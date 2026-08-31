@@ -156,6 +156,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayConsolePlainText(string message) => throw new NotImplementedException();
         public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null) => throw new NotImplementedException();
         public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle) => throw new NotImplementedException();
+        public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry) => throw new NotImplementedException();
         public Task RequestAppHostAttachAsync(int processId, string projectName) => throw new NotImplementedException();
         public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) => throw new NotImplementedException();
@@ -165,7 +166,7 @@ public class ExtensionGuestLauncherTests
         public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => throw new NotImplementedException();
         public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public Task<string> PromptForStringAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<string> PromptForFilePathAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
         public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => throw new NotImplementedException();

@@ -56,6 +56,27 @@ internal static class CliTestHelper
         return new InstallSidecarReader(loggerFactory.CreateLogger<InstallSidecarReader>());
     }
 
+    public static ServiceProvider CreateExtensionServiceProvider(
+        TemporaryWorkspace workspace,
+        ITestOutputHelper outputHelper,
+        Action<string, string?, bool, DebugSessionOptions?> startDebugSessionCallback,
+        Action<CliServiceCollectionTestOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        var services = CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            configureOptions?.Invoke(testOptions);
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                StartDebugSessionCallback = startDebugSessionCallback
+            };
+        });
+        configureServices?.Invoke(services);
+
+        return services.BuildServiceProvider();
+    }
+
     public static IServiceCollection CreateServiceCollection(TemporaryWorkspace workspace, ITestOutputHelper outputHelper, Action<CliServiceCollectionTestOptions>? configure = null)
     {
         var options = new CliServiceCollectionTestOptions(outputHelper, workspace.WorkspaceRoot);
@@ -201,6 +222,7 @@ internal static class CliTestHelper
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -238,6 +260,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddSingleton<CommonCommandServices>();
+        services.AddSingleton<ResourceWaitService>();
         services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
@@ -296,6 +319,7 @@ internal static class CliTestHelper
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
+        services.AddTransient<SdkExportCommand>();
         services.AddTransient<ApiCommand>();
         services.AddTransient<ApiListCommand>();
         services.AddTransient<ApiSearchCommand>();

@@ -20,6 +20,7 @@
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />
     <Compile Include="$(SharedDir)CompareHelpers.cs" Link="Utils\CompareHelpers.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="CustomResourceSnapshotExtensions.cs" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Dashboard\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Dashboard\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Dashboard\KnownRelationshipTypes.cs" />
@@ -29,6 +30,7 @@
     <Compile Include="$(SharedDir)KnownEndpointNames.cs" Link="Utils\KnownEndpointNames.cs" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="ApplicationModel\EnvironmentVariableNameEncoder.cs" />
     <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
+    <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
@@ -36,6 +38,7 @@
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)OtlpEndpointResolver.cs" Link="Utils\OtlpEndpointResolver.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
+    <Compile Include="$(SharedDir)VolumeMountPathResolver.cs" Link="VolumeMountPathResolver.cs" />
     <Compile Include="$(SharedDir)ProjectPathResolver.cs" Link="Utils\ProjectPathResolver.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" Link="Utils\ResourceNameComparer.cs" />
@@ -75,7 +78,6 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Polly.Core" />
-    <PackageReference Include="JsonPatch.Net" />
     <PackageReference Include="AspNetCore.HealthChecks.Uris" />
     <PackageReference Include="Semver" />
     <PackageReference Include="System.IO.Hashing" />
@@ -132,6 +134,8 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
@@ -140,12 +144,7 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
-    <InternalsVisibleTo Include="Aspire.TestUtilities" />
-    <InternalsVisibleTo Include="Aspire.Cli.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />
-    <InternalsVisibleTo Include="Aspire.Hosting.Radius" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />

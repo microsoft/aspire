@@ -1,5 +1,43 @@
 # Aspire VS Code Extension Changelog
 
+## v1.20.0
+
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
+
+### Fixes
+
+- Prevent the Hot Reload advisory notification from repeatedly reappearing during a debug session ([#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Documentation
+
+- Rewrite the extension README and walkthrough with clearer setup and getting-started guidance ([#19632](https://github.com/microsoft/aspire/pull/19632)).
+
+## v1.19.0
+
+<!-- aspire-ext-changelog-done from=b5be9fc0742c7cdf5e02e4b6e2b7cb5c45e5c387 to=c1d2831ade34a050e8ea1111ac64aeda67c7321e base=1.18.0 -->
+
+### Features
+
+- Surface **Deploy**, **Publish**, **Run pipeline step**, and **Debug pipeline step** actions directly on AppHost items in the Aspire pane, instead of requiring the Command Palette ([#19407](https://github.com/microsoft/aspire/issues/19407), [#19466](https://github.com/microsoft/aspire/pull/19466)).
+- Add a **Create with Aspire...** action to the Aspire pane toolbar for creating a new Aspire app or adding Aspire to the current workspace ([#19499](https://github.com/microsoft/aspire/issues/19499), [#19539](https://github.com/microsoft/aspire/pull/19539)).
+- Prompt to pick an AppHost when a debug configuration's directory contains multiple buildable AppHosts with no configured default, instead of failing inside a non-interactive launch ([#19280](https://github.com/microsoft/aspire/issues/19280), [#19541](https://github.com/microsoft/aspire/pull/19541)).
+
+## v1.18.0
+
+<!-- aspire-ext-changelog-done from=1c8df90b9860e508e841ee5bae43d9fdd0e6bd60 to=95ba0548da04adf7d7fe6866fff9e3df2d2ee549 base=1.17.0 -->
+
+### Features
+
+- Add a Java hosting integration, including Spring Boot and Quarkus app support, container publishing, and VS Code debugger wiring ([#18033](https://github.com/microsoft/aspire/pull/18033)).
+- Add a Rust hosting package with VS Code debugger wiring ([#18906](https://github.com/microsoft/aspire/pull/18906)).
+
+### Fixes
+
+- Remember the selected AppHost folder correctly in multi-root workspaces ([#19342](https://github.com/microsoft/aspire/issues/19342), [#19359](https://github.com/microsoft/aspire/pull/19359)).
+- Honor the AppHost launch profile selected in `launch.json` instead of falling back to the default profile's environment and URL ([#19387](https://github.com/microsoft/aspire/issues/19387), [#19400](https://github.com/microsoft/aspire/pull/19400)).
+- Scope AppHost start/stop to the current git worktree and fix AppHost launch arguments being dropped or flattened when forwarded through VS Code ([#19357](https://github.com/microsoft/aspire/issues/19357), [#19384](https://github.com/microsoft/aspire/pull/19384)).
+- Harden Aspire Skills bundle integrity checks by switching to SHA-512 and hide the remote-fetch preview toggle from user-facing settings ([#19303](https://github.com/microsoft/aspire/pull/19303)).
+
 ## v1.17.0
 
 <!-- aspire-ext-changelog-done from=8278bca4a530f0fc513bdf4ed03b10683e36c16e to=d1c7add665f7e6582cdaa1b328c44172f0f96339 base= -->
@@ -16,6 +54,7 @@
 
 ### Fixes
 
+- Remember the selected AppHost folder when debugging multi-root workspaces ([#19342](https://github.com/microsoft/aspire/issues/19342)).
 - Make C# Dev Kit Hot Reload discoverable while debugging ([#19067](https://github.com/microsoft/aspire/pull/19067)).
 - Keep launch-configuration AppHost targets out of the workspace default list ([#19126](https://github.com/microsoft/aspire/pull/19126)).
 - Honor `ASPIRE_HOME` for deployment state ([#19244](https://github.com/microsoft/aspire/pull/19244)).

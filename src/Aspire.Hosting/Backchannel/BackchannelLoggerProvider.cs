@@ -11,7 +11,9 @@ internal class BackchannelLoggerProvider : ILoggerProvider
     private readonly Queue<BackchannelLogEntry> _replayBuffer = new();
     private readonly object _lock = new();
     private readonly Dictionary<int, Channel<BackchannelLogEntry>> _subscribers = [];
+    private readonly Guid _generationId = Guid.NewGuid();
     private int _nextSubscriberId;
+    private long _nextSequenceNumber;
     private const int MaxReplayEntries = 1000;
 
     /// <summary>
@@ -45,6 +47,9 @@ internal class BackchannelLoggerProvider : ILoggerProvider
     {
         lock (_lock)
         {
+            entry.GenerationId = _generationId;
+            entry.SequenceNumber = ++_nextSequenceNumber;
+
             if (_replayBuffer.Count >= MaxReplayEntries)
             {
                 _replayBuffer.Dequeue();
@@ -99,6 +104,7 @@ internal class BackchannelLogger(string categoryName, BackchannelLoggerProvider 
                 LogLevel = logLevel,
                 EventId = eventId,
                 Message = formatter(state, exception),
+                Exception = exception?.ToString(),
             };
 
             provider.WriteEntry(entry);

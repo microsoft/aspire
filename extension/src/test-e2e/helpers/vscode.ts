@@ -176,6 +176,11 @@ export async function executeCommandFromPalette(command: string): Promise<void> 
     throw lastError;
 }
 
+export async function reloadWindow(): Promise<void> {
+    await dismissActiveInput();
+    await new Workbench().executeCommand('Developer: Reload Window');
+}
+
 export async function cancelActiveInput(): Promise<void> {
     const input = await VSBrowser.instance.driver.wait(async () => {
         try {
@@ -190,22 +195,64 @@ export async function cancelActiveInput(): Promise<void> {
 }
 
 export async function answerActiveInput(value: string, expectedPlaceholder: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput(expectedPlaceholder, undefined, timeoutMs);
+    await input.setText(value);
+    await input.confirm();
+}
+
+export async function waitForActiveInput(expectedPlaceholder: string, expectedTitle?: string, timeoutMs = 30000): Promise<InputBox> {
     let lastPrompt = '<none>';
-    const input = await VSBrowser.instance.driver.wait(async () => {
+    return await VSBrowser.instance.driver.wait(async () => {
         try {
             const candidate = await InputBox.create();
             const placeholder = await candidate.getPlaceHolder();
             const title = await candidate.getTitle();
             lastPrompt = `${title ?? '<no title>'} / ${placeholder}`;
-            return placeholder === expectedPlaceholder ? candidate : false;
+            return placeholder === expectedPlaceholder
+                && (expectedTitle === undefined || title === expectedTitle)
+                ? candidate
+                : false;
         }
         catch (error) {
             throwIfWebDriverSessionFailure(error);
             return false;
         }
-    }, timeoutMs, `Timed out waiting for input placeholder '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
-    await input.setText(value);
-    await input.confirm();
+    }, timeoutMs, `Timed out waiting for input '${expectedTitle ?? '<any title>'}' / '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
+}
+
+export async function answerActiveInputByMessage(value: string, expectedMessage: string, timeoutMs = 30000): Promise<void> {
+    let lastMessage = '<none>';
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const widgets = await VSBrowser.instance.driver.findElements(By.css('.quick-input-widget'));
+            for (const widget of widgets) {
+                if (!await widget.isDisplayed()) {
+                    continue;
+                }
+
+                const messages = await widget.findElements(By.css('.quick-input-message'));
+                lastMessage = (await Promise.all(messages.map(message => message.getText()))).join(' ');
+                if (!lastMessage.includes(expectedMessage)) {
+                    continue;
+                }
+
+                const inputs = await widget.findElements(By.css('.quick-input-box input'));
+                for (const candidate of inputs) {
+                    if (await candidate.isDisplayed()) {
+                        return candidate;
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for input message '${expectedMessage}'. Last message: ${lastMessage}.`);
+    await input.click();
+    await input.sendKeys(value, '\uE007');
 }
 
 export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): Promise<void> {
@@ -236,6 +283,31 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
             return false;
         }
     }, timeoutMs, `Timed out waiting for quick pick '${label}'. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
+    await item.select();
+}
+
+export async function chooseActiveQuickPickAtIndex(index: number, timeoutMs = 30000): Promise<void> {
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return await InputBox.create();
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
+    let visibleLabels: string[] = [];
+    const item = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const picks = await input.getQuickPicks();
+            visibleLabels = await Promise.all(picks.map(pick => pick.getLabel()));
+            return picks[index] ?? false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for quick pick index ${index}. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
     await item.select();
 }
 

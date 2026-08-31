@@ -8,6 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestFileSystemService.cs" Link="shared/TestFileSystemService.cs" />
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
   </ItemGroup>
 

@@ -125,12 +125,12 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: agent
           path: /tmp/gh-aw/
@@ -217,16 +217,33 @@ safe-outputs:
                 f"found {len(create_items)}."
             )
 
-        base_branch = create_items[0].get("base")
+        # gh-aw v0.86.2 records the supported tool input as:
+        #   {"type":"create_pull_request","base":"release/13.5",...}
+        # Older outputs record the normalized value as "base_branch" instead.
+        create_item = create_items[0]
+        has_base = "base" in create_item
+        has_base_branch = "base_branch" in create_item
+        base = create_item.get("base")
+        base_branch = create_item.get("base_branch")
+        if has_base and not isinstance(base, str):
+            raise SystemExit("Canonical create_pull_request base is invalid.")
+        if has_base_branch and not isinstance(base_branch, str):
+            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+        if has_base and has_base_branch and base != base_branch:
+            raise SystemExit(
+                "Canonical create_pull_request base and base_branch disagree."
+            )
+
+        target_branch = base if has_base else base_branch
         if (
-            not isinstance(base_branch, str)
-            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
+            not isinstance(target_branch, str)
+            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", target_branch)
             is None
         ):
-            raise SystemExit("Canonical create_pull_request base is invalid.")
+            raise SystemExit("Canonical create_pull_request target branch is invalid.")
 
         with open(sys.argv[1], "a", encoding="utf-8") as github_output:
-            github_output.write(f"branch={base_branch}\n")
+            github_output.write(f"branch={target_branch}\n")
         PY
   create-pull-request:
     title-prefix: "[docs] "
@@ -295,7 +312,7 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v4
+          uses: actions/checkout@v4.3.1
           with:
             path: _validator
             sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
@@ -352,7 +369,7 @@ safe-outputs:
             owner: microsoft
             repositories: aspire
         - name: Post status comment on source PR
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
@@ -487,7 +504,7 @@ safe-outputs:
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
@@ -557,7 +574,7 @@ pre-agent-steps:
     # For a merged pull_request:closed event, the default `ref` is the updated
     # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
     # Both select the helper version associated with the workflow being run.
-    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    uses: actions/checkout@v6.0.2
     with:
       repository: microsoft/aspire
       path: _repos/aspire

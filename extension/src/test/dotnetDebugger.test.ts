@@ -91,6 +91,48 @@ suite('Dotnet Debugger Extension Tests', () => {
         process.env[name] = value;
     }
 
+    for (const [projectFile, language] of [
+        ['/workspace/AppHost.fsproj', 'F#'],
+        ['/workspace/AppHost.vbproj', 'Visual Basic'],
+    ]) {
+        test(`${language} AppHost tracker routes output through the AppHost coordinator`, async () => {
+            const parentDebugSession = {
+                id: 'aspire-session',
+                type: 'aspire',
+                name: 'Aspire',
+                workspaceFolder: undefined,
+                configuration: {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: projectFile,
+                },
+                customRequest: sinon.stub(),
+                getDebugProtocolBreakpoint: sinon.stub(),
+            } as unknown as vscode.DebugSession;
+            const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+            const outputCoordinator = (aspireDebugSession as unknown as {
+                _appHostLogOutput: {
+                    handleDebugAdapterOutput(output: string, category: string | undefined): unknown;
+                };
+            })._appHostLogOutput;
+            const handleOutputSpy = sinon.spy(outputCoordinator, 'handleDebugAdapterOutput');
+            const trackerStub = sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+            sinon.stub(projectDebuggerExtension, 'createDebugSessionConfigurationCallback').resolves();
+            sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves({
+                id: 'apphost-session',
+            } as unknown as Awaited<ReturnType<AspireDebugSession['startAndGetDebugSession']>>);
+
+            await aspireDebugSession.startAppHost(projectFile, ['run', '--project', projectFile], [], true, { forceBuild: false });
+
+            const onOutput = trackerStub.firstCall.args[1]?.onOutput;
+            assert.ok(onOutput);
+            onOutput('AppHost output\n', 'stdout');
+
+            assert.strictEqual(handleOutputSpy.calledOnceWithExactly('AppHost output\n', 'stdout'), true);
+        });
+    }
+
     test('failed AppHost start writes error to debug console', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -191,7 +233,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.strictEqual(configuration.__aspireAppHostRestartSourceSessionId, parentDebugSession.id);
 
@@ -233,7 +276,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.ok(terminateCallback);
         await terminateCallback(appHostDebugSession);
@@ -276,7 +320,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
 
-        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        const restartHandler = trackerStub.firstCall.args[1]?.onRestartRequested;
+        assert.ok(restartHandler);
         assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
         assert.ok(terminateCallback);
         await terminateCallback(appHostDebugSession);
@@ -663,7 +708,16 @@ suite('Dotnet Debugger Extension Tests', () => {
             AMBIENT_ONLY: process.env.AMBIENT_ONLY,
             CLI_PRECEDENCE: process.env.CLI_PRECEDENCE,
             DEFAULT_PROFILE_ONLY: process.env.DEFAULT_PROFILE_ONLY,
-            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT
+            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT,
+            DEFAULT_PROFILE_EXPANDED: process.env.DEFAULT_PROFILE_EXPANDED,
+            DEFAULT_PROFILE_SOURCE: process.env.DEFAULT_PROFILE_SOURCE,
+            DEFAULT_PROFILE_DEPENDENT: process.env.DEFAULT_PROFILE_DEPENDENT,
+            DEFAULT_PROFILE_RAW: process.env.DEFAULT_PROFILE_RAW,
+            DEFAULT_PROFILE_CYCLE_A: process.env.DEFAULT_PROFILE_CYCLE_A,
+            DEFAULT_PROFILE_CYCLE_B: process.env.DEFAULT_PROFILE_CYCLE_B,
+            DEFAULT_PROFILE_SELF: process.env.DEFAULT_PROFILE_SELF,
+            PROFILE_ROOT: process.env.PROFILE_ROOT,
+            PROFILE_MISSING: process.env.PROFILE_MISSING
         };
 
         process.env.mode = 'ambient-h1';
@@ -674,6 +728,15 @@ suite('Dotnet Debugger Extension Tests', () => {
         process.env.CLI_PRECEDENCE = 'from-process';
         process.env.DEFAULT_PROFILE_ONLY = 'from-process';
         process.env.DEFAULT_PROFILE_EXPLICIT = 'from-process';
+        process.env.DEFAULT_PROFILE_EXPANDED = 'from-process';
+        process.env.DEFAULT_PROFILE_SOURCE = 'from-process-source';
+        process.env.DEFAULT_PROFILE_DEPENDENT = 'from-process-dependent';
+        process.env.DEFAULT_PROFILE_RAW = 'from-process-raw';
+        process.env.DEFAULT_PROFILE_CYCLE_A = 'ambient-a';
+        process.env.DEFAULT_PROFILE_CYCLE_B = 'ambient-b';
+        process.env.DEFAULT_PROFILE_SELF = 'ambient-self';
+        delete process.env.PROFILE_ROOT;
+        delete process.env.PROFILE_MISSING;
 
         try {
             const projectPath = nodePath.join(projectDir, 'AppHost.csproj');
@@ -687,12 +750,23 @@ suite('Dotnet Debugger Extension Tests', () => {
                             mode: '1',
                             EXPLICIT: 'from-h1',
                             DEFAULT_PROFILE_ONLY: 'from-h1',
-                            DEFAULT_PROFILE_EXPLICIT: 'from-h1'
+                            DEFAULT_PROFILE_EXPLICIT: 'from-h1',
+                            DEFAULT_PROFILE_EXPANDED: '%PROFILE_ROOT%/default',
+                            DEFAULT_PROFILE_SOURCE: 'from-h1',
+                            DEFAULT_PROFILE_DEPENDENT: '%DEFAULT_PROFILE_SOURCE%/dependent',
+                            DEFAULT_PROFILE_RAW: '%DEFAULT_PROFILE_SOURCE%/raw',
+                            DEFAULT_PROFILE_CYCLE_A: '%DEFAULT_PROFILE_CYCLE_B%',
+                            DEFAULT_PROFILE_CYCLE_B: '%DEFAULT_PROFILE_CYCLE_A%',
+                            DEFAULT_PROFILE_SELF: '%DEFAULT_PROFILE_SELF%',
+                            INVALID_DEFAULT_ENV: 42
                         }
                     },
                     h2: {
                         commandName: 'Project',
                         applicationUrl: 'http://localhost:15002',
+                        executablePath: false,
+                        workingDirectory: true,
+                        useSSL: 'ignored by the SDK',
                         environmentVariables: {
                             mode: '2',
                             EXPLICIT: 'from-h2',
@@ -701,8 +775,13 @@ suite('Dotnet Debugger Extension Tests', () => {
                     },
                     h3: {
                         commandName: 'Project',
+                        commandLineArgs: '--profile-root %PROFILE_ROOT% --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%',
                         environmentVariables: {
-                            UNSELECTED_ONLY: 'from-h3'
+                            UNSELECTED_ONLY: 'from-h3',
+                            PROFILE_PATH: '%PROFILE_ROOT%/config',
+                            PROFILE_MSBUILD: '$(PROFILE_ROOT)/config',
+                            PROFILE_UNRESOLVED: '%PROFILE_MISSING%/config',
+                            PROFILE_OVERLAP: '%PROFILE_MISSING%PROFILE_ROOT%'
                         }
                     }
                 }
@@ -746,7 +825,15 @@ suite('Dotnet Debugger Extension Tests', () => {
                     { name: 'CLI_PRECEDENCE', value: 'from-cli' },
                     { name: 'UNSELECTED_ONLY', value: 'from-cli' },
                     { name: 'DEFAULT_PROFILE_ONLY', value: 'from-h1' },
-                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' }
+                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' },
+                    { name: 'DEFAULT_PROFILE_EXPANDED', value: '/profile/root/default' },
+                    { name: 'DEFAULT_PROFILE_SOURCE', value: 'from-h1' },
+                    { name: 'DEFAULT_PROFILE_DEPENDENT', value: 'from-process-source/dependent' },
+                    { name: 'DEFAULT_PROFILE_RAW', value: '%DEFAULT_PROFILE_SOURCE%/raw' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_A', value: 'ambient-b' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_B', value: 'ambient-a' },
+                    { name: 'DEFAULT_PROFILE_SELF', value: 'explicit-self' },
+                    { name: 'PROFILE_ROOT', value: '/profile/root' }
                 ],
                 { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                 extension);
@@ -760,7 +847,14 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: debugConfig.env.CLI_PRECEDENCE,
                 UNSELECTED_ONLY: debugConfig.env.UNSELECTED_ONLY,
                 DEFAULT_PROFILE_ONLY: debugConfig.env.DEFAULT_PROFILE_ONLY,
-                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT
+                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT,
+                DEFAULT_PROFILE_EXPANDED: debugConfig.env.DEFAULT_PROFILE_EXPANDED,
+                DEFAULT_PROFILE_SOURCE: debugConfig.env.DEFAULT_PROFILE_SOURCE,
+                DEFAULT_PROFILE_DEPENDENT: debugConfig.env.DEFAULT_PROFILE_DEPENDENT,
+                DEFAULT_PROFILE_RAW: debugConfig.env.DEFAULT_PROFILE_RAW,
+                DEFAULT_PROFILE_CYCLE_A: debugConfig.env.DEFAULT_PROFILE_CYCLE_A,
+                DEFAULT_PROFILE_CYCLE_B: debugConfig.env.DEFAULT_PROFILE_CYCLE_B,
+                DEFAULT_PROFILE_SELF: debugConfig.env.DEFAULT_PROFILE_SELF
             }, {
                 mode: '2',
                 DOTNET_LAUNCH_PROFILE: 'h2',
@@ -770,8 +864,18 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: 'from-cli',
                 UNSELECTED_ONLY: 'from-cli',
                 DEFAULT_PROFILE_ONLY: 'from-process',
-                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit'
+                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit',
+                DEFAULT_PROFILE_EXPANDED: 'from-process',
+                DEFAULT_PROFILE_SOURCE: 'from-process-source',
+                DEFAULT_PROFILE_DEPENDENT: 'from-process-dependent',
+                DEFAULT_PROFILE_RAW: 'from-process-raw',
+                DEFAULT_PROFILE_CYCLE_A: 'ambient-a',
+                DEFAULT_PROFILE_CYCLE_B: 'ambient-b',
+                DEFAULT_PROFILE_SELF: 'explicit-self'
             });
+            assert.strictEqual(debugConfig.cwd, projectDir);
+            assert.strictEqual(debugConfig.executablePath, undefined);
+            assert.strictEqual(debugConfig.checkForDevCert, undefined);
             assert.deepStrictEqual(
                 Object.keys(debugConfig.env).filter(name => name.toLowerCase() === 'mode'),
                 ['mode']);
@@ -794,6 +898,44 @@ suite('Dotnet Debugger Extension Tests', () => {
                 extension);
 
             assert.strictEqual(ambientUrlDebugConfig.env.ASPNETCORE_URLS, 'http://localhost:14000');
+
+            const cliSelectedDebugSessionConfig: AspireExtendedDebugConfiguration = {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: projectPath
+            };
+            fakeAspireDebugSession.configuration = cliSelectedDebugSessionConfig;
+            const cliSelectedLaunchConfig: ProjectLaunchConfiguration = {
+                ...launchConfig,
+                launch_profile: 'h3'
+            };
+            const cliSelectedDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                undefined,
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.strictEqual(
+                cliSelectedDebugConfig.args,
+                '--profile-root /profile/root --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_PATH, '/profile/root/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_MSBUILD, '$(PROFILE_ROOT)/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_UNRESOLVED, '%PROFILE_MISSING%/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_OVERLAP, '%PROFILE_MISSING%PROFILE_ROOT%');
+
+            const forwardedArguments = ['--literal', '%PROFILE_ROOT%'];
+            const explicitArgumentsDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                forwardedArguments,
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.deepStrictEqual(explicitArgumentsDebugConfig.args, forwardedArguments);
         } finally {
             platformStub.restore();
             for (const [name, value] of Object.entries(inheritedEnvironment)) {
@@ -1290,7 +1432,7 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(extension.debugAdapter, 'coreclr');
         assert.strictEqual(debugConfig.program, executablePath);
-        assert.strictEqual(debugConfig.args, undefined);
+        assert.deepStrictEqual(debugConfig.args, []);
         // cwd defaults to the file's directory; run-api's WorkingDirectory (empty here) is not consumed.
         assert.strictEqual(debugConfig.cwd, '/tmp');
         // run-api's profile-derived EnvironmentVariables are dropped (only DOTNET_ROOT* would be kept), so
@@ -1347,20 +1489,18 @@ suite('Dotnet Debugger Extension Tests', () => {
         });
     });
 
-    test('file-based .cs project launched via the dotnet launcher keeps the run-api host DLL and user args', async () => {
+    test('file-based .cs project launched via the dotnet launcher keeps the run-api host args and user args', async () => {
         // When the SDK resolves a file-based app to the `dotnet` launcher, run-api returns ExecutablePath=dotnet
-        // and CommandLineArguments carrying the built app DLL. The extension must launch that program with the
-        // DLL host argument first, then the user application arguments supplied by DCP. Dropping CommandLineArguments
-        // would launch the 'dotnet' launcher with nothing to run. The working directory and environment come from
-        // the launch profile (here, its defaults) — not from run-api, whose values reflect the SDK default profile.
-        const dllPath = '/tmp/obj/Debug/net10.0/app.dll';
+        // and SDK-serialized CommandLineArguments such as `exec "<TargetPath>"` for UseAppHost=false.
+        // The extension must deserialize those host tokens before prepending user arguments supplied by DCP.
+        const dllPath = '/tmp/obj/Debug/net10.0/app with spaces.dll';
         const workingDirectory = '/tmp/obj/Debug/net10.0';
         const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
         dotNetService.runApiOutput = JSON.stringify({
             $type: 'RunCommand',
             Version: 1,
             ExecutablePath: 'dotnet',
-            CommandLineArguments: dllPath,
+            CommandLineArguments: `exec "${dllPath}"`,
             WorkingDirectory: workingDirectory,
             EnvironmentVariables: { RUNAPI_ENV: 'from-run-api' }
         });
@@ -1383,13 +1523,56 @@ suite('Dotnet Debugger Extension Tests', () => {
         await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
         assert.strictEqual(debugConfig.program, 'dotnet');
-        assert.strictEqual(debugConfig.args, `${dllPath} --message hello`);
+        assert.deepStrictEqual(debugConfig.args, ['exec', dllPath, '--message', 'hello']);
         // cwd comes from the launch profile default (the file's directory), not run-api's WorkingDirectory.
         assert.strictEqual(debugConfig.cwd, '/tmp');
         // run-api's profile-derived EnvironmentVariables are dropped (only DOTNET_ROOT* would be kept), so
         // RUNAPI_ENV must not appear.
         assert.deepStrictEqual(debugConfig.env, {});
         assert.strictEqual(dotNetService.buildDotNetProjectStub.called, true);
+    });
+
+    test('file-based .cs AppHost keeps run-api host arguments and forwarded arg tokens separate', async () => {
+        // The AppHost forwards run-session arguments as discrete tokens. When run-api reports the file-based
+        // host program as `dotnet exec "<TargetPath>"`, the extension must deserialize and prepend those
+        // SDK-authored host tokens without joining the forwarded tokens into command-line text.
+        const path = require('path');
+
+        const projectPath = path.join(process.cwd(), '.test-temp', `dotnet-apphost-forwarded-args-${process.pid}-${Date.now()}`, 'apphost.cs');
+        const projectDirectory = path.dirname(projectPath);
+        const dllPath = path.join(projectDirectory, 'obj', 'Debug', 'net10.0', 'output with spaces', 'apphost.dll');
+        const forwardedArgs = ['--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`];
+        const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+        dotNetService.runApiOutput = JSON.stringify({
+            $type: 'RunCommand',
+            Version: 1,
+            ExecutablePath: 'dotnet',
+            CommandLineArguments: `exec "${dllPath}"`,
+            WorkingDirectory: path.join(projectDirectory, 'from-run-api'),
+            EnvironmentVariables: {}
+        });
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, forceBuild: false, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.program, 'dotnet');
+        assert.deepStrictEqual(debugConfig.args, ['exec', dllPath, '--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`]);
+        assert.strictEqual(debugConfig.cwd, projectDirectory);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
 
     test('file-based .cs applies the launch profile working directory', async () => {
@@ -1510,7 +1693,8 @@ suite('Dotnet Debugger Extension Tests', () => {
     test('file-based .cs with disable_launch_profile ignores run-api profile arguments, working directory, and profile environment but keeps DOTNET_ROOT', async () => {
         // With disable_launch_profile the extension selects no launch profile, but `dotnet run-api` still applies
         // the SDK default profile and returns its arguments, working directory, and environment. The profile
-        // values may not leak into the debug configuration: args come only from the run session, cwd defaults to
+        // values may not leak into the debug configuration: args come only from the run session (an explicit empty
+        // array here), cwd defaults to
         // the file's directory, and no profile env is applied. The runtime host-resolution variables (DOTNET_ROOT*)
         // are NOT profile-derived, so they must still be preserved even when the profile is disabled.
         const fs = require('fs');
@@ -1565,7 +1749,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
             assert.strictEqual(debugConfig.program, executablePath);
-            assert.strictEqual(debugConfig.args, undefined);
+            assert.deepStrictEqual(debugConfig.args, []);
             assert.strictEqual(debugConfig.cwd, tempRoot);
             // The profile env (DISABLED_PROFILE_ENV) is dropped; the runtime host variable DOTNET_ROOT is preserved.
             assert.deepStrictEqual(debugConfig.env, { DOTNET_ROOT: '/usr/share/dotnet' });
@@ -2232,6 +2416,63 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
+    test('project Executable profile preserves forwarded array args without expanding tokens', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-exec-args-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'ToolProject');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const spacesEnvVarName = 'ASPIRE_TEST_DEBUGGER_ARG_SPACES';
+        const pathEnvVarName = 'ASPIRE_TEST_DEBUGGER_ARG_PATH';
+        const backslashPath = String.raw`C:\tools\backslash\path`;
+        process.env[spacesEnvVarName] = 'value with spaces';
+        process.env[pathEnvVarName] = backslashPath;
+
+        try {
+            const projectPath = path.join(projectDir, 'ToolProject.csproj');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    Tool: {
+                        commandName: 'Executable',
+                        executablePath: 'dotnet'
+                    }
+                }
+            }));
+
+            const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'ToolProject.dll');
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'Tool'
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const forwardedArgs = ['--custom', `$(${spacesEnvVarName})`, '', 'literal "quote"', `$(${pathEnvVarName})`];
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, forwardedArgs);
+        } finally {
+            delete process.env[spacesEnvVarName];
+            delete process.env[pathEnvVarName];
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
     test('preserves launch profile argument string for dotnet CLI fallback when run session arguments are absent', async () => {
         const fs = require('fs');
         const path = require('path');
@@ -2691,7 +2932,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.args, 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler');
 
         // cwd should resolve to the profile's working directory
-        assert.strictEqual(debugConfig.cwd, path.resolve(projectDir, 'bin/Debug/net10.0/'));
+        assert.strictEqual(debugConfig.cwd, path.resolve(propertiesDir, 'bin/Debug/net10.0/'));
 
         // env should include the profile's environment variables
         assert.strictEqual(debugConfig.env.FUNCTION_ENV, 'test');
@@ -2808,6 +3049,110 @@ suite('Dotnet Debugger Extension Tests', () => {
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig),
                 /Launch profile 'RunExe' uses commandName 'Executable' but does not specify an executablePath/);
+
+            assert.strictEqual(dotNetService.buildDotNetProjectStub.called, false);
+        } finally {
+            removeDirectorySafely(tempDir);
+        }
+    });
+
+    test('fails explicit project launch when the selected profile is missing, malformed, or has an unsupported commandName', async () => {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        try {
+            const projectDir = path.join(tempDir, 'AppHost');
+            const propertiesDir = path.join(projectDir, 'Properties');
+            fs.mkdirSync(propertiesDir, { recursive: true });
+
+            const projectPath = path.join(projectDir, 'AppHost.csproj');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), `{
+                "profiles": {
+                    "invalid": {
+                        "commandName": "project",
+                        "commandLineArgs": 42
+                    },
+                    "malformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes"
+                    },
+                    "duplicateMalformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes",
+                        "launchBrowser": true
+                    }
+                }
+            }`);
+
+            const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'AppHost.dll');
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const unsupportedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'invalid'
+            };
+            const missingLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'missing'
+            };
+            const malformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'malformed'
+            };
+            const duplicateMalformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'duplicateMalformed'
+            };
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    unsupportedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'invalid' uses a commandName that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    malformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'malformed' contains property values that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    duplicateMalformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'duplicateMalformed' contains property values that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    missingLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'missing' could not be uniquely resolved/);
 
             assert.strictEqual(dotNetService.buildDotNetProjectStub.called, false);
         } finally {

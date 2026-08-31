@@ -456,7 +456,6 @@ jobs:
             echo "   | \`SkipNpmPointerPublish\` | \`true\` |"
             echo "   | \`SkipChannelPromotion\` | \`true\` |"
             echo "   | \`SkipWinGetPublish\` | \`true\` |"
-            echo "   | \`SkipHomebrewValidation\` | \`true\` |"
             echo "   | \`SkipGitHubTasks\` | \`true\` |"
             echo "   | \`SkipReleaseAssets\` | \`true\` |"
             echo "   | \`SkipNixPackageUpdate\` | \`true\` |"

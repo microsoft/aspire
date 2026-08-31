@@ -22,6 +22,7 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 public partial class AzureKubernetesEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
+    IComputeEnvironmentWithVolumeMounts,
     IAzureNspAssociationTarget
 {
     /// <summary>

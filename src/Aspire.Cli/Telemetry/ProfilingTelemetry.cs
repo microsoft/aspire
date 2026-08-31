@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 
@@ -410,7 +411,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     internal ActivityScope StartDetachedSpawnChild(string executablePath, IReadOnlyList<string> args, string childCommand)
     {
         var activity = StartActivity(Activities.Process, ActivityKind.Client);
-        activity.SetProcessInvocation(executablePath, args);
+        // Profiling traces are exported and persisted, so the forwarded AppHost tail of the child
+        // command line is redacted for the same reason the CLI log redacts it.
+        activity.SetProcessInvocation(executablePath, AppHostArgumentRedactor.Redact(args));
         activity.SetChildCommand(childCommand);
         return activity;
     }
@@ -1133,9 +1136,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);
 
-        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, string? msBuildServer)
+        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, int? appHostArgumentStartIndex, string? msBuildServer)
         {
-            SetProcessInvocation(dotnetPath, args);
+            // `dotnet run --project AppHost.csproj -- <appHostArgs>` flows through here, and the
+            // recorded tag is persisted with the exported trace, so redact the forwarded tail.
+            // A direct AppHost launch has no separator and declares its boundary explicitly.
+            SetProcessInvocation(dotnetPath, appHostArgumentStartIndex is { } startIndex
+                ? AppHostArgumentRedactor.RedactFrom(args, startIndex)
+                : AppHostArgumentRedactor.Redact(args));
             SetDotNetMsBuildServer(msBuildServer);
         }
 

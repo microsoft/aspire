@@ -2,12 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Struct = Google.Protobuf.WellKnownTypes.Struct;
 using Value = Google.Protobuf.WellKnownTypes.Value;
@@ -274,19 +279,20 @@ public class ResourceOutgoingPeerResolverTests
     public async Task OnPeerChanges_DataUpdates_EventRaised()
     {
         // Arrange
+        Assert.Equal(TimeSpan.FromMilliseconds(500), CallbackThrottler.DefaultMinExecuteInterval);
+
         var tcs = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sourceChannel = Channel.CreateUnbounded<ResourceViewModelChange>();
-        var resultChannel = Channel.CreateUnbounded<int>();
+        var resultChannel = Channel.CreateUnbounded<(int ChangeCount, long Timestamp)>();
         var dashboardClient = new MockDashboardClient(tcs.Task);
-        var resolver = new ResourceOutgoingPeerResolver(dashboardClient);
+        var resolver = CreateResolver(dashboardClient);
         var changeCount = 0;
         resolver.OnPeerChanges(async () =>
         {
-            await resultChannel.Writer.WriteAsync(++changeCount);
+            await resultChannel.Writer.WriteAsync((++changeCount, Stopwatch.GetTimestamp()));
         });
 
-        var readValue = 0;
-        Assert.False(resultChannel.Reader.TryRead(out readValue));
+        Assert.False(resultChannel.Reader.TryRead(out _));
 
         // Act 1
         // Initial resource causes change.
@@ -295,8 +301,9 @@ public class ResourceOutgoingPeerResolverTests
             GetChanges()));
 
         // Assert 1
-        readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(1, readValue);
+        var readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(1, readValue.ChangeCount);
+        var previousTimestamp = readValue.Timestamp;
 
         // Act 2
         // New resource causes change.
@@ -304,7 +311,9 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 2
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(2, readValue);
+        Assert.Equal(2, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
+        previousTimestamp = readValue.Timestamp;
 
         // Act 3
         // URL change causes change.
@@ -312,7 +321,8 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 3
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(3, readValue);
+        Assert.Equal(3, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
 
         // Act 4
         // Resource update doesn't cause change.
@@ -332,6 +342,91 @@ public class ResourceOutgoingPeerResolverTests
             {
                 yield return [item];
             }
+        }
+
+        static void AssertMinimumExecuteInterval(long startTimestamp, long endTimestamp)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTimestamp, endTimestamp);
+            Assert.True(elapsed >= CallbackThrottler.DefaultMinExecuteInterval - TimeSpan.FromMilliseconds(50), $"Callbacks executed too quickly: {elapsed}.");
+        }
+    }
+
+    [Fact]
+    public async Task Constructor_AmbientActivity_DoesNotFlowToResourceWatch()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dashboardClient = new MockDashboardClient(subscribeResult.Task);
+        using var activity = new Activity("request").Start();
+        var resolver = CreateResolver(dashboardClient);
+
+        Assert.Null(await dashboardClient.ActivityOnSubscribe.Task.DefaultTimeout());
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        sourceChannel.Writer.Complete();
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+        await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task OnPeerChanges_AmbientExecutionContext_DoesNotFlowToCallback()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task));
+        var ambientValue = new AsyncLocal<string?> { Value = "request" };
+        var callbackValue = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        resolver.OnPeerChanges(() =>
+        {
+            callbackValue.SetResult(ambientValue.Value);
+            return Task.CompletedTask;
+        });
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        subscribeResult.SetResult(new ResourceViewModelSubscription(
+            [CreateResource("test", serviceAddress: "localhost", servicePort: 8080)],
+            sourceChannel.Reader.ReadAllAsync()));
+
+        Assert.Null(await callbackValue.Task.DefaultTimeout());
+
+        ambientValue.Value = null;
+        sourceChannel.Writer.Complete();
+        await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceChanges_CreateActivityForEachBatch()
+    {
+        using var activitySource = new DashboardActivitySource();
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var activities = new ConcurrentQueue<Activity>();
+        var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        {
+            activities.Enqueue(activity);
+            if (activities.Count == 2)
+            {
+                activitiesReceived.TrySetResult();
+            }
+        });
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task), activitySource);
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Starting))]);
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Running))]);
+        await activitiesReceived.Task.DefaultTimeout();
+        sourceChannel.Writer.Complete();
+        await resolver.DisposeAsync().DefaultTimeout();
+
+        Assert.Collection(
+            activities,
+            AssertActivity,
+            AssertActivity);
+
+        static void AssertActivity(Activity activity)
+        {
+            Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+            Assert.Equal("Process resource subscription changes", activity.OperationName);
+            Assert.Equal(ActivityKind.Consumer, activity.Kind);
         }
     }
 
@@ -370,6 +465,14 @@ public class ResourceOutgoingPeerResolverTests
     private static bool TryResolvePeerName(IDictionary<string, ResourceViewModel> resources, KeyValuePair<string, string>[] attributes, out string? peerName)
     {
         return ResourceOutgoingPeerResolver.TryResolvePeerCore(resources, attributes, out peerName, out _);
+    }
+
+    private static ResourceOutgoingPeerResolver CreateResolver(IResourceRepository resourceRepository, DashboardActivitySource? activitySource = null)
+    {
+        return new ResourceOutgoingPeerResolver(
+            resourceRepository,
+            activitySource ?? new DashboardActivitySource(),
+            NullLogger<ResourceOutgoingPeerResolver>.Instance);
     }
 
     [Fact]
@@ -578,6 +681,7 @@ public class ResourceOutgoingPeerResolverTests
 
     private sealed class MockDashboardClient(Task<ResourceViewModelSubscription> subscribeResult) : IDashboardClient
     {
+        public TaskCompletionSource<Activity?> ActivityOnSubscribe { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
@@ -593,9 +697,14 @@ public class ResourceOutgoingPeerResolverTests
         public ResourceViewModel? GetResource(string resourceName) => null;
         public IReadOnlyList<ResourceViewModel> GetResources() => [];
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
         public Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => subscribeResult;
+        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
+        {
+            ActivityOnSubscribe.TrySetResult(Activity.Current);
+            return subscribeResult;
+        }
     }
 }

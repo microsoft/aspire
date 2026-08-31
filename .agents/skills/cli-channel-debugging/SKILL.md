@@ -63,6 +63,9 @@ The same values can come from the `channel`, `version`, `commit`, `nugetServiceI
 and `packages` fields of an `.aspire-install.json` sidecar next to the CLI binary. Resolution
 order per field is **env var → sidecar field → assembly-baked stamp**. Use the sidecar when
 you want a persistent emulated identity for an installed binary; use env vars for one-off runs.
+Installer-authored `channel`, `version`, and `commit` fields describe the real installed identity
+and do not show the emulation banner, so use `aspire doctor --format Json` to confirm their source.
+The developer-only `nugetServiceIndexOverride` and `packages` sidecar fields still show the banner.
 
 ### Legacy PackagingService config keys (staging-feed routing only)
 

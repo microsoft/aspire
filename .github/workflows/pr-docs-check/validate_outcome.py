@@ -104,6 +104,37 @@ def _require_target_branch(value: object, field_name: str) -> str:
     return value
 
 
+def _get_create_pull_request_target(payload: Any) -> str:
+    create_pull_request = _get_create_pull_request(payload)
+    has_base = "base" in create_pull_request
+    has_base_branch = "base_branch" in create_pull_request
+    if not has_base and not has_base_branch:
+        raise OutcomeValidationError(
+            "Canonical create_pull_request target branch is missing."
+        )
+
+    if has_base and has_base_branch:
+        base = _require_target_branch(
+            create_pull_request.get("base"),
+            "canonical create_pull_request base",
+        )
+        base_branch = _require_target_branch(
+            create_pull_request.get("base_branch"),
+            "canonical create_pull_request base_branch",
+        )
+        if base != base_branch:
+            raise OutcomeValidationError(
+                "Canonical create_pull_request base and base_branch disagree."
+            )
+        return base
+
+    field_name = "base" if has_base else "base_branch"
+    return _require_target_branch(
+        create_pull_request.get(field_name),
+        f"canonical create_pull_request {field_name}",
+    )
+
+
 def _validate_drafted_base_contract(
     payload: Any,
     notification: dict[str, Any],
@@ -115,18 +146,14 @@ def _validate_drafted_base_contract(
             "Safe outputs returned an invalid microsoft/aspire.dev pull request URL."
         )
 
-    create_pull_request = _get_create_pull_request(payload)
-    canonical_base = _require_target_branch(
-        create_pull_request.get("base"),
-        "canonical create_pull_request base",
-    )
+    canonical_base = _get_create_pull_request_target(payload)
     notification_target = _require_target_branch(
         notification.get("target_branch"),
         "notify_source_pr target_branch",
     )
     if notification_target != canonical_base:
         raise OutcomeValidationError(
-            "Canonical create_pull_request base "
+            "Canonical create_pull_request target branch "
             f"{canonical_base} does not match notify_source_pr target_branch "
             f"{notification_target}."
         )
@@ -135,7 +162,7 @@ def _validate_drafted_base_contract(
     if actual_base != canonical_base:
         raise OutcomeValidationError(
             f"Drafted PR base branch {actual_base} does not match canonical "
-            f"create_pull_request base {canonical_base}."
+            f"create_pull_request target branch {canonical_base}."
         )
 
 

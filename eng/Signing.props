@@ -12,7 +12,7 @@
     <FileExtensionSignInfo Update=".vsix" CertificateName="None" />
 
     <!-- add missing entry for .msi, this can be removed once aspire uses arcade 10.0 -->
-    <FileExtensionSignInfo Include=".msi" CertificateName="MicrosoftDotNet500" Condition="!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))" />
+    <FileExtensionSignInfo Include=".msi" CertificateName="Microsoft400" Condition="!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))" />
 
     <!--
       JS files in project templates are customer-modifiable: users edit them after project
@@ -23,7 +23,7 @@
     -->
     <FileExtensionSignInfo Update=".js" CertificateName="None" />
     <!-- Sign the catalog file that covers the template JS files -->
-    <FileExtensionSignInfo Include=".cat" CertificateName="MicrosoftDotNet500" />
+    <FileExtensionSignInfo Include=".cat" CertificateName="Microsoft400" />
     <!-- Remove .py files from being signed. See https://github.com/microsoft/aspire/issues/13004 -->
     <FileExtensionSignInfo Update=".py" CertificateName="None" />
   </ItemGroup>
@@ -61,21 +61,22 @@
     <FileSignInfo Include="OpenTelemetry.Extensions.Hosting.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="NSec.Cryptography.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
 
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="MicrosoftDotNet500" />
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-managed.exe" CertificateName="MicrosoftDotNet500" />
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="MicrosoftDotNet500" />
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="MicrosoftDotNet500" />
+    <!-- Aspire is a Microsoft product rather than a .NET runtime binary, so use Arcade's general Microsoft certificate. -->
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="Microsoft400" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-managed.exe" CertificateName="Microsoft400" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="Microsoft400" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire-managed" CertificateName="MacDeveloperHardenWithNotarization" />
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="get-aspire-cli.ps1" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="get-aspire-cli.ps1" CertificateName="Microsoft400" />
 
     <!-- Sign the manifest catalog on Windows -->
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="Microsoft400" />
 
     <!--
       npm packages are tarballs, but only the Aspire CLI npm tarballs should get
@@ -84,7 +85,7 @@
       unchanged for unrelated artifacts.
     -->
     <FileExtensionSignInfo Include=".tgz" CertificateName="LinuxSign500180PGP" CollisionPriorityId="AspireCliNpmPackage" />
-    <FileSignInfo Include="aspire.js" CertificateName="MicrosoftDotNet500" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire.js" CertificateName="Microsoft400" CollisionPriorityId="AspireCliNpmPackage" />
     <FileSignInfo Include="aspire.exe" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
     <FileSignInfo Include="aspire" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
   </ItemGroup>

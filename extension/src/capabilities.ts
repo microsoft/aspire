@@ -26,7 +26,8 @@ export type Capability =
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
     | 'java' // Support for running Java projects
     | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
-    | 'azure-functions'; // Support for running Azure Functions projects
+    | 'azure-functions' // Support for running Azure Functions projects
+    | 'apphost-log-output.v1'; // Support structured AppHost log correlation in the debug console
 
 export type Capabilities = Capability[];
 
@@ -39,12 +40,17 @@ export function isCsDevKitInstalled() {
     return isExtensionInstalled("ms-dotnettools.csdevkit");
 }
 
+export const csharpExtensionId = 'ms-dotnettools.csharp';
+export const azureFunctionsExtensionId = 'ms-azuretools.vscode-azurefunctions';
+export const mauiExtensionId = 'ms-dotnettools.dotnet-maui';
+export const codeLldbExtensionId = 'vadimcn.vscode-lldb';
+
 export function isCsharpInstalled() {
-    return isExtensionInstalled("ms-dotnettools.csharp");
+    return isExtensionInstalled(csharpExtensionId);
 }
 
 export function isPythonInstalled() {
-    return isExtensionInstalled("ms-python.python");
+    return isExtensionInstalled("ms-python.debugpy");
 }
 
 export function isGoInstalled() {
@@ -58,15 +64,15 @@ export function isGoInstalled() {
 export function getRustExtensionId(
     platform: NodeJS.Platform = process.platform,
     extensionInstalled?: (extensionId: string) => boolean
-): 'ms-vscode.cpptools' | 'vadimcn.vscode-lldb' {
+): 'ms-vscode.cpptools' | typeof codeLldbExtensionId {
     if (platform === 'win32'
         && extensionInstalled
         && !extensionInstalled('ms-vscode.cpptools')
-        && extensionInstalled('vadimcn.vscode-lldb')) {
-        return 'vadimcn.vscode-lldb';
+        && extensionInstalled(codeLldbExtensionId)) {
+        return codeLldbExtensionId;
     }
 
-    return platform === 'win32' ? 'ms-vscode.cpptools' : 'vadimcn.vscode-lldb';
+    return platform === 'win32' ? 'ms-vscode.cpptools' : codeLldbExtensionId;
 }
 
 export function isRustInstalled(platform: NodeJS.Platform = process.platform) {
@@ -74,11 +80,11 @@ export function isRustInstalled(platform: NodeJS.Platform = process.platform) {
 }
 
 export function isAzureFunctionsExtensionInstalled() {
-    return isExtensionInstalled("ms-azuretools.vscode-azurefunctions");
+    return isExtensionInstalled(azureFunctionsExtensionId);
 }
 
 export function isMauiInstalled() {
-    return isExtensionInstalled("ms-dotnettools.dotnet-maui");
+    return isExtensionInstalled(mauiExtensionId);
 }
 
 export function isNodeInstalled() {
@@ -106,6 +112,8 @@ export function isJavaInstalled(extensionInstalled: (extensionId: string) => boo
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
+    capabilities.push('apphost-log-output.v1');
+
     if (isCsDevKitInstalled()) {
         capabilities.push("devkit");
         capabilities.push("ms-dotnettools.csdevkit");
@@ -113,7 +121,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isCsharpInstalled()) {
         capabilities.push("project");
-        capabilities.push("ms-dotnettools.csharp");
+        capabilities.push(csharpExtensionId);
 
         // Azure Functions debugging requires both C# (coreclr attach to the worker
         // process) and the Azure Functions extension (to launch func host start).
@@ -150,7 +158,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isMauiInstalled()) {
         capabilities.push("maui");
-        capabilities.push("ms-dotnettools.dotnet-maui");
+        capabilities.push(mauiExtensionId);
     }
 
     if (isJavaInstalled()) {

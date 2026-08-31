@@ -8,13 +8,15 @@ import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AnsiColors } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
+import { AppHostLogEntry } from '../debugger/appHostLogOutput';
+import { AnsiColors } from '../utils/AspireTerminalProvider';
 
 export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
@@ -43,6 +45,7 @@ export interface IInteractionService extends vscode.Disposable {
     notifyAppHostStartupCompleted: () => void;
     startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
     writeDebugSessionMessage: (message: string, stdout: boolean, textStyle?: string) => void;
+    writeAppHostLogEntry: (entry: AppHostLogEntry) => void;
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
@@ -162,6 +165,7 @@ type DebugSessionOptions = {
     command?: string;
     args?: string[];
     env?: { [key: string]: string };
+    appHostSelectionOrigin?: AppHostSelectionOrigin;
 };
 
 export class InteractionService implements IInteractionService {
@@ -637,7 +641,20 @@ export class InteractionService implements IInteractionService {
             return;
         }
 
+        // CLIs without `apphost-log-output.v1` deliver AppHost logs here without record
+        // identity or provenance. Preserve that output as-is rather than guessing by
+        // message text and potentially dropping a distinct record.
         debugSession.sendMessage(applyTextStyle(message, textStyle), addNewLine, stdout ? 'stdout' : 'stderr');
+    }
+
+    writeAppHostLogEntry(entry: AppHostLogEntry) {
+        const debugSession = this._getAspireDebugSession();
+        if (!debugSession) {
+            extensionLogOutputChannel.warn('Attempted to write an AppHost log entry, but no active debug session exists.');
+            return;
+        }
+
+        debugSession.sendAppHostLogEntry(entry);
     }
 
     async launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void> {
@@ -678,6 +695,8 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const command = options?.command ?? 'run';
+        const appHostSelectionOrigin = options?.appHostSelectionOrigin
+            ?? (projectFile ? 'user-selection' : 'default-discovery');
 
         const debugConfiguration: AspireExtendedDebugConfiguration = {
             type: 'aspire',
@@ -688,7 +707,7 @@ export class InteractionService implements IInteractionService {
             args: options?.args,
             env: options?.env,
             noDebug: !debug,
-            [appHostSelectionOriginConfigKey]: projectFile ? 'user-selection' : 'default-discovery',
+            [appHostSelectionOriginConfigKey]: appHostSelectionOrigin,
         };
 
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workingDirectory));
@@ -761,6 +780,7 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
     connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
+    connection.onRequest("writeAppHostLogEntry", middleware('writeAppHostLogEntry', interactionService.writeAppHostLogEntry.bind(interactionService)));
 }
 
 function delayStatusForE2E(): void {

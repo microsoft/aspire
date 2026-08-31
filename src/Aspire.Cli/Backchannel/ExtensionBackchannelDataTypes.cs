@@ -68,6 +68,9 @@ internal sealed class EnvVar
 /// </summary>
 internal sealed class DebugSessionOptions
 {
+    internal const string ExplicitCliAppHostSelectionOrigin = "explicit-cli";
+    internal const string DefaultDiscoveryAppHostSelectionOrigin = "default-discovery";
+
     /// <summary>
     /// Gets or sets the command type for the debug session (e.g., "run", "deploy", "publish", "do").
     /// </summary>
@@ -85,4 +88,37 @@ internal sealed class DebugSessionOptions
     /// </summary>
     [JsonPropertyName("env")]
     public Dictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value describing how the AppHost was selected.
+    /// </summary>
+    [JsonPropertyName("appHostSelectionOrigin")]
+    public string? AppHostSelectionOrigin { get; set; }
+}
+
+/// <summary>
+/// Carries one structured AppHost log record to an extension debug session.
+/// </summary>
+internal sealed class ExtensionAppHostLogEntry
+{
+    [JsonPropertyName("generationId")]
+    public required Guid GenerationId { get; set; }
+
+    [JsonPropertyName("sequenceNumber")]
+    public required long SequenceNumber { get; set; }
+
+    [JsonPropertyName("logLevel")]
+    public required string LogLevel { get; set; }
+
+    [JsonPropertyName("message")]
+    public required string Message { get; set; }
+
+    [JsonPropertyName("categoryName")]
+    public required string CategoryName { get; set; }
+
+    [JsonPropertyName("eventId")]
+    public required int EventId { get; set; }
+
+    [JsonPropertyName("exception")]
+    public string? Exception { get; set; }
 }

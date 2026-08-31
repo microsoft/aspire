@@ -46,6 +46,7 @@ internal interface IExtensionBackchannel
     Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options, CancellationToken cancellationToken);
     Task DisplayPlainTextAsync(string text, CancellationToken cancellationToken);
     Task WriteDebugSessionMessageAsync(string message, bool stdout, string? textStyle, CancellationToken cancellationToken);
+    Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken);
 }
 
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
@@ -718,6 +719,20 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             cancellationToken);
     }
 
+    public async Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        await rpc.InvokeWithCancellationAsync(
+            "writeAppHostLogEntry",
+            [_token, entry],
+            cancellationToken);
+    }
+
     public async Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken)
     {
         var capabilities = await GetCapabilitiesAsync(cancellationToken);
@@ -750,7 +765,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var rpc = await _rpcTaskCompletionSource.Task;
 
-        _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
+        _logger.LogDebug("Running project at {ProjectFile} with {ArgumentCount} arguments", projectFile, arguments.Count);
 
         await rpc.InvokeWithCancellationAsync(
             "launchAppHost",
