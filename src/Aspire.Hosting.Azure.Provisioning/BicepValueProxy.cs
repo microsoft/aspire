@@ -159,7 +159,7 @@ public sealed class BicepValueProxy
 
     private void EnsureLiteralType(Type targetType)
     {
-        if (_value.Kind != BicepValueKind.Literal)
+        if (_value.Kind != BicepValueKind.Literal && _valueType == typeof(object))
         {
             return;
         }
@@ -174,8 +174,9 @@ public sealed class BicepValueProxy
 
         if (sourceUnderlyingType != targetUnderlyingType)
         {
+            var valueDescription = _value.Kind == BicepValueKind.Literal ? "literal" : "value";
             throw new ArgumentException(
-                $"A literal of type {_valueType.Name} cannot be assigned to a BicepValue<{targetType.Name}>.");
+                $"A {valueDescription} of type {_valueType.Name} cannot be assigned to a BicepValue<{targetType.Name}>.");
         }
     }
 
