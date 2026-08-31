@@ -67,8 +67,9 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
         // rewrites only channel/version/commit, so this field survives the self-update below.
         await auto.RunCommandAsync(
             "install_root=$HOME/.aspire-self-update-e2e; " +
-            "packages_dir=$(dirname \"$(find ~/.aspire/hives -type f -name 'Aspire.Hosting.*.nupkg' | head -1)\"); " +
-            "test -n \"$packages_dir\"; " +
+            "package_path=$(find ~/.aspire/hives -type f -name 'Aspire.Hosting.*.nupkg' -print -quit); " +
+            "test -n \"$package_path\"; " +
+            "packages_dir=$(dirname \"$package_path\"); " +
             "mkdir -p \"$install_root/bin\"; " +
             "cp \"$(command -v aspire)\" \"$install_root/bin/aspire\"; " +
             "chmod +x \"$install_root/bin/aspire\"; " +
