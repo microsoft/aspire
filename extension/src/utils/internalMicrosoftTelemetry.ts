@@ -32,6 +32,10 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
     }
 
     async initializeAsync(): Promise<void> {
+        if (this._disposed) {
+            return;
+        }
+
         if (!this._authenticationChangeRegistration) {
             this._authenticationChangeRegistration = this._authentication.onDidChangeSessions(event => {
                 if (event.provider.id === microsoftAuthenticationProviderId) {
@@ -40,16 +44,22 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
             });
         }
 
-        await this.refreshAsync();
-        if (!this._identity.isInternal) {
-            await waitFor(() => this._identity.isInternal, this._initialAccountLoadGraceMs);
-        }
+        void this.refreshAsync();
+        await waitFor(
+            () => this._identity.isInternal || this._authenticationChangeRegistration === undefined,
+            this._initialAccountLoadGraceMs);
+    }
+
+    disable(): void {
+        this._refreshGeneration++;
+        this._authenticationChangeRegistration?.dispose();
+        this._authenticationChangeRegistration = undefined;
+        this.publish({ isInternal: false });
     }
 
     dispose(): void {
         this._disposed = true;
-        this._refreshGeneration++;
-        this._authenticationChangeRegistration?.dispose();
+        this.disable();
     }
 
     private async refreshAsync(): Promise<InternalMicrosoftTelemetryIdentity | undefined> {

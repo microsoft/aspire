@@ -142,6 +142,11 @@ export function isExtensionTelemetryEnabled(): boolean {
     return telemetryLogger?.isUsageEnabled === true || telemetryLogger?.isErrorsEnabled === true;
 }
 
+export function onDidChangeExtensionTelemetryEnabled(listener: (enabled: boolean) => void): vscode.Disposable {
+    return telemetryLogger?.onDidChangeEnableStates(() => listener(isExtensionTelemetryEnabled())) ??
+        { dispose() { } };
+}
+
 /**
  * Replace the current set of common properties. Passing `undefined` for a
  * property removes it. Values must conform to the telemetry registry's data-classification
@@ -192,6 +197,10 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
+    if (telemetryLogger?.isUsageEnabled !== true) {
+        return;
+    }
+
     emitWhenEnriched(() => {
         telemetryLogger?.logUsage(eventName, {
             properties: mergeProperties(properties),
@@ -209,6 +218,10 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
+    if (telemetryLogger?.isErrorsEnabled !== true) {
+        return;
+    }
+
     emitWhenEnriched(() => {
         telemetryLogger?.logError(eventName, {
             properties: mergeProperties(properties),

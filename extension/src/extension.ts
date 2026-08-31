@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { RpcClient } from './server/rpcClient';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, sendTelemetryEvent, setTelemetryEnrichmentTask } from './utils/telemetry';
+import { initializeTelemetry, isExtensionTelemetryEnabled, onDidChangeExtensionTelemetryEnabled, sendTelemetryEvent, setTelemetryEnrichmentTask } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -49,8 +49,17 @@ export async function activate(context: vscode.ExtensionContext) {
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   const internalMicrosoftTelemetryProvider = new InternalMicrosoftTelemetryProvider();
   context.subscriptions.push(internalMicrosoftTelemetryProvider);
-  setTelemetryEnrichmentTask(internalMicrosoftTelemetryProvider.initializeAsync());
   initializeTelemetry(context);
+  const updateInternalMicrosoftTelemetry = (enabled: boolean) => {
+    if (enabled) {
+      setTelemetryEnrichmentTask(internalMicrosoftTelemetryProvider.initializeAsync());
+    }
+    else {
+      internalMicrosoftTelemetryProvider.disable();
+    }
+  };
+  updateInternalMicrosoftTelemetry(isExtensionTelemetryEnabled());
+  context.subscriptions.push(onDidChangeExtensionTelemetryEnabled(updateInternalMicrosoftTelemetry));
   sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
     extension_mode: getExtensionModeForTelemetry(context.extensionMode),

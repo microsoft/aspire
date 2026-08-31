@@ -188,6 +188,40 @@ suite('telemetry utilities', () => {
         });
     });
 
+    test('does not export an event that occurred while its telemetry level was disabled', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+        fake.telemetryLevel = 'off';
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.disabled' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', { resource_type: 'test' });
+        fake.telemetryLevel = 'all';
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 0);
+    });
+
+    test('rechecks the telemetry level before emitting a queued event', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.enabled' });
+        fake.telemetryLevel = 'off';
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 0);
+    });
+
     test('usage and dashboard events keep their registry wire names', () => {
         setCommonTelemetryProperties({
             is_microsoft_internal: 'true',

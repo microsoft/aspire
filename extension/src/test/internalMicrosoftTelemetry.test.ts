@@ -158,6 +158,80 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         }
     });
 
+    test('bounds initialization when account enumeration stalls', async () => {
+        const published: CommonTelemetryProperties[] = [];
+        const provider = new InternalMicrosoftTelemetryProvider(
+            {
+                getAccounts: () => new Promise(() => { }),
+                onDidChangeSessions: () => ({ dispose() { } }),
+            },
+            properties => published.push({ ...properties }),
+            () => { },
+            10);
+
+        try {
+            await provider.initializeAsync();
+
+            assert.deepStrictEqual(published.at(-1), {
+                is_microsoft_internal: 'false',
+                microsoft_internal_alias: undefined,
+                microsoft_internal_domain: undefined,
+            });
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('does not access accounts while disabled and refreshes when re-enabled', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let accountQueries = 0;
+        let accounts: readonly vscode.AuthenticationSessionAccountInformation[] = [
+            { id: `first.${microsoftTenantId}`, label: 'first.user@microsoft.com' },
+        ];
+        const published: CommonTelemetryProperties[] = [];
+        const provider = new InternalMicrosoftTelemetryProvider(
+            {
+                getAccounts: async () => {
+                    accountQueries++;
+                    return accounts;
+                },
+                onDidChangeSessions: sessionChanges.event,
+            },
+            properties => published.push({ ...properties }),
+            () => { },
+            10);
+
+        try {
+            provider.disable();
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await new Promise(resolve => setTimeout(resolve, 0));
+            assert.strictEqual(accountQueries, 0);
+
+            await provider.initializeAsync();
+            assert.strictEqual(accountQueries, 1);
+            assert.strictEqual(published.at(-1)?.microsoft_internal_alias, 'first.user');
+
+            provider.disable();
+            accounts = [{ id: `second.${microsoftTenantId}`, label: 'second.user@microsoft.com' }];
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await new Promise(resolve => setTimeout(resolve, 0));
+            assert.strictEqual(accountQueries, 1);
+            assert.deepStrictEqual(published.at(-1), {
+                is_microsoft_internal: 'false',
+                microsoft_internal_alias: undefined,
+                microsoft_internal_domain: undefined,
+            });
+
+            await provider.initializeAsync();
+            assert.strictEqual(accountQueries, 2);
+            assert.strictEqual(published.at(-1)?.microsoft_internal_alias, 'second.user');
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {
