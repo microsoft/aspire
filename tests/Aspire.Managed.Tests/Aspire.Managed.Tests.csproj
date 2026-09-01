@@ -15,7 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
 
-    <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
 
 </Project>

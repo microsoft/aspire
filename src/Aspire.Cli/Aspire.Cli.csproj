@@ -36,6 +36,8 @@
          AssemblyMetadata below so the runtime IdentityChannelReader can read it without
          reflection-unsafe lookups. -->
     <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
+    <NuGetClientRepoRoot Condition="'$(NuGetClientRepoRoot)' == ''">$([System.IO.Path]::GetFullPath('$(RepoRoot)..\NuGet.Client'))</NuGetClientRepoRoot>
+    <NuGetClientArtifactsRoot>$(NuGetClientRepoRoot)\artifacts</NuGetClientArtifactsRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -95,6 +97,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <RuntimeHostConfigurationOption Include="NuGet.UseSystemTextJsonDeserialization"
+                                    Value="true"
+                                    Trim="true" />
+  </ItemGroup>
+
+  <!-- NuGet's Linux signature verification probes trustedroots under the SDK root.
+       The NativeAOT CLI extracts these embedded SDK roots only while initializing NuGet's trust store. -->
+  <PropertyGroup>
+    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
+    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Markdig" />
@@ -110,10 +128,38 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- System.Security.Cryptography.Pkcs ships a real lib/net10.0 assembly that binds to
+         Microsoft.Bcl.Cryptography, but its net10.0 dependency group is empty. Reference
+         the matching implementation explicitly so Native AOT can resolve signature verification. -->
+    <PackageReference Include="Microsoft.Bcl.Cryptography" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Protocol" ExcludeAssets="all" />
+    <PackageReference Include="NuGet.Resolver" ExcludeAssets="all" />
+    <Reference Include="NuGet.Common" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Common\bin\Release\net10.0\NuGet.Common.dll" />
+    <Reference Include="NuGet.Configuration" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Configuration\bin\Release\net10.0\NuGet.Configuration.dll" />
+    <Reference Include="NuGet.Credentials" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Credentials\bin\Release\net10.0\NuGet.Credentials.dll" />
+    <Reference Include="NuGet.Frameworks" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Frameworks\bin\Release\net10.0\NuGet.Frameworks.dll" />
+    <Reference Include="NuGet.Packaging" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Packaging\bin\Release\net10.0\NuGet.Packaging.dll" />
+    <Reference Include="NuGet.Protocol" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Protocol\bin\Release\net10.0\NuGet.Protocol.dll" />
+    <Reference Include="NuGet.Resolver" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Resolver\bin\Release\net10.0\NuGet.Resolver.dll" />
+    <Reference Include="NuGet.Versioning" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Versioning\bin\Release\net10.0\NuGet.Versioning.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Common\bin\Release\net10.0\NuGet.Common.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Configuration\bin\Release\net10.0\NuGet.Configuration.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Credentials\bin\Release\net10.0\NuGet.Credentials.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Frameworks\bin\Release\net10.0\NuGet.Frameworks.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Packaging\bin\Release\net10.0\NuGet.Packaging.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Protocol\bin\Release\net10.0\NuGet.Protocol.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Resolver\bin\Release\net10.0\NuGet.Resolver.dll" />
+    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Versioning\bin\Release\net10.0\NuGet.Versioning.dll" />
   </ItemGroup>
+
+  <Target Name="EnsureLocalNuGetBuild" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('%(_LocalNuGetAssembly.Identity)')"
+           Text="The local NuGet assembly was not found at '%(_LocalNuGetAssembly.Identity)'. Build '$(NuGetClientRepoRoot)\src\NuGet.Core\NuGet.Resolver\NuGet.Resolver.csproj' in Release configuration, or set NuGetClientRepoRoot." />
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
