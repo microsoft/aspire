@@ -92,6 +92,11 @@
         <target state="translated">Obtention des modèles...</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationTestFrameworkOptionDescription">
+        <source>Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.net.</source>
+        <target state="new">Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.net.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IntegrationTestsTemplate_Description">
         <source>Integration tests</source>
         <target state="translated">Tests d'intégration</target>

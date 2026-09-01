@@ -223,6 +223,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.net..
+        /// </summary>
+        public static string IntegrationTestFrameworkOptionDescription {
+            get {
+                return ResourceManager.GetString("IntegrationTestFrameworkOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Integration tests.
         /// </summary>
         public static string IntegrationTestsTemplate_Description {
