@@ -1,0 +1,38 @@
+{
+  "run_id": 33555454691,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33555454691",
+  "analyzed_at": "2026-09-01T21:03:51Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19846,
+    "title": "Remove obsolete NuGet layout command",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-remove-nuget-layout",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19846"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, discovery-configuration)",
+      "id": 100019156474,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33555454691/job/100019156474",
+      "classification": "flaky-test",
+      "reason": "The 'discovery-configuration' shard matches a known recurring flaky failure ('rediscovers workspace AppHost candidates when config changes') caused by a config file read/write race in the VS Code extension E2E test harness. Detailed job logs were unavailable, but the PR only removes an obsolete NuGet layout command (src/Aspire.Managed/NuGet/Commands/LayoutCommand.cs and related tests/docs), which has no relation to the VS Code extension or workspace discovery/configuration code.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire workspace discovery and configuration E2E rediscovers workspace AppHost candidates when config changes",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, discovery-configuration)",
+      "error": "Process completed with exit code 1. Job logs unavailable ('Failed to fetch logs for job'). Matches prior recurring failure pattern for this shard: assert.ok(multipleCandidates.state.workspaceAppHostCandidatePaths.length >= 2) evaluated to falsy due to a config file read/write race producing invalid JSON.",
+      "stack_trace": "N/A (job logs unavailable)",
+      "classification": "flaky",
+      "reason": "This exact shard (Windows, discovery-configuration) has a known recurring flaky pattern caused by a race condition in test config file read/write. The PR under test only removes an unrelated obsolete NuGet layout command, with no changes to VS Code extension, workspace discovery, or configuration code."
+    }
+  ],
+  "causes": ["vscode-e2e-discovery-configuration-race"]
+}
