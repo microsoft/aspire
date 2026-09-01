@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Net.Http.Headers;
+using Azure.Core;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b;
 using Hex1b.Automation;
@@ -123,9 +125,13 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromMinutes(4));
 
-            deploymentUrls["frontend"] = File.ReadAllText(urlFile).Trim();
+            var frontendUrl = File.ReadAllText(urlFile).Trim();
+            output.WriteLine("Step 8: Verifying the deploying identity can reach the application through Entra authentication...");
+            await VerifyAuthenticatedSandboxEndpointAsync(frontendUrl, cancellationToken);
 
-            output.WriteLine("Step 8: Destroying the Azure sandbox deployment...");
+            deploymentUrls["frontend"] = frontendUrl;
+
+            output.WriteLine("Step 9: Destroying the Azure sandbox deployment...");
             await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(10));
             destroyCompleted = true;
 
@@ -497,6 +503,38 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             "sleep 10; " +
             "done; " +
             "if [ \"$success\" -ne 1 ]; then echo \"Sandbox URL check failed for $URL\"; cat /tmp/aspire-sandbox-curl.err 2>/dev/null || true; exit 1; fi";
+    }
+
+    private async Task VerifyAuthenticatedSandboxEndpointAsync(string url, CancellationToken cancellationToken)
+    {
+        var credential = AzureAuthenticationHelpers.GetAzureCredential();
+        var accessToken = await credential.GetTokenAsync(
+            new TokenRequestContext(["https://auth.adcproxy.io/.default"]),
+            cancellationToken);
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+
+        for (var attempt = 1; attempt <= 18; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Token);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            output.WriteLine($"Authenticated endpoint returned HTTP {(int)response.StatusCode} (attempt {attempt}).");
+            if (response.IsSuccessStatusCode &&
+                string.Equals(body, ExpectedDotNetResponseText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (attempt < 18)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+        }
+
+        Assert.Fail("The deploying identity could not reach the application through the Entra-authenticated Sandbox endpoint.");
     }
 
     private static string VerifyRetainedUrlSummaryCommand(string firstUrlFile, string secondUrlFile, string secondDeployOutputFile)
