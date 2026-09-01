@@ -344,6 +344,10 @@ path_rules:
     targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Hosting.DotnetTool.Tests, job:polyglot]
     reason: AppHost SDK targets + RuntimeIdentifier tool; SDK ships to every generated apphost
   - paths:
+      - tools/CreateFailingTestIssue/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests dynamically builds and exercises the tool lifecycle without a ProjectReference
+  - paths:
       - tools/QuarantineTools/**
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic

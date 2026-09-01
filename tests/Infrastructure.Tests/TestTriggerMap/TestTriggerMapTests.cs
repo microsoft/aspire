@@ -368,6 +368,10 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
+            "tools/CreateFailingTestIssue/FailingTestIssueCommand.cs",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             "eng/scripts/smoke-installed-cli.ps1",
             ["job:winget-installer"]
         },
