@@ -91,28 +91,47 @@ public class AppHostAuxiliaryBackchannelTests
         Assert.Empty(response.Terminals);
     }
 
+    [Theory]
+    [InlineData(nameof(TestAppHostRpcTarget.GetAppHostInformationAsync))]
+    [InlineData(nameof(TestAppHostRpcTarget.GetCapabilitiesAsync))]
+    public async Task ConnectAsync_WhenHandshakeRpcStalls_TimesOutAndDisposesConnection(string stalledMethod)
+    {
+        using var server = TestAppHostBackchannelServer.Start(stalledMethod);
+
+        var connectTask = server.ConnectAsync(TimeSpan.FromSeconds(3));
+        await server.WaitForStalledMethodEntryAsync().DefaultTimeout();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connectTask).DefaultTimeout();
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
+    }
+
     private sealed class TestAppHostBackchannelServer : IDisposable
     {
         private readonly TcpListener _listener;
         private readonly List<IDisposable> _disposables = [];
+        private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        private TestAppHostBackchannelServer()
+        private TestAppHostBackchannelServer(string? stalledMethod)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
-            Target = new TestAppHostRpcTarget();
+            Target = new TestAppHostRpcTarget(stalledMethod);
         }
 
         public TestAppHostRpcTarget Target { get; }
 
-        public static TestAppHostBackchannelServer Start()
+        public static TestAppHostBackchannelServer Start(string? stalledMethod = null)
         {
-            var server = new TestAppHostBackchannelServer();
+            var server = new TestAppHostBackchannelServer(stalledMethod);
             server._listener.Start();
 
             return server;
         }
 
-        public async Task<AppHostAuxiliaryBackchannel> ConnectAsync()
+        public Task<AppHostAuxiliaryBackchannel> ConnectAsync() => ConnectAsyncCore(handshakeTimeout: null);
+
+        public Task<AppHostAuxiliaryBackchannel> ConnectAsync(TimeSpan handshakeTimeout) => ConnectAsyncCore(handshakeTimeout);
+
+        private async Task<AppHostAuxiliaryBackchannel> ConnectAsyncCore(TimeSpan? handshakeTimeout)
         {
             var clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             var acceptTask = _listener.AcceptSocketAsync();
@@ -121,16 +140,28 @@ public class AppHostAuxiliaryBackchannelTests
             var serverStream = new NetworkStream(serverSocket, ownsSocket: true);
             var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
             var rpc = new JsonRpc(messageHandler, Target);
+            rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
             rpc.StartListening();
             _disposables.Add(rpc);
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
+            if (handshakeTimeout is { } timeout)
+            {
+                return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, timeout, CancellationToken.None).DefaultTimeout();
+            }
+
             return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
         }
 
+        public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
+
+        public Task WaitForStalledMethodEntryAsync() => Target.WaitForStalledMethodEntryAsync();
+
         public void Dispose()
         {
+            Target.ReleaseStall();
+
             foreach (var disposable in _disposables)
             {
                 disposable.Dispose();
@@ -143,6 +174,9 @@ public class AppHostAuxiliaryBackchannelTests
     private sealed class TestAppHostRpcTarget
     {
         private readonly int _processId = Environment.ProcessId;
+        private readonly string? _stalledMethod;
+        private readonly TaskCompletionSource _stalledMethodEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releaseStall = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly string[] _capabilities =
         [
             AuxiliaryBackchannelCapabilities.V1,
@@ -150,30 +184,37 @@ public class AppHostAuxiliaryBackchannelTests
             AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
         ];
 
+        public TestAppHostRpcTarget(string? stalledMethod)
+        {
+            _stalledMethod = stalledMethod;
+        }
+
         public GetResourcesRequest? GetResourcesRequest { get; private set; }
 
         public WatchResourcesRequest? WatchResourcesRequest { get; private set; }
 
-        public Task<AppHostInformation> GetAppHostInformationAsync(CancellationToken cancellationToken = default)
+        public async Task<AppHostInformation> GetAppHostInformationAsync(CancellationToken cancellationToken = default)
         {
             _ = cancellationToken;
+            await StallIfRequestedAsync(nameof(GetAppHostInformationAsync));
 
-            return Task.FromResult(new AppHostInformation
+            return new AppHostInformation
             {
                 AppHostPath = "/path/to/AppHost.csproj",
                 ProcessId = _processId
-            });
+            };
         }
 
-        public Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null, CancellationToken cancellationToken = default)
+        public async Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null, CancellationToken cancellationToken = default)
         {
             _ = request;
             _ = cancellationToken;
+            await StallIfRequestedAsync(nameof(GetCapabilitiesAsync));
 
-            return Task.FromResult(new GetCapabilitiesResponse
+            return new GetCapabilitiesResponse
             {
                 Capabilities = _capabilities
-            });
+            };
         }
 
         public Task<GetResourcesResponse> GetResourcesAsync(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
@@ -200,5 +241,20 @@ public class AppHostAuxiliaryBackchannelTests
                 Name = "api",
                 ResourceType = "Project"
             };
+
+        public void ReleaseStall() => _releaseStall.TrySetResult();
+
+        public Task WaitForStalledMethodEntryAsync() => _stalledMethodEntered.Task;
+
+        private Task StallIfRequestedAsync(string method)
+        {
+            if (_stalledMethod != method)
+            {
+                return Task.CompletedTask;
+            }
+
+            _stalledMethodEntered.TrySetResult();
+            return _releaseStall.Task;
+        }
     }
 }

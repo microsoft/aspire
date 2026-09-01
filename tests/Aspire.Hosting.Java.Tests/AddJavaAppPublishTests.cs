@@ -262,6 +262,17 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyPublish_UsesTheExplicitMavenProfileForTheRuntimeImage()
+    {
+        var content = await PublishDockerfileAsync(
+            configureSource: WriteProfilePom,
+            configureResource: app => app.WithMavenBuild("-Pprod", "package"));
+
+        Assert.StartsWith("FROM --platform=$BUILDPLATFORM docker.io/library/eclipse-temurin:25-jdk AS build", content);
+        Assert.Contains("\nFROM docker.io/library/eclipse-temurin:25-jre\n", content);
+    }
+
+    [Fact]
     public async Task VerifyPublish_DetectsTheBuildToolFromDiskWhenOnlyAJarPathWasGiven()
     {
         var content = await PublishDockerfileAsync(
@@ -553,6 +564,157 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void JavaVersionDetector_ReadsActiveByDefaultProfileProperties()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, "pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <artifactId>demo</artifactId>
+              <profiles>
+                <profile>
+                  <id>java-25</id>
+                  <activation><activeByDefault>true</activeByDefault></activation>
+                  <properties><java.version>25</java.version></properties>
+                </profile>
+              </profiles>
+            </project>
+            """);
+
+        Assert.Equal("25", JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Fact]
+    public void JavaVersionDetector_PrefersActiveByDefaultProfilePropertiesToProjectProperties()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, "pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <artifactId>demo</artifactId>
+              <properties><java.version>21</java.version></properties>
+              <profiles>
+                <profile>
+                  <id>java-25</id>
+                  <activation><activeByDefault>true</activeByDefault></activation>
+                  <properties><java.version>25</java.version></properties>
+                </profile>
+              </profiles>
+            </project>
+            """);
+
+        Assert.Equal("25", JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Fact]
+    public void JavaVersionDetector_UsesTheFinalActiveByDefaultProfileProperty()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, "pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <artifactId>demo</artifactId>
+              <profiles>
+                <profile>
+                  <id>java-17</id>
+                  <activation><activeByDefault>true</activeByDefault></activation>
+                  <properties><java.version>17</java.version></properties>
+                </profile>
+                <profile>
+                  <id>java-25</id>
+                  <activation><activeByDefault>true</activeByDefault></activation>
+                  <properties><java.version>25</java.version></properties>
+                </profile>
+              </profiles>
+            </project>
+            """);
+
+        Assert.Equal("25", JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Theory]
+    [InlineData("-Pprod")]
+    [InlineData("-P", "prod")]
+    [InlineData("-P=prod")]
+    [InlineData("--activate-profiles=prod")]
+    [InlineData("--activate-profiles", "prod")]
+    [InlineData("-Punknown,prod")]
+    [InlineData("-Pdefault,prod")]
+    [InlineData("-P?prod")]
+    public void JavaVersionDetector_UsesExplicitlyActivatedMavenProfile(params string[] buildArgs)
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+        WriteProfilePom(appDirectory.Path);
+
+        Assert.Equal("25", JavaVersionDetector.Detect(appDirectory.Path, JavaBuildTool.Maven, buildArgs));
+    }
+
+    [Theory]
+    [InlineData("-P!default")]
+    [InlineData("-P=-default")]
+    [InlineData("-Pdefault,!default")]
+    public void JavaVersionDetector_ExcludesExplicitlyDeactivatedDefaultProfile(params string[] buildArgs)
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+        WriteProfilePom(appDirectory.Path);
+
+        Assert.Equal("21", JavaVersionDetector.Detect(appDirectory.Path, JavaBuildTool.Maven, buildArgs));
+    }
+
+    [Theory]
+    [InlineData("-P")]
+    [InlineData("-P=")]
+    [InlineData("-P!")]
+    [InlineData("-P?")]
+    [InlineData("--activate-profiles")]
+    public void JavaVersionDetector_IgnoresMalformedMavenProfileArguments(params string[] buildArgs)
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+        WriteProfilePom(appDirectory.Path);
+
+        Assert.Equal("17", JavaVersionDetector.Detect(appDirectory.Path, JavaBuildTool.Maven, buildArgs));
+    }
+
+    [Fact]
+    public void JavaVersionDetector_DoesNotTreatGradleProjectPropertiesAsMavenProfiles()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+        WriteProfilePom(appDirectory.Path);
+        File.WriteAllText(Path.Combine(appDirectory.Path, "build.gradle"), "plugins { id 'java' }");
+
+        Assert.Equal("17", JavaVersionDetector.Detect(appDirectory.Path, JavaBuildTool.Gradle, ["-Pprod"]));
+    }
+
+    [Fact]
+    public void JavaVersionDetector_IgnoresInactiveProfileProperties()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, "pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <artifactId>demo</artifactId>
+              <profiles>
+                <profile>
+                  <id>legacy</id>
+                  <properties><java.version>17</java.version></properties>
+                </profile>
+              </profiles>
+              <properties><java.version>21</java.version></properties>
+            </project>
+            """);
+
+        Assert.Equal("21", JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Fact]
     public void JavaVersionDetector_IgnoresATargetOutsideAPluginConfiguration()
     {
         // <target> is a common element name in other plugins. Matched anywhere, an antrun target that
@@ -579,11 +741,101 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }", "21")]
     [InlineData("java.toolchain.languageVersion.set(JavaLanguageVersion.of(17))", "17")]
+    [InlineData("java.toolchain.languageVersion = JavaLanguageVersion.of(25)", "25")]
     [InlineData("sourceCompatibility = JavaVersion.VERSION_1_8", "8")]
     [InlineData("sourceCompatibility = JavaVersion.VERSION_21", "21")]
     [InlineData("sourceCompatibility = '17'", "17")]
     [InlineData("targetCompatibility = 1.8", "8")]
+    [InlineData("""
+        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = '21'
+        sourceCompatibility = JavaVersion.VERSION_25
+        """, "21")]
+    [InlineData("""
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        project(":legacy") {
+            java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+        }
+        """, "25")]
+    [InlineData("""
+        java.toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+        project(":legacy")
+        {
+            java.toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """, "25")]
+    [InlineData("""
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        subprojects {
+            extensions.configure<JavaPluginExtension> {
+                toolchain {
+                    languageVersion.set(JavaLanguageVersion.of(17))
+                }
+            }
+        }
+        """, "25")]
+    [InlineData("""
+        targetCompatibility = JavaVersion.VERSION_25
+        subprojects {
+            targetCompatibility = JavaVersion.VERSION_17
+        }
+        """, "25")]
+    [InlineData("""
+        sourceCompatibility = JavaVersion.VERSION_25
+        project(":legacy") {
+            sourceCompatibility = JavaVersion.VERSION_17
+        }
+        """, "25")]
+    [InlineData("""
+        sourceCompatibility = JavaVersion.VERSION_25
+        configure(subprojects) { sourceCompatibility = JavaVersion.VERSION_17 }
+        """, "25")]
+    [InlineData("""
+        targetCompatibility = JavaVersion.VERSION_25
+        configure
+        (
+            subprojects
+        )
+        {
+            targetCompatibility = JavaVersion.VERSION_17
+        }
+        """, "25")]
+    [InlineData("""
+        sourceCompatibility = JavaVersion.VERSION_25
+        project(":legacy").sourceCompatibility = JavaVersion.VERSION_17
+        """, "25")]
+    [InlineData("""
+        targetCompatibility = JavaVersion.VERSION_25
+        project(":legacy").targetCompatibility = JavaVersion.VERSION_17
+        """, "25")]
+    [InlineData("""
+        java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+        project(":legacy").java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+        """, "25")]
+    [InlineData("""
+        project(":legacy").description = "legacy application"
+        sourceCompatibility = JavaVersion.VERSION_25
+        """, "25")]
+    [InlineData("""
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        project(
+            ":leg)acy"
+        ) /* This brace does not start the project block: } */ {
+            def ignored = "This brace does not close the project block: }"
+            java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+        }
+        """, "25")]
+    [InlineData("""
+        allprojects {
+            java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+        }
+        """, "25")]
     [InlineData("", JavaVersionDetector.DefaultJavaVersion)]
+    [InlineData("""
+        java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        sourceCompatibility = '17'
+        """, "25")]
     // A commented-out setting must not win over the active one below it.
     [InlineData("""
         java {
@@ -609,6 +861,22 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
         tasks.register("noop") { doLast { println("/*") } }
         java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
         """, "21")]
+    [InlineData("""
+        def openingBrace = /{/
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        """, "25")]
+    [InlineData("""
+        def openingBrace = $/{/$
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        """, "25")]
+    [InlineData("""
+        def expression = { return /{/ }
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        """, "25")]
+    [InlineData("""
+        java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+        def ignored = $/ $/$$ java { toolchain { languageVersion = JavaLanguageVersion.of(17) } } /$
+        """, "25")]
     // A setting that only exists inside a comment leaves nothing to detect.
     [InlineData("// languageVersion = JavaLanguageVersion.of(17)", JavaVersionDetector.DefaultJavaVersion)]
     // A version-shaped fragment quoted inside a string is not a declaration, and appears first, so
@@ -640,6 +908,131 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(appDirectory.Path, "build.gradle"), script);
 
         Assert.Equal(expected, JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Theory]
+    [InlineData("build.gradle", """
+        java.toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+
+        def legacyLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+        tasks.register('legacyJava', JavaExec) {
+            javaLauncher = legacyLauncher
+        }
+        """)]
+    [InlineData("build.gradle", """
+        java {
+            def ignored = "{ toolchain { languageVersion = JavaLanguageVersion.of(11) } }"
+            // This brace does not close the java block: }
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(25)
+            }
+        }
+
+        def legacyLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+        tasks.register('legacyJava', JavaExec) {
+            javaLauncher = legacyLauncher
+        }
+        """)]
+    [InlineData("build.gradle.kts", """"
+        java {
+            val ignored = """{ toolchain { languageVersion.set(JavaLanguageVersion.of(11)) } }"""
+            /* This brace does not close the java block: } */
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(25))
+            }
+        }
+
+        val legacyLauncher = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        tasks.register<JavaExec>("legacyJava") {
+            javaLauncher.set(legacyLauncher)
+        }
+        """")]
+    [InlineData("build.gradle.kts", """
+        extensions.configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(25))
+            }
+        }
+        val launcher = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """)]
+    [InlineData("build.gradle.kts", """
+        java {
+            toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+        }
+        val launcher = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """)]
+    [InlineData("build.gradle.kts", """
+        configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(25))
+            }
+        }
+        val launcher = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """)]
+    [InlineData("build.gradle.kts", """
+        pluginManager.withPlugin("java") {
+            extensions.configure<JavaPluginExtension> {
+                toolchain {
+                    languageVersion.set(JavaLanguageVersion.of(25))
+                }
+            }
+        }
+        val launcher = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """)]
+    [InlineData("build.gradle.kts", """
+        java {
+            toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+        }
+        project(":legacy") {
+            java {
+                toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+            }
+        }
+        """)]
+    [InlineData("build.gradle.kts", """
+        java {
+            toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+        }
+        subprojects {
+            java.toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        """)]
+    public void JavaVersionDetector_IgnoresToolchainsOutsideTheJavaApplicationToolchain(string fileName, string script)
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, fileName), script);
+
+        Assert.Equal("25", JavaVersionDetector.Detect(appDirectory.Path));
+    }
+
+    [Fact]
+    public void JavaVersionDetector_UsesTheFinalGradleAssignment()
+    {
+        using var appDirectory = new TempJavaAppDirectory();
+
+        File.WriteAllText(Path.Combine(appDirectory.Path, "build.gradle"), """
+            sourceCompatibility = '17'
+            sourceCompatibility = '21'
+            """);
+
+        Assert.Equal("21", JavaVersionDetector.Detect(appDirectory.Path));
     }
 
     [Fact]
@@ -2070,6 +2463,32 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
               <properties>
                 <java.version>{javaVersion}</java.version>
               </properties>
+            </project>
+            """);
+    }
+
+    private static void WriteProfilePom(string sourceDirectory)
+    {
+        WriteWrapper(sourceDirectory, "mvnw", "4.0.0");
+        File.WriteAllText(Path.Combine(sourceDirectory, "pom.xml"), """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example</groupId>
+              <artifactId>api</artifactId>
+              <version>0.0.1-SNAPSHOT</version>
+              <properties><java.version>21</java.version></properties>
+              <profiles>
+                <profile>
+                  <id>default</id>
+                  <activation><activeByDefault>true</activeByDefault></activation>
+                  <properties><java.version>17</java.version></properties>
+                </profile>
+                <profile>
+                  <id>prod</id>
+                  <properties><java.version>25</java.version></properties>
+                </profile>
+              </profiles>
             </project>
             """);
     }

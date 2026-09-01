@@ -170,22 +170,99 @@ function isCreateBuilderCall(node: TreeSitterNode): boolean {
 }
 
 /**
- * Finds the entry point, covering both shapes an AppHost can take: a JEP 512 implicitly declared
- * `void main()`, and a conventional `public static void main(String[])` inside a class, which is what
- * a Maven or Gradle AppHost project uses. See https://openjdk.org/jeps/512.
+ * Finds the entry point using the Java 25 launch protocol: a `String[]` main takes precedence over a
+ * no-argument main, and either can be static or an instance method. See https://openjdk.org/jeps/512.
  */
 function findMainMethod(rootNode: TreeSitterNode): TreeSitterNode | undefined {
-    let result: TreeSitterNode | undefined;
-    visit(rootNode, node => {
-        if (node.type === 'method_declaration' && node.childForFieldName('name')?.text === 'main') {
-            result = node;
-            return false;
+    const builderInvocation = findInvocation(rootNode, isCreateBuilderCall);
+    const scope = builderInvocation ? findOutermostTypeBody(builderInvocation, rootNode) : rootNode;
+    let noArgumentMain: TreeSitterNode | undefined;
+    let stringArrayMain: TreeSitterNode | undefined;
+    for (const node of scope.namedChildren) {
+        if (node.type !== 'method_declaration' || !isLaunchableMainMethod(node)) {
+            continue;
         }
 
-        return true;
-    });
+        if (getMainParameterShape(node) === 'stringArray') {
+            stringArrayMain = node;
+            break;
+        }
 
-    return result;
+        noArgumentMain ??= node;
+    }
+
+    return stringArrayMain ?? noArgumentMain;
+}
+
+function findOutermostTypeBody(node: TreeSitterNode, rootNode: TreeSitterNode): TreeSitterNode {
+    let outermostType: TreeSitterNode | undefined;
+    for (let current = node.parent; current && current !== rootNode; current = current.parent) {
+        if (isTypeDeclaration(current)) {
+            outermostType = current;
+        }
+    }
+
+    return outermostType?.childForFieldName('body') ?? rootNode;
+}
+
+function isTypeDeclaration(node: TreeSitterNode): boolean {
+    return node.type === 'class_declaration'
+        || node.type === 'enum_declaration'
+        || node.type === 'interface_declaration'
+        || node.type === 'record_declaration';
+}
+
+function isLaunchableMainMethod(node: TreeSitterNode): boolean {
+    if (node.childForFieldName('name')?.text !== 'main'
+        || node.childForFieldName('type')?.type !== 'void_type'
+        || node.childForFieldName('type_parameters')
+        || !node.childForFieldName('body')) {
+        return false;
+    }
+
+    const modifiers = node.namedChildren.find(child => child.type === 'modifiers');
+    if (modifiers?.children.some(child => child.type === 'private')) {
+        return false;
+    }
+
+    return getMainParameterShape(node) !== undefined;
+}
+
+type MainParameterShape = 'none' | 'stringArray';
+
+function getMainParameterShape(node: TreeSitterNode): MainParameterShape | undefined {
+    const parameters = node.childForFieldName('parameters')?.namedChildren ?? [];
+    if (parameters.length === 0) {
+        return 'none';
+    }
+
+    if (parameters.length !== 1) {
+        return undefined;
+    }
+
+    const parameter = parameters[0];
+    if (parameter.type === 'formal_parameter') {
+        const type = parameter.childForFieldName('type')?.text;
+        const trailingDimensions = parameter.childForFieldName('dimensions')?.text ?? '';
+        return isStringArrayType(`${type ?? ''}${trailingDimensions}`) ? 'stringArray' : undefined;
+    }
+
+    if (parameter.type === 'spread_parameter') {
+        const type = parameter.namedChildren.find(child =>
+            child.type === 'type_identifier' || child.type === 'scoped_type_identifier');
+        return isStringType(type?.text) ? 'stringArray' : undefined;
+    }
+
+    return undefined;
+}
+
+function isStringArrayType(type: string): boolean {
+    const normalizedType = type.replaceAll(/\s/g, '');
+    return normalizedType === 'String[]' || normalizedType === 'java.lang.String[]';
+}
+
+function isStringType(type: string | undefined): boolean {
+    return type === 'String' || type === 'java.lang.String';
 }
 
 function getFirstArgument(node: TreeSitterNode): TreeSitterNode | undefined {

@@ -126,7 +126,7 @@ internal static partial class JavaDockerfileGenerator
         }
 
         var build = prebuiltJar is null ? JavaContainerBuild.Resolve(resource, appDirectory) : null;
-        var javaVersion = JavaVersionDetector.Detect(appDirectory, build?.Tool);
+        var javaVersion = JavaVersionDetector.Detect(appDirectory, build?.Tool, build?.Args);
 
         // ctx.Resource is the ContainerResource PublishAsDockerFile substitutes in, but it shares the
         // original JavaAppResource's annotation collection, which is why WithDockerfileBaseImage authored
@@ -623,6 +623,7 @@ internal static partial class JavaDockerfileGenerator
     /// The build-tool-specific pieces of the container build.
     /// </summary>
     /// <param name="Tool">The build tool that produces the JAR.</param>
+    /// <param name="Args">The resolved arguments passed to the build tool.</param>
     /// <param name="BuildCommand">The shell command that runs the build.</param>
     /// <param name="SelectArtifactCommand">The shell command that copies the produced JAR to a fixed path.</param>
     /// <param name="ToolHome">The container path the build tool treats as its home directory.</param>
@@ -644,6 +645,7 @@ internal static partial class JavaDockerfileGenerator
     /// </remarks>
     internal sealed record JavaContainerBuild(
         JavaBuildTool Tool,
+        string[] Args,
         string BuildCommand,
         string SelectArtifactCommand,
         string ToolHome,
@@ -724,6 +726,7 @@ internal static partial class JavaDockerfileGenerator
 
             return new JavaContainerBuild(
                 tool,
+                buildArgs,
                 buildCommand,
                 selectArtifact,
                 toolHome,

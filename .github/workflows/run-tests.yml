@@ -99,6 +99,13 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
+      - name: Set up Java
+        if: ${{ fromJson(inputs.properties).requiresJava == true }}
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
         # Allow the task to succeed on partial trust.

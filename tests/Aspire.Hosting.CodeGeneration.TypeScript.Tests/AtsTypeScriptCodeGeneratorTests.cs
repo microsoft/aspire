@@ -776,6 +776,62 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_NullableNumericArrayElements_AreGrouped()
+    {
+        var nullableNumberType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            Category = AtsTypeCategory.Primitive,
+            IsNullable = true
+        };
+        var nullableNumberArrayType = new AtsTypeRef
+        {
+            TypeId = $"{AtsConstants.Number}[]",
+            Category = AtsTypeCategory.Array,
+            ElementType = nullableNumberType
+        };
+        var capability = CreateVoidEntryPointCapability(
+            "inspectNullableNumberArray",
+            new AtsParameterInfo
+            {
+                Name = "values",
+                Type = nullableNumberArrayType
+            });
+        var nullableNumberArrayDto = new AtsDtoTypeInfo
+        {
+            TypeId = "Aspire.Hosting.CodeGeneration.TypeScript.Tests/NullableNumberArrayDto",
+            Name = "NullableNumberArrayDto",
+            Properties =
+            [
+                new AtsDtoPropertyInfo
+                {
+                    Name = "Values",
+                    Type = nullableNumberArrayType
+                }
+            ]
+        };
+        var scannedContext = CreateContextFromTestAssembly();
+        var atsContext = new AtsContext
+        {
+            Capabilities = [.. scannedContext.Capabilities, capability],
+            HandleTypes = scannedContext.HandleTypes,
+            DtoTypes = [.. scannedContext.DtoTypes, nullableNumberArrayDto],
+            EnumTypes = scannedContext.EnumTypes,
+            ExportedValues = scannedContext.ExportedValues,
+            Diagnostics = scannedContext.Diagnostics
+        };
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains(
+            "export async function inspectNullableNumberArray(client: AspireClientRpc, values: (number | null)[]): Promise<void>",
+            aspireTs);
+        Assert.Contains("values?: (number | null)[];", aspireTs);
+        Assert.DoesNotContain("number | null[]", aspireTs);
+    }
+
+    [Fact]
     public void MapInputUnionTypeToTypeScript_ThrowsOnEmptyUnion()
     {
         var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());

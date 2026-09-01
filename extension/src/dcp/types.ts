@@ -138,6 +138,8 @@ export interface JavaLaunchConfiguration extends ExecutableLaunchConfiguration {
     type: "java";
     request?: "launch" | "attach";
     working_directory?: string;
+    // Absolute JVM launcher selected by the CLI. Absent for older CLIs that only send "java".
+    java_exec?: string;
     // A fully qualified class name, optionally prefixed with a Java module name
     // ("[module/]com.example.Api"), or the path of the .java source file declaring main. Absent when
     // the IDE should resolve the entry point itself. A JAR path is never valid here; an executable
