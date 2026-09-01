@@ -62,7 +62,10 @@ internal static class McpConfigFileHelper
     /// <param name="preprocessContent">Function to preprocess file content before parsing (e.g., to strip JSONC comments), or null for no preprocessing.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The parsed <see cref="JsonObject"/> from the file, or a new empty <see cref="JsonObject"/> if the file doesn't exist.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the file exists but contains malformed JSON, wrapping the underlying <see cref="JsonException"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the file contains malformed JSON or its root is not an object.
+    /// Malformed JSON exceptions wrap the underlying <see cref="JsonException"/>.
+    /// </exception>
     public static async Task<JsonObject> ReadConfigAsync(string configFilePath, Func<string, string>? preprocessContent, CancellationToken cancellationToken)
     {
         if (!File.Exists(configFilePath))
