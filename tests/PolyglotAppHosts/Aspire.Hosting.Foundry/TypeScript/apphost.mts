@@ -82,11 +82,11 @@ await _promptAgent.withTool(azFunc);
 await _promptAgent.withTool(funcTool);
 
 // Foundry Toolbox
-const toolbox = await project.addToolbox('field-tools');
+const toolbox = await project.addToolbox('field-tools', { version: '7' });
 await toolbox.withDescription('Tools for field technicians.');
 await toolbox.withWebSearchTool();
 await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp');
-await toolbox.withAISearchTool('knowledge-base', search);
+await toolbox.withAISearchTool('knowledge-base', search, 'docs');
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');

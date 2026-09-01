@@ -173,7 +173,7 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
         string name,
         AzureSearchResource searchResource,
         AzureCognitiveServicesProjectConnectionResource connection,
-        string? indexName)
+        string indexName)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(searchResource);
@@ -195,9 +195,9 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
     public AzureCognitiveServicesProjectConnectionResource Connection { get; }
 
     /// <summary>
-    /// Gets the optional Azure AI Search index name.
+    /// Gets the Azure AI Search index name.
     /// </summary>
-    public string? IndexName { get; }
+    public string IndexName { get; }
 
     internal override async ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken)
     {

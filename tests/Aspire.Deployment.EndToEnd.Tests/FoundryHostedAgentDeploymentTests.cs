@@ -95,7 +95,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 foundryProject.AddToolbox("field-tools")
                     .WithDescription("Tools for field technicians.")
                     .WithWebSearchTool()
-                    .WithAISearchTool("knowledge-base", search);
+                    .WithAISearchTool("knowledge-base", search, "docs");
 
                 builder.Build().Run();
                 """);

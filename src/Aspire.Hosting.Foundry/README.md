@@ -283,6 +283,7 @@ var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
 
 * https://aspire.dev/integrations/gallery/
 * https://aspire.dev/integrations/cloud/azure/azure-ai-foundry/azure-ai-foundry-host/
+* https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry
 * https://learn.microsoft.com/azure/ai-foundry/foundry-local/
 

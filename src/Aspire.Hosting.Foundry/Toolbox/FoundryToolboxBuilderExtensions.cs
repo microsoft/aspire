@@ -1,11 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using System.IO.Hashing;
-using System.Text;
+using Azure.Provisioning.Search;
 
 namespace Aspire.Hosting;
 
@@ -193,7 +194,7 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="search">The Azure AI Search resource backing the tool.</param>
-    /// <param name="indexName">The optional search index name.</param>
+    /// <param name="indexName">The search index name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -201,13 +202,18 @@ public static class FoundryToolboxBuilderExtensions
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
         IResourceBuilder<AzureSearchResource> search,
-        string? indexName = null)
+        string indexName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(search);
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
 
         var projectBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent);
+        projectBuilder.WithRoleAssignments(
+            search,
+            SearchBuiltInRole.SearchIndexDataReader,
+            SearchBuiltInRole.SearchServiceContributor);
         var connectionName = CreateSearchConnectionName(
             builder.Resource.Parent.Name,
             builder.Resource.Name,

@@ -257,7 +257,13 @@ public class ToolboxTests
 
         var projectTool = await def.ToProjectsAgentToolAsync(CancellationToken.None);
 
-        Assert.NotNull(projectTool);
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Equal(
+            """{"type":"mcp","server_label":"inventory","server_url":"https://inventory.example.com/mcp"}""",
+            json.ToString());
     }
 
     [Fact]
@@ -341,6 +347,21 @@ public class ToolboxTests
             Assert.Single(secondToolbox.Resource.Tools));
 
         Assert.Equal(firstDefinition.Connection.Name, secondDefinition.Connection.Name);
+    }
+
+    [Fact]
+    public void WithAISearchTool_RejectsEmptyIndexName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithAISearchTool("knowledge-base", search, string.Empty));
+
+        Assert.Equal("indexName", exception.ParamName);
     }
 
     [Fact]

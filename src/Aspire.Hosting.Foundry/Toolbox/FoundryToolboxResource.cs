@@ -377,8 +377,8 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         // Toolbox deploy step retains its dependency on the replacement resource.
         var modelResourceNames = new HashSet<string>(
             model.Resources.Select(resource => resource.Name),
-            StringComparer.Ordinal);
-        var seenResourceNames = new HashSet<string>(StringComparer.Ordinal);
+            StringComparers.ResourceName);
+        var seenResourceNames = new HashSet<string>(StringComparers.ResourceName);
 
         foreach (var tool in _tools.OfType<FoundryToolboxMcpToolDefinition>())
         {
