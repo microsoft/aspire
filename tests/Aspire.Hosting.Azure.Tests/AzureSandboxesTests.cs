@@ -1011,14 +1011,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void SandboxReadinessProbeDoesNotFollowRedirects()
-    {
-        using var handler = AzureSandboxContainerDeployment.CreatePublicEndpointHttpHandler();
-
-        Assert.False(handler.AllowAutoRedirect);
-    }
-
-    [Fact]
     public async Task SandboxDeletionRunsAfterPortRemovalFailure()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1917,7 +1909,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
                 AutoDeleteEnabled = true,
                 AutoDeleteInterval = TimeSpan.FromHours(1),
                 AutoDeleteTrigger = AzureSandboxAutoDeleteTrigger.AfterSuspend,
-                PublicEndpointReadyTimeout = TimeSpan.FromMinutes(2),
                 Endpoints =
                 [
                     new AzureSandboxEndpointOptions
@@ -1952,7 +1943,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Null(lifecycle.AutoDeletePolicy.DeleteIntervalInDays);
         Assert.Equal(3600, lifecycle.AutoDeletePolicy.DeleteIntervalInSeconds);
         Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger);
-        Assert.Equal(TimeSpan.FromMinutes(2), AzureSandboxContainerDeployment.GetPublicEndpointReadyTimeout(sandboxContainer));
 
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
         [
@@ -2047,14 +2037,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {
             AutoDeleteInterval = TimeSpan.FromSeconds(-1)
-        }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
-        {
-            PublicEndpointReadyTimeout = TimeSpan.Zero
-        }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
-        {
-            PublicEndpointReadyTimeout = TimeSpan.FromSeconds((double)int.MaxValue + 1)
         }));
         Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(new AzureSandboxOptions
         {

@@ -34,7 +34,6 @@ internal static class AzureSandboxContainerDeployment
     private const string SandboxStateParentSection = "Azure:Sandboxes";
     internal const string SandboxStateSectionPrefix = $"{SandboxStateParentSection}:";
     private const int DiskImageReadyTimeoutSeconds = 600;
-    private const int PublicEndpointTimeoutSeconds = 180;
     private static readonly IReadOnlySet<string> s_noExcludedIds = new HashSet<string>(StringComparer.Ordinal);
 
     public static IEnumerable<PipelineStep> CreatePipelineSteps(AzureSandboxContainerResource resource)
@@ -345,11 +344,6 @@ internal static class AzureSandboxContainerDeployment
                     addedPorts.Add(endpoint);
 
                     var endpointUrl = addedPort.Url.ToString();
-                    if (endpoint.IsExternal && endpoint.IsHttp)
-                    {
-                        await WaitForPublicHttpAsync(endpointUrl, GetPublicEndpointReadyTimeout(resource), context.CancellationToken).ConfigureAwait(false);
-                    }
-
                     portStates.Add(new JsonObject
                     {
                         ["Name"] = endpoint.Name,
@@ -2186,48 +2180,6 @@ internal static class AzureSandboxContainerDeployment
             yield return legacyPort;
         }
     }
-
-    internal static TimeSpan GetPublicEndpointReadyTimeout(AzureSandboxContainerResource resource)
-    {
-        return GetAzureSandboxContainerOptions(resource.TargetResource)?.PublicEndpointReadyTimeout ??
-            TimeSpan.FromSeconds(PublicEndpointTimeoutSeconds);
-    }
-
-    private static async Task WaitForPublicHttpAsync(string publicUrl, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        using var httpClient = new HttpClient(CreatePublicEndpointHttpHandler()) { Timeout = TimeSpan.FromSeconds(10) };
-        var deadline = DateTimeOffset.UtcNow.Add(timeout);
-        Exception? lastException = null;
-        HttpStatusCode? lastStatusCode = null;
-
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            try
-            {
-                using var response = await httpClient.GetAsync(publicUrl.TrimEnd('/'), cancellationToken).ConfigureAwait(false);
-                lastStatusCode = response.StatusCode;
-                if ((int)response.StatusCode < 500)
-                {
-                    return;
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                lastException = ex;
-            }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                lastException = ex;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
-        }
-
-        throw new TimeoutException($"Sandbox public URL '{publicUrl}' was not ready after {timeout.TotalSeconds} seconds (last HTTP status: '{lastStatusCode}').", lastException);
-    }
-
-    internal static HttpClientHandler CreatePublicEndpointHttpHandler() =>
-        new() { AllowAutoRedirect = false };
 
     internal static async Task DeleteSandboxAsync(
         PipelineStepContext context,

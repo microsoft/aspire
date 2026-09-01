@@ -313,7 +313,6 @@ public static class AzureSandboxesExtensions
             AutoDeleteEnabled = options.AutoDeleteEnabled,
             AutoDeleteInterval = options.AutoDeleteInterval,
             AutoDeleteTrigger = options.AutoDeleteTrigger,
-            PublicEndpointReadyTimeout = options.PublicEndpointReadyTimeout,
             Endpoints = options.Endpoints?.Select(static endpoint => new AzureSandboxEndpointOptions
             {
                 Name = endpoint.Name,
@@ -370,10 +369,6 @@ public static class AzureSandboxesExtensions
         ValidateOptionalEnum(options.AutoSuspendMode, nameof(AzureSandboxOptions.AutoSuspendMode));
         ValidateOptionalWholeSecondDuration(options.AutoDeleteInterval, nameof(AzureSandboxOptions.AutoDeleteInterval));
         ValidateOptionalEnum(options.AutoDeleteTrigger, nameof(AzureSandboxOptions.AutoDeleteTrigger));
-        ValidateOptionalPositiveDuration(
-            options.PublicEndpointReadyTimeout,
-            nameof(AzureSandboxOptions.PublicEndpointReadyTimeout),
-            TimeSpan.FromSeconds(int.MaxValue));
 
         if (options.AutoSuspendEnabled is null &&
             (options.AutoSuspendInterval is not null || options.AutoSuspendMode is not null))
@@ -431,19 +426,6 @@ public static class AzureSandboxesExtensions
         if (value.Value.Ticks % TimeSpan.TicksPerSecond != 0)
         {
             throw new ArgumentException("The value must use whole-second precision.", paramName);
-        }
-
-        if (maximum is not null && value > maximum)
-        {
-            throw new ArgumentOutOfRangeException(paramName, $"The value cannot exceed {maximum}.");
-        }
-    }
-
-    private static void ValidateOptionalPositiveDuration(TimeSpan? value, string paramName, TimeSpan? maximum = null)
-    {
-        if (value is not null && value <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "The value must be positive.");
         }
 
         if (maximum is not null && value > maximum)
