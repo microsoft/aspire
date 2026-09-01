@@ -12,7 +12,7 @@ operation through the checked-in tracking-issue modules. Treat identity as persi
 data: changing normalization, field order, delimiters, or hashing re-keys every
 historical issue.
 
-**REQUIRED SUB-SKILL:** Use test-driven-development for behavior changes.
+**Test first:** Behavior changes start with a failing test — see [Required Tests](#required-tests).
 
 ## Ownership Boundary
 
