@@ -10,6 +10,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -266,14 +267,14 @@ public class DotNetTemplateFactoryTests
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
         Assert.Contains("aspire-starter", templateNames);
+        Assert.Contains("aspire-test", templateNames);
         Assert.Contains("aspire", templateNames);
         Assert.Contains("aspire-apphost", templateNames);
         Assert.Contains("aspire-servicedefaults", templateNames);
-        Assert.Contains("aspire-test", templateNames);
     }
 
     [Fact]
-    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
+    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsStarterAndIntegrationTestTemplates()
     {
         // Arrange
         var features = new TestFeatures();
@@ -285,10 +286,10 @@ public class DotNetTemplateFactoryTests
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
         Assert.Contains("aspire-starter", templateNames);
+        Assert.Contains("aspire-test", templateNames);
         Assert.DoesNotContain(KnownTemplateId.DotNetEmptyAppHost, templateNames);
         Assert.DoesNotContain("aspire-apphost", templateNames);
         Assert.DoesNotContain("aspire-servicedefaults", templateNames);
-        Assert.DoesNotContain("aspire-test", templateNames);
     }
 
     [Fact]
@@ -353,6 +354,7 @@ public class DotNetTemplateFactoryTests
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
         var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var appHostInfoResolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
 
         return new DotNetTemplateFactory(
             interactionService,
@@ -365,6 +367,7 @@ public class DotNetTemplateFactoryTests
             telemetry,
             hostEnvironment,
             templateNuGetConfigService,
+            appHostInfoResolver,
             new HostEnvironment());
     }
 
@@ -489,7 +492,7 @@ public class DotNetTemplateFactoryTests
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<ITemplate> PromptForTemplateAsync(ITemplate[] templates, CancellationToken cancellationToken)
+        public Task<ITemplate> PromptForTemplateAsync(ITemplate[] templates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null)
             => throw new NotImplementedException();
     }
 

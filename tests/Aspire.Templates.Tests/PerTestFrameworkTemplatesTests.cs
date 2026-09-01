@@ -52,8 +52,8 @@ public abstract partial class PerTestFrameworkTemplatesTests : TemplateTestsBase
 
         var res = await cmd.ExecuteAsync($"test -c {config}");
 
-        Assert.True(res.ExitCode != 0, $"Expected the tests project run to fail");
-        Assert.Matches("Failed! * - Failed: *1, Passed: *0, Skipped: *0, Total: *1", res.Output);
+        Assert.Equal(0, res.ExitCode);
+        Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", res.Output);
 
         async Task AssertBasicTemplateAsync(IBrowserContext context)
         {
