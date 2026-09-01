@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Azure.Provisioning.Primitives;
 
@@ -11,7 +10,6 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure Connector Namespace backed by a <c>Microsoft.Web/connectorGateways</c> resource.
 /// </summary>
 [AspireExport]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
 {
     /// <summary>
@@ -37,11 +35,19 @@ public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
     /// <summary>
     /// Gets the connector namespace system-assigned managed identity principal ID output reference.
     /// </summary>
+    /// <remarks>
+    /// This output is empty for an existing Connector Namespace because its identity type is not
+    /// controlled by Aspire and may be user-assigned.
+    /// </remarks>
     public BicepOutputReference PrincipalId => new("principalId", this);
 
     /// <summary>
     /// Gets the connector namespace system-assigned managed identity tenant ID output reference.
     /// </summary>
+    /// <remarks>
+    /// This output is empty for an existing Connector Namespace because its identity type is not
+    /// controlled by Aspire and may be user-assigned.
+    /// </remarks>
     public BicepOutputReference TenantId => new("tenantId", this);
 
     internal List<AzureConnectorNamespaceConnectionResource> Connections { get; } = [];

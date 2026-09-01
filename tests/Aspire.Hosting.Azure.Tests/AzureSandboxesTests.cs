@@ -138,6 +138,14 @@ public class AzureSandboxesTests
         {
             ConfigName = "existing-mcp"
         }).AsExisting();
+        gateway.AddConnection("sharepoint", "sharepointonline")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -351,29 +359,24 @@ public class AzureSandboxesTests
                     TenantId = "22222222-2222-2222-2222-222222222222"
                 });
 
-        Assert.Equal("p9-office365-policy-reader", Assert.Single(office365.Resource.AccessPolicies).Name);
-        Assert.Equal("p10-sharepoint-policy-reader", Assert.Single(sharepoint.Resource.AccessPolicies).Name);
+        Assert.Equal("office365-policy-reader-0eeeb1280aa1c70d", Assert.Single(office365.Resource.AccessPolicies).Name);
+        Assert.Equal("sharepoint-policy-reader-1cd0856cb9868404", Assert.Single(sharepoint.Resource.AccessPolicies).Name);
         Assert.NotEqual(
             Assert.Single(compoundParentName.Resource.AccessPolicies).Name,
             Assert.Single(compoundPolicyName.Resource.AccessPolicies).Name);
     }
 
     [Theory]
-    [InlineData(false, "reader", "reader")]
-    [InlineData(true, "reader", "reader")]
-    [InlineData(false, "reader-access", "reader_access")]
-    [InlineData(true, "reader-access", "reader_access")]
-    public void ConnectorAccessPolicyRequiresUniqueBicepIdentifier(
-        bool useIdentityPolicy,
-        string firstResourceName,
-        string secondResourceName)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConnectorAccessPolicyRequiresUniqueBicepIdentifier(bool useIdentityPolicy)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
             .WithAccessPolicy(
-                firstResourceName,
+                "reader",
                 new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     PolicyName = "first-policy",
@@ -383,11 +386,11 @@ public class AzureSandboxesTests
 
         var exception = useIdentityPolicy
             ? Assert.Throws<InvalidOperationException>(() => connection.WithIdentityAccessPolicy(
-                secondResourceName,
+                "reader",
                 builder.AddAzureUserAssignedIdentity("reader-identity"),
                 "second-policy"))
             : Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
-                secondResourceName,
+                "reader",
                 new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     PolicyName = "second-policy",
@@ -396,9 +399,52 @@ public class AzureSandboxesTests
                 }));
 
         Assert.Equal(
-            $"Access policy resource '{secondResourceName}' is already registered on connector connection 'office365'.",
+            "Access policy resource 'reader' is already registered on connector connection 'office365'.",
             exception.Message);
         Assert.Single(connection.Resource.AccessPolicies);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConnectorAccessPolicyResourceNamesAreCollisionResistant(bool useIdentityPolicy)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection("office365", "office365")
+            .WithAccessPolicy(
+                "reader-access",
+                new AzureConnectorNamespaceAccessPolicyOptions
+                {
+                    PolicyName = "first-policy",
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+
+        if (useIdentityPolicy)
+        {
+            connection.WithIdentityAccessPolicy(
+                "reader_access",
+                builder.AddAzureUserAssignedIdentity("reader-identity"),
+                "second-policy");
+        }
+        else
+        {
+            connection.WithAccessPolicy(
+                "reader_access",
+                new AzureConnectorNamespaceAccessPolicyOptions
+                {
+                    PolicyName = "second-policy",
+                    ObjectId = "33333333-3333-3333-3333-333333333333",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+        }
+
+        Assert.Collection(
+            connection.Resource.AccessPolicies,
+            first => Assert.Equal("office365-policy-reader-access-ca76cd2bec01b9b5", first.Name),
+            second => Assert.Equal("office365-policy-reader_access-0b33dc934567a50e", second.Name));
     }
 
     [Theory]
@@ -410,10 +456,24 @@ public class AzureSandboxesTests
         bool addAccessPolicyFirst,
         bool useMcpServerConfig)
     {
+        string collidingResourceName;
+        using (var nameBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish))
+        {
+            var nameSource = nameBuilder.AddAzureConnectorNamespace("name-source")
+                .AddConnection("mail", "office365")
+                .WithAccessPolicy(
+                    "reader",
+                    new AzureConnectorNamespaceAccessPolicyOptions
+                    {
+                        ObjectId = "11111111-1111-1111-1111-111111111111",
+                        TenantId = "22222222-2222-2222-2222-222222222222"
+                    });
+            collidingResourceName = Assert.Single(nameSource.Resource.AccessPolicies).Name;
+        }
+
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
-        const string collidingResourceName = "p4-mail-policy-reader";
         if (!addAccessPolicyFirst)
         {
             if (useMcpServerConfig)

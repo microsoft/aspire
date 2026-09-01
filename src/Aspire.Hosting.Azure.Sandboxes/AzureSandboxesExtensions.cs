@@ -5,6 +5,9 @@
 #pragma warning disable ASPIREAZURE001
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
@@ -21,7 +24,6 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Extension methods for adding Azure Container Apps sandbox resources to the application model.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class AzureSandboxesExtensions
 {
     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#container-apps-sandboxgroup-data-owner
@@ -56,7 +58,6 @@ public static class AzureSandboxesExtensions
     /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceResource> AddAzureConnectorNamespace(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -119,7 +120,7 @@ public static class AzureSandboxesExtensions
                     {
                         Parent = connection,
                         Name = accessPolicyResource.PolicyName,
-                        Location = BicepFunction.GetResourceGroup().Location
+                        Location = gateway.Location
                     };
 
                     accessPolicy.Principal.Type = "ActiveDirectory";
@@ -206,14 +207,24 @@ public static class AzureSandboxesExtensions
 
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = gateway.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = gateway.Name.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
+            if (gatewayResource.IsExisting())
             {
-                Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "principalId")
-            });
-            infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string))
+                // Existing Connector Namespaces can use a user-assigned identity, which has no
+                // principalId or tenantId fields. Keep the output contract safe and deterministic.
+                infrastructure.Add(new ProvisioningOutput("principalId", typeof(string)) { Value = string.Empty });
+                infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string)) { Value = string.Empty });
+            }
+            else
             {
-                Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "tenantId")
-            });
+                infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
+                {
+                    Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "principalId")
+                });
+                infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string))
+                {
+                    Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "tenantId")
+                });
+            }
         }
 
         return builder.AddResource(new AzureConnectorNamespaceResource(name, ConfigureInfrastructure));
@@ -233,7 +244,6 @@ public static class AzureSandboxesExtensions
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> AddConnection(
         this IResourceBuilder<AzureConnectorNamespaceResource> builder,
         [ResourceName] string name,
@@ -276,7 +286,6 @@ public static class AzureSandboxesExtensions
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("asExistingConnectorNamespaceConnection", MethodName = "asExisting")]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> AsExisting(
         this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder)
     {
@@ -309,7 +318,6 @@ public static class AzureSandboxesExtensions
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> WithAccessPolicy(
         this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder,
         [ResourceName] string name,
@@ -353,7 +361,6 @@ public static class AzureSandboxesExtensions
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> WithIdentityAccessPolicy(
         this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder,
         [ResourceName] string name,
@@ -391,7 +398,6 @@ public static class AzureSandboxesExtensions
     /// <returns>A resource builder for the MCP server configuration.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> AddMcpServerConfig(
         this IResourceBuilder<AzureConnectorNamespaceResource> builder,
         [ResourceName] string name,
@@ -431,7 +437,6 @@ public static class AzureSandboxesExtensions
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("asExistingConnectorNamespaceMcpServerConfig", MethodName = "asExisting")]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> AsExisting(
         this IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> builder)
     {
@@ -466,7 +471,6 @@ public static class AzureSandboxesExtensions
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> WithConnector(
         this IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> builder,
         string connectorName,
@@ -837,7 +841,13 @@ public static class AzureSandboxesExtensions
     }
 
     private static string GetAccessPolicyResourceName(AzureConnectorNamespaceConnectionResource connection, string name)
-        => $"p{connection.Name.Length}-{connection.Name}-policy-{name}";
+    {
+        // Keep the parent and policy names readable while hashing the delimited pair so different
+        // combinations cannot normalize to the same Bicep identifier.
+        var identity = $"{connection.Name}\0{name}";
+        var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(identity)).ToString("x16", CultureInfo.InvariantCulture);
+        return $"{connection.Name}-policy-{name}-{hash}";
+    }
 
     private static IEnumerable<IResource> GetConnectorNamespaceChildren(AzureConnectorNamespaceResource connectorNamespace)
     {

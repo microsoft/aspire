@@ -201,7 +201,7 @@ Adding Azure resources to the Aspire application model will automatically enable
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
-* https://learn.microsoft.com/azure/container-apps/sandboxes-overview
+* https://sandboxes.azure.com/docs/sandboxes/quickstart/setup-portal
 * https://learn.microsoft.com/azure/connector-namespace/connector-namespace-overview
 * https://learn.microsoft.com/azure/connector-namespace/create-connector-namespace-connection
 

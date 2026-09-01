@@ -1,15 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
 /// Configures a Connector Namespace connection.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceConnectionOptions
 {
     /// <summary>
@@ -27,7 +24,6 @@ public sealed class AzureConnectorNamespaceConnectionOptions
 /// Configures a Microsoft Entra access policy for a Connector Namespace connection.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceAccessPolicyOptions
 {
     /// <summary>
@@ -50,7 +46,6 @@ public sealed class AzureConnectorNamespaceAccessPolicyOptions
 /// Configures a managed MCP server in a Connector Namespace.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceMcpServerConfigOptions
 {
     /// <summary>
@@ -68,7 +63,6 @@ public sealed class AzureConnectorNamespaceMcpServerConfigOptions
 /// Configures a connector route exposed by a managed MCP server.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceMcpConnectorOptions
 {
     /// <summary>
@@ -91,7 +85,6 @@ public sealed class AzureConnectorNamespaceMcpConnectorOptions
 /// Describes a connector operation exposed as an MCP tool.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureConnectorNamespaceMcpOperationOptions
 {
     /// <summary>
