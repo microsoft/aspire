@@ -3283,10 +3283,13 @@ impl CSharpAppResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -3304,11 +3307,14 @@ impl CSharpAppResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -6175,10 +6181,13 @@ impl ContainerResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -6196,11 +6205,14 @@ impl ContainerResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -8097,10 +8109,13 @@ impl DotnetToolResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -8118,11 +8133,14 @@ impl DotnetToolResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -9992,10 +10010,13 @@ impl ExecutableResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -10013,11 +10034,14 @@ impl ExecutableResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -16061,10 +16085,13 @@ impl ProjectResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -16082,11 +16109,14 @@ impl ProjectResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -18375,10 +18405,13 @@ impl TestDatabaseResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -18396,11 +18429,14 @@ impl TestDatabaseResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -20027,10 +20063,13 @@ impl TestRedisResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -20048,11 +20087,14 @@ impl TestRedisResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -21755,10 +21797,13 @@ impl TestVaultResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol.
-    pub fn as_agent(&self, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent(&self, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
@@ -21776,11 +21821,14 @@ impl TestVaultResource {
     }
 
     /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocol: AgentProtocol, agent_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocol".to_string(), serde_json::to_value(&protocol).unwrap_or(Value::Null));
+        if let Some(ref v) = agent_name {
+            args.insert("agentName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))

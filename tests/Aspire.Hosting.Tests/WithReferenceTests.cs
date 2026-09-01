@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+#pragma warning disable ASPIREAGENTS001 // Generic resource reference dispatch is experimental.
+
 [Trait("Partition", "5")]
 public class WithReferenceTests
 {

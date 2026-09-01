@@ -24,7 +24,7 @@ builder.AddProject<Projects.ResponsesAgent>("responses-agent")
     .WithReference(chat)
     .WithReference(a2aAgent)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.Responses)
+    .AsAgent(AgentProtocol.Responses, agentName: "responses-agent")
     .WithMcpServer();
 
 builder.AddNodeApp("vercel-ai-responses-agent", "../vercel-ai-responses-agent", "app.ts")
@@ -33,7 +33,7 @@ builder.AddNodeApp("vercel-ai-responses-agent", "../vercel-ai-responses-agent", 
     .WithHttpEndpoint(env: "PORT")
     .WithReference(chat)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.Responses);
+    .AsAgent(AgentProtocol.Responses, agentName: "vercel-ai-responses-agent");
 
 builder.AddProject<Projects.McpAgent>("mcp-agent")
     .WithHttpEndpoint(env: "PORT")
@@ -47,7 +47,7 @@ builder.AddUvicornApp("agui-acp-agent", "../agui-acp-agent-python", "agui_acp_ag
     .WithReference(chat)
     .WaitFor(chat)
     .AsAgent(AgentProtocol.AgUi)
-    .AsAgent(AgentProtocol.Acp);
+    .AsAgent(AgentProtocol.Acp, agentName: "agui-acp-agent");
 
 builder.AddProject<Projects.AgentEnvDump>("agent-env-dump")
     .WithReference(a2aAgent).WaitFor(a2aAgent);

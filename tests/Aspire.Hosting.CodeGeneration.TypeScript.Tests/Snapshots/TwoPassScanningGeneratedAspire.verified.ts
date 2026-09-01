@@ -1575,6 +1575,16 @@ export interface ArgOptions {
     defaultValue?: string;
 }
 
+export interface AsAgentOptions {
+    /** The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it. */
+    agentName?: string;
+}
+
+export interface AsAgentWithPathOptions {
+    /** The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it. */
+    agentName?: string;
+}
+
 export interface BuildOptions {
     /** The logger used while resolving values. */
     resourceLogger?: Awaitable<Logger>;
@@ -17436,12 +17446,27 @@ export interface ContainerResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ContainerResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -17449,13 +17474,27 @@ export interface ContainerResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -18273,12 +18312,27 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ContainerResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -18286,13 +18340,27 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -20687,8 +20755,9 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<ContainerResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -20698,11 +20767,21 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise {
+        const agentName = options?.agentName;
+        return new ContainerResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -20717,6 +20796,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -20726,8 +20811,9 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ContainerResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -20737,12 +20823,21 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise {
+        const agentName = options?.agentName;
+        return new ContainerResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -20757,6 +20852,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -21557,16 +21658,16 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
@@ -22249,12 +22350,27 @@ export interface CSharpAppResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -22262,13 +22378,27 @@ export interface CSharpAppResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -22910,12 +23040,27 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -22923,13 +23068,27 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -24907,8 +25066,9 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<CSharpAppResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -24918,11 +25078,21 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise {
+        const agentName = options?.agentName;
+        return new CSharpAppResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -24937,6 +25107,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -24946,8 +25122,9 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<CSharpAppResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -24957,12 +25134,21 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise {
+        const agentName = options?.agentName;
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -24977,6 +25163,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -25713,16 +25905,16 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
@@ -26427,12 +26619,27 @@ export interface DotnetToolResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -26440,13 +26647,27 @@ export interface DotnetToolResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -27110,12 +27331,27 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -27123,13 +27359,27 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -29178,8 +29428,9 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<DotnetToolResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -29189,11 +29440,21 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise {
+        const agentName = options?.agentName;
+        return new DotnetToolResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -29208,6 +29469,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -29217,8 +29484,9 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<DotnetToolResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -29228,12 +29496,21 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise {
+        const agentName = options?.agentName;
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -29248,6 +29525,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -30000,16 +30283,16 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
@@ -30688,12 +30971,27 @@ export interface ExecutableResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -30701,13 +30999,27 @@ export interface ExecutableResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -31338,12 +31650,27 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -31351,13 +31678,27 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -33302,8 +33643,9 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<ExecutableResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -33313,11 +33655,21 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise {
+        const agentName = options?.agentName;
+        return new ExecutableResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -33332,6 +33684,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -33341,8 +33699,9 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ExecutableResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -33352,12 +33711,21 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise {
+        const agentName = options?.agentName;
+        return new ExecutableResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -33372,6 +33740,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -34100,16 +34474,16 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
@@ -39224,12 +39598,27 @@ export interface ProjectResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ProjectResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -39237,13 +39626,27 @@ export interface ProjectResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -39885,12 +40288,27 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ProjectResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -39898,13 +40316,27 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -41883,8 +42315,9 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<ProjectResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -41894,11 +42327,21 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise {
+        const agentName = options?.agentName;
+        return new ProjectResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -41913,6 +42356,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -41922,8 +42371,9 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ProjectResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -41933,12 +42383,21 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise {
+        const agentName = options?.agentName;
+        return new ProjectResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -41953,6 +42412,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -42689,16 +43154,16 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
@@ -43557,12 +44022,27 @@ export interface TestDatabaseResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -43570,13 +44050,27 @@ export interface TestDatabaseResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -44394,12 +44888,27 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -44407,13 +44916,27 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -46807,8 +47330,9 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestDatabaseResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -46818,11 +47342,21 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise {
+        const agentName = options?.agentName;
+        return new TestDatabaseResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -46837,6 +47371,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -46846,8 +47386,9 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestDatabaseResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -46857,12 +47398,21 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise {
+        const agentName = options?.agentName;
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -46877,6 +47427,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -47677,16 +48233,16 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
@@ -48567,12 +49123,27 @@ export interface TestRedisResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -48580,13 +49151,27 @@ export interface TestRedisResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -49488,12 +50073,27 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -49501,13 +50101,27 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -52023,8 +52637,9 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestRedisResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -52034,11 +52649,21 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise {
+        const agentName = options?.agentName;
+        return new TestRedisResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -52053,6 +52678,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -52062,8 +52693,9 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestRedisResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -52073,12 +52705,21 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise {
+        const agentName = options?.agentName;
+        return new TestRedisResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -52093,6 +52734,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -53156,16 +53803,16 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
@@ -54084,12 +54731,27 @@ export interface TestVaultResource {
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -54097,13 +54759,27 @@ export interface TestVaultResource {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -54923,12 +55599,27 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -54936,13 +55627,27 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -57338,8 +58043,9 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestVaultResource> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -57349,11 +58055,21 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise {
+        const agentName = options?.agentName;
+        return new TestVaultResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -57368,6 +58084,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -57377,8 +58099,9 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestVaultResource> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -57388,12 +58111,21 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise {
+        const agentName = options?.agentName;
+        return new TestVaultResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -57408,6 +58140,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -58223,16 +58961,16 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
@@ -61357,12 +62095,27 @@ export interface ResourceWithEndpoints {
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -61370,13 +62123,27 @@ export interface ResourceWithEndpoints {
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -61485,12 +62252,27 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -61498,13 +62280,27 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise;
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -61942,8 +62738,9 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _asAgentInternal(protocol: AgentProtocol): Promise<ResourceWithEndpoints> {
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
             'Aspire.Hosting.Agents/asAgent',
             rpcArgs
@@ -61953,11 +62750,21 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /**
      * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent(AgentProtocol.A2A)
+     * .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._asAgentInternal(protocol), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise {
+        const agentName = options?.agentName;
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -61972,6 +62779,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /**
      * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
@@ -61981,8 +62794,9 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ResourceWithEndpoints> {
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
             'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
@@ -61992,12 +62806,21 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent-service")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A)
+     * .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise {
+        const agentName = options?.agentName;
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
     }
 
     /** @internal */
@@ -62012,6 +62835,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /**
      * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * ```
+     * var agent = builder.AddProject<Projects.Agent>("agent")
+     * .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+     * ```
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @param invocationMode The invocation mode used by dashboard commands.
@@ -62100,16 +62929,16 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.onResourceEndpointsAllocated(callback)), this._client);
     }
 
-    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
     }
 
     asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
     }
 
-    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
     }
 
     asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {

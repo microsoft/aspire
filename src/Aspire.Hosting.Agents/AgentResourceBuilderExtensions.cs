@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Agents;
 
@@ -47,6 +48,7 @@ public static class AgentResourceBuilderExtensions
     private const string DefaultA2AHttpJsonV03StreamingMessagePath = "/v1/message:stream";
     private const string A2AProtocolBindingJsonRpc = "JSONRPC";
     private const string A2AProtocolBindingHttpJson = "HTTP+JSON";
+    private const string AgentNameArgumentName = "agentName";
     private const string AgentMessageArgumentName = "message";
 
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
@@ -57,12 +59,25 @@ public static class AgentResourceBuilderExtensions
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="protocol">The protocol supported by the agent.</param>
+    /// <param name="agentName">The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+    /// identifiers and do not need to match the Aspire resource name.
+    /// <code>
+    /// var agent = builder.AddProject&lt;Projects.Agent&gt;("agent-service")
+    ///     .AsAgent(AgentProtocol.A2A)
+    ///     .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
+    /// </code>
+    /// </remarks>
     [AspireExport]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, AgentProtocol protocol)
+    public static IResourceBuilder<T> AsAgent<T>(
+        this IResourceBuilder<T> builder,
+        AgentProtocol protocol,
+        string? agentName = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, protocol, A2AInvocationMode.NonStreaming);
+        return AsAgentCore(builder, agentCustomPath: null, protocol, A2AInvocationMode.NonStreaming, agentName);
     }
 
     /// <summary>
@@ -74,6 +89,13 @@ public static class AgentResourceBuilderExtensions
     /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    /// <remarks>
+    /// Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+    /// <code>
+    /// var agent = builder.AddProject&lt;Projects.Agent&gt;("agent")
+    ///     .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+    /// </code>
+    /// </remarks>
     [AspireExport("asAgentWithInvocationMode")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -81,7 +103,7 @@ public static class AgentResourceBuilderExtensions
         A2AInvocationMode invocationMode)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, protocol, invocationMode);
+        return AsAgentCore(builder, agentCustomPath: null, protocol, invocationMode, agentName: null);
     }
 
     /// <summary>
@@ -91,12 +113,25 @@ public static class AgentResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="agentCustomPath">The custom path for protocol-specific dashboard commands and URLs.</param>
     /// <param name="protocol">The protocol supported by the agent.</param>
+    /// <param name="agentName">The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+    /// <code>
+    /// var agent = builder.AddProject&lt;Projects.Agent&gt;("agent-service")
+    ///     .AsAgent("/agent-card.json", AgentProtocol.A2A)
+    ///     .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
+    /// </code>
+    /// </remarks>
     [AspireExport("asAgentWithPath")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
+    public static IResourceBuilder<T> AsAgent<T>(
+        this IResourceBuilder<T> builder,
+        string? agentCustomPath,
+        AgentProtocol protocol,
+        string? agentName = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath, protocol, A2AInvocationMode.NonStreaming);
+        return AsAgentCore(builder, agentCustomPath, protocol, A2AInvocationMode.NonStreaming, agentName);
     }
 
     /// <summary>
@@ -109,6 +144,13 @@ public static class AgentResourceBuilderExtensions
     /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    /// <remarks>
+    /// Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+    /// <code>
+    /// var agent = builder.AddProject&lt;Projects.Agent&gt;("agent")
+    ///     .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
+    /// </code>
+    /// </remarks>
     [AspireExport("asAgentWithPathAndInvocationMode")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -117,41 +159,59 @@ public static class AgentResourceBuilderExtensions
         A2AInvocationMode invocationMode)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        return AsAgentCore(builder, agentCustomPath, protocol, invocationMode, agentName: null);
+    }
+
+    private static IResourceBuilder<T> AsAgentCore<T>(
+        IResourceBuilder<T> builder,
+        string? agentCustomPath,
+        AgentProtocol protocol,
+        A2AInvocationMode invocationMode,
+        string? agentName)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
         if (protocol is not AgentProtocol.A2A && invocationMode is not A2AInvocationMode.NonStreaming)
         {
             throw new ArgumentException("A2A invocation modes can only be configured for the A2A protocol.", nameof(invocationMode));
         }
+        if (agentName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
+            if (protocol is not (AgentProtocol.Responses or AgentProtocol.Acp))
+            {
+                throw new ArgumentException("An agent name can only be configured for the Responses or ACP protocol.", nameof(agentName));
+            }
+        }
 
         var normalizedPath = NormalizePath(agentCustomPath);
-        var annotation = new AgentResourceAnnotation(protocol, normalizedPath, invocationMode);
+        var annotation = new AgentResourceAnnotation(protocol, normalizedPath, invocationMode, agentName);
 
         builder.WithAnnotation(annotation);
         builder.WithIconName("Agents");
 
-        var endpoint = GetAgentEndpoint(builder, KnownNetworkIdentifiers.LocalhostNetwork);
         var hasHighlightedCommand = builder.Resource.Annotations
             .OfType<ResourceCommandAnnotation>()
             .Any(command => command.IsHighlighted);
 
         if (IsA2AProtocol(protocol))
         {
-            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, invocationMode, ShouldHighlightCommand);
+            ConfigureA2A(builder, normalizedPath ?? DefaultA2AAgentCardPath, invocationMode, ShouldHighlightCommand);
         }
 
         if (protocol is AgentProtocol.Responses)
         {
-            ConfigureResponses(builder, endpoint, normalizedPath ?? DefaultResponsesPath, ShouldHighlightCommand);
+            ConfigureResponses(builder, normalizedPath ?? DefaultResponsesPath, agentName, ShouldHighlightCommand);
         }
 
         if (protocol is AgentProtocol.AgUi)
         {
-            ConfigureAgUi(builder, endpoint, normalizedPath ?? DefaultAgUiPath, ShouldHighlightCommand);
+            ConfigureAgUi(builder, normalizedPath ?? DefaultAgUiPath, ShouldHighlightCommand);
         }
 
         if (protocol is AgentProtocol.Acp)
         {
-            ConfigureAcp(builder, endpoint, normalizedPath ?? DefaultAcpPath, builder.Resource.Name, ShouldHighlightCommand);
+            ConfigureAcp(builder, normalizedPath ?? DefaultAcpPath, agentName, ShouldHighlightCommand);
         }
 
         return builder;
@@ -192,30 +252,34 @@ public static class AgentResourceBuilderExtensions
     {
         var endpointName = source.Annotations
             .OfType<EndpointAnnotation>()
-            .Where(e => e.UriScheme is "http" or "https")
+            .Where(e => !e.ExcludeReferenceEndpoint && e.UriScheme is "http" or "https")
             .OrderByDescending(e => string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
             .Select(e => e.Name)
-            .FirstOrDefault() ?? "http";
+            .FirstOrDefault()
+            ?? throw new DistributedApplicationException(
+                $"Could not configure agent resource '{source.Name}' because no non-excluded HTTP or HTTPS endpoint was found.");
 
         return new EndpointReference(source, endpointName, network);
     }
 
     private static void ConfigureA2A<T>(
         IResourceBuilder<T> builder,
-        EndpointReference endpoint,
         string agentCardPath,
         A2AInvocationMode invocationMode,
         Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        var advertisedEndpoint = GetAgentEndpoint(
-            builder,
-            builder.Resource.IsContainer()
+        builder.WithEnvironment(context =>
+        {
+            var network = context.Resource.IsContainer()
                 ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
-                : KnownNetworkIdentifiers.LocalhostNetwork);
-        builder.WithEnvironment(A2AAgentBaseUrlEnvironmentVariableName, ReferenceExpression.Create($"{advertisedEndpoint.Property(EndpointProperty.Url)}"));
+                : KnownNetworkIdentifiers.LocalhostNetwork;
+            var advertisedEndpoint = GetDefaultAgentEndpoint(builder.Resource, network);
+            context.EnvironmentVariables[A2AAgentBaseUrlEnvironmentVariableName] =
+                ReferenceExpression.Create($"{advertisedEndpoint.Property(EndpointProperty.Url)}");
+        });
 
-        AddProtocolEndpointUrl(builder, endpoint, agentCardPath, "Agent Card");
+        AddProtocolEndpointUrl(builder, agentCardPath, "Agent Card");
 
         AddHttpCommandIfMissing(
             builder,
@@ -229,16 +293,20 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
-                EndpointSelector = () => endpoint,
+                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareA2ARequestAsync(ctx, invocationMode),
                 GetCommandResult = GetAgentCommandResultAsync
             });
     }
 
-    private static void ConfigureResponses<T>(IResourceBuilder<T> builder, EndpointReference endpoint, string responsesPath, Func<bool> shouldHighlightCommand)
+    private static void ConfigureResponses<T>(
+        IResourceBuilder<T> builder,
+        string responsesPath,
+        string? agentName,
+        Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        AddProtocolEndpointUrl(builder, endpoint, responsesPath, "Responses Endpoint");
+        AddProtocolEndpointUrl(builder, responsesPath, "Responses Endpoint");
 
         AddHttpCommandIfMissing(
             builder,
@@ -251,17 +319,17 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
-                Arguments = [CreateMessageArgument("Hello, what can you do?")],
-                EndpointSelector = () => endpoint,
-                PrepareRequest = ctx => PrepareResponsesRequestAsync(ctx, builder.Resource.Name),
+                Arguments = CreateAgentCommandArguments(agentName, "Hello, what can you do?"),
+                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
+                PrepareRequest = ctx => PrepareResponsesRequestAsync(ctx, agentName),
                 GetCommandResult = GetAgentCommandJsonResultAsync
             });
     }
 
-    private static void ConfigureAgUi<T>(IResourceBuilder<T> builder, EndpointReference endpoint, string agUiPath, Func<bool> shouldHighlightCommand)
+    private static void ConfigureAgUi<T>(IResourceBuilder<T> builder, string agUiPath, Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints
     {
-        AddProtocolEndpointUrl(builder, endpoint, agUiPath, "AG-UI Endpoint");
+        AddProtocolEndpointUrl(builder, agUiPath, "AG-UI Endpoint");
 
         AddHttpCommandIfMissing(
             builder,
@@ -275,16 +343,20 @@ public static class AgentResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
-                EndpointSelector = () => endpoint,
+                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = PrepareAgUiRequestAsync,
                 GetCommandResult = GetAgentCommandTextResultAsync
             });
     }
 
-    private static void ConfigureAcp<T>(IResourceBuilder<T> builder, EndpointReference endpoint, string acpPath, string agentName, Func<bool> shouldHighlightCommand)
+    private static void ConfigureAcp<T>(
+        IResourceBuilder<T> builder,
+        string acpPath,
+        string? agentName,
+        Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints
     {
-        AddProtocolEndpointUrl(builder, endpoint, acpPath, "ACP Runs Endpoint");
+        AddProtocolEndpointUrl(builder, acpPath, "ACP Runs Endpoint");
 
         AddHttpCommandIfMissing(
             builder,
@@ -297,23 +369,36 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
-                Arguments = [CreateMessageArgument("Hello, what can you do?")],
-                EndpointSelector = () => endpoint,
+                Arguments = CreateAgentCommandArguments(agentName, "Hello, what can you do?"),
+                EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareAcpRunRequestAsync(ctx, agentName),
                 GetCommandResult = GetAgentCommandJsonResultAsync
             });
     }
 
-    private static void AddProtocolEndpointUrl<T>(IResourceBuilder<T> builder, EndpointReference endpoint, string path, string displayText)
+    private static void AddProtocolEndpointUrl<T>(IResourceBuilder<T> builder, string path, string displayText)
         where T : IResourceWithEndpoints
     {
-        builder.WithUrlForEndpoint(
-            endpoint.EndpointName,
-            _ => new ResourceUrlAnnotation
+        builder.WithUrls(context =>
+        {
+            EndpointReference endpoint;
+            try
+            {
+                endpoint = GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork);
+            }
+            catch (DistributedApplicationException ex)
+            {
+                context.Logger.LogWarning(ex, "Could not add agent protocol URL for resource '{ResourceName}'.", builder.Resource.Name);
+                return;
+            }
+
+            context.Urls.Add(new ResourceUrlAnnotation
             {
                 Url = path,
-                DisplayText = displayText
+                DisplayText = displayText,
+                Endpoint = endpoint
             });
+        });
     }
 
     private static async Task PrepareA2ARequestAsync(HttpCommandRequestContext ctx, A2AInvocationMode invocationMode)
@@ -345,7 +430,8 @@ public static class AgentResourceBuilderExtensions
                     ["params"] = CreateA2ASendMessageRequest(
                         message,
                         role: isV03 ? "user" : "ROLE_USER",
-                        partsPropertyName: "parts")
+                        partsPropertyName: "parts",
+                        includeConfiguration: true)
                 }.ToString(),
                 Encoding.UTF8,
                 "application/json");
@@ -356,8 +442,9 @@ public static class AgentResourceBuilderExtensions
         ctx.Request.Content = new StringContent(
             CreateA2ASendMessageRequest(
                 message,
-                role: isHttpJsonV03 ? "user" : "ROLE_USER",
-                partsPropertyName: isHttpJsonV03 ? "content" : "parts").ToString(),
+                role: "ROLE_USER",
+                partsPropertyName: isHttpJsonV03 ? "content" : "parts",
+                includeConfiguration: !isHttpJsonV03).ToString(),
             Encoding.UTF8,
             "application/a2a+json");
     }
@@ -512,8 +599,9 @@ public static class AgentResourceBuilderExtensions
         return builder.Uri;
     }
 
-    private static Task PrepareResponsesRequestAsync(HttpCommandRequestContext ctx, string agentName)
+    private static Task PrepareResponsesRequestAsync(HttpCommandRequestContext ctx, string? agentName)
     {
+        agentName = GetAgentName(ctx.Arguments, agentName);
         var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Content = new StringContent(
@@ -565,8 +653,9 @@ public static class AgentResourceBuilderExtensions
         return Task.CompletedTask;
     }
 
-    private static Task PrepareAcpRunRequestAsync(HttpCommandRequestContext ctx, string agentName)
+    private static Task PrepareAcpRunRequestAsync(HttpCommandRequestContext ctx, string? agentName)
     {
+        agentName = GetAgentName(ctx.Arguments, agentName);
         var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Content = new StringContent(
@@ -596,6 +685,25 @@ public static class AgentResourceBuilderExtensions
         return Task.CompletedTask;
     }
 
+    private static InteractionInput[] CreateAgentCommandArguments(string? agentName, string messagePlaceholder)
+    {
+        return agentName is null
+            ? [CreateAgentNameArgument(), CreateMessageArgument(messagePlaceholder)]
+            : [CreateMessageArgument(messagePlaceholder)];
+    }
+
+    private static InteractionInput CreateAgentNameArgument()
+    {
+        return new InteractionInput
+        {
+            Name = AgentNameArgumentName,
+            Label = "Agent Name",
+            Description = "Registered protocol agent name.",
+            InputType = InputType.Text,
+            Required = true
+        };
+    }
+
     private static InteractionInput CreateMessageArgument(string placeholder)
     {
         return new InteractionInput
@@ -615,6 +723,13 @@ public static class AgentResourceBuilderExtensions
             ?? throw new InvalidOperationException("Agent command message argument is required.");
     }
 
+    private static string GetAgentName(InteractionInputCollection arguments, string? configuredAgentName)
+    {
+        return configuredAgentName
+            ?? arguments.GetString(AgentNameArgumentName)
+            ?? throw new InvalidOperationException("Agent command agent name argument is required.");
+    }
+
     private static async Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(HttpCommandResultContext ctx)
     {
         ctx.CancellationToken.ThrowIfCancellationRequested();
@@ -632,6 +747,14 @@ public static class AgentResourceBuilderExtensions
         if (responseJson is null)
         {
             return CommandResults.Failure("Agent returned an empty response.");
+        }
+
+        if (responseJson["error"] is { } error)
+        {
+            return CommandResults.Failure(
+                "Agent request returned a JSON-RPC error.",
+                JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                CommandResultFormat.Json);
         }
 
         return CommandResults.Success(
@@ -661,16 +784,109 @@ public static class AgentResourceBuilderExtensions
             displayImmediately: true);
     }
 
-    private static Task<ExecuteCommandResult> GetAgentCommandResultAsync(HttpCommandResultContext ctx)
+    private static async Task<ExecuteCommandResult> GetAgentCommandSseResultAsync(HttpCommandResultContext ctx)
     {
-        return ctx.Response.Content.Headers.ContentType?.MediaType is "application/json" or "application/a2a+json"
-            ? GetAgentCommandJsonResultAsync(ctx)
-            : GetAgentCommandTextResultAsync(ctx);
+        ctx.CancellationToken.ThrowIfCancellationRequested();
+
+        var responseBody = await ctx.Response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+        if (!ctx.Response.IsSuccessStatusCode)
+        {
+            return CommandResults.Failure(
+                $"Agent request failed with status code {(int)ctx.Response.StatusCode} ({ctx.Response.StatusCode}).",
+                responseBody,
+                CommandResultFormat.Text);
+        }
+
+        if (TryGetSseJsonRpcError(responseBody, out var error))
+        {
+            return CommandResults.Failure(
+                "Agent request returned a JSON-RPC error.",
+                JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                CommandResultFormat.Json);
+        }
+
+        return CommandResults.Success(
+            message: "Agent response received.",
+            result: responseBody,
+            resultFormat: CommandResultFormat.Text,
+            displayImmediately: true);
     }
 
-    private static JsonObject CreateA2ASendMessageRequest(string message, string role, string partsPropertyName)
+    private static Task<ExecuteCommandResult> GetAgentCommandResultAsync(HttpCommandResultContext ctx)
     {
-        return new JsonObject
+        return ctx.Response.Content.Headers.ContentType?.MediaType switch
+        {
+            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx),
+            "text/event-stream" => GetAgentCommandSseResultAsync(ctx),
+            _ => GetAgentCommandTextResultAsync(ctx)
+        };
+    }
+
+    private static bool TryGetSseJsonRpcError(string responseBody, out JsonNode? error)
+    {
+        // A2A streaming responses contain one JSON-RPC response per SSE event:
+        //   event: message
+        //   data: {"jsonrpc":"2.0","id":"...","error":{"code":-32603,"message":"Agent failed."}}
+        // Join consecutive data fields because SSE allows an event payload to span multiple lines.
+        using var reader = new StringReader(responseBody);
+        var eventData = new StringBuilder();
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (line.Length == 0)
+            {
+                if (TryGetJsonRpcError(eventData, out error))
+                {
+                    return true;
+                }
+
+                eventData.Clear();
+                continue;
+            }
+
+            if (!line.StartsWith("data:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line["data:".Length..];
+            if (value.StartsWith(' '))
+            {
+                value = value[1..];
+            }
+
+            if (eventData.Length > 0)
+            {
+                eventData.Append('\n');
+            }
+
+            eventData.Append(value);
+        }
+
+        return TryGetJsonRpcError(eventData, out error);
+
+        static bool TryGetJsonRpcError(StringBuilder eventData, out JsonNode? error)
+        {
+            try
+            {
+                error = (JsonNode.Parse(eventData.ToString()) as JsonObject)?["error"];
+                return error is not null;
+            }
+            catch (JsonException)
+            {
+                error = null;
+                return false;
+            }
+        }
+    }
+
+    private static JsonObject CreateA2ASendMessageRequest(
+        string message,
+        string role,
+        string partsPropertyName,
+        bool includeConfiguration)
+    {
+        var request = new JsonObject
         {
             ["message"] = new JsonObject
             {
@@ -683,13 +899,19 @@ public static class AgentResourceBuilderExtensions
                         ["text"] = message
                     }
                 }
-            },
-            ["configuration"] = new JsonObject
+            }
+        };
+
+        if (includeConfiguration)
+        {
+            request["configuration"] = new JsonObject
             {
                 ["returnImmediately"] = false,
                 ["acceptedOutputModes"] = new JsonArray("text/plain")
-            }
-        };
+            };
+        }
+
+        return request;
     }
 
     private static void AddHttpCommandIfMissing<T>(
@@ -706,19 +928,6 @@ public static class AgentResourceBuilderExtensions
         }
 
         builder.WithHttpCommand(path, displayName, endpointSelector: commandOptions.EndpointSelector, commandName, commandOptions);
-    }
-
-    private static EndpointReference GetAgentEndpoint<T>(IResourceBuilder<T> builder, NetworkIdentifier network)
-        where T : IResourceWithEndpoints
-    {
-        var endpointName = builder.Resource.Annotations
-            .OfType<EndpointAnnotation>()
-            .Where(e => e.UriScheme is "http" or "https")
-            .OrderByDescending(e => string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
-            .Select(e => e.Name)
-            .FirstOrDefault() ?? "http";
-
-        return new EndpointReference(builder.Resource, endpointName, network);
     }
 
     private static string? NormalizePath(string? path)

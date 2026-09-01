@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 namespace Aspire.Hosting.Agents.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to test dashboard command arguments.
+#pragma warning disable ASPIREAGENTS001 // Generic agent reference dispatch is experimental.
 
 [Trait("Partition", "5")]
 public class AgentResourceBuilderExtensionsTests
@@ -29,6 +30,7 @@ public class AgentResourceBuilderExtensionsTests
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
         Assert.Equal(AgentProtocol.A2A, annotation.Protocol);
         Assert.Equal(A2AInvocationMode.NonStreaming, annotation.InvocationMode);
+        Assert.Null(annotation.AgentName);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name == "agent-a2a-agent-card");
@@ -49,12 +51,15 @@ public class AgentResourceBuilderExtensionsTests
         var agent = builder.AddContainer("agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
             .AsAgent("/a2a-card.json", AgentProtocol.A2A)
-            .AsAgent("/responses", AgentProtocol.Responses);
+            .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
 
         var annotations = agent.Resource.Annotations.OfType<AgentResourceAnnotation>().ToArray();
         Assert.Equal(2, annotations.Length);
         Assert.Contains(annotations, a => a.Protocol == AgentProtocol.A2A && a.CustomPath == "/a2a-card.json");
-        Assert.Contains(annotations, a => a.Protocol == AgentProtocol.Responses && a.CustomPath == "/responses");
+        Assert.Contains(annotations, a =>
+            a.Protocol == AgentProtocol.Responses &&
+            a.CustomPath == "/responses" &&
+            a.AgentName == "weather-agent");
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.Contains(commands, c => c.Name == "agent-a2a-send-message" && c.IsHighlighted);
@@ -71,7 +76,7 @@ public class AgentResourceBuilderExtensionsTests
             .WithHttpEndpoint(targetPort: 8080)
             .AsAgent(AgentProtocol.A2A)
             .AsAgent(AgentProtocol.AgUi)
-            .AsAgent(AgentProtocol.Acp);
+            .AsAgent(AgentProtocol.Acp, agentName: "registered-agent");
 
         var annotations = agent.Resource.Annotations.OfType<AgentResourceAnnotation>().ToArray();
         Assert.Equal(3, annotations.Length);
@@ -94,7 +99,7 @@ public class AgentResourceBuilderExtensionsTests
         var agent = builder.AddContainer("agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
             .AsAgent(AgentProtocol.AgUi)
-            .AsAgent(AgentProtocol.Acp);
+            .AsAgent(AgentProtocol.Acp, agentName: "registered-agent");
 
         var annotations = agent.Resource.Annotations.OfType<AgentResourceAnnotation>().ToArray();
         Assert.Equal(2, annotations.Length);
@@ -115,7 +120,58 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal(IconVariant.Regular, acpCommand.IconVariant);
         Assert.False(acpCommand.IsHighlighted);
         AssertMessageArgument(acpCommand);
+        Assert.Equal("registered-agent", Assert.Single(annotations, a => a.Protocol == AgentProtocol.Acp).AgentName);
         Assert.Single(commands, c => c.IsHighlighted);
+    }
+
+    [Fact]
+    public void AsAgent_WithoutConfiguredProtocolNameAddsAgentNameArgument()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent-service", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .AsAgent(AgentProtocol.Responses);
+
+        var command = Assert.Single(agent.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == "agent-service-responses-send-message");
+        Assert.Collection(
+            command.Arguments,
+            agentName =>
+            {
+                Assert.Equal("agentName", agentName.Name);
+                Assert.Equal("Agent Name", agentName.Label);
+                Assert.True(agentName.Required);
+            },
+            AssertMessageArgument);
+    }
+
+    [Theory]
+    [InlineData(AgentProtocol.Responses, "agent-service-responses-send-message")]
+    [InlineData(AgentProtocol.Acp, "agent-service-acp-run")]
+    public async Task InvokeAgentUsesConfiguredProtocolAgentName(AgentProtocol protocol, string commandName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new CaptureAgentCommandHandler();
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent-service")
+            .AsAgent(protocol, agentName: "registered-agent");
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, commandName);
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, commandName, CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(handler.RequestBody);
+        var body = JsonNode.Parse(handler.RequestBody);
+        var actualAgentName = protocol is AgentProtocol.Responses
+            ? body?["agent"]?["name"]?.GetValue<string>()
+            : body?["agent_name"]?.GetValue<string>();
+        Assert.Equal("registered-agent", actualAgentName);
     }
 
     [Fact]
@@ -146,6 +202,31 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal("http://agent.dev.internal:8080", config[AgentResourceBuilderExtensions.A2AAgentBaseUrlEnvironmentVariableName]);
     }
 
+    [Fact]
+    public async Task AsAgent_CanBeConfiguredBeforeEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new A2ACommandHandler("JSONRPC", "1.0", supportsStreaming: false, "http://localhost:8080/a2a");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = builder.AddResource(new CustomResource("agent"))
+            .AsAgent(AgentProtocol.A2A)
+            .WithHttpEndpoint(targetPort: 8080);
+        var endpoint = Assert.Single(agent.Resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(new Uri("http://localhost:8080/a2a"), handler.InvocationRequest?.RequestUri);
+    }
+
     [Theory]
     [InlineData("JSONRPC", "1.0", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
     [InlineData("JSONRPC", "1.0", true, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
@@ -153,8 +234,8 @@ public class AgentResourceBuilderExtensionsTests
     [InlineData("JSONRPC", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/stream", "user", "parts")]
     [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
     [InlineData("HTTP+JSON", "1.0", true, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
-    [InlineData("HTTP+JSON", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "user", "content")]
-    [InlineData("HTTP+JSON", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "user", "content")]
+    [InlineData("HTTP+JSON", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "ROLE_USER", "content")]
+    [InlineData("HTTP+JSON", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "ROLE_USER", "content")]
     [InlineData("JSONRPC", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
     [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
     public async Task InvokeA2AReadsAgentCardAndChoosesBinding(
@@ -191,21 +272,22 @@ public class AgentResourceBuilderExtensionsTests
 
         Assert.NotNull(handler.InvocationBody);
         var body = JsonNode.Parse(handler.InvocationBody);
+        var requestBody = expectedJsonRpcMethod is null ? body : body?["params"];
         if (expectedJsonRpcMethod is not null)
         {
             Assert.Equal(expectedJsonRpcMethod, body?["method"]?.GetValue<string>());
-            Assert.Equal(expectedRole, body?["params"]?["message"]?["role"]?.GetValue<string>());
-            Assert.NotNull(body?["params"]?["message"]?[expectedPartsPropertyName]);
-            Assert.Equal("hello", body?["params"]?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
             Assert.Equal("application/json", handler.InvocationRequest?.Content?.Headers.ContentType?.MediaType);
         }
         else
         {
-            Assert.Equal(expectedRole, body?["message"]?["role"]?.GetValue<string>());
-            Assert.NotNull(body?["message"]?[expectedPartsPropertyName]);
-            Assert.Equal("hello", body?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
             Assert.Equal("application/a2a+json", handler.InvocationRequest?.Content?.Headers.ContentType?.MediaType);
         }
+
+        Assert.Equal(expectedRole, requestBody?["message"]?["role"]?.GetValue<string>());
+        Assert.NotNull(requestBody?["message"]?[expectedPartsPropertyName]);
+        Assert.Equal("hello", requestBody?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
+        var expectedConfiguration = expectedJsonRpcMethod is not null || !protocolVersion.StartsWith("0.", StringComparison.Ordinal);
+        Assert.Equal(expectedConfiguration, requestBody?["configuration"] is not null);
     }
 
     [Fact]
@@ -252,6 +334,60 @@ public class AgentResourceBuilderExtensionsTests
         Assert.False(result.Success);
         Assert.Equal("Command argument validation failed.", result.Message);
         Assert.Null(handler.InvocationRequest);
+    }
+
+    [Fact]
+    public async Task InvokeA2AReportsJsonRpcError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new A2ACommandHandler(
+            "JSONRPC",
+            "1.0",
+            supportsStreaming: false,
+            "http://localhost:8080/a2a",
+            """{"jsonrpc":"2.0","id":"request-id","error":{"code":-32603,"message":"Agent failed."}}""");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent request returned a JSON-RPC error.", result.Message);
+    }
+
+    [Fact]
+    public async Task InvokeStreamingA2AReportsJsonRpcError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new A2ACommandHandler(
+            "JSONRPC",
+            "1.0",
+            supportsStreaming: true,
+            "http://localhost:8080/a2a",
+            """{"jsonrpc":"2.0","id":"request-id","error":{"code":-32603,"message":"Agent failed."}}""");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent request returned a JSON-RPC error.", result.Message);
     }
 
     [Fact]
@@ -308,6 +444,74 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal("http://weather-agent.dev.internal:8080", config["services__weather-agent__http__0"]);
         Assert.Equal("http://weather-agent.dev.internal:8080", config["WEATHER_AGENT_HTTP"]);
         Assert.Equal("http://weather-agent.dev.internal:8080/.well-known/agent-card.json", config["WEATHER_AGENT_AGENTCARD_URL"]);
+
+        var relationships = consumer.Resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(r => ReferenceEquals(r.Resource, agent.Resource));
+        Assert.Single(relationships);
+    }
+
+    [Fact]
+    public async Task AsAgent_ImplicitEndpointSelectionSkipsExcludedEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("weather-agent", "image")
+            .WithHttpsEndpoint(name: "management", targetPort: 8443)
+            .WithEndpoint("management", e =>
+            {
+                e.ExcludeReferenceEndpoint = true;
+                AllocateEndpoint(e, "management.dev.internal", 8443);
+            })
+            .WithHttpEndpoint(name: "api", targetPort: 8080)
+            .WithEndpoint("api", e => AllocateEndpoint(e, "weather-agent.dev.internal", 8080))
+            .AsAgent(AgentProtocol.A2A);
+
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithReference(agent);
+
+        var agentConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(agent.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+        var consumerConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://weather-agent.dev.internal:8080", agentConfig[AgentResourceBuilderExtensions.A2AAgentBaseUrlEnvironmentVariableName]);
+        Assert.Equal("http://weather-agent.dev.internal:8080/.well-known/agent-card.json", consumerConfig["WEATHER_AGENT_AGENTCARD_URL"]);
+    }
+
+    [Fact]
+    public async Task AsAgent_OnlyExcludedEndpointDoesNotFallbackToIt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent", "image")
+            .WithHttpEndpoint()
+            .WithEndpoint("http", e => e.ExcludeReferenceEndpoint = true)
+            .AsAgent(AgentProtocol.A2A);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                agent.Resource,
+                DistributedApplicationOperation.Run,
+                TestServiceProvider.Instance));
+
+        Assert.Contains("no non-excluded HTTP or HTTPS endpoint was found", ex.Message);
+    }
+
+    [Fact]
+    public void WithReference_MultipleAgentAnnotationsAddOneRelationship()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A)
+            .AsAgent("/alternate-agent-card.json", AgentProtocol.A2A);
+
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithReference(agent);
+
+        var relationships = consumer.Resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(r => ReferenceEquals(r.Resource, agent.Resource));
+        Assert.Single(relationships);
     }
 
     [Fact]
@@ -386,7 +590,11 @@ public class AgentResourceBuilderExtensionsTests
 
     private static void AssertMessageArgument(ResourceCommandAnnotation command)
     {
-        var argument = Assert.Single(command.Arguments);
+        AssertMessageArgument(Assert.Single(command.Arguments));
+    }
+
+    private static void AssertMessageArgument(InteractionInput argument)
+    {
         Assert.Equal("message", argument.Name);
         Assert.Equal("Message", argument.Label);
         Assert.Equal("Message to send to the agent.", argument.Description);
@@ -395,7 +603,12 @@ public class AgentResourceBuilderExtensionsTests
         Assert.False(string.IsNullOrWhiteSpace(argument.Placeholder));
     }
 
-    private sealed class A2ACommandHandler(string protocolBinding, string protocolVersion, bool supportsStreaming, string interfaceUrl) : HttpMessageHandler
+    private sealed class A2ACommandHandler(
+        string protocolBinding,
+        string protocolVersion,
+        bool supportsStreaming,
+        string interfaceUrl,
+        string invocationResponse = """{"ok":true}""") : HttpMessageHandler
     {
         public HttpRequestMessage? InvocationRequest { get; private set; }
 
@@ -435,11 +648,29 @@ public class AgentResourceBuilderExtensionsTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = request.Headers.Accept.Any(h => h.MediaType == "text/event-stream")
-                    ? new StringContent("event: message\ndata: {}\n\n", Encoding.UTF8, "text/event-stream")
-                    : new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json")
+                    ? new StringContent($"event: message\ndata: {invocationResponse}\n\n", Encoding.UTF8, "text/event-stream")
+                    : new StringContent(invocationResponse, Encoding.UTF8, "application/json")
+            };
+        }
+    }
+
+    private sealed class CaptureAgentCommandHandler : HttpMessageHandler
+    {
+        public string? RequestBody { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json")
             };
         }
     }
 }
 
 #pragma warning restore ASPIREINTERACTION001
+#pragma warning restore ASPIREAGENTS001

@@ -5,6 +5,8 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Agents;
 
+#pragma warning disable ASPIREAGENTS001 // Agent annotations implement the experimental reference extension point.
+
 /// <summary>
 /// Describes agent-specific metadata for a resource.
 /// </summary>
@@ -20,11 +22,17 @@ public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
     /// <param name="protocol">The agent protocol supported by the resource.</param>
     /// <param name="customPath">The custom protocol path, when one is configured.</param>
     /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
-    public AgentResourceAnnotation(AgentProtocol protocol, string? customPath, A2AInvocationMode invocationMode = A2AInvocationMode.NonStreaming)
+    /// <param name="agentName">The protocol-specific registered agent name, when configured.</param>
+    public AgentResourceAnnotation(
+        AgentProtocol protocol,
+        string? customPath,
+        A2AInvocationMode invocationMode = A2AInvocationMode.NonStreaming,
+        string? agentName = null)
     {
         Protocol = protocol;
         CustomPath = customPath;
         InvocationMode = invocationMode;
+        AgentName = agentName;
     }
 
     /// <summary>
@@ -42,6 +50,11 @@ public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
     /// </summary>
     public A2AInvocationMode InvocationMode { get; }
 
+    /// <summary>
+    /// Gets the protocol-specific registered agent name used by dashboard commands.
+    /// </summary>
+    public string? AgentName { get; }
+
     bool IResourceWithReferenceAnnotation.CanApplyReference(IResource source)
     {
         return AgentResourceBuilderExtensions.IsA2AProtocol(Protocol) && source is IResourceWithEndpoints;
@@ -52,7 +65,6 @@ public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
         IResource source,
         string referenceName)
     {
-        builder.WithReferenceRelationship(source);
         return builder.WithEnvironment(context =>
         {
             context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
@@ -73,3 +85,5 @@ public sealed class AgentResourceAnnotation : IResourceWithReferenceAnnotation
         });
     }
 }
+
+#pragma warning restore ASPIREAGENTS001

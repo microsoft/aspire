@@ -175,6 +175,58 @@ public class WithMcpServerTests
     }
 
     [Fact]
+    public async Task WithMcpServer_ImplicitEndpointSelectionSkipsExcludedEndpoints()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        appBuilder.AddContainer("app", "image")
+            .WithHttpsEndpoint(name: "management")
+            .WithEndpoint("management", e =>
+            {
+                e.ExcludeReferenceEndpoint = true;
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8443);
+            })
+            .WithHttpEndpoint(name: "api")
+            .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080))
+            .WithMcpServer();
+
+        using var app = await appBuilder.BuildAsync();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ContainerResource>());
+        var mcpAnnotation = Assert.Single(resource.Annotations.OfType<McpServerEndpointAnnotation>());
+
+        var resolvedUri = await mcpAnnotation.EndpointUrlResolver(resource, CancellationToken.None);
+
+        Assert.Equal("http://localhost:8080/mcp", resolvedUri?.ToString());
+    }
+
+    [Fact]
+    public async Task WithMcpServer_ExplicitEndpointSelectionAllowsExcludedEndpoint()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        appBuilder.AddContainer("app", "image")
+            .WithHttpsEndpoint(name: "management")
+            .WithEndpoint("management", e =>
+            {
+                e.ExcludeReferenceEndpoint = true;
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8443);
+            })
+            .WithMcpServer(endpointName: "management");
+
+        using var app = await appBuilder.BuildAsync();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ContainerResource>());
+        var mcpAnnotation = Assert.Single(resource.Annotations.OfType<McpServerEndpointAnnotation>());
+
+        var resolvedUri = await mcpAnnotation.EndpointUrlResolver(resource, CancellationToken.None);
+
+        Assert.Equal("https://localhost:8443/mcp", resolvedUri?.ToString());
+    }
+
+    [Fact]
     public async Task WithMcpServer_ResolvesDefaultMcpPath()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();

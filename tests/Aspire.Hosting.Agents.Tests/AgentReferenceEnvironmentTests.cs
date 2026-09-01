@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Agents.Tests;
 
+#pragma warning disable ASPIREAGENTS001 // Generic agent reference dispatch is experimental.
+
 [Trait("Partition", "5")]
 public class AgentReferenceEnvironmentTests
 {
@@ -29,6 +31,8 @@ public class AgentReferenceEnvironmentTests
 
         Assert.DoesNotContain("WEATHER_AGENT_AGENTCARD_URL", config.Keys);
     }
+
+    #pragma warning restore ASPIREAGENTS001
 
     private static void AllocateEndpoint(EndpointAnnotation endpoint, string containerHost, int containerPort)
     {

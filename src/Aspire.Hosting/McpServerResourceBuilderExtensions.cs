@@ -123,7 +123,9 @@ public static class McpServerResourceBuilderExtensions
 
         foreach (var scheme in s_httpSchemes)
         {
-            var endpoint = endpoints.FirstOrDefault(e => string.Equals(e.Scheme, scheme, StringComparison.OrdinalIgnoreCase));
+            var endpoint = endpoints.FirstOrDefault(e =>
+                !e.ExcludeReferenceEndpoint &&
+                string.Equals(e.Scheme, scheme, StringComparison.OrdinalIgnoreCase));
             if (endpoint is not null)
             {
                 return endpoint;
