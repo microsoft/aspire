@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from './logging';
 import { CommonTelemetryProperties, setCommonTelemetryProperties } from './telemetry';
@@ -109,9 +110,9 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
+    const deadline = performance.now() + timeoutMs;
     while (!predicate()) {
-        const remaining = deadline - Date.now();
+        const remaining = deadline - performance.now();
         if (remaining <= 0) {
             return;
         }

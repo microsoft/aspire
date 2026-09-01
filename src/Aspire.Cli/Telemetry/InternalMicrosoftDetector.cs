@@ -122,13 +122,14 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     []);
             }
 
-            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, cancellationToken).ConfigureAwait(false);
+            var result = await RunProbeStagesAsync(cached.CacheStatus, cancellationToken).ConfigureAwait(false);
             if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
             {
                 await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
             }
 
-            return result;
+            stopwatch.Stop();
+            return result with { Duration = stopwatch.Elapsed };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -233,7 +234,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(
         string cacheStatus,
-        Stopwatch stopwatch,
         CancellationToken cancellationToken)
     {
         var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
@@ -253,18 +253,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             timedOut |= stageResult.TimedOut;
             if (stageResult.Result is not null)
             {
-                stopwatch.Stop();
                 return stageResult.Result with
                 {
                     Outcome = InternalMicrosoftDetectorOutcome.Detected,
                     CacheStatus = cacheStatus,
-                    Duration = stopwatch.Elapsed,
+                    Duration = TimeSpan.Zero,
                     ProbeDiagnostics = diagnostics
                 };
             }
         }
 
-        stopwatch.Stop();
         var anyProbeFailed = diagnostics.Any(diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
         return new InternalMicrosoftDetectionResult(
             IsInternalMicrosoft: false,
@@ -277,7 +275,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     ? InternalMicrosoftDetectorOutcome.Failed
                     : InternalMicrosoftDetectorOutcome.NotDetected,
             CacheStatus: cacheStatus,
-            Duration: stopwatch.Elapsed,
+            Duration: TimeSpan.Zero,
             ProbeDiagnostics: diagnostics);
     }
 
