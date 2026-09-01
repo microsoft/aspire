@@ -162,8 +162,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
-
         return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
     }
 
