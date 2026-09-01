@@ -2,8 +2,13 @@
 
 ## v1.22.0
 
-<!-- aspire-ext-changelog from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->
+
+### Fixes
+
+- Fix the Java starter using an ambient JDK instead of the modeled toolchain, and improve Java AppHost transport reliability ([#19635](https://github.com/microsoft/aspire/pull/19635)).
+- Fix Rust AppHost debugging so an early adapter-launched process no longer gets rejected and recycled by DCP, which could leave the resource with no logs or proxy ([#19750](https://github.com/microsoft/aspire/issues/19750), [#19831](https://github.com/microsoft/aspire/pull/19831)).
+- Consolidate AppHost build failure notifications into a single error notification with **Open CLI Log** and **Open AppHost Log** actions ([#19748](https://github.com/microsoft/aspire/issues/19748), [#19755](https://github.com/microsoft/aspire/pull/19755)).
 
 ## v1.21.0
 
