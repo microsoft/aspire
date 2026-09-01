@@ -377,6 +377,37 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
 }
 
+export async function takeNotificationAction(expectedText: string, actionTitle: string, timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            for (const notification of notifications) {
+                if ((await notification.getMessage()).includes(expectedText)) {
+                    await notification.takeAction(actionTitle);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.ElementClickInterceptedError) {
+                // VS Code can leave a custom hover over a notification action after Selenium
+                // positions the pointer. Escape dismisses that hover so the next poll can click.
+                await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
+                return false;
+            }
+            if (error instanceof webDriverError.StaleElementReferenceError
+                || error instanceof webDriverError.NoSuchElementError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, `Timed out selecting notification action '${actionTitle}' from '${expectedText}'.`);
+}
+
 export interface AcceptedModalDialog {
     message: string;
     details: string;

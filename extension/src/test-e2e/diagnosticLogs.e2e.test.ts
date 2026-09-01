@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { dismissAllNotifications, getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { dismissAllNotifications, getNotificationMessages, openAspireView, takeNotificationAction, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface CliResult {
     exitCode: number | null;
@@ -40,13 +40,13 @@ suite('CLI diagnostic log actions E2E', function () {
 
         const missingAppHost = path.join(getWorkspaceRoot(), 'missing', 'Missing.AppHost.csproj');
         const failureText = 'The --apphost option specified a project that does not exist';
-        const { result, notification } = await runFailingCliWithNotification(
+        const result = await runFailingCliWithNotification(
             ['run', '--apphost', missingAppHost, '--non-interactive', '--nologo'],
             failureText);
         const cliLogPath = getDiagnosticLogPath(result.stderr, 'See logs at');
 
         await assertSingleFailureNotification(failureText);
-        await notification.takeAction('Open CLI Log');
+        await takeNotificationAction(failureText, 'Open CLI Log');
         await assertPersistentLogEditor(cliLogPath);
     });
 
@@ -69,25 +69,25 @@ suite('CLI diagnostic log actions E2E', function () {
 
         const failureText = "Required option '--message' was not provided.";
         const firstFailure = await runConnectedFailure(appHostPath, failureText);
-        const firstCliLogPath = getDiagnosticLogPath(firstFailure.result.stderr, 'See logs at');
+        const firstCliLogPath = getDiagnosticLogPath(firstFailure.stderr, 'See logs at');
 
         await assertSingleFailureNotification(failureText);
-        await firstFailure.notification.takeAction('Open CLI Log');
+        await takeNotificationAction(failureText, 'Open CLI Log');
         await assertPersistentLogEditor(firstCliLogPath);
 
         await executeE2eControlCommand({ name: 'closeAllEditors' });
         await dismissAllNotifications();
 
         const secondFailure = await runConnectedFailure(appHostPath, failureText);
-        const appHostLogPath = getDiagnosticLogPath(secondFailure.result.stderr, 'See AppHost logs at');
+        const appHostLogPath = getDiagnosticLogPath(secondFailure.stderr, 'See AppHost logs at');
 
         await assertSingleFailureNotification(failureText);
-        await secondFailure.notification.takeAction('Open AppHost Log');
+        await takeNotificationAction(failureText, 'Open AppHost Log');
         await assertPersistentLogEditor(appHostLogPath);
     });
 });
 
-async function runConnectedFailure(appHostPath: string, failureText: string): Promise<{ result: CliResult; notification: Awaited<ReturnType<typeof waitForNotificationMessage>> }> {
+async function runConnectedFailure(appHostPath: string, failureText: string): Promise<CliResult> {
     return await runFailingCliWithNotification(
         ['resource', 'e2e-worker', 'echo-arguments', '--apphost', appHostPath, '--non-interactive', '--nologo'],
         failureText);
@@ -96,8 +96,8 @@ async function runConnectedFailure(appHostPath: string, failureText: string): Pr
 async function runFailingCliWithNotification(
     args: string[],
     failureText: string
-): Promise<{ result: CliResult; notification: Awaited<ReturnType<typeof waitForNotificationMessage>> }> {
-    const [status, notification] = await Promise.all([
+): Promise<CliResult> {
+    const [status] = await Promise.all([
         executeE2eControlCommand({
             name: 'runAspireCli',
             args,
@@ -109,7 +109,7 @@ async function runFailingCliWithNotification(
     const result = status.result as CliResult;
 
     assert.notStrictEqual(result.exitCode, 0);
-    return { result, notification };
+    return result;
 }
 
 function getDiagnosticLogPath(output: string, prefix: string): string {
