@@ -149,8 +149,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     logger.LogInformation("Creating dev tunnel '{TunnelId}'", tunnelResource.TunnelId);
                     var tunnelStatus = await devTunnelClient.CreateTunnelAsync(tunnelResource.TunnelId, tunnelResource.Options, logger, ct).ConfigureAwait(false);
                     // The CLI resolves a bare ID and returns its cluster-qualified ID. Use that ID for
-                    // port operations because older supported CLI versions cannot resolve a bare ID
-                    // for tunnels created outside the user's home cluster. See https://github.com/microsoft/aspire/issues/18790.
+                    // port operations because bare IDs may not resolve tunnels across clusters.
+                    // See https://github.com/microsoft/aspire/issues/18790.
                     resolvedTunnelId = tunnelStatus.TunnelId;
                     logger.LogDebug("Dev tunnel '{TunnelId}' created", tunnelResource.TunnelId);
                 }
