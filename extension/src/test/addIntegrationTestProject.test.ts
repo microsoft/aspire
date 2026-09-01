@@ -27,7 +27,6 @@ suite('addIntegrationTestProject', () => {
     let terminalProvider: AspireTerminalProvider;
     let configInfoProvider: ConfigInfoProvider;
     let sendCommandStub: sinon.SinonStub;
-    let hasCapabilityStub: sinon.SinonStub;
     let getCapabilityStatusStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
     let executeCommandStub: sinon.SinonStub;
@@ -38,10 +37,8 @@ suite('addIntegrationTestProject', () => {
         terminalProvider = {
             sendAspireCommandToAspireTerminal: sendCommandStub,
         } as unknown as AspireTerminalProvider;
-        hasCapabilityStub = sandbox.stub().resolves(true);
         getCapabilityStatusStub = sandbox.stub().resolves('supported');
         configInfoProvider = {
-            hasCapability: hasCapabilityStub,
             getCapabilityStatus: getCapabilityStatusStub,
         } as unknown as ConfigInfoProvider;
         showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
@@ -125,7 +122,6 @@ suite('addIntegrationTestProject', () => {
             error => error instanceof vscode.CancellationError);
 
         assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectRequiresCSharpAppHost));
-        assert.strictEqual(hasCapabilityStub.called, false);
         assert.strictEqual(getCapabilityStatusStub.called, false);
         assert.strictEqual(sendCommandStub.called, false);
     });
@@ -136,11 +132,12 @@ suite('addIntegrationTestProject', () => {
         try {
             await availability.refresh();
 
-            assert.ok(hasCapabilityStub.calledOnceWith(aspireTestAppHostCapability, {
-                target: windowCliPathTarget,
-                forceRefresh: false,
-                suppressErrors: true,
-            }));
+            assert.strictEqual(getCapabilityStatusStub.callCount, 1);
+            assert.strictEqual(getCapabilityStatusStub.firstCall.args[0], aspireTestAppHostCapability);
+            assert.strictEqual(getCapabilityStatusStub.firstCall.args[1].target, windowCliPathTarget);
+            assert.strictEqual(getCapabilityStatusStub.firstCall.args[1].forceRefresh, false);
+            assert.strictEqual(getCapabilityStatusStub.firstCall.args[1].suppressErrors, true);
+            assert.ok(getCapabilityStatusStub.firstCall.args[1].cancellationToken);
             assert.ok(executeCommandStub.firstCall.calledWith(
                 'setContext',
                 addIntegrationTestProjectSupportedContext,
@@ -155,12 +152,100 @@ suite('addIntegrationTestProject', () => {
         }
     });
 
+    test('retries when command availability cannot initially be verified', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        getCapabilityStatusStub.onFirstCall().resolves('unavailable');
+        getCapabilityStatusStub.onSecondCall().resolves('supported');
+        const availability = new AddIntegrationTestProjectAvailability(configInfoProvider);
+
+        try {
+            await availability.refresh();
+
+            assert.strictEqual(getCapabilityStatusStub.callCount, 1);
+            assert.strictEqual(executeCommandStub.neverCalledWith(
+                'setContext',
+                addIntegrationTestProjectSupportedContext,
+                true), true);
+
+            await clock.tickAsync(5_000);
+
+            assert.strictEqual(getCapabilityStatusStub.callCount, 2);
+            assert.strictEqual(getCapabilityStatusStub.firstCall.args[1].forceRefresh, false);
+            assert.strictEqual(getCapabilityStatusStub.secondCall.args[1].forceRefresh, true);
+            assert.ok(executeCommandStub.lastCall.calledWith(
+                'setContext',
+                addIntegrationTestProjectSupportedContext,
+                true));
+        }
+        finally {
+            availability.dispose();
+        }
+    });
+
+    test('does not retry command availability for an unsupported CLI', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        getCapabilityStatusStub.resolves('unsupported');
+        const availability = new AddIntegrationTestProjectAvailability(configInfoProvider);
+
+        try {
+            await availability.refresh();
+            await clock.tickAsync(10_000);
+
+            assert.strictEqual(getCapabilityStatusStub.callCount, 1);
+            assert.strictEqual(executeCommandStub.neverCalledWith(
+                'setContext',
+                addIntegrationTestProjectSupportedContext,
+                true), true);
+        }
+        finally {
+            availability.dispose();
+        }
+    });
+
+    test('cancels a scheduled availability retry when disposed', async () => {
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+        getCapabilityStatusStub.resolves('unavailable');
+        const availability = new AddIntegrationTestProjectAvailability(configInfoProvider);
+
+        await availability.refresh();
+        availability.dispose();
+        await clock.tickAsync(5_000);
+
+        assert.strictEqual(getCapabilityStatusStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.neverCalledWith(
+            'setContext',
+            addIntegrationTestProjectSupportedContext,
+            true), true);
+    });
+
+    test('cancels an active availability probe when disposed', async () => {
+        let cancellationToken: vscode.CancellationToken | undefined;
+        getCapabilityStatusStub.callsFake((_capability, options) => {
+            cancellationToken = options.cancellationToken;
+            return new Promise(resolve => cancellationToken?.onCancellationRequested(() => resolve('unavailable')));
+        });
+        const availability = new AddIntegrationTestProjectAvailability(configInfoProvider);
+
+        const refresh = availability.refresh();
+        await new Promise(resolve => setImmediate(resolve));
+        availability.dispose();
+        await refresh;
+
+        assert.strictEqual(cancellationToken?.isCancellationRequested, true);
+        assert.strictEqual(executeCommandStub.neverCalledWith(
+            'setContext',
+            addIntegrationTestProjectSupportedContext,
+            true), true);
+    });
+
     test('does not publish support from a superseded capability probe', async () => {
-        let completeFirstProbe: ((supported: boolean) => void) | undefined;
-        hasCapabilityStub.onFirstCall().returns(new Promise(resolve => {
+        let firstCancellationToken: vscode.CancellationToken | undefined;
+        let completeFirstProbe: ((status: 'supported') => void) | undefined;
+        getCapabilityStatusStub.onFirstCall().callsFake((_capability, options) => new Promise(resolve => {
+            firstCancellationToken = options.cancellationToken;
             completeFirstProbe = resolve;
         }));
-        hasCapabilityStub.onSecondCall().resolves(false);
+        getCapabilityStatusStub.onSecondCall().resolves('unsupported');
         const availability = new AddIntegrationTestProjectAvailability(configInfoProvider);
 
         try {
@@ -168,9 +253,10 @@ suite('addIntegrationTestProject', () => {
             await new Promise(resolve => setImmediate(resolve));
             const secondRefresh = availability.refresh();
             await secondRefresh;
-            completeFirstProbe?.(true);
+            completeFirstProbe?.('supported');
             await firstRefresh;
 
+            assert.strictEqual(firstCancellationToken?.isCancellationRequested, true);
             assert.strictEqual(executeCommandStub.neverCalledWith(
                 'setContext',
                 addIntegrationTestProjectSupportedContext,

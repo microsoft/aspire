@@ -18,40 +18,95 @@ import { extensionLogOutputChannel } from '../utils/logging';
 export const addIntegrationTestProjectSupportedContext = 'aspire.addIntegrationTestProjectSupported';
 
 export class AddIntegrationTestProjectAvailability implements vscode.Disposable {
+    private static readonly _unavailableCapabilityRetryDelayMs = 5_000;
+
     private _refreshGeneration = 0;
+    private _probeCancellationSource: vscode.CancellationTokenSource | undefined;
+    private _retryTimer: ReturnType<typeof setTimeout> | undefined;
     private _disposed = false;
 
     constructor(private readonly _configInfoProvider: ConfigInfoProvider) {
     }
 
     async refresh(forceRefresh = false): Promise<void> {
+        if (this._disposed) {
+            return;
+        }
+
         const generation = ++this._refreshGeneration;
+        this._cancelPendingWork();
         await this._publish(false, generation);
         if (this._disposed || generation !== this._refreshGeneration) {
             return;
         }
 
+        const cancellationSource = new vscode.CancellationTokenSource();
+        this._probeCancellationSource = cancellationSource;
         try {
-            const supported = await this._configInfoProvider.hasCapability(
+            const status = await this._configInfoProvider.getCapabilityStatus(
                 aspireTestAppHostCapability,
                 {
                     target: getAvailabilityTarget(),
                     forceRefresh,
                     suppressErrors: true,
+                    cancellationToken: cancellationSource.token,
                 });
-            await this._publish(supported, generation);
+            if (this._disposed
+                || generation !== this._refreshGeneration
+                || cancellationSource.token.isCancellationRequested) {
+                return;
+            }
+
+            if (status === 'unavailable') {
+                this._scheduleRetry(generation);
+                return;
+            }
+
+            await this._publish(status === 'supported', generation);
         }
         catch (error) {
-            if (!this._disposed && generation === this._refreshGeneration) {
+            if (!cancellationSource.token.isCancellationRequested
+                && !this._disposed
+                && generation === this._refreshGeneration) {
                 extensionLogOutputChannel.warn(`Unable to determine integration test scaffolding availability: ${String(error)}`);
             }
+        }
+        finally {
+            if (this._probeCancellationSource === cancellationSource) {
+                this._probeCancellationSource = undefined;
+            }
+            cancellationSource.dispose();
         }
     }
 
     dispose(): void {
         this._disposed = true;
         this._refreshGeneration++;
+        this._cancelPendingWork();
         void vscode.commands.executeCommand('setContext', addIntegrationTestProjectSupportedContext, false);
+    }
+
+    private _scheduleRetry(generation: number): void {
+        this._retryTimer = setTimeout(() => {
+            this._retryTimer = undefined;
+            if (this._disposed || generation !== this._refreshGeneration) {
+                return;
+            }
+
+            // A shared probe can still be running after this caller times out, so retry with an
+            // invocation-owned probe rather than waiting on the same work again.
+            void this.refresh(true);
+        }, AddIntegrationTestProjectAvailability._unavailableCapabilityRetryDelayMs);
+    }
+
+    private _cancelPendingWork(): void {
+        if (this._retryTimer !== undefined) {
+            clearTimeout(this._retryTimer);
+            this._retryTimer = undefined;
+        }
+
+        this._probeCancellationSource?.cancel();
+        this._probeCancellationSource = undefined;
     }
 
     private async _publish(supported: boolean, generation: number): Promise<void> {
