@@ -49,6 +49,10 @@ internal class DotNetTemplateFactory(
     {
         Description = TemplatingStrings.PromptForTFMOptions_Description
     };
+    private readonly Option<string?> _integrationTestFrameworkOption = new("--test-framework")
+    {
+        Description = TemplatingStrings.IntegrationTestFrameworkOptionDescription
+    };
     private readonly Option<string?> _xunitVersionOption = new("--xunit-version")
     {
         Description = TemplatingStrings.EnterXUnitVersion_Description
@@ -224,7 +228,7 @@ internal class DotNetTemplateFactory(
             command =>
             {
                 AddOptionIfMissing(command, _appHostOption);
-                AddOptionIfMissing(command, _testFrameworkOption);
+                AddOptionIfMissing(command, _integrationTestFrameworkOption);
                 AddOptionIfMissing(command, _xunitVersionOption);
             },
             async (template, inputs, parseResult, ct) =>
@@ -239,7 +243,7 @@ internal class DotNetTemplateFactory(
                 var testTemplate = await prompter.PromptForTemplateAsync(
                     [msTestTemplate, xunitTemplate, nunitTemplate],
                     ct,
-                    PromptBinding.Create(parseResult, _testFrameworkOption)
+                    PromptBinding.Create(parseResult, _integrationTestFrameworkOption)
                 );
 
                 var testCallbackTemplate = (CallbackTemplate)testTemplate;

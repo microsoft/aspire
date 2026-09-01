@@ -227,7 +227,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void NewCommand_IntegrationTestTemplateAppHostOptionDescribesProjectFile()
+    public void NewCommand_TemplateOptionsHaveSpecificDescriptions()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -238,9 +238,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<NewCommand>();
         var integrationTestTemplate = command.Subcommands.Single(subcommand => subcommand.Name == "aspire-test");
+        var starterTemplate = command.Subcommands.Single(subcommand => subcommand.Name == "aspire-starter");
         var appHostOption = integrationTestTemplate.Options.Single(option => option.Name == "--apphost");
+        var integrationTestFrameworkOption = integrationTestTemplate.Options.Single(option => option.Name == "--test-framework");
+        var starterTestFrameworkOption = starterTemplate.Options.Single(option => option.Name == "--test-framework");
 
         Assert.Equal("The path to the Aspire AppHost project file", appHostOption.Description);
+        Assert.Equal("Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.net.", integrationTestFrameworkOption.Description);
+        Assert.Equal("Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.", starterTestFrameworkOption.Description);
     }
 
     [Theory]
