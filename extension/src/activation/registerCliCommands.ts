@@ -24,6 +24,7 @@ import { isE2eBridgeEnabled } from '../testing/e2eStateFileBridge';
 import { registerInstrumentedCommand } from './instrumentedCommand';
 import { AppHostCommandTarget, getAppHostArgs } from '../utils/appHostArgs';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { addIntegrationTestProject } from '../commands/addIntegrationTestProject';
 
 interface CommandInvocation {
   readonly target: CliPathResolutionTarget;
@@ -56,6 +57,20 @@ export function registerCliCommands(
   const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
+  const addIntegrationTestProjectRegistration = vscode.commands.registerCommand(
+    'aspire-vscode.addIntegrationTestProject',
+    () => tryExecuteCommand(
+      'aspire-vscode.addIntegrationTestProject',
+      terminalProvider,
+      (tp, invocation, cliPath) => {
+        const appHostPath = invocation.appHost?.appHostPath;
+        if (!appHostPath) {
+          throw new vscode.CancellationError();
+        }
+
+        return addIntegrationTestProject(tp, configInfoProvider, appHostPath, invocation.target, cliPath);
+      },
+      () => selectAppHostCommandInvocation(editorCommandProvider, true)));
 
   // Walkthrough commands (no CLI check - the CLI may not be installed yet).
   const installCliRegistration = registerInstrumentedCommand('aspire-vscode.installCli', 'walkthrough', installCliCommand);
@@ -78,6 +93,7 @@ export function registerCliCommands(
     openGlobalSettingsCommandRegistration,
     runAppHostCommandRegistration,
     debugAppHostCommandRegistration,
+    addIntegrationTestProjectRegistration,
     installCliRegistration,
     verifyCliInstalledRegistration,
   ];

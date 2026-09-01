@@ -595,6 +595,7 @@ function createExpectedLanguageModelTools(strings: {
 
 const expectedCommandIds = [
     'aspire-vscode.add',
+    'aspire-vscode.addIntegrationTestProject',
     'aspire-vscode.codeLensDebugPipelineStep',
     'aspire-vscode.codeLensOpenDashboard',
     'aspire-vscode.codeLensResourceAction',

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
+import { statSync } from 'fs';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { extensionLogOutputChannel } from './logging';
@@ -87,10 +88,11 @@ function resolveConfigInfoWorkingDirectory(target: CliPathResolutionTarget): str
  * CLI supports: features and capabilities are reported as structured data rather than parsed from
  * (potentially localized) command output.
  *
- * Successful reads and concurrent probes are cached by CLI executable path and working directory.
- * This lets callers share one invocation without reusing another workspace folder's local settings
- * or capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that
- * can't answer, or a transient spawn error, should be retried on the next call.
+ * Successful reads and concurrent probes are cached by CLI executable identity and working
+ * directory. This lets callers share one invocation without reusing another workspace folder's
+ * local settings, capabilities from a different CLI, or stale capabilities after an executable is
+ * replaced at the same path. Failures are intentionally NOT cached: an older CLI that can't answer,
+ * or a transient spawn error, should be retried on the next call.
  *
  * Capability checks can fall back to a minimum CLI version when the token predates structured
  * capability reporting. Version probes are intentionally not cached: an exact launch must observe
@@ -101,7 +103,10 @@ export class ConfigInfoProvider {
     private readonly _inFlightByCliPath = new Map<string, Promise<ConfigInfo | null>>();
     private readonly _probeGenerationByCliPath = new Map<string, number>();
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
+    constructor(
+        private readonly _terminalProvider: AspireTerminalProvider,
+        private readonly _getCliExecutableFingerprint = getCliExecutableFingerprint,
+    ) {
     }
 
     /**
@@ -138,7 +143,8 @@ export class ConfigInfoProvider {
         // let one folder's result be served for another in a multi-root workspace - and callers such
         // as "Open Local Settings" act on `localSettingsPath`, so that opens or creates the wrong file.
         const workingDirectory = resolveConfigInfoWorkingDirectory(target);
-        const cacheKey = `${cliPath}\u0000${workingDirectory ?? ''}`;
+        const executableFingerprint = this._getCliExecutableFingerprint(cliPath);
+        const cacheKey = `${cliPath}\u0000${executableFingerprint ?? ''}\u0000${workingDirectory ?? ''}`;
 
         if (!options?.forceRefresh) {
             const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cacheKey);
@@ -582,6 +588,22 @@ export class ConfigInfoProvider {
         if (!suppressErrors) {
             vscode.window.showErrorMessage(message);
         }
+    }
+}
+
+function getCliExecutableFingerprint(cliPath: string): string | undefined {
+    try {
+        const stats = statSync(cliPath, { throwIfNoEntry: false });
+        if (!stats) {
+            return undefined;
+        }
+
+        return `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`;
+    }
+    catch {
+        // Bare command names and executables that disappear during replacement cannot be statted.
+        // Keep the existing path-based identity so capability probing still works in those cases.
+        return undefined;
     }
 }
 

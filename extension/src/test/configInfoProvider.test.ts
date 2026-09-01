@@ -616,6 +616,28 @@ suite('configInfoProvider tests', () => {
         }
     });
 
+    test('getConfigInfo refreshes cached capabilities when the CLI is replaced at the same path', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let fingerprint = '100:1:1';
+        let capabilities: string[] = [];
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            emitConfigInfo(options, capabilities);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider, () => fingerprint);
+
+        assert.deepStrictEqual((await provider.getConfigInfo())?.capabilities, []);
+
+        fingerprint = '120:2:2';
+        capabilities = [lsJsonStreamCapability];
+        assert.deepStrictEqual((await provider.getConfigInfo())?.capabilities, [lsJsonStreamCapability]);
+        assert.deepStrictEqual((await provider.getConfigInfo())?.capabilities, [lsJsonStreamCapability]);
+        assert.strictEqual(spawnStub.callCount, 2);
+    });
+
     test('getConfigInfo isolates concurrent probes by CLI path', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
