@@ -1,0 +1,6 @@
+# The Maven and Gradle wrappers are shell scripts. Committing them with CRLF makes them unrunnable on
+# Linux and macOS, which is where CI builds these samples.
+/inventory/mvnw text eol=lf
+/pricing/gradlew text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

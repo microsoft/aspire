@@ -1521,7 +1521,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var pythonApp = builder.AddPythonApp("myapp", appDirectory, "main.py")
             .WithVirtualEnvironment(virtualEnvironmentPath);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(pythonApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(pythonApp.Resource);
 
         Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
         Assert.Equal(Path.Combine(appDirectory, "main.py"), launchConfig.ProgramPath);
@@ -1542,7 +1542,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var pythonApp = builder.AddPythonModule("myapp", appDirectory, "flask")
             .WithVirtualEnvironment(virtualEnvironmentPath);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(pythonApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(pythonApp.Resource);
 
         Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
         Assert.Equal("flask", launchConfig.Module);
@@ -1567,7 +1567,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
             .WithVirtualEnvironment(virtualEnvironmentPath)
             .WithDebugging();
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(pythonApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(pythonApp.Resource);
 
         Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
         Assert.Equal("uvicorn", launchConfig.Module);
@@ -1594,7 +1594,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
             .WithDebugging()
             .WithWorkingDirectory(customWorkingDirectory);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(pythonApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(pythonApp.Resource);
 
         var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
             Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
@@ -1620,7 +1620,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
             .WithVirtualEnvironment(virtualEnvironmentPath)
             .WithWorkingDirectory(customWorkingDirectory);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(pythonApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(pythonApp.Resource);
 
         var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
             Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
@@ -1628,18 +1628,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(Path.Combine(expectedWorkingDirectory, "main.py"), launchConfig.ProgramPath);
     }
 
-    private static async Task<PythonLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    private static async Task<PythonLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var exe = Executable.Create("test", "python");
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<PythonLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        return Assert.IsType<PythonLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
     [Fact]

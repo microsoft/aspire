@@ -35,6 +35,35 @@ public class DebugSupportExtensionsTests
     }
 
     [Fact]
+    public void CreateLaunchConfigurationOverloadsPreservePublicModeAndInternalContextContracts()
+    {
+        var methods = typeof(DebugSupportExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name == nameof(DebugSupportExtensions.CreateLaunchConfigurationAsync))
+            .ToList();
+
+        var modeOverload = Assert.Single(methods, method =>
+        {
+            var parameters = method.GetParameters();
+            return parameters.Length == 3 &&
+                parameters[0].ParameterType == typeof(IResource) &&
+                parameters[1].ParameterType == typeof(string) &&
+                parameters[2].ParameterType == typeof(CancellationToken);
+        });
+        Assert.True(modeOverload.IsPublic);
+        Assert.True(modeOverload.GetParameters()[2].IsOptional);
+
+        var contextOverload = Assert.Single(methods, method =>
+        {
+            var parameters = method.GetParameters();
+            return parameters.Length == 2 &&
+                parameters[0].ParameterType == typeof(IResource) &&
+                parameters[1].ParameterType == typeof(LaunchConfigurationCallbackContext);
+        });
+        Assert.True(contextOverload.IsAssembly);
+    }
+
+    [Fact]
     public async Task CreateLaunchConfigurationInspectionOverloadCreatesResourceBoundContext()
     {
         var inspectionOverload = typeof(DebugSupportExtensions).GetMethod(
@@ -177,6 +206,80 @@ public class DebugSupportExtensionsTests
         await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug, cts.Token);
 
         Assert.Equal(cts.Token, observedToken);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationPublicOverloadInvokesContextProducerWithLegacyInputs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration
+                                    {
+                                        Mode = context.Mode,
+                                        Package = "./cmd/api"
+                                    });
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug, cts.Token));
+
+        var actualContext = Assert.IsType<LaunchConfigurationCallbackContext>(observedContext);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, actualContext.Mode);
+        Assert.Same(executable.Resource, actualContext.Resource);
+        Assert.Empty(actualContext.EnvironmentVariables);
+        Assert.Equal(cts.Token, actualContext.CancellationToken);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationPublicOverloadValidatesMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => executable.Resource.CreateLaunchConfigurationAsync(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationWithContextUsesResolvedEnvironmentAndCancellation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration
+                                    {
+                                        Mode = context.Mode,
+                                        Package = context.EnvironmentVariables["GO_PACKAGE"]
+                                    });
+                                }, "go");
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            executable.Resource,
+            ExecutableLaunchMode.NoDebug,
+            new Dictionary<string, string> { ["GO_PACKAGE"] = "./cmd/api" },
+            cts.Token);
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(callbackContext));
+
+        var actualContext = Assert.IsType<LaunchConfigurationCallbackContext>(observedContext);
+        Assert.Same(callbackContext, actualContext);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+        Assert.Equal(cts.Token, actualContext.CancellationToken);
     }
 
     [Fact]

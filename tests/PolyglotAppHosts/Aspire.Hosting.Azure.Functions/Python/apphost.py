@@ -6,11 +6,11 @@ from aspire_app import create_builder
 
 with create_builder() as builder:
     # ── 1. addAzureFunctionsProject (path-based overload) ───────────────────────
-    func_app = builder.add_azure_functions_project("resource")
+    func_app = builder.add_azure_functions_project("resource", ".")
     # ── 2. withHostStorage — specify custom Azure Storage for Functions host ────
     storage = builder.add_azure_storage("resource")
-    func_app.with_host_storage()
+    func_app.with_host_storage(storage)
     # ── 4. withReference from base builder — standard resource references ───────
     another_storage = builder.add_azure_storage("resource")
-    func_app.with_reference()
+    func_app.with_reference(another_storage)
     builder.run()

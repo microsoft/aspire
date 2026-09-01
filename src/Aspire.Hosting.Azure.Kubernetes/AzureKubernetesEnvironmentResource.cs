@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 
@@ -17,6 +18,7 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 public partial class AzureKubernetesEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
+    IComputeEnvironmentWithVolumeMounts,
     IAzureNspAssociationTarget
 {
     /// <summary>

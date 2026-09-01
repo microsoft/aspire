@@ -195,7 +195,11 @@ internal class InteractionService : IInteractionService
             var newState = new Interaction(title, message, options, new Interaction.InputsInteractionInfo(inputCollection), interactionCts.Token);
             if (hasFileInputs)
             {
-                _fileUploadStore.StartInteraction(newState.InteractionId);
+                var fileInputs = inputs
+                    .Where(input => input.InputType == InputType.File)
+                    .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
+                    .ToArray();
+                _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
             }
             AddInteractionUpdate(newState);
 
@@ -284,7 +288,7 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
         EnsureServiceAvailable();
 
@@ -295,7 +299,7 @@ internal class InteractionService : IInteractionService
         {
             options ??= ProgressInteractionOptions.CreateDefault();
 
-            var newState = new Interaction(title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            var newState = new Interaction(options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);
@@ -558,7 +562,23 @@ internal class InteractionService : IInteractionService
                 {
                     var value = input.Value = input.Value?.Trim();
 
-                    if (string.IsNullOrEmpty(value))
+                    if (input.InputType == InputType.File)
+                    {
+                        var files = input.GetFiles();
+                        if (input.Required && files.Count == 0)
+                        {
+                            context.AddValidationError(input, "Value is required.");
+                        }
+                        else
+                        {
+                            var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
+                            if (files.Count > maxFileCount)
+                            {
+                                context.AddValidationError(input, $"File count exceeds the maximum of {maxFileCount}.");
+                            }
+                        }
+                    }
+                    else if (string.IsNullOrEmpty(value))
                     {
                         if (input.Required)
                         {
@@ -598,16 +618,6 @@ internal class InteractionService : IInteractionService
                                 if (!int.TryParse(value, CultureInfo.InvariantCulture, out _))
                                 {
                                     context.AddValidationError(input, "Value must be a valid number.");
-                                }
-                                break;
-                            case InputType.File:
-                                // File input values contain serialized JSON file references (id + name).
-                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
-                                // Validate that required file inputs actually have resolved files, not just
-                                // a non-empty JSON string like "[]".
-                                if (input.Required && (input.Files is null || input.Files.Count == 0))
-                                {
-                                    context.AddValidationError(input, "Value is required.");
                                 }
                                 break;
                             default:

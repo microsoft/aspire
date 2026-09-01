@@ -57,6 +57,23 @@ export async function openAspireView(): Promise<TreeSection> {
     }, 30000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section. Visible sections: ${lastSectionTitles.join(', ') || '<none>'}.`);
 }
 
+export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Promise<string[]> {
+    const observedTitles = new Set<string>();
+    const deadline = Date.now() + durationMs;
+
+    do {
+        const sections = await new SideBarView().getContent().getSections();
+        const titles = await Promise.all(sections.map(section => section.getTitle()));
+        for (const title of titles) {
+            observedTitles.add(title);
+        }
+
+        await delay(100);
+    } while (Date.now() < deadline);
+
+    return [...observedTitles];
+}
+
 export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
     return await VSBrowser.instance.driver.wait(async () => {
         try {
@@ -176,6 +193,11 @@ export async function executeCommandFromPalette(command: string): Promise<void> 
     throw lastError;
 }
 
+export async function reloadWindow(): Promise<void> {
+    await dismissActiveInput();
+    await new Workbench().executeCommand('Developer: Reload Window');
+}
+
 export async function cancelActiveInput(): Promise<void> {
     const input = await VSBrowser.instance.driver.wait(async () => {
         try {
@@ -190,22 +212,64 @@ export async function cancelActiveInput(): Promise<void> {
 }
 
 export async function answerActiveInput(value: string, expectedPlaceholder: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput(expectedPlaceholder, undefined, timeoutMs);
+    await input.setText(value);
+    await input.confirm();
+}
+
+export async function waitForActiveInput(expectedPlaceholder: string, expectedTitle?: string, timeoutMs = 30000): Promise<InputBox> {
     let lastPrompt = '<none>';
-    const input = await VSBrowser.instance.driver.wait(async () => {
+    return await VSBrowser.instance.driver.wait(async () => {
         try {
             const candidate = await InputBox.create();
             const placeholder = await candidate.getPlaceHolder();
             const title = await candidate.getTitle();
             lastPrompt = `${title ?? '<no title>'} / ${placeholder}`;
-            return placeholder === expectedPlaceholder ? candidate : false;
+            return placeholder === expectedPlaceholder
+                && (expectedTitle === undefined || title === expectedTitle)
+                ? candidate
+                : false;
         }
         catch (error) {
             throwIfWebDriverSessionFailure(error);
             return false;
         }
-    }, timeoutMs, `Timed out waiting for input placeholder '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
-    await input.setText(value);
-    await input.confirm();
+    }, timeoutMs, `Timed out waiting for input '${expectedTitle ?? '<any title>'}' / '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
+}
+
+export async function answerActiveInputByMessage(value: string, expectedMessage: string, timeoutMs = 30000): Promise<void> {
+    let lastMessage = '<none>';
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const widgets = await VSBrowser.instance.driver.findElements(By.css('.quick-input-widget'));
+            for (const widget of widgets) {
+                if (!await widget.isDisplayed()) {
+                    continue;
+                }
+
+                const messages = await widget.findElements(By.css('.quick-input-message'));
+                lastMessage = (await Promise.all(messages.map(message => message.getText()))).join(' ');
+                if (!lastMessage.includes(expectedMessage)) {
+                    continue;
+                }
+
+                const inputs = await widget.findElements(By.css('.quick-input-box input'));
+                for (const candidate of inputs) {
+                    if (await candidate.isDisplayed()) {
+                        return candidate;
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for input message '${expectedMessage}'. Last message: ${lastMessage}.`);
+    await input.click();
+    await input.sendKeys(value, '\uE007');
 }
 
 export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): Promise<void> {
@@ -236,6 +300,31 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
             return false;
         }
     }, timeoutMs, `Timed out waiting for quick pick '${label}'. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
+    await item.select();
+}
+
+export async function chooseActiveQuickPickAtIndex(index: number, timeoutMs = 30000): Promise<void> {
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return await InputBox.create();
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
+    let visibleLabels: string[] = [];
+    const item = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const picks = await input.getQuickPicks();
+            visibleLabels = await Promise.all(picks.map(pick => pick.getLabel()));
+            return picks[index] ?? false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for quick pick index ${index}. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
     await item.select();
 }
 
@@ -288,6 +377,37 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
 }
 
+export async function takeNotificationAction(expectedText: string, actionTitle: string, timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            for (const notification of notifications) {
+                if ((await notification.getMessage()).includes(expectedText)) {
+                    await notification.takeAction(actionTitle);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.ElementClickInterceptedError) {
+                // VS Code can leave a custom hover over a notification action after Selenium
+                // positions the pointer. Escape dismisses that hover so the next poll can click.
+                await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
+                return false;
+            }
+            if (error instanceof webDriverError.StaleElementReferenceError
+                || error instanceof webDriverError.NoSuchElementError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, `Timed out selecting notification action '${actionTitle}' from '${expectedText}'.`);
+}
+
 export interface AcceptedModalDialog {
     message: string;
     details: string;
@@ -329,6 +449,28 @@ export async function getNotificationMessages(): Promise<string[]> {
     return await Promise.all(notifications.map(notification => notification.getMessage()));
 }
 
+export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            if (notifications.length === 0) {
+                return true;
+            }
+
+            await notifications[0].dismiss();
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.StaleElementReferenceError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, 'Timed out dismissing VS Code notifications.');
+}
+
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {
     await VSBrowser.instance.driver.wait(async () => {
         const currentCount = await getNotificationCount();
@@ -365,6 +507,41 @@ export async function waitForEditorTitle(expectedText: string, timeoutMs = 60000
     }
     catch (error) {
         throw withWaitDiagnostics(error, [`Open editor titles: ${formatDiagnosticList(lastTitles)}`]);
+    }
+}
+
+/**
+ * Waits for a CodeLens whose text contains <paramref name="expectedText"/> in the named editor.
+ *
+ * The widget spans are read directly rather than through `TextEditor.getCodeLenses()` because that
+ * API enumerates `.//span[contains(@widgetid, 'codelens.widget')]/a[@id]` -- only the *clickable*
+ * lenses. A lens contributed with an empty command id is rendered by VS Code as plain text rather
+ * than a link, so it has no anchor element and is structurally invisible to that API. Aspire's
+ * entry point warnings are exactly that shape: they state a fact and have nothing to navigate to.
+ *
+ * One widget exists per line and holds every lens on it, so the returned strings are per line and
+ * read like the editor does, e.g. `Run | Debug | ⚠️ Do not click the Java Run or Debug actions...`.
+ */
+export async function waitForCodeLensText(fileName: string, expectedText: string, timeoutMs = 60000): Promise<string[]> {
+    let lastTexts: string[] = [];
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                await new EditorView().openEditor(fileName);
+                lastTexts = await VSBrowser.instance.driver.executeScript<string[]>(
+                    `return Array.from(document.querySelectorAll('[widgetid*="codelens.widget"]')).map(widget => widget.innerText || widget.textContent || '');`);
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+                return false;
+            }
+
+            return lastTexts.some(text => text.includes(expectedText)) ? lastTexts : false;
+        }, timeoutMs, `Timed out waiting for a CodeLens containing '${expectedText}' in '${fileName}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`CodeLenses: ${formatDiagnosticList(lastTexts)}`]);
     }
 }
 

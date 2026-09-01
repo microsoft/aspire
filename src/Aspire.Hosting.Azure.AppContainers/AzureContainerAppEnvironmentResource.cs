@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
@@ -208,6 +208,17 @@ public class AzureContainerAppEnvironmentResource :
             // Skip resources that are explicitly targeted to a different compute environment
             var resourceComputeEnvironment = r.GetComputeEnvironment();
             if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            // This step is reachable from two pipeline executions: it is RequiredBy "before-start"
+            // (so it runs during AppHost startup) and it is also part of the publish/deploy DAG.
+            // Adding a second DeploymentTargetAnnotation on the second pass makes
+            // ResourceExtensions.GetDeploymentTargetAnnotation throw on the ambiguity, so the step has
+            // to be idempotent. Skipping early also avoids building the container app twice, which
+            // would append duplicate environment variables to the resource.
+            if (r.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == this))
             {
                 continue;
             }

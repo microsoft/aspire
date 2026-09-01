@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
@@ -190,7 +191,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
     }
 
     /// <summary>
-    /// Determines whether <paramref name="appHostPath"/> lives within <paramref name="workingDirectory"/>.
+    /// Determines whether <paramref name="appHostPath"/> lives within <paramref name="workingDirectory"/>
+    /// and in the same git worktree. Nested linked worktrees are out of scope of the primary checkout.
     /// This is the single in-scope implementation shared by <see cref="IsAppHostInScope"/>.
     /// </summary>
     internal static bool IsAppHostInScopeOfDirectory(string? appHostPath, string workingDirectory)
@@ -209,7 +211,15 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
-        return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
+        if (relativePath.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+        {
+            return false;
+        }
+
+        // Path containment alone treats a nested linked worktree (for example
+        // repo/.worktrees/feature) as in-scope of the primary checkout. Stop and ps
+        // should stay inside the current worktree unless --apphost/--all is used.
+        return GitWorktree.IsSameWorktreeScope(normalizedAppHostPath, normalizedWorkingDirectory);
     }
 
     /// <summary>

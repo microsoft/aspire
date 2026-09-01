@@ -257,6 +257,9 @@ internal sealed class PythonModuleBuilder
 
         _logger = logging.getLogger(__name__)
 
+        # Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+        _ASPIRE_UNSET = object()
+
         # Maximum allowed message size (64 MB) to prevent memory exhaustion from malicious Content-Length
         _MAX_MESSAGE_SIZE = 64 * 1024 * 1024
 

@@ -10,15 +10,23 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
+import { noAppHostInWorkspace } from '../loc/strings';
 
+import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
     return {
         document: {
             uri: vscode.Uri.file(filePath),
             fileName: filePath,
-            languageId: filePath.endsWith('.ts') ? 'typescript' : 'csharp'
+            languageId: filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'csharp'
         } as vscode.TextDocument
     } as vscode.TextEditor;
+}
+
+function createLaunchService(): AppHostLaunchService {
+    return new AppHostLaunchService({
+        getCapabilityStatus: async () => 'supported',
+    });
 }
 
 suite('AspireEditorCommandProvider', () => {
@@ -41,7 +49,9 @@ suite('AspireEditorCommandProvider', () => {
         activeEditorStub = sinon.stub(vscode.window, 'activeTextEditor').get(() => activeEditor);
         workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) => {
-            if (uri.fsPath.startsWith(tempDir)) {
+            // VS Code lowercases the drive letter in fsPath, so the raw mkdtemp path does not
+            // prefix-match its own URI on Windows. Normalise both sides through Uri.file.
+            if (uri.fsPath.startsWith(vscode.Uri.file(tempDir).fsPath)) {
                 return { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
             }
 
@@ -69,7 +79,7 @@ suite('AspireEditorCommandProvider', () => {
         getWorkspaceFolderStub.restore();
         workspaceFoldersStub.restore();
         activeEditorStub.restore();
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeDirectorySafely(tempDir);
     });
 
     test('returns containing project file when active editor is SDK-style AppHost Program.cs', async () => {
@@ -82,7 +92,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(projectPath, '<Project Sdk="Microsoft.NET.Sdk" />');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), projectPath);
         }
@@ -96,7 +106,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, '#:sdk Aspire.AppHost.Sdk\nvar builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -110,7 +120,21 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), createLaunchService());
+        try {
+            assert.strictEqual(await provider.getAppHostPath(), appHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('returns source file when active editor is Rust apphost.rs', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.rs');
+        fs.writeFileSync(appHostPath, 'fn main() {}');
+        activeEditor = createEditor(appHostPath);
+
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -124,7 +148,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
         try {
             await provider.processDocument(activeEditor.document);
 
@@ -141,7 +165,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), null);
         }
@@ -160,7 +184,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
         try {
             await provider.tryExecuteRunAppHost(true);
 
@@ -175,6 +199,131 @@ suite('AspireEditorCommandProvider', () => {
             provider.dispose();
         }
     });
+
+    test('explicit AppHost URI wins over the active editor AppHost', async () => {
+        const appHostADirectory = path.join(tempDir, 'AppHostA');
+        const appHostBDirectory = path.join(tempDir, 'AppHostB');
+        fs.mkdirSync(appHostADirectory);
+        fs.mkdirSync(appHostBDirectory);
+
+        const appHostAPath = path.join(appHostADirectory, 'AppHostA.csproj');
+        const appHostBPath = path.join(appHostBDirectory, 'AppHostB.csproj');
+        const programAPath = path.join(appHostADirectory, 'Program.cs');
+        fs.writeFileSync(appHostAPath, '<Project Sdk="Microsoft.NET.Sdk" />');
+        fs.writeFileSync(appHostBPath, '<Project Sdk="Microsoft.NET.Sdk" />');
+        fs.writeFileSync(programAPath, 'var builder = DistributedApplication.CreateBuilder(args);');
+        activeEditor = createEditor(programAPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async (filePath: string) => ({
+                path: filePath === vscode.Uri.file(appHostBPath).fsPath ? appHostBPath : appHostAPath,
+                language: 'csharp',
+                status: 'buildable',
+            }),
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, vscode.Uri.file(appHostBPath));
+
+            const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(launchConfiguration.program, appHostBPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('active editor URI falls back to the workspace AppHost', async () => {
+        const activeDocumentPath = path.join(tempDir, 'Service.java');
+        const workspaceAppHostPath = path.join(tempDir, 'AppHost.java');
+        fs.writeFileSync(activeDocumentPath, 'public class Service {}');
+        fs.writeFileSync(workspaceAppHostPath, 'public class AppHost {}');
+        activeEditor = createEditor(activeDocumentPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true);
+
+            assert.ok(startDebuggingStub.calledOnce);
+            const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(launchConfiguration.program, workspaceAppHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('explicit active editor AppHost URI does not fall back to another workspace AppHost', async () => {
+        const activeAppHostPath = path.join(tempDir, 'AppHost.java');
+        const workspaceAppHostPath = path.join(tempDir, 'OtherAppHost.java');
+        fs.writeFileSync(activeAppHostPath, 'public class AppHost {}');
+        fs.writeFileSync(workspaceAppHostPath, 'public class OtherAppHost {}');
+        activeEditor = createEditor(activeAppHostPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, activeEditor.document.uri, false);
+
+            assert.strictEqual(startDebuggingStub.called, false);
+            assert.ok(showErrorMessageStub.calledOnceWith(noAppHostInWorkspace));
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('explicit non-AppHost URI does not fall back to another workspace AppHost', async () => {
+        const workspaceAppHostPath = path.join(tempDir, 'AppHost.java');
+        const activeDocumentPath = path.join(tempDir, 'Service.java');
+        fs.writeFileSync(workspaceAppHostPath, 'public class AppHost {}');
+        fs.writeFileSync(activeDocumentPath, 'public class Service {}');
+        activeEditor = createEditor(activeDocumentPath);
+        const explicitUri = activeEditor.document.uri;
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, explicitUri, false);
+
+            assert.strictEqual(startDebuggingStub.called, false);
+            assert.ok(showErrorMessageStub.calledOnce);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
 });
 
 function createAppHostDiscoveryService(resolvedPath: string, language = 'csharp'): AppHostDiscoveryService {

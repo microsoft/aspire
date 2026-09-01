@@ -194,11 +194,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                 button.setAttribute('appearance', 'accent');
                 button.textContent = 'Primary action';
                 button.style.cssText = 'position:fixed;left:16px;top:16px;z-index:10000;';
-                const root = document.getElementById('aspire-design-system');
-                if (!root) {
-                    throw new Error('The Aspire design-system token scope was not found.');
-                }
-                root.appendChild(button);
+                document.body.appendChild(button);
                 await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             }
             """).DefaultTimeout();

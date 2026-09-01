@@ -504,6 +504,7 @@ public class Program
         builder.Services.AddSingleton<IInstallationCandidateSource, DotnetToolStoreInstallationCandidateSource>();
         builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
+        builder.Services.AddSingleton<ProfileCaptureState>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
@@ -544,6 +545,7 @@ public class Program
         builder.Services.AddSingleton<INpmRunner, NpmRunner>();
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
+        builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
@@ -601,6 +603,7 @@ public class Program
 
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
+        builder.Services.AddSingleton<ResourceWaitService>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<DcpWorkloadCleanupService>();
         builder.Services.AddTransient<NewCommand>();
@@ -667,6 +670,7 @@ public class Program
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
+        builder.Services.AddTransient<SdkExportCommand>();
         builder.Services.AddTransient<RestoreCommand>();
         builder.Services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         builder.Services.AddTransient<SetupCommand>();
@@ -711,13 +715,22 @@ public class Program
         var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
         var packagesOverride = identityResolver.ResolvePackagesDirectory();
 
-        // The CLI is "emulating" another build whenever any identity field was supplied by an
-        // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
-        // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
-        // Every override source participates — including the NuGet service-index override — so a run
-        // that sets only ASPIRE_CLI_NUGET_SERVICE_INDEX is still flagged as a diagnostic emulation.
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
         var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
+
+        // Installer-authored channel/version/commit fields describe the installed CLI and should not
+        // be presented as diagnostic emulation. Environment variables always require a notice, as do
+        // the sidecar-only package and service-index knobs used to redirect package resolution.
+        static bool IsEnvironmentOverride(IdentitySource source) => source is IdentitySource.Environment;
+        static bool IsDeveloperSidecarOverride(IdentitySource source) => source is IdentitySource.Sidecar;
+        var identityOverrideNoticeRequired =
+            IsEnvironmentOverride(channel.Source) ||
+            IsEnvironmentOverride(version.Source) ||
+            IsEnvironmentOverride(commit.Source) ||
+            IsEnvironmentOverride(nugetServiceIndexOverride.Source) ||
+            IsEnvironmentOverride(packagesOverride.Source) ||
+            IsDeveloperSidecarOverride(nugetServiceIndexOverride.Source) ||
+            IsDeveloperSidecarOverride(packagesOverride.Source);
 
         // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
         // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
@@ -738,6 +751,7 @@ public class Program
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
+            identityOverrideNoticeRequired: identityOverrideNoticeRequired,
             debugMode: debugMode,
             consoleLogLevel: consoleLogLevel,
             packagesDirectory: packagesDirectory,
@@ -847,11 +861,11 @@ public class Program
         }
 
         // Surface a notice whenever the CLI is emulating another build via ASPIRE_CLI_* env vars
-        // or the install sidecar, so a diagnostic run is never mistaken for a real installed build.
+        // or developer-only sidecar overrides, so a diagnostic run is never mistaken for a real install.
         // This is independent of first-run/banner state but is suppressed for machine-readable
         // output so structured payloads stay clean. Written to stderr for the same reason.
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        if (executionContext.IdentityOverridden && !isMachineReadableOutput)
+        if (executionContext.IdentityOverrideNoticeRequired && !isMachineReadableOutput)
         {
             var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
             var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
@@ -1078,6 +1092,7 @@ public class Program
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
         var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
         var profilingTelemetry = app.Services.GetRequiredService<ProfilingTelemetry>();
+        var profileCaptureState = app.Services.GetRequiredService<ProfileCaptureState>();
 
         // Log feature state at startup for diagnostics
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
@@ -1132,12 +1147,20 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging
-                var commandLine = args.Length > 0 ? $"aspire {string.Join(" ", args)}" : "aspire";
+                // Parse before logging. `aspire run --ApiKey sk-live-...` forwards unmatched tokens
+                // to the AppHost even though the user never typed a `--` separator, so the parse
+                // tree is the only reliable way to tell CLI-owned tokens from AppHost input.
+                // Reordering is safe because Parse collects errors into the result instead of
+                // throwing, and nothing between here and the original call site inspects args.
+                var parseResult = rootCommand.Parse(args);
+
+                // Log command invocation details for debugging. Anything forwarded to the AppHost
+                // can contain secrets, so it is redacted.
+                var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
+                var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);
 
-                logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
-                var parseResult = rootCommand.Parse(args);
+                logger.LogDebug("Parsing arguments: {Args}", loggableArgs);
 
 #if DEBUG
                 WaitForDebuggerIfRequested(parseResult, app.Services, WaitForDebugger);
@@ -1213,7 +1236,9 @@ public class Program
                 }
             }
 
-            if (profileCaptureSession is not null)
+            // This state is only consulted when the parent started a capture session. A successful
+            // extension handoff transfers export to the child, while the parent still disposes its session.
+            if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
             {
                 try
                 {

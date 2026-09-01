@@ -7,6 +7,7 @@ import { AppHostDiscoveryService, getDebugTargetForCandidate, selectWorkspaceApp
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import type { CliPathResolutionTarget } from '../utils/cliPathVariables';
 
 export class AspireEditorCommandProvider implements vscode.Disposable {
     private _disposables: vscode.Disposable[] = [];
@@ -77,18 +78,24 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
     }
 
     /**
-     * Returns the resolved AppHost path from the active editor or workspace settings, or null if none is available.
+     * Returns the resolved AppHost path from the explicit resource, active editor, or optionally workspace settings, or null if none is available.
      */
-    public async getAppHostPath(): Promise<string | null> {
-        if (vscode.window.activeTextEditor) {
-            const candidate = await this.tryFindCandidateForEditorFile(vscode.window.activeTextEditor.document.uri.fsPath);
+    public async getAppHostPath(resource?: vscode.Uri, allowWorkspaceFallback = true): Promise<string | null> {
+        const appHostUri = resource ?? vscode.window.activeTextEditor?.document.uri;
+
+        if (appHostUri) {
+            const candidate = await this.tryFindCandidateForEditorFile(appHostUri.fsPath);
             if (candidate) {
                 return getDebugTargetForCandidate(candidate);
             }
+
+            if (resource && !allowWorkspaceFallback) {
+                return null;
+            }
         }
 
-        const workspaceFolder = vscode.window.activeTextEditor
-            ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        const workspaceFolder = appHostUri
+            ? vscode.workspace.getWorkspaceFolder(appHostUri)
             : vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             return null;
@@ -118,8 +125,8 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         }
     }
 
-    public async tryExecuteRunAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('run', noDebug);
+    public async tryExecuteRunAppHost(noDebug: boolean, resource?: vscode.Uri, allowWorkspaceFallback = true): Promise<void> {
+        await this.launchAspireDebugSession('run', noDebug, undefined, await this.getAppHostPath(resource, allowWorkspaceFallback));
     }
 
     public async tryExecuteDeployAppHost(noDebug: boolean): Promise<void> {
@@ -130,18 +137,25 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         await this.launchAspireDebugSession('publish', noDebug);
     }
 
-    public async tryExecuteDoAppHost(noDebug: boolean, doStep?: string): Promise<void> {
-        await this.launchAspireDebugSession('do', noDebug, doStep);
+    public async tryExecuteDoAppHost(noDebug: boolean, doStep?: string, appHostPath?: string, target?: CliPathResolutionTarget, cliPath?: string): Promise<void> {
+        await this.launchAspireDebugSession('do', noDebug, doStep, appHostPath, target, cliPath);
     }
 
-    private async launchAspireDebugSession(aspireCommand: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
-        const appHostToRun = await this.getAppHostPath();
+    private async launchAspireDebugSession(
+        aspireCommand: AspireCommandType,
+        noDebug: boolean,
+        doStep?: string,
+        selectedAppHostPath?: string | null,
+        target?: CliPathResolutionTarget,
+        cliPath?: string,
+    ): Promise<void> {
+        const appHostToRun = selectedAppHostPath === undefined ? await this.getAppHostPath() : selectedAppHostPath;
         if (!appHostToRun) {
             vscode.window.showErrorMessage(noAppHostInWorkspace);
             return;
         }
 
-        await this._launchService.launch(appHostToRun, aspireCommand, noDebug, doStep);
+        await this._launchService.launch(appHostToRun, aspireCommand, noDebug, doStep, target, cliPath);
     }
 
     dispose() {

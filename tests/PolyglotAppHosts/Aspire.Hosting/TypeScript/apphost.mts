@@ -871,12 +871,10 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
 
     const progress = await interactionService.promptProgress("Completing **work**...", {
         title: "Progress",
-        options: {
-            primaryButtonText: "Cancel",
-            enableMessageMarkdown: true,
-            work: async (progressContext) => {
-                await progressContext.cancellationToken();
-            }
+        primaryButtonText: "Cancel",
+        enableMessageMarkdown: true,
+        work: async (progressContext) => {
+            await progressContext.cancellationToken();
         }
     });
 

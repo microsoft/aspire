@@ -7,7 +7,6 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -2569,7 +2568,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2590,7 +2589,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithRunScript("dev");
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2609,7 +2608,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithRunScript("dev")
             .WithDenoRun();
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2628,7 +2627,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithRunScript("dev")
             .WithDenoServe();
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2644,7 +2643,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithDenoTask("dev");
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2661,7 +2660,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithRunScript("dev")
             .WithNpm();
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(denoApp.Resource);
 
         Assert.Equal("node", launchConfig.Type);
         Assert.Equal("npm", launchConfig.RuntimeExecutable);
@@ -2679,25 +2678,18 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource, cancellationTokenSource.Token));
+            () => CreateLaunchConfigurationAsync(denoApp.Resource, cancellationTokenSource.Token));
     }
 
-    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(
+    private static async Task<JavaScriptLaunchConfiguration> CreateLaunchConfigurationAsync(
         IResource resource,
         CancellationToken cancellationToken = default)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var exe = Executable.Create("test", "deno");
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
             resource,
             cancellationToken: cancellationToken);
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        return Assert.IsType<JavaScriptLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
     private static DistributedApplicationExecutionContext CreateRunExecutionContext(IServiceCollection services) =>

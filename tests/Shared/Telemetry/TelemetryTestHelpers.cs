@@ -6,13 +6,11 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -24,6 +22,8 @@ namespace Aspire.Tests.Shared.Telemetry;
 
 internal static class TelemetryTestHelpers
 {
+    private static long s_nextLogEntryId;
+
     public static void AssertId(string expected, string actual)
     {
         var resolvedActual = GetStringId(actual);
@@ -209,6 +209,11 @@ internal static class TelemetryTestHelpers
         return logRecord;
     }
 
+    public static OtlpLogEntry CreateOtlpLogEntry(LogRecord record, OtlpResourceView resourceView, OtlpScope scope, OtlpContext context)
+    {
+        return new OtlpLogEntryData(record, resourceView, scope, context).CreateLogEntry(Interlocked.Increment(ref s_nextLogEntryId));
+    }
+
     public static Resource CreateResource(string? name = null, string? instanceId = null, IEnumerable<KeyValuePair<string, string>>? attributes = null)
     {
         var resource = new Resource()
@@ -229,61 +234,6 @@ internal static class TelemetryTestHelpers
         }
 
         return resource;
-    }
-
-    public static TelemetryRepository CreateRepository(
-        int? maxMetricsCount = null,
-        int? maxAttributeCount = null,
-        int? maxAttributeLength = null,
-        int? maxSpanEventCount = null,
-        int? maxTraceCount = null,
-        int? maxLogCount = null,
-        int? maxResourceCount = null,
-        TimeSpan? subscriptionMinExecuteInterval = null,
-        ILoggerFactory? loggerFactory = null,
-        PauseManager? pauseManager = null,
-        IOutgoingPeerResolver[]? outgoingPeerResolvers = null)
-    {
-        var options = new TelemetryLimitOptions();
-        if (maxMetricsCount != null)
-        {
-            options.MaxMetricsCount = maxMetricsCount.Value;
-        }
-        if (maxAttributeCount != null)
-        {
-            options.MaxAttributeCount = maxAttributeCount.Value;
-        }
-        if (maxAttributeLength != null)
-        {
-            options.MaxAttributeLength = maxAttributeLength.Value;
-        }
-        if (maxSpanEventCount != null)
-        {
-            options.MaxSpanEventCount = maxSpanEventCount.Value;
-        }
-        if (maxTraceCount != null)
-        {
-            options.MaxTraceCount = maxTraceCount.Value;
-        }
-        if (maxLogCount != null)
-        {
-            options.MaxLogCount = maxLogCount.Value;
-        }
-        if (maxResourceCount != null)
-        {
-            options.MaxResourceCount = maxResourceCount.Value;
-        }
-
-        var repository = new TelemetryRepository(
-            loggerFactory ?? NullLoggerFactory.Instance,
-            Options.Create(new DashboardOptions { TelemetryLimits = options }),
-            pauseManager ?? new PauseManager(),
-            outgoingPeerResolvers ?? []);
-        if (subscriptionMinExecuteInterval != null)
-        {
-            repository._subscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
-        }
-        return repository;
     }
 
     public static ulong DateTimeToUnixNanoseconds(DateTime dateTime)

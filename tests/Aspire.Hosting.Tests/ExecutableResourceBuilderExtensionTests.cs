@@ -97,17 +97,16 @@ public class ExecutableResourceBuilderExtensionTests
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
-        var exe = new Executable(new ExecutableSpec());
-        await annotation.LaunchConfigurationAnnotator(
-            exe,
-            LaunchConfigurationTestHelpers.CreateCallbackContext(
+        var producedLaunchConfig = Assert.IsType<ExecutableLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(
                 executable.Resource,
-                ExecutableLaunchMode.NoDebug));
+                LaunchConfigurationTestHelpers.CreateCallbackContext(
+                    executable.Resource,
+                    ExecutableLaunchMode.NoDebug)));
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
-        Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
-        Assert.Equal(launchConfig.Mode, annotations.Single().Mode);
-        Assert.Equal(launchConfig.Type, annotations.Single().Type);
+        Assert.Equal(launchConfig.Mode, producedLaunchConfig.Mode);
+        Assert.Equal(launchConfig.Type, producedLaunchConfig.Type);
     }
 
     [Fact]

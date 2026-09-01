@@ -7,7 +7,6 @@ using Xunit;
 
 namespace Aspire.Deployment.EndToEnd.Tests;
 
-[Trait("Partition", "Deployment")]
 [Trait("category", "deployment")]
 [Trait("provider", "azure")]
 public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
@@ -121,6 +120,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
 
             await WaitForStatefulSetAndManagedDiskAsync(auto, counter);
 
+            await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 2000);
+
             await auto.RunCommandAsync(
                 "PVC_UID_BEFORE=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_BEFORE=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
@@ -150,6 +151,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 "kubectl wait --for=condition=Ready pod/apiservice-statefulset-0 --namespace \"$NS\" --timeout=5m",
                 counter,
                 TimeSpan.FromMinutes(6));
+            await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 3000);
             await auto.RunCommandAsync(
                 "PVC_UID_AFTER=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_AFTER=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
@@ -166,6 +168,12 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 apiPort,
                 "?action=read",
                 "PASSED: read aks-pv-marker-42 revision second");
+            await VerifyApiResponseAsync(
+                auto,
+                counter,
+                apiPort,
+                "?action=write-new",
+                "PASSED: wrote new aks-pv-marker-42 revision second");
             await StopPortForwardAsync(auto, counter);
 
             await auto.AspireDestroyAsync(counter);
@@ -229,19 +237,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             """builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")""",
             """
             builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")
-                .WithPersistentVolume(data, "/srv/data")
+                .WithPersistentVolume(data, "/srv/data", env: "DATA_PATH")
                 .WithEnvironment("DEPLOYMENT_REVISION", "first")
-                .PublishAsKubernetesService(resource =>
-                {
-                    // .NET containers run as the non-root app user. Apply its group to the
-                    // managed disk so the API can write to the filesystem mounted by kubelet.
-                    var workload = resource.Workload
-                        ?? throw new InvalidOperationException("The API Kubernetes workload was not generated.");
-                    workload.PodTemplate.Spec.SecurityContext = new()
-                    {
-                        FsGroup = 1654
-                    };
-                })
             """,
             appHostPath);
 
@@ -254,7 +251,16 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         content = ReplaceRequired(
             content,
             """.WithEnvironment("DEPLOYMENT_REVISION", "first")""",
-            """.WithEnvironment("DEPLOYMENT_REVISION", "second")""",
+            """
+            .WithEnvironment("DEPLOYMENT_REVISION", "second")
+                .PublishAsKubernetesService(resource =>
+                {
+                    var podSpec = resource.Workload?.PodTemplate.Spec
+                        ?? throw new InvalidOperationException("The API Kubernetes workload was not generated.");
+                    podSpec.SecurityContext ??= new();
+                    podSpec.SecurityContext.FsGroup = 3000;
+                })
+            """,
             appHostPath);
         File.WriteAllText(appHostPath, content);
     }
@@ -270,7 +276,10 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
 
             var app = builder.Build();
 
-            const string markerPath = "/srv/data/marker.txt";
+            var dataPath = app.Configuration["DATA_PATH"]
+                ?? throw new InvalidOperationException("DATA_PATH is not configured.");
+            var markerPath = Path.Combine(dataPath, "marker.txt");
+            var newMarkerPath = Path.Combine(dataPath, "new-marker.txt");
             const string markerToken = "aks-pv-marker-42";
             var deploymentRevision = app.Configuration["DEPLOYMENT_REVISION"]
                 ?? throw new InvalidOperationException("DEPLOYMENT_REVISION is not configured.");
@@ -300,7 +309,13 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                     return Results.Ok($"PASSED: read {persistedValue} revision {deploymentRevision}");
                 }
 
-                return Results.BadRequest("FAILED: action must be write or read");
+                if (action == "write-new")
+                {
+                    await File.WriteAllTextAsync(newMarkerPath, markerToken);
+                    return Results.Ok($"PASSED: wrote new {markerToken} revision {deploymentRevision}");
+                }
+
+                return Results.BadRequest("FAILED: action must be write, read, or write-new");
             });
 
             app.MapDefaultEndpoints();
@@ -331,6 +346,29 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             "kubectl wait --for=condition=Ready pod/apiservice-statefulset-0 --namespace \"$NS\" --timeout=5m",
             counter,
             TimeSpan.FromMinutes(6));
+    }
+
+    private static async Task VerifyFileSystemGroupAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        long expectedFsGroup)
+    {
+        await auto.RunCommandAsync(
+            $"FS_GROUP=$(kubectl get statefulset apiservice-statefulset --namespace \"$NS\" -o jsonpath='{{.spec.template.spec.securityContext.fsGroup}}') && " +
+            $"test \"$FS_GROUP\" = \"{expectedFsGroup}\" && " +
+            // Verify the Linux identity and mount ownership reported as:
+            //   id -u: 1654
+            //   id -G: 1654 2000
+            //   stat -c %g /srv/data: 2000
+            // This proves the write succeeds through group access rather than root privileges.
+            "PROCESS_UID=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- id -u) && " +
+            "PROCESS_GROUPS=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- id -G) && " +
+            "VOLUME_GROUP=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- stat -c %g /srv/data) && " +
+            "test \"$PROCESS_UID\" != \"0\" && " +
+            $"printf ' %s ' \"$PROCESS_GROUPS\" | grep --fixed-strings --quiet ' {expectedFsGroup} ' && " +
+            $"test \"$VOLUME_GROUP\" = \"{expectedFsGroup}\" && " +
+            $"echo \"StatefulSet uses fsGroup {expectedFsGroup}; pod UID is $PROCESS_UID with groups $PROCESS_GROUPS; /srv/data group is $VOLUME_GROUP\"",
+            counter);
     }
 
     private static async Task DeployAsync(

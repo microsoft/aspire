@@ -72,9 +72,12 @@ internal sealed class RunCommand : BaseCommand
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
+    // Match BackchannelLoggerProvider's 1,000-entry replay buffer.
+    private const int MaxRememberedAppHostLogSequenceNumbers = 1000;
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
 
@@ -98,6 +101,9 @@ internal sealed class RunCommand : BaseCommand
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
     // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
+
+    // A wedged extension must degrade to legacy output instead of stalling AppHost log capture.
+    private static readonly TimeSpan s_structuredLogSupportProbeTimeout = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
@@ -131,6 +137,7 @@ internal sealed class RunCommand : BaseCommand
         FileLoggerProvider fileLoggerProvider,
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
+        ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
@@ -147,6 +154,7 @@ internal sealed class RunCommand : BaseCommand
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
+        _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
 
         Options.Add(s_detachOption);
@@ -162,7 +170,7 @@ internal sealed class RunCommand : BaseCommand
         var detach = parseResult.GetValue(s_detachOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var captureProfileDelay = TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption));
@@ -212,8 +220,28 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
+            var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
+                parseResult,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                s_detachOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                startDebugSession,
+                new DebugSessionOptions
+                {
+                    Command = "run",
+                    Args = [.. debugSessionArguments.Tokens],
+                    AppHostSelectionOrigin = passedAppHostProjectFile is not null
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin
+                });
+            _profileCaptureState.MarkTransferred();
             return CommandResult.Success();
         }
 
@@ -229,7 +257,6 @@ internal sealed class RunCommand : BaseCommand
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             using var activity = _profilingTelemetry.StartRunCommand();
 
@@ -254,12 +281,22 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
+            var isolated = AppHostLauncher.ResolveIsolated(parseResult);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
+
             // Resolve the language for this file and get the appropriate handler
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);
             if (project is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
+            }
+
+            if (AppHostLauncher.GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.InvalidCommand,
+                    launchProfileError);
             }
 
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
@@ -295,6 +332,7 @@ internal sealed class RunCommand : BaseCommand
                 WaitForDebugger = waitForDebugger,
                 Isolated = isolated,
                 StartDebugSession = startDebugSession,
+                LaunchProfile = launchProfile,
                 EnvironmentVariables = new Dictionary<string, string>(),
                 UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
@@ -592,13 +630,6 @@ internal sealed class RunCommand : BaseCommand
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "incompatible_version");
             Telemetry.RecordError(ex.Message, ex);
             return CommandResult.FromExitCode(InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability));
-        }
-        catch (CertificateServiceException ex)
-        {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
-            var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
-            Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, errorMessage);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
@@ -1081,22 +1112,128 @@ internal sealed class RunCommand : BaseCommand
         {
             await Task.Yield();
 
-            var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            // Start the probe without awaiting it so extension responsiveness never delays
+            // subscription to the AppHost stream or writes to the diagnostic log file.
+            var structuredLogSupportProbe = ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
+                ? SupportsStructuredAppHostLogsAsync(fileLoggerProvider, extensionBackchannel, cancellationToken)
+                : Task.FromResult(false);
 
-            await foreach (var entry in logEntries.WithCancellation(cancellationToken))
+            var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            bool? extensionSupportsStructuredLogs = null;
+            var pendingExtensionEntries = new List<BackchannelLogEntry>();
+            var recentSequenceIdentities = new HashSet<(Guid GenerationId, long SequenceNumber)>(MaxRememberedAppHostLogSequenceNumbers);
+            var sequenceIdentityOrder = new Queue<(Guid GenerationId, long SequenceNumber)>(MaxRememberedAppHostLogSequenceNumbers);
+
+            try
             {
-                if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out _))
+                using var enumerationCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                await using var enumerator = logEntries.GetAsyncEnumerator(enumerationCancellationSource.Token);
+                Task<bool>? moveNextTask = null;
+
+                try
                 {
-                    if (entry.LogLevel is not LogLevel.Trace and not LogLevel.Debug)
+                    while (true)
                     {
-                        // Send only information+ level logs to the extension host.
-                        extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
+                        moveNextTask ??= enumerator.MoveNextAsync().AsTask();
+
+                        // Once an entry is buffered, keep one MoveNextAsync in flight and observe the
+                        // capability probe alongside it. This preserves file capture throughput while
+                        // allowing an idle stream to flush as soon as the extension answers.
+                        if (extensionSupportsStructuredLogs is null && pendingExtensionEntries.Count > 0)
+                        {
+                            var probeCompletedFirst = structuredLogSupportProbe.IsCompleted ||
+                                await Task.WhenAny(moveNextTask, structuredLogSupportProbe).ConfigureAwait(false) == structuredLogSupportProbe;
+                            if (probeCompletedFirst)
+                            {
+                                extensionSupportsStructuredLogs = await structuredLogSupportProbe.ConfigureAwait(false);
+                                ForwardPendingAppHostLogEntriesToExtension(
+                                    extensionInteractionService!,
+                                    extensionSupportsStructuredLogs.Value,
+                                    pendingExtensionEntries);
+                                continue;
+                            }
+                        }
+
+                        var hasEntry = await moveNextTask.ConfigureAwait(false);
+                        moveNextTask = null;
+                        if (!hasEntry)
+                        {
+                            break;
+                        }
+
+                        var entry = enumerator.Current;
+
+                        // A reconnect replays the AppHost's 1,000-entry buffer. Remember exact
+                        // generation/sequence pairs to preserve delayed delivery and distinguish a
+                        // replacement AppHost. Sequence zero comes from older AppHosts and has no
+                        // stable identity.
+                        if (entry.SequenceNumber > 0)
+                        {
+                            var sequenceIdentity = (entry.GenerationId, entry.SequenceNumber);
+                            if (!recentSequenceIdentities.Add(sequenceIdentity))
+                            {
+                                continue;
+                            }
+
+                            sequenceIdentityOrder.Enqueue(sequenceIdentity);
+                            if (sequenceIdentityOrder.Count > MaxRememberedAppHostLogSequenceNumbers)
+                            {
+                                recentSequenceIdentities.Remove(sequenceIdentityOrder.Dequeue());
+                            }
+                        }
+
+                        var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
+                        var message = string.IsNullOrEmpty(entry.Exception)
+                            ? entry.Message
+                            : $"{entry.Message}{Environment.NewLine}{entry.Exception}";
+                        fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
+
+                        // Preserve the previous RPC volume. Trace and Debug still arrive through the
+                        // AppHost console provider and are styled by the extension.
+                        if (extensionInteractionService is null || entry.LogLevel is LogLevel.Trace or LogLevel.Debug)
+                        {
+                            continue;
+                        }
+
+                        if (extensionSupportsStructuredLogs is null)
+                        {
+                            pendingExtensionEntries.Add(entry);
+                            continue;
+                        }
+
+                        ForwardAppHostLogEntryToExtension(extensionInteractionService, extensionSupportsStructuredLogs.Value, entry);
                     }
                 }
+                finally
+                {
+                    if (moveNextTask is not null)
+                    {
+                        // Forwarding can fail while the stream read is still pending. Cancel and
+                        // settle that read before DisposeAsync touches the enumerator.
+                        await enumerationCancellationSource.CancelAsync().ConfigureAwait(false);
+                        try
+                        {
+                            await moveNextTask.ConfigureAwait(false);
+                        }
+                        catch (Exception) when (enumerationCancellationSource.IsCancellationRequested)
+                        {
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                // The AppHost process exited and the backchannel connection was lost. This is
+                // expected during orderly shutdown, but buffered records still need to be flushed.
+            }
 
-                // Write to the unified log file via FileLoggerProvider
-                var shortCategory = FileLoggerProvider.GetShortCategoryName(entry.CategoryName);
-                fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", entry.Message);
+            if (!cancellationToken.IsCancellationRequested && extensionInteractionService is not null && pendingExtensionEntries.Count > 0)
+            {
+                extensionSupportsStructuredLogs ??= await structuredLogSupportProbe.ConfigureAwait(false);
+                ForwardPendingAppHostLogEntriesToExtension(
+                    extensionInteractionService,
+                    extensionSupportsStructuredLogs.Value,
+                    pendingExtensionEntries);
             }
         }
         catch (OperationCanceledException)
@@ -1111,6 +1248,72 @@ internal sealed class RunCommand : BaseCommand
             // token fires because logCaptureCancellationSource.Cancel() runs in the finally
             // block after the AppHost process has already exited.
             return;
+        }
+    }
+
+    private static void ForwardPendingAppHostLogEntriesToExtension(
+        IExtensionInteractionService extensionInteractionService,
+        bool extensionSupportsStructuredLogs,
+        List<BackchannelLogEntry> pendingExtensionEntries)
+    {
+        foreach (var pendingEntry in pendingExtensionEntries)
+        {
+            ForwardAppHostLogEntryToExtension(extensionInteractionService, extensionSupportsStructuredLogs, pendingEntry);
+        }
+
+        pendingExtensionEntries.Clear();
+    }
+
+    private static void ForwardAppHostLogEntryToExtension(
+        IExtensionInteractionService extensionInteractionService,
+        bool extensionSupportsStructuredLogs,
+        BackchannelLogEntry entry)
+    {
+        // Older AppHosts deserialize the added sequence as 0. Only numbered records have
+        // the identity needed to suppress reconnect replays safely.
+        if (extensionSupportsStructuredLogs && entry.SequenceNumber > 0)
+        {
+            extensionInteractionService.WriteAppHostLogEntry(new ExtensionAppHostLogEntry
+            {
+                GenerationId = entry.GenerationId,
+                SequenceNumber = entry.SequenceNumber,
+                LogLevel = entry.LogLevel.ToString(),
+                Message = entry.Message,
+                CategoryName = entry.CategoryName,
+                EventId = entry.EventId.Id,
+                Exception = entry.Exception,
+            });
+        }
+        else
+        {
+            // Older extensions only accept plain debug-session messages.
+            extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
+        }
+    }
+
+    private static async Task<bool> SupportsStructuredAppHostLogsAsync(
+        FileLoggerProvider fileLoggerProvider,
+        IExtensionBackchannel extensionBackchannel,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.AppHostLogOutput, cancellationToken)
+                .WaitAsync(s_structuredLogSupportProbeTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            fileLoggerProvider.WriteLog(
+                DateTimeOffset.UtcNow,
+                LogLevel.Debug,
+                "Aspire.Cli",
+                "Structured AppHost log capability probe failed; using legacy debug console output.",
+                ex);
+            return false;
         }
     }
 
@@ -1169,11 +1372,13 @@ internal sealed class RunCommand : BaseCommand
     private Task<CommandResult> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var isolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var noBuild = parseResult.GetValue(s_noBuildOption);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var appHostArgs = parseResult.UnmatchedTokens;
+        var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -1184,10 +1389,22 @@ internal sealed class RunCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
+        if (appHostArgs.Count > 0)
+        {
+            additionalArgs.Add("--");
+            additionalArgs.AddRange(appHostArgs);
+        }
+
         return _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

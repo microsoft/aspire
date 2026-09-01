@@ -1,22 +1,14 @@
-# The Aspire Dashboard
+# See the whole system
 
-The Aspire Dashboard gives you real-time visibility into your running application. It's also a lightweight [OpenTelemetry](https://opentelemetry.io/) viewer for any structured logs, metrics, or traces you have instrumented in your app.
+The Aspire Dashboard gives you one place to inspect your running app:
 
-### What you'll see
+- **Resources** show what is running, waiting, or unhealthy.
+- **Endpoints** take you straight to each service.
+- **Console Logs** show resource output.
+- **Structured Logs** show OpenTelemetry data.
+- **Traces** follow a request across service boundaries.
+- **Metrics** show how the app behaves over time.
 
-- **Resources** — all your services, containers, and executables with their current state
-- **Endpoints** — live URLs for each service
-- **Console Logs** — aggregated output from all services in one place
-- **Structured Logs** — searchable, structured log entries with OpenTelemetry
-- **Traces** — distributed traces showing request flow across services
-- **Metrics** — performance counters and custom metrics
+Open it from the Aspire view whenever you need to understand what your app is doing.
 
-### Health monitoring
-
-Each resource shows its health status at a glance:
-
-- 🟢 **Running** — service is healthy
-- 🟡 **Starting** — service is spinning up
-- 🔴 **Failed** — something went wrong
-
-The dashboard launches automatically when you run your app and is accessible from a local URL in your terminal output.
+[Explore the Aspire Dashboard](https://aspire.dev/dashboard/overview/)

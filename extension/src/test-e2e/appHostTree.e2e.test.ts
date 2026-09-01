@@ -1,11 +1,15 @@
 import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+
+const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
 suite('Aspire AppHost tree E2E', function () {
-    this.timeout(240000);
+    // The first real AppHost launch pays for an isolated CLI bundle extraction and cold build.
+    // Leave the CLI's full startup budget plus another budget for the scenario and its cleanup.
+    this.timeout(cliStartupTimeoutMs * 2);
 
     teardown(async () => {
         await runE2eTeardown([
@@ -31,7 +35,29 @@ suite('Aspire AppHost tree E2E', function () {
 
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
+        assert.ok(await waitForChildTreeItem(item, 'Run AppHost'));
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('does not activate the Aspire view when the window reloads with Explorer selected', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+
+        try {
+            await executeCommandFromPalette('workbench.view.explorer');
+            await reloadWorkspaceForE2E();
+            await waitForRepositoryIdle();
+            await waitForWorkspaceAppHost();
+
+            const visibleSectionTitles = await observeVisibleSideBarSectionTitles();
+            assert.ok(
+                !visibleSectionTitles.includes('AppHosts'),
+                `Aspire stole sidebar focus after reload. Visible sections: ${visibleSectionTitles.join(', ')}`);
+        } finally {
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+        }
     });
 
     test('shows streamed candidates while AppHost discovery is still running', async () => {
@@ -185,14 +211,16 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
-        const section = await openAspireView();
+        await openAspireView();
 
-        const idleItem = await waitForTreeItem(section, appHostLabel);
-        await idleItem.expand();
-        await clickTreeItem(section, 'Run AppHost');
-        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
-        const running = await waitForRunningAppHost();
+        const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
+        // Match the E2E runner's CLI startup budget so CI contention cannot make the test abandon a
+        // launch that the CLI still legitimately considers in progress.
+        const running = await waitForRunningAppHost(cliStartupTimeoutMs);
         const runningAppHost = findRunningAppHost(running.state);
         assert.ok(runningAppHost);
         const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;
@@ -255,6 +283,10 @@ suite('Aspire AppHost tree E2E', function () {
         // it before starting the AppHost. See https://github.com/microsoft/aspire/issues/18578.
         const idleItem = await waitForTreeItem(section, appHostLabel);
         await idleItem.expand();
+
+        for (const actionLabel of ['Deploy AppHost', 'Publish AppHost', 'Run pipeline step', 'Debug pipeline step']) {
+            assert.ok(await waitForChildTreeItem(idleItem, actionLabel), `Expected '${actionLabel}' under the idle AppHost.`);
+        }
 
         // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
         // E2E host runs in English so the literals are stable, mirroring other tree-item labels
@@ -377,5 +409,15 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForNoRunningAppHost(120000, appHostPath);
     });
-
 });
+
+function getCliStartupTimeoutMs(): number {
+    // run-e2e.js forwards the effective CLI timeout as a positive integer number of seconds,
+    // for example ASPIRE_CLI_START_TIMEOUT=300.
+    const configuredSeconds = Number(process.env.ASPIRE_CLI_START_TIMEOUT);
+    if (!Number.isInteger(configuredSeconds) || configuredSeconds <= 0) {
+        throw new Error(`ASPIRE_CLI_START_TIMEOUT must be a positive integer for AppHost tree E2E tests. Got '${process.env.ASPIRE_CLI_START_TIMEOUT ?? '<unset>'}'.`);
+    }
+
+    return configuredSeconds * 1000;
+}

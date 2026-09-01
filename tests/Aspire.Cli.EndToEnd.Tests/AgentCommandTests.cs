@@ -173,6 +173,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -190,10 +191,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
-        await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
 
-        // Run aspire agent init and accept the default location and skills. The cache
-        // fixture above keeps this independent from the unpublished npm package.
+        // Run aspire agent init and accept the default location and skills.
         await auto.TypeAsync("aspire agent init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
@@ -207,7 +206,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         // Playwright and dotnet-inspect are not pre-selected, so just accept
-        // the default Aspire skills from the seeded bundle.
+        // the default Aspire skills from the installed CLI's embedded bundle.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -215,10 +214,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         var fileContent = File.ReadAllText(skillFilePath);
-        Assert.Contains("aspire start", fileContent);
+        Assert.Contains("name: aspire", fileContent);
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
-        Assert.Contains("Aspire Deployment", deploymentFileContent);
+        Assert.Contains("name: aspire-deployment", deploymentFileContent);
     }
 
     /// <summary>
@@ -234,23 +233,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
-
-        // Seed the user-level cache with the six bundle skills so the CLI exercises the cached
-        // path without needing the unpublished npm package. The fixture mirrors the published
-        // bundle's manifest shape.
-        await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
 
         // The names below are the ones the original bug hid from the CLI. Naming them explicitly
         // (rather than `--skills all`) avoids pulling in playwright/dotnet-inspect, which would
@@ -270,166 +264,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         {
             var skillFile = Path.Combine(skillsRoot, skillName, "SKILL.md");
             Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
+            Assert.Contains($"name: {skillName}", File.ReadAllText(skillFile));
         }
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
-    private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
+    private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)
     {
-        const string aspireSkillsVersion = "0.0.1";
-        var scriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "seed-aspire-skills-cache.sh");
-        var script =
-            $$"""
-            #!/usr/bin/env bash
-            set -euo pipefail
-
-            cache="$HOME/.aspire/cache/aspire-skills/{{aspireSkillsVersion}}"
-            rm -rf "$cache"
-            mkdir -p \
-              "$cache/skills/aspire/references" \
-              "$cache/skills/aspire/evals" \
-              "$cache/skills/aspireify" \
-              "$cache/skills/aspire-deployment/references" \
-              "$cache/skills/aspire-init" \
-              "$cache/skills/aspire-monitoring" \
-              "$cache/skills/aspire-orchestration"
-
-            cat > "$cache/skills/aspire/SKILL.md" <<'SKILL'
-            ---
-            name: aspire
-            description: "Aspire CLI commands and workflows for distributed apps"
-            ---
-
-            # Aspire Skill
-
-            Use `aspire start` to start an Aspire app.
-            SKILL
-            printf '%s\n' '# App commands' > "$cache/skills/aspire/references/app-commands.md"
-            printf '%s\n' '{}' > "$cache/skills/aspire/evals/evals.json"
-
-            cat > "$cache/skills/aspireify/SKILL.md" <<'SKILL'
-            ---
-            name: aspireify
-            description: "One-time setup: wire up AppHost with discovered projects"
-            ---
-
-            # Aspireify
-            SKILL
-
-            cat > "$cache/skills/aspire-deployment/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-deployment
-            description: "Aspire deployment target selection, preflight, publish, and deploy workflows"
-            ---
-
-            # Aspire Deployment
-            SKILL
-            printf '%s\n' '# Preflight' > "$cache/skills/aspire-deployment/references/preflight.md"
-
-            cat > "$cache/skills/aspire-init/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-init
-            description: "First-run flow for adding Aspire to a repo"
-            ---
-
-            # Aspire Init
-            SKILL
-
-            cat > "$cache/skills/aspire-monitoring/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-monitoring
-            description: "Observe Aspire apps with logs, traces, metrics, and resource state"
-            ---
-
-            # Aspire Monitoring
-            SKILL
-
-            cat > "$cache/skills/aspire-orchestration/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-orchestration
-            description: "Manage Aspire AppHost lifecycle and resource commands"
-            ---
-
-            # Aspire Orchestration
-            SKILL
-
-            aspire_skill_hash="$(sha512sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"
-            aspire_commands_hash="$(sha512sum "$cache/skills/aspire/references/app-commands.md" | awk '{print $1}')"
-            aspire_evals_hash="$(sha512sum "$cache/skills/aspire/evals/evals.json" | awk '{print $1}')"
-            aspireify_skill_hash="$(sha512sum "$cache/skills/aspireify/SKILL.md" | awk '{print $1}')"
-            deployment_skill_hash="$(sha512sum "$cache/skills/aspire-deployment/SKILL.md" | awk '{print $1}')"
-            deployment_preflight_hash="$(sha512sum "$cache/skills/aspire-deployment/references/preflight.md" | awk '{print $1}')"
-            init_skill_hash="$(sha512sum "$cache/skills/aspire-init/SKILL.md" | awk '{print $1}')"
-            monitoring_skill_hash="$(sha512sum "$cache/skills/aspire-monitoring/SKILL.md" | awk '{print $1}')"
-            orchestration_skill_hash="$(sha512sum "$cache/skills/aspire-orchestration/SKILL.md" | awk '{print $1}')"
-
-            cat > "$cache/skill-manifest.json" <<JSON
-            {
-              "version": "{{aspireSkillsVersion}}",
-              "supports": {
-                "aspireCli": ">=0.0.0 <999.0.0",
-                "aspireSdk": ">=0.0.0 <999.0.0"
-              },
-              "skills": [
-                {
-                  "name": "aspire",
-                  "description": "Aspire CLI commands and workflows for distributed apps",
-                  "installExcludedRelativePaths": ["evals"],
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$aspire_skill_hash" },
-                    { "relativePath": "references/app-commands.md", "sha512": "$aspire_commands_hash" },
-                    { "relativePath": "evals/evals.json", "sha512": "$aspire_evals_hash" }
-                  ]
-                },
-                {
-                  "name": "aspireify",
-                  "description": "One-time setup: wire up AppHost with discovered projects",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$aspireify_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-deployment",
-                  "description": "Aspire deployment target selection, preflight, publish, and deploy workflows",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$deployment_skill_hash" },
-                    { "relativePath": "references/preflight.md", "sha512": "$deployment_preflight_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-init",
-                  "description": "First-run flow for adding Aspire to a repo",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$init_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-monitoring",
-                  "description": "Observe Aspire apps with logs, traces, metrics, and resource state",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$monitoring_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-orchestration",
-                  "description": "Manage Aspire AppHost lifecycle and resource commands",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha512": "$orchestration_skill_hash" }
-                  ]
-                }
-              ]
-            }
-            JSON
-            """;
-
-        await File.WriteAllTextAsync(scriptPath, script.ReplaceLineEndings("\n"));
-
-        var containerScriptPath = CliE2ETestHelpers.ToContainerPath(scriptPath, workspace);
-        await auto.RunCommandAsync($"bash {AspireCliShellCommandHelpers.QuoteBashArg(containerScriptPath)}", counter, TimeSpan.FromSeconds(30));
-        await auto.RunCommandAsync($"export aspireSkillsVersion={AspireCliShellCommandHelpers.QuoteBashArg(aspireSkillsVersion)}", counter, TimeSpan.FromSeconds(30));
+        Assert.SkipWhen(
+            strategy.Mode == CliInstallMode.InstallScript ||
+            (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
+            "This test validates the current Aspire CLI's embedded skills bundle. Use a local or PR CLI build instead of a released CLI.");
     }
 }
