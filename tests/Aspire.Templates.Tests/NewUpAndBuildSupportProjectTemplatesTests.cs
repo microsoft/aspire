@@ -140,6 +140,22 @@ public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper te
     [InlineData("aspire-mstest")]
     [InlineData("aspire-nunit")]
     [InlineData("aspire-xunit")]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    public Task CanNewAndBuildWithQuoteInAppHostPath(string templateName)
+    {
+        return CanNewAndBuildActual(
+            templateName,
+            "",
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            appHostDirectoryNamePrefix: "AppHost_\"quoted");
+    }
+
+    [Theory]
+    [InlineData("aspire-mstest")]
+    [InlineData("aspire-nunit")]
+    [InlineData("aspire-xunit")]
     public async Task AppHostTargetFrameworkAcceptsPlatformQualifiedFramework(string templateName)
     {
         var buildEnvironment = BuildEnvironment.ForNet10SdkOnly;

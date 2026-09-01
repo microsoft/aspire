@@ -107,7 +107,7 @@
       "datatype": "string",
       "replaces": "XmlEncodedAppHostProjectPath",
       "valueSource": "AppHostProjectPath",
-      "valueTransform": "xmlEncode"
+      "valueTransform": "xmlDoubleQuotedAttributeEncode"
     },
     "hostIdentifier": {
       "type": "bind",
@@ -118,6 +118,20 @@
       "datatype": "bool",
       "description": "If specified, skips the automatic restore of the project on create.",
       "defaultValue": "false"
+    }
+  },
+  "forms": {
+    "xmlDoubleQuotedAttributeEncode": {
+      "identifier": "chain",
+      "steps": [
+        "xmlEncode",
+        "encodeDoubleQuote"
+      ]
+    },
+    "encodeDoubleQuote": {
+      "identifier": "replace",
+      "pattern": "\"",
+      "replacement": "&quot;"
     }
   },
   "primaryOutputs": [
