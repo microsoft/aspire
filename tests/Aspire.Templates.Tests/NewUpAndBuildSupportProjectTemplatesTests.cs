@@ -120,14 +120,17 @@ public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper te
             runTests: true);
     }
 
-    [Fact]
-    public Task MissingAppHostTargetFrameworkFallsBackToExplicitFramework()
+    [Theory]
+    [InlineData("aspire-mstest")]
+    [InlineData("aspire-nunit")]
+    [InlineData("aspire-xunit")]
+    public Task MissingAppHostTargetFrameworkFallsBackToExplicitFramework(string templateName)
     {
         return CanNewAndBuildActual(
-            "aspire-mstest",
+            templateName,
             "",
             TestSdk.Net10,
-            TestTargetFramework.Net10,
+            TestTargetFramework.Net9,
             error: null,
             useAppHostTargetFramework: false,
             runTests: true);
