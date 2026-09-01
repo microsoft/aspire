@@ -29,19 +29,20 @@ function leanCard(c) {
   };
 }
 
+// Returns the report as a single JSON string rather than writing it, so the caller controls
+// flushing (see the entrypoint) and tests can assert the payload without capturing stdout.
 export async function main() {
   const report = await computeSlaReport();
   if (!report || !report.authenticated) {
     // Emit a well-formed, clearly-unauthenticated payload so the workflow can bail quietly
     // instead of tripping on a parse error.
-    process.stdout.write(JSON.stringify({
+    return JSON.stringify({
       authenticated: false,
       message: report?.message ?? "not authenticated",
       generatedAt: new Date().toISOString(),
       sla: null,
       externalOpenPrs: [],
-    }) + "\n");
-    return;
+    });
   }
 
   const sla = report.sla ?? null;
@@ -63,21 +64,29 @@ export async function main() {
       : null,
     externalOpenPrs: report.externalOpenPrs ?? [],
   };
-  process.stdout.write(JSON.stringify(payload) + "\n");
+  return JSON.stringify(payload);
+}
+
+// process.exit() abandons any not-yet-flushed writes to a piped (i.e. async, non-TTY) stdout,
+// which can truncate the JSON mid-document when a consumer reads it through a pipe. So wait for
+// the write to drain via its completion callback, then force the exit from inside that callback.
+// Forcing the exit (rather than relying on a natural event-loop drain) keeps the CLI from
+// hanging if any background handle isn't unref'd. See
+// https://nodejs.org/api/process.html#processexitcode — "process.exit() will force the process
+// to exit as quickly as possible even if there are still asynchronous operations pending that
+// have not yet completed fully, including I/O operations to process.stdout and process.stderr."
+function writeThenExit(stream, text, code) {
+  stream.write(text, () => process.exit(code));
 }
 
 // Only self-execute when invoked directly (`node sla-cli.mjs`). The extension validator
 // dynamically imports every .mjs to smoke-test it; without this guard the import would run
-// main() and call process.exit(), aborting validation of the whole extension.
+// main() and exit the process, aborting validation of the whole extension.
 const invokedDirectly = import.meta.url === pathToFileURL(process.argv[1] || "").href;
 if (invokedDirectly) {
   main()
-    .then(() => {
-      // Background pollers/timers are unref'd, but exit explicitly so the CLI never hangs.
-      process.exit(0);
-    })
+    .then((json) => writeThenExit(process.stdout, json + "\n", 0))
     .catch((err) => {
-      process.stderr.write("sla-cli failed: " + (err?.stack || err?.message || String(err)) + "\n");
-      process.exit(1);
+      writeThenExit(process.stderr, "sla-cli failed: " + (err?.stack || err?.message || String(err)) + "\n", 1);
     });
 }

@@ -707,6 +707,33 @@ test("refresh tooltip counts down to the server's next background poll", () => {
   assert.equal(intervalMs, 1000);
 });
 
+test("the poll-countdown interval re-renders live SLA note text from each note's stored deadline", () => {
+  // The 1s interval onPollSchedule registers drives BOTH the refresh tooltip and the per-card
+  // SLA countdown (updateRefreshControls + tickSlaNotes). Merely asserting the interval is
+  // registered wouldn't catch a regression that drops the SLA tick, so capture the handler,
+  // run it, and prove a note whose deadline is still in the future gets rewritten from a stale
+  // label to a freshly-computed "due in ..." string sourced from its own data-sla-deadline.
+  const note = {
+    dataset: { slaState: "approaching", slaDeadline: new Date(Date.now() + 90 * 60_000).toISOString() },
+    textContent: "STALE",
+  };
+  const refreshButton = { dataset: {}, classList: classList(), setAttribute() {} };
+  let handler;
+  const { api } = createRendererHarness({
+    elements: { "refresh-btn": refreshButton },
+    setInterval(fn) { handler = fn; return 1; },
+    querySelectorAll: (selector) => (selector === ".sla-note[data-sla-deadline]" ? [note] : []),
+  });
+
+  api.onPollSchedule({ nextPollAt: Date.now() + 34_000 });
+  assert.equal(typeof handler, "function", "onPollSchedule should register a 1s interval handler");
+
+  handler();
+
+  assert.notEqual(note.textContent, "STALE", "the interval tick must recompute the SLA note text");
+  assert.match(note.textContent, /Review within SLA \u00b7 due in 1h/);
+});
+
 test("issueCard renders linked pull requests as separate safe new-tab links below the pills", () => {
   const { api } = createRendererHarness();
   const html = api.issueCard({

@@ -180,11 +180,11 @@ never sits unreviewed past budget.
   cached snapshot. The tracking store lives at
   `artifacts/sla-tracking.json` under the extension's Copilot home directory and records
   only when each PR first qualified, so restarts and refreshes never reset a clock.
-- **Hourly Teams alerts** — a local scheduled workflow runs `sla-cli.mjs` every hour and
-  posts consolidated Teams messages when a new external PR appears and when a tracked PR
-  transitions into *approaching* or *breached*, so the team is nudged even with the
-  canvas closed. It de-dupes against a small tracker so it stays silent when nothing
-  changed.
+- **Headless report for external automation** — `sla-cli.mjs` computes the same review-SLA
+  snapshot outside the canvas and prints it as a single JSON document (tracked PRs with their
+  stable anchors and state, plus every open external PR). An external scheduled automation can
+  consume that output to nudge reviewers even with the canvas closed; the report is a plain
+  read-only projection and takes no action itself.
 
 
 
@@ -198,7 +198,7 @@ never sits unreviewed past budget.
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
 | `sla.mjs` | Review-SLA engine: business-hours math, candidate rule, tracking store, dashboard annotation. |
-| `sla-cli.mjs` | Headless JSON emitter (`node sla-cli.mjs`) consumed by the hourly Teams-alert workflow. |
+| `sla-cli.mjs` | Headless JSON emitter (`node sla-cli.mjs`) that prints a read-only review-SLA snapshot for an external scheduled automation to consume. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
 | `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
