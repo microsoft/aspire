@@ -325,6 +325,20 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void WithMcpTool_ThrowsImmediatelyWhenLiteralEndpointIsLoopback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithMcpTool("inventory", "https://localhost:7443/mcp"));
+
+        Assert.Equal("endpoint", exception.ParamName);
+    }
+
+    [Fact]
     public void WithAISearchTool_UsesDeterministicConnectionName()
     {
         using var firstBuilder = TestDistributedApplicationBuilder.Create();

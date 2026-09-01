@@ -88,6 +88,20 @@ The Microsoft Foundry project resource exposes the following connection properti
 | `ConnectionString` | The connection string, with the format `Endpoint=<uri>` |
 | `ApplicationInsightsConnectionString` | The Application Insights connection string for telemetry |
 
+### Microsoft Foundry Toolbox
+
+The Toolbox resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Name` | The Toolbox resource name |
+| `ProjectEndpoint` | The parent Microsoft Foundry project endpoint |
+| `Uri` | The MCP consumer endpoint, or the version-specific endpoint when `Version` is set |
+| `ApiVersion` | The Toolbox data-plane API version |
+| `FoundryFeatures` | The required `Foundry-Features` request header value |
+| `AuthorizationScope` | The Microsoft Entra authorization scope for Toolbox requests |
+| `Version` | The pinned immutable version, when configured |
+
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
 
 ## Microsoft Foundry project usage
@@ -171,25 +185,11 @@ await service.withReference(toolbox);
 
 MCP endpoints must be publicly reachable over HTTPS because the Foundry data plane invokes them.
 For local development, use a public development tunnel instead of a localhost endpoint. Inline
-credentials and headers are not supported; configure authenticated MCP servers through Foundry
-project connections.
+credentials and headers are not supported. Connection-authenticated MCP servers are not currently
+supported by this integration.
 
 The default consumer endpoint always serves the promoted Toolbox version. Set
 `FoundryToolboxResource.Version` only when a consumer must target a specific immutable version.
-
-### Microsoft Foundry Toolbox
-
-The Toolbox resource exposes the following connection properties:
-
-| Property Name | Description |
-|---------------|-------------|
-| `Name` | The Toolbox resource name |
-| `ProjectEndpoint` | The parent Microsoft Foundry project endpoint |
-| `Uri` | The MCP consumer endpoint, or the version-specific endpoint when `Version` is set |
-| `ApiVersion` | The Toolbox data-plane API version |
-| `FoundryFeatures` | The required `Foundry-Features` request header value |
-| `AuthorizationScope` | The Microsoft Entra authorization scope for Toolbox requests |
-| `Version` | The pinned immutable version, when configured |
 
 ## Prompt agent usage
 
