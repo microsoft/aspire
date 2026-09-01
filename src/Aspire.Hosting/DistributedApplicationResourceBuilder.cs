@@ -24,9 +24,14 @@ internal sealed class DistributedApplicationResourceBuilder<T>(IDistributedAppli
 
         // If the behavior is AddReplace then there should never be more than one annotation present. The following call will result in an exception which
         // allows us to easily spot these bugs.
-        if (behavior == ResourceAnnotationMutationBehavior.Replace && Resource.Annotations.OfType<TAnnotation>().SingleOrDefault() is { } existingAnnotation)
+        if (behavior == ResourceAnnotationMutationBehavior.Replace)
         {
-            Resource.Annotations.Remove(existingAnnotation);
+            Resource.Annotations.SuppressInheritedAnnotations<TAnnotation>();
+
+            if (Resource.Annotations.OfType<TAnnotation>().SingleOrDefault() is { } existingAnnotation)
+            {
+                Resource.Annotations.Remove(existingAnnotation);
+            }
         }
 
         Resource.Annotations.Add(annotation);

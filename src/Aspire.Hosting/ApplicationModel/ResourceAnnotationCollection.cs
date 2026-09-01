@@ -30,6 +30,52 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
     {
     }
 
+    internal void MaterializeInheritedAnnotations<TAnnotation>(
+        Func<TAnnotation, TAnnotation> clone,
+        Func<TAnnotation, string>? keySelector = null)
+        where TAnnotation : IResourceAnnotation
+    {
+        ArgumentNullException.ThrowIfNull(clone);
+
+        if (Items is LayeredAnnotationList annotations)
+        {
+            annotations.MaterializeInheritedAnnotations(
+                annotation => clone((TAnnotation)annotation),
+                typeof(TAnnotation),
+                keySelector is null ? null : annotation => keySelector((TAnnotation)annotation));
+        }
+    }
+
+    internal void SuppressInheritedAnnotations<TAnnotation>()
+        where TAnnotation : IResourceAnnotation
+    {
+        if (Items is LayeredAnnotationList annotations)
+        {
+            annotations.SuppressInheritedAnnotations(typeof(TAnnotation));
+        }
+    }
+
+    internal void ConfigureProjection(Action configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        if (Items is not LayeredAnnotationList annotations)
+        {
+            configure();
+            return;
+        }
+
+        annotations.HideInheritedAnnotations();
+        try
+        {
+            configure();
+        }
+        finally
+        {
+            annotations.ShowInheritedAnnotations();
+        }
+    }
+
     // Override Collection<T> virtual methods to perform mutations atomically on the backing
     // store. Collection<T>.Add/Remove read items.Count/items.IndexOf outside any lock, then
     // pass the (potentially stale) index to these virtuals. By overriding, we can clamp or
@@ -60,11 +106,6 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         Items.Clear();
     }
 
-    /// <summary>
-    /// Thread-safe <see cref="IList{T}"/> backed by an <see cref="ImmutableArray{T}"/>.
-    /// Reads are lock-free (they read the current immutable snapshot). Writes lock to swap
-    /// the snapshot atomically.
-    /// </summary>
     private interface IResourceAnnotationList : IList<IResourceAnnotation>
     {
         void SafeInsert(int index, IResourceAnnotation item);
@@ -74,6 +115,11 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         void SafeSetItem(int index, IResourceAnnotation item);
     }
 
+    /// <summary>
+    /// Thread-safe <see cref="IList{T}"/> backed by an <see cref="ImmutableArray{T}"/>.
+    /// Reads are lock-free (they read the current immutable snapshot). Writes lock to swap
+    /// the snapshot atomically.
+    /// </summary>
     private sealed class ThreadSafeAnnotationList : IResourceAnnotationList
     {
         // Using ImmutableArray<T> provides lock-free reads and snapshot semantics without
@@ -82,6 +128,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         // (LINQ queries) vastly outnumber writes (Add during setup).
         private ImmutableArray<IResourceAnnotation> _items = [];
         private readonly object _writeLock = new();
+        private readonly Dictionary<int, (int Index, IResourceAnnotation Item)> _indexedItemsByThread = [];
 
         public int Count => _items.Length;
 
@@ -119,7 +166,19 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
 
         public void CopyTo(IResourceAnnotation[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
 
-        public int IndexOf(IResourceAnnotation item) => _items.IndexOf(item);
+        public int IndexOf(IResourceAnnotation item)
+        {
+            var index = _items.IndexOf(item);
+            if (index >= 0)
+            {
+                lock (_writeLock)
+                {
+                    _indexedItemsByThread[Environment.CurrentManagedThreadId] = (index, item);
+                }
+            }
+
+            return index;
+        }
 
         public void Insert(int index, IResourceAnnotation item)
         {
@@ -150,6 +209,18 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
+                if (_indexedItemsByThread.Remove(Environment.CurrentManagedThreadId, out var indexedItem) &&
+                    indexedItem.Index == index)
+                {
+                    var currentIndex = _items.IndexOf(indexedItem.Item);
+                    if (currentIndex >= 0)
+                    {
+                        _items = _items.RemoveAt(currentIndex);
+                    }
+
+                    return;
+                }
+
                 if ((uint)index < (uint)_items.Length)
                 {
                     _items = _items.RemoveAt(index);
@@ -210,8 +281,13 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
     {
         private readonly List<IResourceAnnotation> _localItems = [];
         private readonly HashSet<IResourceAnnotation> _removedInheritedItems = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<Type> _suppressedInheritedTypes = [];
+        private readonly Dictionary<Type, KeyedAnnotationSuppression> _suppressedInheritedKeys = [];
+        private readonly Dictionary<int, (int Index, IResourceAnnotation Item)> _indexedItemsByThread = [];
         private readonly object _writeLock = new();
-        private bool _clearInherited;
+        private List<IResourceAnnotation>? _detachedItems;
+        private int? _hiddenInheritedAnnotationsThreadId;
+        private int _hiddenInheritedAnnotationsDepth;
 
         public int Count
         {
@@ -242,7 +318,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                _localItems.Add(item);
+                SafeInsertCore(GetSnapshot().Length, item);
             }
         }
 
@@ -250,13 +326,11 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                foreach (var annotation in inheritedAnnotations)
-                {
-                    _removedInheritedItems.Add(annotation);
-                }
-
-                _clearInherited = true;
+                _detachedItems = [];
                 _localItems.Clear();
+                _removedInheritedItems.Clear();
+                _suppressedInheritedTypes.Clear();
+                _suppressedInheritedKeys.Clear();
             }
         }
 
@@ -288,7 +362,14 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                return GetSnapshot().IndexOf(item);
+                var snapshot = GetSnapshot();
+                var index = snapshot.IndexOf(item);
+                if (index >= 0)
+                {
+                    _indexedItemsByThread[Environment.CurrentManagedThreadId] = (index, snapshot[index]);
+                }
+
+                return index;
             }
         }
 
@@ -298,20 +379,15 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                var localIndex = _localItems.IndexOf(item);
-                if (localIndex >= 0)
+                var snapshot = GetSnapshot();
+                var index = snapshot.IndexOf(item);
+                if (index < 0)
                 {
-                    _localItems.RemoveAt(localIndex);
-                    return true;
+                    return false;
                 }
 
-                if (inheritedAnnotations.Contains(item) && !_removedInheritedItems.Contains(item))
-                {
-                    _removedInheritedItems.Add(item);
-                    return true;
-                }
-
-                return false;
+                RemoveItem(snapshot[index]);
+                return true;
             }
         }
 
@@ -321,9 +397,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                var inheritedCount = GetInheritedSnapshot().Length;
-                var localIndex = Math.Clamp(index - inheritedCount, 0, _localItems.Count);
-                _localItems.Insert(localIndex, item);
+                SafeInsertCore(index, item);
             }
         }
 
@@ -331,17 +405,22 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                var inherited = GetInheritedSnapshot();
-                if ((uint)index < (uint)inherited.Length)
+                IResourceAnnotation? target = null;
+                if (_indexedItemsByThread.Remove(Environment.CurrentManagedThreadId, out var indexedItem) &&
+                    indexedItem.Index == index)
                 {
-                    _removedInheritedItems.Add(inherited[index]);
-                    return;
+                    target = indexedItem.Item;
                 }
 
-                var localIndex = index - inherited.Length;
-                if ((uint)localIndex < (uint)_localItems.Count)
+                var snapshot = GetSnapshot();
+                if (target is null && (uint)index < (uint)snapshot.Length)
                 {
-                    _localItems.RemoveAt(localIndex);
+                    target = snapshot[index];
+                }
+
+                if (target is not null)
+                {
+                    RemoveItem(target);
                 }
             }
         }
@@ -350,37 +429,206 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                var inherited = GetInheritedSnapshot();
-                if ((uint)index < (uint)inherited.Length)
+                var snapshot = GetSnapshot();
+                if ((uint)index >= (uint)snapshot.Length)
                 {
-                    _removedInheritedItems.Add(inherited[index]);
-                    _localItems.Insert(0, item);
                     return;
                 }
 
-                var localIndex = index - inherited.Length;
-                if ((uint)localIndex < (uint)_localItems.Count)
-                {
-                    _localItems[localIndex] = item;
-                }
+                Detach(snapshot)[index] = item;
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        private ImmutableArray<IResourceAnnotation> GetInheritedSnapshot()
+        public void HideInheritedAnnotations()
         {
-            if (_clearInherited)
+            lock (_writeLock)
             {
-                return [];
+                var threadId = Environment.CurrentManagedThreadId;
+                if (_hiddenInheritedAnnotationsThreadId is not null &&
+                    _hiddenInheritedAnnotationsThreadId != threadId)
+                {
+                    throw new InvalidOperationException("Projection configuration is already running on another thread.");
+                }
+
+                _hiddenInheritedAnnotationsThreadId = threadId;
+                _hiddenInheritedAnnotationsDepth++;
+            }
+        }
+
+        public void ShowInheritedAnnotations()
+        {
+            lock (_writeLock)
+            {
+                if (_hiddenInheritedAnnotationsThreadId != Environment.CurrentManagedThreadId ||
+                    _hiddenInheritedAnnotationsDepth == 0)
+                {
+                    throw new InvalidOperationException("Projection configuration scope is not active on this thread.");
+                }
+
+                _hiddenInheritedAnnotationsDepth--;
+                if (_hiddenInheritedAnnotationsDepth == 0)
+                {
+                    _hiddenInheritedAnnotationsThreadId = null;
+                }
+            }
+        }
+
+        public void MaterializeInheritedAnnotations(
+            Func<IResourceAnnotation, IResourceAnnotation> clone,
+            Type annotationType,
+            Func<IResourceAnnotation, string>? keySelector)
+        {
+            lock (_writeLock)
+            {
+                if (_detachedItems is not null)
+                {
+                    for (var i = 0; i < _detachedItems.Count; i++)
+                    {
+                        if (annotationType.IsInstanceOfType(_detachedItems[i]))
+                        {
+                            _detachedItems[i] = clone(_detachedItems[i]);
+                        }
+                    }
+
+                    return;
+                }
+
+                var inherited = inheritedAnnotations
+                    .Where(annotation =>
+                        annotationType.IsInstanceOfType(annotation) &&
+                        IsInheritedAnnotationVisible(annotation))
+                    .ToArray();
+
+                if (keySelector is null)
+                {
+                    _suppressedInheritedTypes.Add(annotationType);
+                }
+                else
+                {
+                    if (!_suppressedInheritedKeys.TryGetValue(annotationType, out var suppression))
+                    {
+                        suppression = new KeyedAnnotationSuppression(keySelector);
+                        _suppressedInheritedKeys.Add(annotationType, suppression);
+                    }
+
+                    foreach (var annotation in inherited)
+                    {
+                        suppression.Keys.Add(keySelector(annotation));
+                    }
+                }
+
+                _localItems.AddRange(inherited.Select(clone));
+            }
+        }
+
+        public void SuppressInheritedAnnotations(Type annotationType)
+        {
+            lock (_writeLock)
+            {
+                if (_detachedItems is null)
+                {
+                    _suppressedInheritedTypes.Add(annotationType);
+                }
+            }
+        }
+
+        private void SafeInsertCore(int index, IResourceAnnotation item)
+        {
+            var snapshot = GetSnapshot();
+            index = Math.Clamp(index, 0, snapshot.Length);
+
+            if (_detachedItems is not null)
+            {
+                _detachedItems.Insert(index, item);
+            }
+            else if (index == snapshot.Length)
+            {
+                SuppressMatchingInheritedKey(item);
+                _localItems.Add(item);
+            }
+            else
+            {
+                Detach(snapshot).Insert(index, item);
+            }
+        }
+
+        private void RemoveItem(IResourceAnnotation item)
+        {
+            if (_detachedItems is not null)
+            {
+                var index = _detachedItems.FindIndex(candidate => ReferenceEquals(candidate, item));
+                if (index >= 0)
+                {
+                    _detachedItems.RemoveAt(index);
+                }
+
+                return;
             }
 
-            return [.. inheritedAnnotations.Where(annotation => !_removedInheritedItems.Contains(annotation))];
+            var localIndex = _localItems.FindIndex(candidate => ReferenceEquals(candidate, item));
+            if (localIndex >= 0)
+            {
+                _localItems.RemoveAt(localIndex);
+            }
+            else if (inheritedAnnotations.Any(candidate => ReferenceEquals(candidate, item)))
+            {
+                _removedInheritedItems.Add(item);
+            }
+        }
+
+        private List<IResourceAnnotation> Detach(ImmutableArray<IResourceAnnotation> snapshot)
+        {
+            _detachedItems ??= [.. snapshot];
+            _localItems.Clear();
+            _removedInheritedItems.Clear();
+            _suppressedInheritedTypes.Clear();
+            _suppressedInheritedKeys.Clear();
+
+            return _detachedItems;
         }
 
         private ImmutableArray<IResourceAnnotation> GetSnapshot()
         {
-            return [.. GetInheritedSnapshot(), .. _localItems];
+            if (_detachedItems is not null)
+            {
+                return [.. _detachedItems];
+            }
+
+            var hideInherited = _hiddenInheritedAnnotationsThreadId == Environment.CurrentManagedThreadId &&
+                _hiddenInheritedAnnotationsDepth > 0;
+
+            return hideInherited
+                ? [.. _localItems]
+                : [.. inheritedAnnotations.Where(IsInheritedAnnotationVisible), .. _localItems];
+        }
+
+        private bool IsInheritedAnnotationVisible(IResourceAnnotation annotation)
+        {
+            return !_removedInheritedItems.Contains(annotation) &&
+                !_suppressedInheritedTypes.Any(type => type.IsAssignableFrom(annotation.GetType())) &&
+                !_suppressedInheritedKeys.Any(pair =>
+                    pair.Key.IsAssignableFrom(annotation.GetType()) &&
+                    pair.Value.Keys.Contains(pair.Value.KeySelector(annotation)));
+        }
+
+        private void SuppressMatchingInheritedKey(IResourceAnnotation annotation)
+        {
+            foreach (var pair in _suppressedInheritedKeys)
+            {
+                if (pair.Key.IsAssignableFrom(annotation.GetType()))
+                {
+                    pair.Value.Keys.Add(pair.Value.KeySelector(annotation));
+                }
+            }
+        }
+
+        private sealed class KeyedAnnotationSuppression(Func<IResourceAnnotation, string> keySelector)
+        {
+            public Func<IResourceAnnotation, string> KeySelector { get; } = keySelector;
+
+            public HashSet<string> Keys { get; } = new(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

@@ -36,7 +36,12 @@ internal static class ResourceProjectionBuilderExtensions
                     $"Resource '{builder.Resource.Name}' already has a non-container projection selected for the '{operation}' operation.");
             }
 
-            configure(builder.ApplicationBuilder.CreateResourceBuilder(containerProjection));
+            containerProjection.Annotations.MaterializeInheritedAnnotations<EndpointAnnotation>(
+                CloneEndpoint,
+                endpoint => endpoint.Name);
+
+            var existingProjectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(containerProjection);
+            containerProjection.Annotations.ConfigureProjection(() => configure(existingProjectionBuilder));
             return builder;
         }
 
@@ -46,19 +51,46 @@ internal static class ResourceProjectionBuilderExtensions
         var projection = new ContainerResourceProjection<T>(builder.Resource);
         var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder<ContainerResource>(projection);
 
-        // Container image annotations discriminate the effective shape and are mutable. Remove
-        // inherited instances before invoking container APIs so WithImage cannot mutate an owner
-        // annotation in place and the selected projection remains authoritative.
-        foreach (var imageAnnotation in projection.Annotations.OfType<ContainerImageAnnotation>().ToArray())
-        {
-            projection.Annotations.Remove(imageAnnotation);
-        }
+        projection.Annotations.MaterializeInheritedAnnotations<EndpointAnnotation>(
+            CloneEndpoint,
+            endpoint => endpoint.Name);
 
-        configure(projectionBuilder);
+        // Container image annotations discriminate the effective shape. A container projection
+        // must define its own image without exposing or mutating an owner-level legacy discriminator.
+        projection.Annotations.SuppressInheritedAnnotations<ContainerImageAnnotation>();
+
+        // Configuration callbacks must never observe mutable owner annotation instances. Known
+        // annotations that support in-place container configuration are materialized above; all
+        // other inherited annotations remain hidden until configuration completes.
+        projection.Annotations.ConfigureProjection(() => configure(projectionBuilder));
 
         builder.Resource.Annotations.Add(new ResourceProjectionAnnotation(
             new OperationResourceProjectionSource(operation, projection)));
 
         return builder;
+    }
+
+    private static EndpointAnnotation CloneEndpoint(EndpointAnnotation endpoint)
+    {
+        // Projection registration happens while building the model, before endpoint allocation.
+        // Clone model-time endpoint configuration so container callbacks can adapt the selected
+        // shape without changing endpoint semantics on the canonical owner.
+        return new EndpointAnnotation(
+            endpoint.Protocol,
+            endpoint.DefaultNetworkID,
+            endpoint.UriScheme,
+            endpoint.Transport,
+            endpoint.Name,
+            endpoint.SpecifiedPort,
+            endpoint.TargetPort,
+            endpoint.IsExternal,
+            endpoint.IsExplicitlyProxied)
+        {
+            ExcludeReferenceEndpoint = endpoint.ExcludeReferenceEndpoint,
+            FromLaunchProfile = endpoint.FromLaunchProfile,
+            TargetHost = endpoint.TargetHost,
+            TargetPortEnvironmentVariable = endpoint.TargetPortEnvironmentVariable,
+            TlsEnabled = endpoint.TlsEnabled
+        };
     }
 }
