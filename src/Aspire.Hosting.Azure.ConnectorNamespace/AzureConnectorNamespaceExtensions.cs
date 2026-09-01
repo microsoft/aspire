@@ -50,7 +50,7 @@ public static class AzureConnectorNamespaceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        builder.AddAzureProvisioning();
+
         builder.AddAzureProvisioning();
 
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
