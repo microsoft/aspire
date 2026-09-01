@@ -225,7 +225,7 @@ internal static class TypeScriptAppHostToolchainResolver
                 TypeScriptAppHostToolchain.Deno => new CommandSpec
                 {
                     Command = "deno",
-                    Args = ["check", "{appHostFile}"]
+                    Args = ["check", "--sloppy-imports", "{appHostFile}"]
                 },
                 _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
             }
@@ -258,7 +258,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Deno => new CommandSpec
             {
                 Command = "deno",
-                Args = ["run", "-A", "{appHostFile}"]
+                Args = ["run", "-A", "--sloppy-imports", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
@@ -319,7 +319,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Deno => new CommandSpec
             {
                 Command = "deno",
-                Args = ["run", "-A", "--check", "--watch", "{appHostFile}"]
+                Args = ["run", "-A", "--sloppy-imports", "--check", "--watch", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
