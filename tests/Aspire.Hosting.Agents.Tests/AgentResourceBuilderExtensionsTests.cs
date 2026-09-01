@@ -363,6 +363,50 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal("Agent request returned a JSON-RPC error.", result.Message);
     }
 
+    [Theory]
+    [InlineData("failed", false)]
+    [InlineData("TASK_STATE_REJECTED", false)]
+    [InlineData("canceled", true)]
+    public async Task InvokeA2AReportsTerminalTaskFailure(string taskState, bool streaming)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var invocationResponse = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = "request-id",
+            ["result"] = new JsonObject
+            {
+                ["id"] = "task-id",
+                ["status"] = new JsonObject
+                {
+                    ["state"] = taskState
+                }
+            }
+        }.ToJsonString();
+        var handler = new A2ACommandHandler(
+            "JSONRPC",
+            "1.0",
+            supportsStreaming: streaming,
+            "http://localhost:8080/a2a",
+            invocationResponse);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var invocationMode = streaming ? A2AInvocationMode.Streaming : A2AInvocationMode.NonStreaming;
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A, invocationMode);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal($"Agent task ended in the '{taskState}' state.", result.Message);
+    }
+
     [Fact]
     public async Task InvokeStreamingA2AReportsJsonRpcError()
     {
@@ -388,6 +432,33 @@ public class AgentResourceBuilderExtensionsTests
 
         Assert.False(result.Success);
         Assert.Equal("Agent request returned a JSON-RPC error.", result.Message);
+    }
+
+    [Fact]
+    public async Task InvokeAgUiReportsRunError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new SseAgentCommandHandler(
+            """
+            event: message
+            data: {"type":"RUN_ERROR","message":"Agent failed."}
+
+            """);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.AgUi);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-ag-ui-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-ag-ui-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent run returned a RUN_ERROR event.", result.Message);
     }
 
     [Fact]
@@ -668,6 +739,17 @@ public class AgentResourceBuilderExtensionsTests
             {
                 Content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json")
             };
+        }
+    }
+
+    private sealed class SseAgentCommandHandler(string responseBody) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseBody, Encoding.UTF8, "text/event-stream")
+            });
         }
     }
 }

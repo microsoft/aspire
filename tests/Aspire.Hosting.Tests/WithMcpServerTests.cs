@@ -438,12 +438,16 @@ public class WithMcpServerTests
 
         var commandTask = app.ResourceCommands.ExecuteCommandAsync(container.Resource, "app-mcp-call-tool-interactive");
 
-        var toolInteraction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        var toolInteraction = await ReadInteractionAsync(
+            interactionService,
+            interaction => interaction is { Type: InteractionType.Input, Title: "MCP Tool" });
         var toolInput = Assert.Single(toolInteraction.Inputs);
         toolInput.Value = "get_weather";
         toolInteraction.CompletionTcs.SetResult(InteractionResult.Ok(toolInput));
 
-        var argumentsInteraction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        var argumentsInteraction = await ReadInteractionAsync(
+            interactionService,
+            interaction => interaction is { Type: InteractionType.Inputs, Title: "Invoke get_weather" });
         Assert.Collection(
             argumentsInteraction.Inputs,
             optionalBoolean =>
@@ -474,6 +478,20 @@ public class WithMcpServerTests
         var arguments = Assert.IsType<JsonObject>(handler.ToolCallRequest?["params"]?["arguments"]);
         Assert.Equal(["use_cache"], arguments.Select(argument => argument.Key));
         Assert.True(arguments["use_cache"]?.GetValue<bool>() is true);
+    }
+
+    private static async Task<InteractionData> ReadInteractionAsync(
+        TestInteractionService interactionService,
+        Func<InteractionData, bool> predicate)
+    {
+        while (true)
+        {
+            var interaction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+            if (predicate(interaction))
+            {
+                return interaction;
+            }
+        }
     }
 
     [Fact]

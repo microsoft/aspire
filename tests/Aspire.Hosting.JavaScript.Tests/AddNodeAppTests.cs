@@ -15,7 +15,7 @@ namespace Aspire.Hosting.JavaScript.Tests;
 public class AddNodeAppTests(ITestOutputHelper outputHelper)
 {
     private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
-        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
         .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
             && m.IsGenericMethodDefinition
             && m.GetParameters() is { Length: 5 } parameters

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -70,6 +71,10 @@ public static class AgentResourceBuilderExtensions
     ///     .AsAgent(AgentProtocol.Responses, agentName: "weather-agent");
     /// </code>
     /// </remarks>
+    /// <ats-remarks>
+    /// Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+    /// identifiers and do not need to match the Aspire resource name.
+    /// </ats-remarks>
     [AspireExport]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -96,6 +101,9 @@ public static class AgentResourceBuilderExtensions
     ///     .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
     /// </code>
     /// </remarks>
+    /// <ats-remarks>
+    /// Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+    /// </ats-remarks>
     [AspireExport("asAgentWithInvocationMode")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -123,6 +131,9 @@ public static class AgentResourceBuilderExtensions
     ///     .AsAgent("/responses", AgentProtocol.Responses, agentName: "weather-agent");
     /// </code>
     /// </remarks>
+    /// <ats-remarks>
+    /// Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+    /// </ats-remarks>
     [AspireExport("asAgentWithPath")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -151,6 +162,9 @@ public static class AgentResourceBuilderExtensions
     ///     .AsAgent("/agent-card.json", AgentProtocol.A2A, A2AInvocationMode.Streaming);
     /// </code>
     /// </remarks>
+    /// <ats-remarks>
+    /// Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+    /// </ats-remarks>
     [AspireExport("asAgentWithPathAndInvocationMode")]
     public static IResourceBuilder<T> AsAgent<T>(
         this IResourceBuilder<T> builder,
@@ -295,7 +309,7 @@ public static class AgentResourceBuilderExtensions
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
                 EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareA2ARequestAsync(ctx, invocationMode),
-                GetCommandResult = GetAgentCommandResultAsync
+                GetCommandResult = GetA2ACommandResultAsync
             });
     }
 
@@ -345,7 +359,7 @@ public static class AgentResourceBuilderExtensions
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
                 EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = PrepareAgUiRequestAsync,
-                GetCommandResult = GetAgentCommandTextResultAsync
+                GetCommandResult = GetAgUiCommandResultAsync
             });
     }
 
@@ -730,7 +744,14 @@ public static class AgentResourceBuilderExtensions
             ?? throw new InvalidOperationException("Agent command agent name argument is required.");
     }
 
-    private static async Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(HttpCommandResultContext ctx)
+    private static Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(HttpCommandResultContext ctx)
+    {
+        return GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: false);
+    }
+
+    private static async Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(
+        HttpCommandResultContext ctx,
+        bool validateA2ATaskState)
     {
         ctx.CancellationToken.ThrowIfCancellationRequested();
 
@@ -755,6 +776,11 @@ public static class AgentResourceBuilderExtensions
                 "Agent request returned a JSON-RPC error.",
                 JsonSerializer.Serialize(error, s_indentedJsonOptions),
                 CommandResultFormat.Json);
+        }
+
+        if (validateA2ATaskState && TryGetA2ATerminalFailureState(responseJson, out var taskState))
+        {
+            return CreateA2ATaskFailure(responseJson, taskState);
         }
 
         return CommandResults.Success(
@@ -784,7 +810,7 @@ public static class AgentResourceBuilderExtensions
             displayImmediately: true);
     }
 
-    private static async Task<ExecuteCommandResult> GetAgentCommandSseResultAsync(HttpCommandResultContext ctx)
+    private static async Task<ExecuteCommandResult> GetA2ACommandSseResultAsync(HttpCommandResultContext ctx)
     {
         ctx.CancellationToken.ThrowIfCancellationRequested();
 
@@ -797,11 +823,49 @@ public static class AgentResourceBuilderExtensions
                 CommandResultFormat.Text);
         }
 
-        if (TryGetSseJsonRpcError(responseBody, out var error))
+        foreach (var responseJson in GetSseJsonPayloads(responseBody))
+        {
+            if (responseJson["error"] is { } error)
+            {
+                return CommandResults.Failure(
+                    "Agent request returned a JSON-RPC error.",
+                    JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                    CommandResultFormat.Json);
+            }
+
+            if (TryGetA2ATerminalFailureState(responseJson, out var taskState))
+            {
+                return CreateA2ATaskFailure(responseJson, taskState);
+            }
+        }
+
+        return CommandResults.Success(
+            message: "Agent response received.",
+            result: responseBody,
+            resultFormat: CommandResultFormat.Text,
+            displayImmediately: true);
+    }
+
+    private static async Task<ExecuteCommandResult> GetAgUiCommandResultAsync(HttpCommandResultContext ctx)
+    {
+        ctx.CancellationToken.ThrowIfCancellationRequested();
+
+        var responseBody = await ctx.Response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+        if (!ctx.Response.IsSuccessStatusCode)
         {
             return CommandResults.Failure(
-                "Agent request returned a JSON-RPC error.",
-                JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                $"Agent request failed with status code {(int)ctx.Response.StatusCode} ({ctx.Response.StatusCode}).",
+                responseBody,
+                CommandResultFormat.Text);
+        }
+
+        var runError = GetSseJsonPayloads(responseBody)
+            .FirstOrDefault(payload => string.Equals(GetJsonString(payload["type"]), "RUN_ERROR", StringComparison.Ordinal));
+        if (runError is not null)
+        {
+            return CommandResults.Failure(
+                "Agent run returned a RUN_ERROR event.",
+                JsonSerializer.Serialize(runError, s_indentedJsonOptions),
                 CommandResultFormat.Json);
         }
 
@@ -812,21 +876,54 @@ public static class AgentResourceBuilderExtensions
             displayImmediately: true);
     }
 
-    private static Task<ExecuteCommandResult> GetAgentCommandResultAsync(HttpCommandResultContext ctx)
+    private static Task<ExecuteCommandResult> GetA2ACommandResultAsync(HttpCommandResultContext ctx)
     {
         return ctx.Response.Content.Headers.ContentType?.MediaType switch
         {
-            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx),
-            "text/event-stream" => GetAgentCommandSseResultAsync(ctx),
+            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: true),
+            "text/event-stream" => GetA2ACommandSseResultAsync(ctx),
             _ => GetAgentCommandTextResultAsync(ctx)
         };
     }
 
-    private static bool TryGetSseJsonRpcError(string responseBody, out JsonNode? error)
+    private static ExecuteCommandResult CreateA2ATaskFailure(JsonObject responseJson, string taskState)
     {
-        // A2A streaming responses contain one JSON-RPC response per SSE event:
+        return CommandResults.Failure(
+            $"Agent task ended in the '{taskState}' state.",
+            JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
+            CommandResultFormat.Json);
+    }
+
+    private static bool TryGetA2ATerminalFailureState(JsonObject responseJson, [NotNullWhen(true)] out string? taskState)
+    {
+        var result = responseJson["result"] as JsonObject ?? responseJson;
+        taskState = result["status"] is JsonObject status ? GetJsonString(status["state"]) : null;
+        if (taskState is null)
+        {
+            return false;
+        }
+
+        var normalizedState = taskState.StartsWith("TASK_STATE_", StringComparison.OrdinalIgnoreCase)
+            ? taskState["TASK_STATE_".Length..]
+            : taskState;
+
+        return normalizedState.Equals("failed", StringComparison.OrdinalIgnoreCase)
+            || normalizedState.Equals("rejected", StringComparison.OrdinalIgnoreCase)
+            || normalizedState.Equals("canceled", StringComparison.OrdinalIgnoreCase)
+            || normalizedState.Equals("cancelled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetJsonString(JsonNode? node)
+    {
+        return node is JsonValue value && value.TryGetValue<string>(out var result) ? result : null;
+    }
+
+    private static IEnumerable<JsonObject> GetSseJsonPayloads(string responseBody)
+    {
+        // A2A and AG-UI streaming responses contain one JSON object per SSE event:
         //   event: message
         //   data: {"jsonrpc":"2.0","id":"...","error":{"code":-32603,"message":"Agent failed."}}
+        //   data: {"type":"RUN_ERROR","message":"Agent failed."}
         // Join consecutive data fields because SSE allows an event payload to span multiple lines.
         using var reader = new StringReader(responseBody);
         var eventData = new StringBuilder();
@@ -835,9 +932,9 @@ public static class AgentResourceBuilderExtensions
         {
             if (line.Length == 0)
             {
-                if (TryGetJsonRpcError(eventData, out error))
+                if (TryParseEventData(eventData, out var payload))
                 {
-                    return true;
+                    yield return payload;
                 }
 
                 eventData.Clear();
@@ -863,18 +960,27 @@ public static class AgentResourceBuilderExtensions
             eventData.Append(value);
         }
 
-        return TryGetJsonRpcError(eventData, out error);
-
-        static bool TryGetJsonRpcError(StringBuilder eventData, out JsonNode? error)
+        if (TryParseEventData(eventData, out var finalPayload))
         {
+            yield return finalPayload;
+        }
+
+        static bool TryParseEventData(StringBuilder eventData, [NotNullWhen(true)] out JsonObject? payload)
+        {
+            if (eventData.Length == 0)
+            {
+                payload = null;
+                return false;
+            }
+
             try
             {
-                error = (JsonNode.Parse(eventData.ToString()) as JsonObject)?["error"];
-                return error is not null;
+                payload = JsonNode.Parse(eventData.ToString()) as JsonObject;
+                return payload is not null;
             }
             catch (JsonException)
             {
-                error = null;
+                payload = null;
                 return false;
             }
         }
