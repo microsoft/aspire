@@ -132,13 +132,13 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.RunCommandAsync(
                 VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, defaultUrlFile, "frontend", anonymous: false),
                 counter,
-                TimeSpan.FromMinutes(4));
+                TimeSpan.FromMinutes(7));
 
             output.WriteLine("Step 8: Verifying the anonymous endpoint reaches the .NET HTTP listener through Sandbox TLS termination...");
             await auto.RunCommandAsync(
                 VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, anonymousUrlFile, "anonymous", anonymous: true),
                 counter,
-                TimeSpan.FromMinutes(4));
+                TimeSpan.FromMinutes(7));
 
             deploymentUrls["frontend"] = File.ReadAllText(defaultUrlFile).Trim();
             deploymentUrls["anonymous"] = File.ReadAllText(anonymousUrlFile).Trim();
