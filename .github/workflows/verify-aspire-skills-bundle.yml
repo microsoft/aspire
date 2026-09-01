@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'src/Aspire.Cli/Agents/AspireSkills/Embedded/**'
+      - 'src/Aspire.Cli/Agents/AspireSkills/AspireSkillsInstaller.cs'
       - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh'
       - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
       - 'eng/scripts/verify-aspire-skills-bundle.ps1'
@@ -22,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Verify embedded Aspire skills bundle attestation
+      - name: Verify embedded skills and extension bundle attestations
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

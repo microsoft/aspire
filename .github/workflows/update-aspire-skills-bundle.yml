@@ -28,7 +28,7 @@ jobs:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
-      - name: Update embedded Aspire skills bundle
+      - name: Update embedded skills and extension bundles
         shell: pwsh
         env:
           GH_TOKEN: ${{ steps.update-token.outputs.token }}
@@ -74,4 +74,4 @@ jobs:
             area-cli
             area-engineering-systems
           title: "[Automated] Update Aspire skills bundle"
-          body: "Auto-generated update to refresh the embedded Aspire skills bundle fallback used by the Aspire CLI."
+          body: "Auto-generated update to refresh the embedded skills and extension bundles from microsoft/aspire-skills used by the Aspire CLI."

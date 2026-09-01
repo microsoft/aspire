@@ -26,6 +26,7 @@ internal sealed class McpInitCommand : BaseCommand
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
         Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator telemetryHookConfigurator,
+        IEnvironment environment,
         CommonCommandServices services)
         : base("init", McpCommandStrings.InitCommand_Description, services)
     {
@@ -37,6 +38,7 @@ internal sealed class McpInitCommand : BaseCommand
             gitRepository,
             languageDiscovery,
             telemetryHookConfigurator,
+            environment,
             services);
     }
 

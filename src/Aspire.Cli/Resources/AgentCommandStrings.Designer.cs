@@ -61,6 +61,132 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Where should extension files be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensionLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensionLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Which extensions should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed Aspire extensions:.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummary {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Extensions: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummaryExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Locations: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledExtensionsSummaryLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to install {0} extension at {1}: {2}.
+        /// </summary>
+        internal static string InitCommand_FailedToInstallExtension {
+            get {
+                return ResourceManager.GetString("InitCommand_FailedToInstallExtension", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The GitHub Copilot App was not detected. Continuing because explicit extension options were provided..
+        /// </summary>
+        internal static string InitCommand_NoCompatibleClientForExplicitExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_NoCompatibleClientForExplicitExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire extension bundle could not be loaded..
+        /// </summary>
+        internal static string InitCommand_ExtensionBundleUnavailable {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionBundleUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Project (.github/extensions/).
+        /// </summary>
+        internal static string ExtensionLocation_ProjectName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_ProjectName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Available to GitHub Copilot App in this project.
+        /// </summary>
+        internal static string ExtensionLocation_ProjectDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_ProjectDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to User (~/.copilot/extensions/).
+        /// </summary>
+        internal static string ExtensionLocation_UserName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_UserName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Available to GitHub Copilot App for the current user.
+        /// </summary>
+        internal static string ExtensionLocation_UserDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_UserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_ExtensionLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of extensions to install. Bundle extensions are loaded dynamically. Use '{0}' or '{1}'.
+        /// </summary>
+        internal static string InitCommand_ExtensionsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Manage AI agent environment configuration..
         /// </summary>
         internal static string Description {

@@ -12,84 +12,62 @@ $PSNativeCommandUseErrorActionPreference = $true
 $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
-$metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
+$installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 
 . (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
 
+$bundleDefinitions = Get-AspireSkillsBundleDefinitions
+
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "The GitHub CLI ('gh') is required to verify the embedded Aspire skills bundle."
+    throw "The GitHub CLI ('gh') is required to verify the embedded Aspire Skills bundles."
 }
 
-if (-not (Test-Path $metadataPath)) {
-    throw "Embedded Aspire skills metadata was not found at '$metadataPath'."
+$verifiedBundles = @(
+    foreach ($definition in $bundleDefinitions) {
+        [pscustomobject]@{
+            Definition = $definition
+            Metadata = Get-AspireSkillsVerifiedBundleMetadata `
+                -Repository $Repository `
+                -EmbeddedDirectory $embeddedDir `
+                -Definition $definition
+        }
+    }
+)
+
+$installerContent = Get-Content -Raw -Path $installerPath
+$versionMatches = [regex]::Matches($installerContent, 'internal const string Version = "([^"]+)";')
+if ($versionMatches.Count -ne 1) {
+    throw "Expected exactly one Aspire Skills bundle version constant in '$installerPath', but found $($versionMatches.Count)."
 }
-
-$metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
-
-if ($metadata.repository -ne $Repository) {
-    throw "Unexpected embedded bundle repository '$($metadata.repository)'. Expected '$Repository'."
+$expectedVersion = $versionMatches[0].Groups[1].Value
+$embeddedVersions = @($verifiedBundles.Metadata.version | Select-Object -Unique)
+if ($embeddedVersions.Count -ne 1 -or $embeddedVersions[0] -ne $expectedVersion) {
+    throw "Embedded Aspire Skills bundle versions '$($embeddedVersions -join ', ')' must match AspireSkillsInstaller.Version '$expectedVersion'."
 }
-
-if ([string]::IsNullOrWhiteSpace($metadata.tag)) {
-    throw "Embedded Aspire skills metadata must specify a GitHub release tag."
-}
-
-if ([string]::IsNullOrWhiteSpace($metadata.assetName)) {
-    throw "Embedded Aspire skills metadata must specify a release asset name."
-}
-
-if ($metadata.assetName -ne [System.IO.Path]::GetFileName($metadata.assetName)) {
-    throw "Embedded Aspire skills asset name '$($metadata.assetName)' must not contain path separators."
-}
-
-if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
-    throw "Embedded Aspire skills metadata must specify the release asset SHA-512 hash."
-}
-
-$archivePath = Join-Path $embeddedDir $metadata.assetName
-if (-not (Test-Path $archivePath)) {
-    throw "Embedded Aspire skills archive was not found at '$archivePath'."
-}
-
-$actualHash = (Get-FileHash -Algorithm SHA512 $archivePath).Hash.ToLowerInvariant()
-if ($actualHash -ne $metadata.sha512) {
-    throw "Embedded bundle SHA-512 mismatch. Expected '$($metadata.sha512)', got '$actualHash'."
-}
-
-$certIdentity = "https://github.com/$($metadata.repository)/.github/workflows/publish.yml@refs/tags/$($metadata.tag)"
-gh attestation verify $archivePath `
-    --repo $metadata.repository `
-    --cert-identity $certIdentity `
-    --cert-oidc-issuer 'https://token.actions.githubusercontent.com'
-# Explicitly fail on a non-zero exit. This is the security-critical gate, and the native
-# command error-action auto-throw is not honored on older hosts (Windows PowerShell 5.1), where
-# a failed or abstained attestation would otherwise fall through and be reported as verified.
-if ($LASTEXITCODE -ne 0) {
-    throw "GitHub artifact attestation verification failed for '$archivePath' (exit code $LASTEXITCODE)."
-}
-
-Write-Host "Embedded Aspire skills bundle '$($metadata.assetName)' verified against GitHub artifact attestation."
 
 # Verify the embedded telemetry hook scripts when the bundle records them. The hooks block is only
 # present once update-aspire-skills-bundle.ps1 has synced hooks from a release that contains them, so
 # older bundles (which predate the feature) skip this check. When present, cross-check both that the
 # embedded file matches the recorded hash AND that the recorded hash matches the canonical source at
 # the pinned aspire-skills commit, so a hand-edit that also updates the metadata hash cannot pass.
+# Shared hook provenance remains in the skills metadata, independent of the extension archive.
+$skillsBundle = $verifiedBundles | Where-Object { $_.Definition.AssetPrefix -eq 'aspire-skills' }
+$metadata = $skillsBundle.Metadata
 if ($metadata.PSObject.Properties.Name -contains 'hooks') {
     $hooks = $metadata.hooks
 
     if ([string]::IsNullOrWhiteSpace($hooks.commitSha)) {
-        throw "Embedded Aspire skills metadata 'hooks' block must specify the aspire-skills commit SHA the hooks were pinned to."
+        throw "Embedded Aspire bundle metadata 'hooks' block must specify the aspire-skills commit SHA the hooks were pinned to."
     }
 
     if (-not ($hooks.PSObject.Properties.Name -contains 'files')) {
-        throw "Embedded Aspire skills metadata 'hooks' block must record a 'files' map of hook hashes."
+        throw "Embedded Aspire bundle metadata 'hooks' block must record a 'files' map of hook hashes."
     }
 
     foreach ($hookFileName in Get-AspireSkillsHookFileNames) {
         if (-not ($hooks.files.PSObject.Properties.Name -contains $hookFileName)) {
-            throw "Embedded Aspire skills metadata 'hooks' block is missing a recorded hash for '$hookFileName'."
+            throw "Embedded Aspire bundle metadata 'hooks' block is missing a recorded hash for '$hookFileName'."
         }
 
         $recordedHash = $hooks.files.$hookFileName

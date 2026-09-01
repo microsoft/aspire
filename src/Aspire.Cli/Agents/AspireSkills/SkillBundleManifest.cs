@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Describes a published Aspire skills bundle.
+/// Describes a published Aspire Skills bundle.
 /// </summary>
 internal sealed class SkillBundleManifest
 {
@@ -15,7 +15,7 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill?[] Skills { get; init; } = [];
+    public SkillBundleAsset?[] Assets { get; init; } = [];
 }
 
 /// <summary>
@@ -29,9 +29,9 @@ internal sealed class SkillBundleSupports
 }
 
 /// <summary>
-/// Describes a single skill in an Aspire skills bundle.
+/// Describes a single skill in an Aspire Skills bundle.
 /// </summary>
-internal sealed class SkillBundleSkill
+internal sealed class SkillBundleAsset
 {
     public string? Name { get; init; }
 
@@ -45,7 +45,7 @@ internal sealed class SkillBundleSkill
 }
 
 /// <summary>
-/// Describes a single file in an Aspire skills bundle.
+/// Describes a single file in an Aspire Skills bundle.
 /// </summary>
 internal sealed class SkillBundleFile
 {
@@ -64,7 +64,7 @@ internal sealed class SkillBundleFile
 }
 
 /// <summary>
-/// Describes the Aspire skills bundle archive embedded in the CLI.
+/// Describes the Aspire Skills bundle archive embedded in the CLI.
 /// </summary>
 internal sealed class EmbeddedAspireSkillsBundleMetadata
 {
@@ -81,7 +81,7 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
 }
 
 /// <summary>
-/// Source-generation context for Aspire skills bundle JSON.
+/// Source-generation context for Aspire Skills bundle JSON.
 /// </summary>
 [JsonSourceGenerationOptions(
     AllowTrailingCommas = true,
