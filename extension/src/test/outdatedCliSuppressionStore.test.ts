@@ -78,14 +78,37 @@ suite('outdatedCliSuppressionStore', () => {
 
         assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
     });
+
+    test('recovers an expired lock whose process ID has been reused', async () => {
+        createAbandonedLock(directory, process.pid, 0);
+
+        const store = new FileSystemOutdatedCliSuppressionStore(directory);
+        await store.add('/cli/aspire\u000013.5.0');
+
+        assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
+    });
+
+    test('recovers expired cleanup ownership whose process ID has been reused', async () => {
+        const exitedProcessId = await startAndWaitForProcess();
+        const { ownerPath, storageDirectory } = createAbandonedLock(directory, exitedProcessId);
+        fs.renameSync(
+            ownerPath,
+            path.join(storageDirectory, `.operation-lock-recovery-${process.pid}-0-0`));
+
+        const store = new FileSystemOutdatedCliSuppressionStore(directory);
+        await store.add('/cli/aspire\u000013.5.0');
+
+        assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
+    });
 });
 
 function createAbandonedLock(
     directory: string,
     processId: number,
+    createdAt = Date.now(),
 ): { ownerPath: string; storageDirectory: string } {
     const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
-    const ownerFileName = `.operation-lock-owner-${Date.now()}-${processId}-0`;
+    const ownerFileName = `.operation-lock-owner-${createdAt}-${processId}-0`;
     const ownerPath = path.join(storageDirectory, ownerFileName);
     fs.mkdirSync(storageDirectory, { recursive: true });
     fs.writeFileSync(ownerPath, ownerFileName);

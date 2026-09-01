@@ -9,11 +9,13 @@ const operationLockOwnerPrefix = '.operation-lock-owner-';
 const operationLockRecoveryPrefix = '.operation-lock-recovery-';
 const operationLockRetryIntervalMs = 10;
 const operationLockAcquireTimeoutMs = 5_000;
+const operationLockLeaseMs = 60_000;
 let suppressionSequence = 0;
 let operationLockSequence = 0;
 
 /** Holds suppression writes until the warning has been dispatched, but not while awaiting user input. */
 export interface OutdatedCliNotificationClaim {
+    isValid(): boolean;
     release(): Promise<void>;
 }
 
@@ -21,6 +23,10 @@ export interface OutdatedCliSuppressionStore {
     readAll(): Promise<string[]>;
     add(notificationKey: string): Promise<void>;
     tryClaimNotification(notificationKey: string): Promise<OutdatedCliNotificationClaim | undefined>;
+}
+
+function isLeaseCurrent(createdAt: number): boolean {
+    return Date.now() - createdAt < operationLockLeaseMs;
 }
 
 /**
@@ -43,7 +49,7 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
     }
 
     async add(notificationKey: string): Promise<void> {
-        const release = await this._acquireOperationLock();
+        const claim = await this._acquireOperationLock();
         try {
             const generation = `${Date.now()}-${process.pid}-${suppressionSequence++}`;
             const fileName = `${suppressionFilePrefix}${generation}.json`;
@@ -54,22 +60,22 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
             await rename(temporaryPath, finalPath);
         }
         finally {
-            await release();
+            await claim.release();
         }
     }
 
     async tryClaimNotification(notificationKey: string): Promise<OutdatedCliNotificationClaim | undefined> {
-        const release = await this._acquireOperationLock();
+        const claim = await this._acquireOperationLock();
         try {
             if ((await this._readAll()).includes(notificationKey)) {
-                await release();
+                await claim.release();
                 return undefined;
             }
 
-            return { release };
+            return claim;
         }
         catch (error) {
-            await release();
+            await claim.release();
             throw error;
         }
     }
@@ -95,12 +101,13 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
         return suppressions;
     }
 
-    private async _acquireOperationLock(): Promise<() => Promise<void>> {
+    private async _acquireOperationLock(): Promise<OutdatedCliNotificationClaim> {
         await mkdir(this._directoryPath, { recursive: true });
         const startedAt = Date.now();
 
         while (true) {
-            const generation = `${Date.now()}-${process.pid}-${operationLockSequence++}`;
+            const createdAt = Date.now();
+            const generation = `${createdAt}-${process.pid}-${operationLockSequence++}`;
             const ownerFileName = `${operationLockOwnerPrefix}${generation}`;
             const ownerPath = path.join(this._directoryPath, ownerFileName);
             await writeFile(ownerPath, ownerFileName, { encoding: 'utf8', flag: 'wx' });
@@ -125,12 +132,15 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
                 }
 
                 let released = false;
-                return async () => {
-                    if (released) {
-                        return;
-                    }
-                    await this._releaseOperationLock(ownerPath);
-                    released = true;
+                return {
+                    isValid: () => isLeaseCurrent(createdAt),
+                    release: async () => {
+                        if (released) {
+                            return;
+                        }
+                        await this._releaseOperationLock(ownerPath);
+                        released = true;
+                    },
                 };
             }
             catch (error) {
@@ -150,8 +160,9 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
             // The lock file contains its unique owner filename:
             //   .operation-lock-owner-1788280000000-12345-0
             ownerFileName = await readFile(this._operationLockPath, 'utf8');
-            const match = /^\.operation-lock-owner-\d+-(\d+)-\d+$/.exec(ownerFileName);
-            if (!match || isProcessRunning(Number(match[1]))) {
+            const match = /^\.operation-lock-owner-(\d+)-(\d+)-\d+$/.exec(ownerFileName);
+            if (!match ||
+                (isLeaseCurrent(Number(match[1])) && isProcessRunning(Number(match[2])))) {
                 return;
             }
         }
@@ -167,31 +178,11 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
             return;
         }
 
-        try {
-            const currentOwner = await readFile(this._operationLockPath, 'utf8').catch(error => {
-                if (hasErrorCode(error, 'ENOENT')) {
-                    return undefined;
-                }
-                throw error;
-            });
-            if (currentOwner === ownerFileName) {
-                await unlink(this._operationLockPath);
-            }
-        }
-        finally {
-            await unlink(recoveryPath).catch(error => {
-                if (!hasErrorCode(error, 'ENOENT')) {
-                    throw error;
-                }
-            });
-        }
+        await this._removeClaimedOperationLock(ownerFileName, recoveryPath);
     }
 
     private async _claimAbandonedOperationLock(ownerFileName: string): Promise<string | undefined> {
-        const generation = `${process.pid}-${Date.now()}-${operationLockSequence++}`;
-        const recoveryPath = path.join(
-            this._directoryPath,
-            `${operationLockRecoveryPrefix}${generation}`);
+        const recoveryPath = this._createRecoveryPath();
         try {
             // Renaming the owner's unique link transfers cleanup authority atomically. If this
             // cleaner exits, a later host can transfer the recovery link again.
@@ -223,8 +214,9 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
 
             // Recovery links are named:
             //   .operation-lock-recovery-<cleaner-pid>-<timestamp>-<process-local-sequence>
-            const match = /^\.operation-lock-recovery-(\d+)-\d+-\d+$/.exec(entry.name);
-            if (!match || isProcessRunning(Number(match[1]))) {
+            const match = /^\.operation-lock-recovery-(\d+)-(\d+)-\d+$/.exec(entry.name);
+            if (!match ||
+                (isProcessRunning(Number(match[1])) && isLeaseCurrent(Number(match[2])))) {
                 return undefined;
             }
 
@@ -243,23 +235,51 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
     }
 
     private async _releaseOperationLock(ownerPath: string): Promise<void> {
+        const ownerFileName = path.basename(ownerPath);
+        const recoveryPath = this._createRecoveryPath();
         try {
-            await unlink(this._operationLockPath);
+            // Releasing transfers the same cleanup authority used for crash recovery. An expired
+            // holder therefore cannot remove a replacement lock after another host recovers it.
+            await rename(ownerPath, recoveryPath);
         }
         catch (error) {
-            if (!hasErrorCode(error, 'ENOENT')) {
-                throw error;
+            if (hasErrorCode(error, 'ENOENT')) {
+                return;
             }
+            throw error;
         }
 
+        await this._removeClaimedOperationLock(ownerFileName, recoveryPath);
+    }
+
+    private async _removeClaimedOperationLock(
+        ownerFileName: string,
+        recoveryPath: string,
+    ): Promise<void> {
         try {
-            await unlink(ownerPath);
-        }
-        catch (error) {
-            if (!hasErrorCode(error, 'ENOENT')) {
+            const currentOwner = await readFile(this._operationLockPath, 'utf8').catch(error => {
+                if (hasErrorCode(error, 'ENOENT')) {
+                    return undefined;
+                }
                 throw error;
+            });
+            if (currentOwner === ownerFileName) {
+                await unlink(this._operationLockPath);
             }
         }
+        finally {
+            await unlink(recoveryPath).catch(error => {
+                if (!hasErrorCode(error, 'ENOENT')) {
+                    throw error;
+                }
+            });
+        }
+    }
+
+    private _createRecoveryPath(): string {
+        return path.join(
+            this._directoryPath,
+            `${operationLockRecoveryPrefix}${process.pid}-${Date.now()}-${operationLockSequence++}`);
     }
 }
 

@@ -130,6 +130,21 @@ export class OutdatedCliNotifier implements vscode.Disposable {
                 this._persistentlySuppressedCliVersions.add(notificationKey);
                 return;
             }
+            try {
+                if (!claim.isValid()) {
+                    this._notifiedCliVersions.delete(notificationKey);
+                    this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
+                    await this._releaseNotificationClaim(claim);
+                    return;
+                }
+            }
+            catch (error) {
+                this._notifiedCliVersions.delete(notificationKey);
+                extensionLogOutputChannel.warn(`Unable to validate Aspire CLI update notification claim: ${String(error)}`);
+                this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
+                await this._releaseNotificationClaim(claim);
+                return;
+            }
         }
         if (this._disposed) {
             await this._releaseNotificationClaim(claim);

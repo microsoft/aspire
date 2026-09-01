@@ -87,7 +87,10 @@ suite('outdatedCliNotifier', () => {
     }
 
     function createNotificationClaim(): OutdatedCliNotificationClaim {
-        return { release: async () => undefined };
+        return {
+            isValid: () => true,
+            release: async () => undefined,
+        };
     }
 
     async function waitFor(predicate: () => boolean, message: string): Promise<void> {
@@ -207,6 +210,7 @@ suite('outdatedCliNotifier', () => {
             readAll: async () => [],
             add: async () => undefined,
             tryClaimNotification: async () => ({
+                isValid: () => true,
                 release: async () => {
                     claimReleased = true;
                 },
@@ -226,6 +230,30 @@ suite('outdatedCliNotifier', () => {
 
         completeSelection(undefined);
         await notification;
+        notifier.dispose();
+    });
+
+    test('does not warn from an expired cross-window claim', async () => {
+        let released = false;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => [],
+            add: async () => undefined,
+            tryClaimNotification: async () => ({
+                isValid: () => false,
+                release: async () => {
+                    released = true;
+                },
+            }),
+        };
+        const { notifier, surface, versionProvider } = createNotifier(Date.now, suppressionStore);
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(released, true);
+        assert.deepStrictEqual(surface.warnings, []);
+        assert.strictEqual(versionProvider.versionCalls.length, 2);
+        assert.strictEqual(versionProvider.recommendationCalls.length, 2);
         notifier.dispose();
     });
 
