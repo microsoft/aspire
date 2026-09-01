@@ -102,9 +102,6 @@ export async function addIntegrationTestProject(
         {
             cliPath,
             target,
-            environmentVariables: {
-                ASPIRE_CLI_SHOW_ALL_TEMPLATES: 'true',
-            },
         });
 }
 
