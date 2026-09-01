@@ -1195,6 +1195,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             var personalizationResults = new List<InternalMicrosoftProbeResult>();
             var fallbackResults = new List<InternalMicrosoftProbeResult>();
+            var hasMalformedPersonalizationAccount = false;
+            var hasMalformedFallbackAccount = false;
             InternalMicrosoftProbeResult? failure = null;
             foreach (var account in store.RootElement.EnumerateArray())
             {
@@ -1204,6 +1206,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 if (result.Failure is not null)
                 {
                     failure ??= result;
+                    if (HasMicrosoftIdentityProvider(account))
+                    {
+                        if (TryGetBoolean(account, "IsPersonalizationAccount") == true)
+                        {
+                            hasMalformedPersonalizationAccount = true;
+                        }
+                        else
+                        {
+                            hasMalformedFallbackAccount = true;
+                        }
+                    }
                     continue;
                 }
                 if (!result.IsInternalMicrosoft)
@@ -1221,8 +1234,21 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 }
             }
 
-            var candidates = personalizationResults.Count > 0 ? personalizationResults : fallbackResults;
-            return SelectUnambiguousIdentity(candidates) ?? failure ?? InternalMicrosoftProbeResult.NotDetected;
+            if (personalizationResults.Count > 0)
+            {
+                return hasMalformedPersonalizationAccount
+                    ? Detected(alias: null)
+                    : SelectUnambiguousIdentity(personalizationResults);
+            }
+
+            if (fallbackResults.Count > 0)
+            {
+                return hasMalformedPersonalizationAccount || hasMalformedFallbackAccount
+                    ? Detected(alias: null)
+                    : SelectUnambiguousIdentity(fallbackResults);
+            }
+
+            return failure ?? InternalMicrosoftProbeResult.NotDetected;
         }
         catch (JsonException)
         {
@@ -1233,13 +1259,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private static InternalMicrosoftProbeResult? SelectUnambiguousIdentity(IReadOnlyList<InternalMicrosoftProbeResult> candidates)
+    private static bool HasMicrosoftIdentityProvider(JsonElement account)
     {
-        if (candidates.Count == 0)
-        {
-            return null;
-        }
+        return account.ValueKind == JsonValueKind.Object &&
+            account.TryGetProperty("Properties", out var properties) &&
+            properties.ValueKind == JsonValueKind.Object &&
+            TryGetString(properties, "IdentityProvider")?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true;
+    }
 
+    private static InternalMicrosoftProbeResult SelectUnambiguousIdentity(IReadOnlyList<InternalMicrosoftProbeResult> candidates)
+    {
         var first = candidates[0];
         return candidates.Skip(1).All(candidate =>
             string.Equals(candidate.Alias, first.Alias, StringComparison.Ordinal) &&

@@ -1066,6 +1066,39 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DetectVisualStudioMicrosoftTenantForTesting_OmitsIdentityForMalformedMicrosoftPeer(bool personalizationAccounts)
+    {
+        var store = CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+            new VisualStudioAccountRecord("valid.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts),
+            peerIsPersonalizationAccount: personalizationAccounts);
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_IgnoresMalformedFallbackWhenPersonalizationIdentityIsValid()
+    {
+        var store = CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+            new VisualStudioAccountRecord("valid.alias@microsoft.com", IsPersonalizationAccount: true),
+            peerIsPersonalizationAccount: false);
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("valid.alias", result.Alias);
+    }
+
+    [Theory]
     [InlineData("stale")]
     [InlineData("identity-provider")]
     [InlineData("home-tenant")]
@@ -1324,6 +1357,27 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                 })
             }
         }));
+    }
+
+    private static string CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+        VisualStudioAccountRecord validAccount,
+        bool peerIsPersonalizationAccount)
+    {
+        using var validStore = JsonDocument.Parse(CreateVisualStudioAccountStore(validAccount));
+        var validRecord = validStore.RootElement[0].Clone();
+        return JsonSerializer.Serialize(new object[]
+        {
+            validRecord,
+            new
+            {
+                Stale = false,
+                IsPersonalizationAccount = peerIsPersonalizationAccount,
+                Properties = new
+                {
+                    IdentityProvider = MicrosoftTenantIdForTests
+                }
+            }
+        });
     }
 
     private sealed record VisualStudioAccountRecord(
