@@ -5,10 +5,10 @@ using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGatewayConnection(string bicepIdentifier, string? resourceVersion = null)
-    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/connections", resourceVersion ?? SandboxesResourceVersions.ConnectorGateway)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/connections", resourceVersion ?? ConnectorNamespaceResourceVersions.ConnectorGateway)
 {
     public BicepValue<ResourceIdentifier> Id
     {
@@ -65,7 +65,7 @@ internal sealed class ConnectorGatewayConnection(string bicepIdentifier, string?
         base.DefineProvisionableProperties();
         _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isOutput: true);
         _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
-        _displayName = DefineProperty<string>(nameof(DisplayName), ["properties", "displayName"]);
+        _displayName = DefineProperty<string>(nameof(DisplayName), ["properties", "displayName"], isRequired: true);
         _connectorName = DefineProperty<string>(nameof(ConnectorName), ["properties", "connectorName"], isRequired: true);
         _connectionRuntimeUrl = DefineProperty<string>(nameof(ConnectionRuntimeUrl), ["properties", "connectionRuntimeUrl"], isOutput: true);
         _parent = DefineResource<ConnectorGateway>(nameof(Parent), ["parent"], isRequired: true);

@@ -4,7 +4,7 @@
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGatewayMcpConnector : ProvisionableConstruct
 {
@@ -47,7 +47,7 @@ internal sealed class ConnectorGatewayMcpConnector : ProvisionableConstruct
     {
         _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
         _connectionName = DefineProperty<string>(nameof(ConnectionName), ["connectionName"], isRequired: true);
-        _displayName = DefineProperty<string>(nameof(DisplayName), ["displayName"]);
+        _displayName = DefineProperty<string>(nameof(DisplayName), ["displayName"], isRequired: true);
         _description = DefineProperty<string>(nameof(Description), ["description"]);
         _operations = DefineListProperty<ConnectorGatewayMcpOperation>(nameof(Operations), ["operations"], isRequired: true);
     }

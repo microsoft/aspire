@@ -28,11 +28,9 @@ const outlookMcp = await connectorNamespace.addMcpServerConfig("outlook-mcp", {
     description: "Allow-listed Outlook tools."
 });
 await outlookMcp.withConnector("office365", outlook, {
-    displayName: "Office 365 Outlook",
     operations: [
         {
-            name: "GetEmailsV3",
-            displayName: "Get emails"
+            name: "GetEmailsV3"
         }
     ]
 });
@@ -42,26 +40,27 @@ await sandboxes.withUserAssignedIdentity(sandboxIdentity);
 const pullIdentity = await builder.addAzureUserAssignedIdentity("sandbox-pull-identity");
 await sandboxes.withAcrPullIdentity(pullIdentity);
 
-const publishedApi = await builder
+const api = await builder
     .addContainer("api", "mcr.microsoft.com/dotnet/runtime-deps:10.0")
     .withHttpEndpoint({ name: "http", targetPort: 8080 })
-    .withExternalHttpEndpoints()
-    .publishAsAzureSandbox(sandboxes, {
-        tier: AzureSandboxTier.Large,
-        autoSuspendEnabled: true,
-        autoSuspendInterval: 900_000,
-        autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
-        autoDeleteEnabled: true,
-        autoDeleteInterval: 3_600_000,
-        autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
-        publicEndpointReadyTimeout: 120_000,
-        endpoints: [
-            {
-                name: "http",
-                anonymous: false
-            }
-        ]
-    });
+    .withExternalHttpEndpoints();
+
+const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
+    tier: AzureSandboxTier.Large,
+    autoSuspendEnabled: true,
+    autoSuspendInterval: 900_000,
+    autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
+    autoDeleteEnabled: true,
+    autoDeleteInterval: 3_600_000,
+    autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
+    publicEndpointReadyTimeout: 120_000,
+    endpoints: [
+        {
+            name: "http",
+            anonymous: false
+        }
+    ]
+});
 await publishedApi.withRemoteImageTag("validated-compute-handle");
 
 await builder.build().run();

@@ -4,7 +4,7 @@
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGatewayAccessPolicyPrincipalIdentity : ProvisionableConstruct
 {

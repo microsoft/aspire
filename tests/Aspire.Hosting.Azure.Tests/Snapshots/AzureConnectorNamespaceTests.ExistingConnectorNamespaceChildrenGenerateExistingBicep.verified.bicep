@@ -5,12 +5,12 @@ resource gateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' existing =
   name: 'existing-gateway'
 }
 
-resource office365 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' existing = {
+resource connectorConnection_gateway_office365_ff65bf7e6a298940 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' existing = {
   name: 'existing-connection'
   parent: gateway
 }
 
-resource sharepoint 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
+resource connectorConnection_gateway_sharepoint_e2b458120659a04f 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
   name: 'sharepoint'
   properties: {
     displayName: 'sharepoint'
@@ -19,9 +19,9 @@ resource sharepoint 'Microsoft.Web/connectorGateways/connections@2026-05-01-prev
   parent: gateway
 }
 
-resource sharepoint_policy_reader_1cd0856cb9868404 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource connectorAccessPolicy_gateway_sharepoint_reader_1c0b87931d6065d9 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'reader'
-  location: gateway.location
+  location: location
   properties: {
     principal: {
       type: 'ActiveDirectory'
@@ -31,10 +31,10 @@ resource sharepoint_policy_reader_1cd0856cb9868404 'Microsoft.Web/connectorGatew
       }
     }
   }
-  parent: sharepoint
+  parent: connectorConnection_gateway_sharepoint_e2b458120659a04f
 }
 
-resource mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' existing = {
+resource connectorMcpServer_gateway_mcp_7fe2af054c40f74d 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' existing = {
   name: 'existing-mcp'
   parent: gateway
 }

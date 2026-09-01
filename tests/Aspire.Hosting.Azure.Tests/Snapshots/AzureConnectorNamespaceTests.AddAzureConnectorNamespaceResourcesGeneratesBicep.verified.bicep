@@ -5,16 +5,17 @@ param worker_identity_outputs_principalid string
 
 resource gateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' = {
   name: take('gateway${uniqueString(resourceGroup().id)}', 24)
-  location: resourceGroup().location
+  location: location
   identity: {
     type: 'SystemAssigned'
   }
+  properties: { }
   tags: {
     'aspire-resource-name': 'gateway'
   }
 }
 
-resource office365 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
+resource connectorConnection_gateway_office365_ff65bf7e6a298940 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
   name: 'office365-outlook'
   properties: {
     displayName: 'Office 365 Outlook'
@@ -23,9 +24,9 @@ resource office365 'Microsoft.Web/connectorGateways/connections@2026-05-01-previ
   parent: gateway
 }
 
-resource office365_policy_worker_access_8458ee06dd4d700d 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource connectorAccessPolicy_gateway_office365_worker_access_4c96cd5e6ccf4c9e 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-acl'
-  location: resourceGroup().location
+  location: gateway.location
   properties: {
     principal: {
       type: 'ActiveDirectory'
@@ -35,12 +36,12 @@ resource office365_policy_worker_access_8458ee06dd4d700d 'Microsoft.Web/connecto
       }
     }
   }
-  parent: office365
+  parent: connectorConnection_gateway_office365_ff65bf7e6a298940
 }
 
-resource office365_policy_worker_identity_access_69f196500731b6a6 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource connectorAccessPolicy_gateway_office365_worker_identity__e8ca2c1b62ef8e81 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-identity-acl'
-  location: resourceGroup().location
+  location: gateway.location
   properties: {
     principal: {
       type: 'ActiveDirectory'
@@ -50,10 +51,10 @@ resource office365_policy_worker_identity_access_69f196500731b6a6 'Microsoft.Web
       }
     }
   }
-  parent: office365
+  parent: connectorConnection_gateway_office365_ff65bf7e6a298940
 }
 
-resource outlook_mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' = {
+resource connectorMcpServer_gateway_outlook_mcp_7e6242840bbe075d 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' = {
   name: 'outlook-tools'
   kind: 'ManagedMcpServer'
   properties: {
@@ -63,12 +64,12 @@ resource outlook_mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-0
       {
         name: 'office365'
         connectionName: 'office365-outlook'
-        displayName: 'Office 365 Outlook'
+        displayName: 'office365'
         description: 'Read-only Outlook operations.'
         operations: [
           {
             name: 'GetEmailsV3'
-            displayName: 'Get emails'
+            displayName: 'GetEmailsV3'
             description: 'Reads recent emails.'
           }
         ]
@@ -77,7 +78,7 @@ resource outlook_mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-0
   }
   parent: gateway
   dependsOn: [
-    office365
+    connectorConnection_gateway_office365_ff65bf7e6a298940
   ]
 }
 

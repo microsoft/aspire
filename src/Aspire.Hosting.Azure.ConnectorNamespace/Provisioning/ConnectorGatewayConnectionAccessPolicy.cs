@@ -5,10 +5,10 @@ using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGatewayConnectionAccessPolicy(string bicepIdentifier, string? resourceVersion = null)
-    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/connections/accessPolicies", resourceVersion ?? SandboxesResourceVersions.ConnectorGateway)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/connections/accessPolicies", resourceVersion ?? ConnectorNamespaceResourceVersions.ConnectorGateway)
 {
     public BicepValue<ResourceIdentifier> Id
     {

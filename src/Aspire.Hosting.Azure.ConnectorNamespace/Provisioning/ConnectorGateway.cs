@@ -6,10 +6,10 @@ using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Resources;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGateway(string bicepIdentifier, string? resourceVersion = null)
-    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways", resourceVersion ?? SandboxesResourceVersions.ConnectorGateway)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways", resourceVersion ?? ConnectorNamespaceResourceVersions.ConnectorGateway)
 {
     public BicepValue<ResourceIdentifier> Id
     {
@@ -37,6 +37,13 @@ internal sealed class ConnectorGateway(string bicepIdentifier, string? resourceV
     }
     private ManagedServiceIdentity? _identity;
 
+    public BicepDictionary<string> Properties
+    {
+        get { Initialize(); return _properties!; }
+        set { Initialize(); _properties!.Assign(value); }
+    }
+    private BicepDictionary<string>? _properties;
+
     public BicepDictionary<string> Tags
     {
         get { Initialize(); return _tags!; }
@@ -61,6 +68,7 @@ internal sealed class ConnectorGateway(string bicepIdentifier, string? resourceV
         _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
         _location = DefineProperty<AzureLocation>(nameof(Location), ["location"], isRequired: true);
         _identity = DefineModelProperty<ManagedServiceIdentity>(nameof(Identity), ["identity"]);
+        _properties = DefineDictionaryProperty<string>(nameof(Properties), ["properties"]);
         _tags = DefineDictionaryProperty<string>(nameof(Tags), ["tags"]);
     }
 }

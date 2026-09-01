@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -26,6 +27,7 @@ public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, I
         ConfigName = configName;
         Description = description;
         Parent = parent ?? throw new ArgumentNullException(nameof(parent));
+        BicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateMcpServerConfig(parent.Name, name);
     }
 
     /// <summary>
@@ -40,6 +42,8 @@ public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, I
 
     /// <inheritdoc/>
     public AzureConnectorNamespaceResource Parent { get; }
+
+    internal string BicepIdentifier { get; }
 
     internal List<AzureConnectorNamespaceMcpConnectorDefinition> Connectors { get; } = [];
 

@@ -5,10 +5,10 @@ using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
-namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
+namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal sealed class ConnectorGatewayMcpServerConfig(string bicepIdentifier, string? resourceVersion = null)
-    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/mcpserverConfigs", resourceVersion ?? SandboxesResourceVersions.ConnectorGateway)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.Web/connectorGateways/mcpserverConfigs", resourceVersion ?? ConnectorNamespaceResourceVersions.ConnectorGateway)
 {
     public BicepValue<ResourceIdentifier> Id
     {
@@ -83,7 +83,7 @@ internal sealed class ConnectorGatewayMcpServerConfig(string bicepIdentifier, st
         _description = DefineProperty<string>(nameof(Description), ["properties", "description"]);
         _state = DefineProperty<string>(nameof(State), ["properties", "state"]);
         _mcpEndpointUrl = DefineProperty<string>(nameof(McpEndpointUrl), ["properties", "mcpEndpointUrl"], isOutput: true);
-        _connectors = DefineListProperty<ConnectorGatewayMcpConnector>(nameof(Connectors), ["properties", "connectors"]);
+        _connectors = DefineListProperty<ConnectorGatewayMcpConnector>(nameof(Connectors), ["properties", "connectors"], isRequired: true);
         _parent = DefineResource<ConnectorGateway>(nameof(Parent), ["parent"], isRequired: true);
     }
 }
