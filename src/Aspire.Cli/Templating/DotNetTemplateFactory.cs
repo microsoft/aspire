@@ -220,7 +220,12 @@ internal class DotNetTemplateFactory(
             "aspire-test",
             TemplatingStrings.IntegrationTestsTemplate_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-            command => AddOptionIfMissing(command, _appHostOption),
+            command =>
+            {
+                AddOptionIfMissing(command, _appHostOption);
+                AddOptionIfMissing(command, _testFrameworkOption);
+                AddOptionIfMissing(command, _xunitVersionOption);
+            },
             async (template, inputs, parseResult, ct) =>
             {
                 var appHostProject = parseResult.GetValue(_appHostOption);
@@ -232,7 +237,8 @@ internal class DotNetTemplateFactory(
 
                 var testTemplate = await prompter.PromptForTemplateAsync(
                     [msTestTemplate, xunitTemplate, nunitTemplate],
-                    ct
+                    ct,
+                    PromptBinding.Create(parseResult, _testFrameworkOption)
                 );
 
                 var testCallbackTemplate = (CallbackTemplate)testTemplate;

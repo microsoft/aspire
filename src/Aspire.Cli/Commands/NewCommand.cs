@@ -651,7 +651,7 @@ internal sealed class NewCommand : BaseCommand
 
 internal interface INewCommandPrompter
 {
-    Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
+    Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
     Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default);
 }
@@ -797,12 +797,13 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             cancellationToken: cancellationToken);
     }
 
-    public virtual async Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
+    public virtual async Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null)
     {
         return await interactionService.PromptForSelectionAsync(
             NewCommandStrings.SelectAProjectTemplate,
             validTemplates,
             t => t.Description.EscapeMarkup(),
+            binding: binding,
             cancellationToken: cancellationToken
         );
     }

@@ -143,19 +143,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 OpenEditorCallback = path => openedEditorPath = path
             };
-            options.NewCommandPrompterFactory = serviceProvider =>
-            {
-                var prompter = new TestNewCommandPrompter(serviceProvider.GetRequiredService<IInteractionService>())
-                {
-                    PromptForTemplateCallback = templates => templates.Single(template => template.Name == "aspire-mstest")
-                };
-                return prompter;
-            };
         });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new aspire-test --name AppHost.Tests --output \"{outputPath}\" --apphost \"{appHostFile.FullName}\" --suppress-agent-init");
+        var result = command.Parse($"new aspire-test --test-framework MSTest --name AppHost.Tests --output \"{outputPath}\" --apphost \"{appHostFile.FullName}\" --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -249,6 +241,45 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var appHostOption = integrationTestTemplate.Options.Single(option => option.Name == "--apphost");
 
         Assert.Equal("The path to the Aspire AppHost project file", appHostOption.Description);
+    }
+
+    [Theory]
+    [InlineData("MSTest", "aspire-mstest", null)]
+    [InlineData("NUnit", "aspire-nunit", null)]
+    [InlineData("xUnit", "aspire-xunit", "v2")]
+    public async Task NewCommand_IntegrationTestTemplateCanSelectFrameworkNonInteractively(
+        string testFramework,
+        string expectedTemplate,
+        string? xunitVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        string? selectedTemplate = null;
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.NewProjectAsyncCallback = (templateName, _, generatedPath, _, _) =>
+        {
+            selectedTemplate = templateName;
+            Directory.CreateDirectory(generatedPath);
+            return 0;
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var xunitVersionArgument = xunitVersion is null ? string.Empty : $" --xunit-version {xunitVersion}";
+        var result = command.Parse(
+            $"new aspire-test --test-framework {testFramework}{xunitVersionArgument} --name AppHost.Tests " +
+            $"--output \"{outputPath}\" --suppress-agent-init --non-interactive");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(expectedTemplate, selectedTemplate);
+        Assert.Equal(xunitVersion is null ? [] : ["--xunit-version", xunitVersion], runner.LastNewProjectExtraArgs);
     }
 
     [Fact]
