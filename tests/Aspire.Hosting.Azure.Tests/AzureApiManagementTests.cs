@@ -895,6 +895,37 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ProductApiAssociationsHaveUnambiguousBicepIdentifiers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var catalogApi = apim.AddApi("catalog-api", backend, "catalog");
+        var productCatalogApi = apim.AddApi("product-catalog-api", backend, "product-catalog");
+        apim.AddProduct("catalog-product", "Catalog product").WithApi(catalogApi);
+        apim.AddProduct("catalog", "Catalog").WithApi(productCatalogApi);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        var associationDeclarations = bicep
+            .Split('\n')
+            .Where(line => line.StartsWith("resource _apim_productApi_", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(2, associationDeclarations.Length);
+        Assert.Equal(2, associationDeclarations.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void ApiManagementServiceFeaturesValidateInvalidConfigurations()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

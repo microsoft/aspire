@@ -3087,7 +3087,7 @@ public static class AzureApiManagementExtensions
             return value;
         }
 
-        var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..8];
+        var hash = GetStableHash(value);
         return $"{value[..(maximumLength - hash.Length - 1)]}-{hash}";
     }
 
@@ -3095,9 +3095,22 @@ public static class AzureApiManagementExtensions
     {
         // Aspire resource names must start with a letter, so this prefix reserves a namespace for
         // generated APIM symbols that cannot collide with symbols derived from user resource names.
-        return Infrastructure.NormalizeBicepIdentifier(
+        var identifier = Infrastructure.NormalizeBicepIdentifier(
             string.Join('_', resourceNames.Prepend(kind).Prepend("apim").Prepend(string.Empty)));
+
+        if (resourceNames.Length > 1)
+        {
+            // Joining normalized names is ambiguous when a separator can also occur within a name.
+            // A null character cannot occur in an Aspire resource name, so it preserves component
+            // boundaries when computing the stable identity suffix.
+            return $"{identifier}_{GetStableHash(string.Join('\0', resourceNames))}";
+        }
+
+        return identifier;
     }
+
+    private static string GetStableHash(string value) =>
+        Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..8];
 
     private static AzureApiManagementOpenApiFormat InferOpenApiFormat(string path)
     {

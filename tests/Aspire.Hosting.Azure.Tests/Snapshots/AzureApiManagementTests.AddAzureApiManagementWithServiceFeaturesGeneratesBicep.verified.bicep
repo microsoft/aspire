@@ -380,7 +380,7 @@ resource catalog_product 'Microsoft.ApiManagement/service/products@2024-05-01' =
   parent: apim
 }
 
-resource _apim_productApi_catalog_product_catalog_api 'Microsoft.ApiManagement/service/products/apis@2024-05-01' = {
+resource _apim_productApi_catalog_product_catalog_api_51517753 'Microsoft.ApiManagement/service/products/apis@2024-05-01' = {
   name: 'catalog-api'
   parent: catalog_product
   dependsOn: [
