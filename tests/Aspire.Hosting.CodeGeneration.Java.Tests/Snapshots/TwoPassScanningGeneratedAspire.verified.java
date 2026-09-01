@@ -393,6 +393,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -400,8 +401,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashSet;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -413,6 +418,9 @@ import java.util.function.Function;
 @SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireClient {
     private static final boolean DEBUG = System.getenv("ASPIRE_DEBUG") != null;
+    private static final int MAX_PENDING_REMOTE_CANCELLATIONS = 1024;
+    private static final ThreadLocal<AspireClient> callbackClient = new ThreadLocal<>();
+    private static final ThreadLocal<List<CancellationToken>> callbackRemoteTokens = new ThreadLocal<>();
     
     private final String socketPath;
     private OutputStream outputStream;
@@ -425,7 +433,18 @@ public class AspireClient {
     private final AtomicInteger requestId = new AtomicInteger(0);
     private final Map<String, Function<Object[], Object>> callbacks = new ConcurrentHashMap<>();
     private final Map<String, Consumer<Void>> cancellations = new ConcurrentHashMap<>();
+    private final Map<Integer, CompletableFuture<Object>> pendingRequests = new ConcurrentHashMap<>();
+    private final Map<String, CancellationRegistration> cancellationRegistrations = new ConcurrentHashMap<>();
+    private final Map<Object, String> activeCallbackRequests = new ConcurrentHashMap<>();
+    private final Map<String, CancellationToken> remoteCancellationTokens = new ConcurrentHashMap<>();
+    private final Map<String, CancellationToken> pendingRemoteCancellations = new LinkedHashMap<>();
+    private final Object readerLock = new Object();
+    private final Object connectionStateLock = new Object();
+    private volatile boolean readerStarted;
+    private volatile boolean disconnected;
+    private volatile Throwable disconnectCause;
     private Runnable disconnectHandler;
+    private int activeServerCallbacks;
 
     // Handle wrapper factory registry
     private static final Map<String, BiFunction<Handle, AspireClient, Object>> handleWrappers = new ConcurrentHashMap<>();
@@ -438,6 +457,76 @@ public class AspireClient {
         this.socketPath = socketPath;
     }
 
+    static AspireClient currentCallbackClient() {
+        return callbackClient.get();
+    }
+
+    CancellationToken getOrCreateRemoteCancellationToken(String cancellationId) {
+        CancellationToken token;
+        synchronized (connectionStateLock) {
+            if (disconnected) {
+                token = new CancellationToken(cancellationId, this);
+                token.retainRemoteReference();
+                token.markCancelled();
+            } else {
+                CancellationToken pendingCancellation = pendingRemoteCancellations.remove(cancellationId);
+                token = remoteCancellationTokens.compute(cancellationId, (id, existing) -> {
+                    CancellationToken retained = existing != null
+                        ? existing
+                        : pendingCancellation != null ? pendingCancellation : new CancellationToken(id, this);
+                    retained.retainRemoteReference();
+                    return retained;
+                });
+            }
+        }
+        callbackRemoteTokens.get().add(token);
+        return token;
+    }
+
+    void removeRemoteCancellationToken(String cancellationId, CancellationToken token) {
+        remoteCancellationTokens.remove(cancellationId, token);
+    }
+
+    void releaseRemoteCancellationToken(String cancellationId, CancellationToken token) {
+        remoteCancellationTokens.computeIfPresent(cancellationId, (id, existing) -> {
+            if (existing != token) {
+                return existing;
+            }
+            return token.decrementRemoteReference() == 0 ? null : token;
+        });
+    }
+
+    private boolean cancelRemoteCancellationToken(String cancellationId) {
+        CancellationToken token;
+        boolean notifyListeners;
+        synchronized (connectionStateLock) {
+            if (disconnected) {
+                return false;
+            }
+            token = remoteCancellationTokens.get(cancellationId);
+            if (token == null && activeServerCallbacks == 0) {
+                return false;
+            }
+            if (token == null) {
+                token = pendingRemoteCancellations.computeIfAbsent(
+                    cancellationId,
+                    id -> new CancellationToken(id, this));
+            } else if (activeServerCallbacks > 0) {
+                pendingRemoteCancellations.put(cancellationId, token);
+            }
+            while (pendingRemoteCancellations.size() > MAX_PENDING_REMOTE_CANCELLATIONS) {
+                String oldestId = pendingRemoteCancellations.keySet().iterator().next();
+                pendingRemoteCancellations.remove(oldestId);
+            }
+            notifyListeners = token.markCancelled();
+        }
+
+        if (notifyListeners) {
+            token.notifyCancellationListeners();
+        }
+        return true;
+    }
+
     public void connect() throws IOException {
         debug("Connecting to AppHost server at " + socketPath);
         
@@ -446,6 +535,8 @@ public class AspireClient {
         } else {
             connectUnixSocket();
         }
+
+        ensureReaderLoopStarted();
         
         debug("Connected successfully");
     }
@@ -485,37 +576,108 @@ public class AspireClient {
     }
 
     public void onDisconnect(Runnable handler) {
-        this.disconnectHandler = handler;
+        boolean invokeImmediately;
+        synchronized (connectionStateLock) {
+            invokeImmediately = disconnected;
+            if (!invokeImmediately) {
+                disconnectHandler = handler;
+            }
+        }
+
+        if (invokeImmediately) {
+            handler.run();
+        }
     }
 
     public Object invokeCapability(String capabilityId, Map<String, Object> args) {
-        int id = requestId.incrementAndGet();
-        
-        Map<String, Object> params = new HashMap<>();
-        params.put("capabilityId", capabilityId);
-        params.put("args", marshalTransportValue(args));
+        List<String> cancellationIds = new ArrayList<>();
+
+        try {
+            Map<String, Object> params = new HashMap<>();
+            params.put("capabilityId", capabilityId);
+            params.put("args", marshalTransportValue(args, cancellationIds));
+            var uniqueCancellationIds = new HashSet<>(cancellationIds);
+
+            return sendRequest("invokeCapability", params, () -> {
+                for (String cancellationId : uniqueCancellationIds) {
+                    CancellationRegistration registration = cancellationRegistrations.get(cancellationId);
+                    if (registration != null) {
+                        registration.enable();
+                    }
+                }
+            });
+        } finally {
+            for (String cancellationId : new HashSet<>(cancellationIds)) {
+                unregisterCancellation(cancellationId);
+            }
+        }
+    }
+
+    private Object sendRequest(String method, Object params) {
+        return sendRequest(method, params, null);
+    }
+
+    private Object sendRequest(String method, Object params, Runnable requestSent) {
+        CompletableFuture<Object> pendingResponse = new CompletableFuture<>();
+        int id;
+        synchronized (connectionStateLock) {
+            if (disconnected) {
+                throw disconnectedException();
+            }
+
+            id = requestId.incrementAndGet();
+            pendingRequests.put(id, pendingResponse);
+        }
 
         Map<String, Object> request = new HashMap<>();
         request.put("jsonrpc", "2.0");
         request.put("id", id);
-        request.put("method", "invokeCapability");
+        request.put("method", method);
         request.put("params", params);
 
-        debug("Sending request invokeCapability with id=" + id);
-        
+        debug("Sending request " + method + " with id=" + id);
+
         try {
+            ensureReaderLoopStarted();
             sendMessage(request);
-            return readResponse(id);
+            if (requestSent != null) {
+                requestSent.run();
+            }
         } catch (IOException e) {
+            pendingRequests.remove(id);
             handleDisconnect();
-            throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to send request " + method + ": " + e.getMessage(), e);
+        }
+
+        try {
+            Object result = pendingResponse.join();
+            return unwrapResult(result);
+        } catch (CompletionException completionException) {
+            Throwable cause = completionException.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new RuntimeException("Request " + method + " failed", cause);
         }
     }
 
     @SuppressWarnings("unchecked")
     private Object marshalTransportValue(Object value) {
+        return marshalTransportValue(value, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object marshalTransportValue(Object value, List<String> cancellationIds) {
         if (value == null) {
             return null;
+        }
+
+        if (value instanceof CancellationToken token) {
+            String cancellationId = registerCancellation(token, false);
+            if (cancellationId != null && cancellationIds != null && cancellationRegistrations.containsKey(cancellationId)) {
+                cancellationIds.add(cancellationId);
+            }
+            return cancellationId;
         }
 
         if (value instanceof Function<?, ?> function) {
@@ -528,7 +690,7 @@ public class AspireClient {
             Map<String, Object> map = (Map<String, Object>) serialized;
             Map<String, Object> result = new HashMap<>();
             for (Map.Entry<String, Object> entry : map.entrySet()) {
-                result.put(entry.getKey(), marshalTransportValue(entry.getValue()));
+                result.put(entry.getKey(), marshalTransportValue(entry.getValue(), cancellationIds));
             }
             return result;
         }
@@ -536,14 +698,14 @@ public class AspireClient {
             List<Object> list = (List<Object>) serialized;
             List<Object> result = new ArrayList<>();
             for (Object item : list) {
-                result.add(marshalTransportValue(item));
+                result.add(marshalTransportValue(item, cancellationIds));
             }
             return result;
         }
         if (serialized instanceof Object[] array) {
             List<Object> result = new ArrayList<>();
             for (Object item : array) {
-                result.add(marshalTransportValue(item));
+                result.add(marshalTransportValue(item, cancellationIds));
             }
             return result;
         }
@@ -552,27 +714,9 @@ public class AspireClient {
     }
 
     public void authenticate(String token) {
-        int id = requestId.incrementAndGet();
-
-        List<Object> params = List.of(token);
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("jsonrpc", "2.0");
-        request.put("id", id);
-        request.put("method", "authenticate");
-        request.put("params", params);
-
-        debug("Sending request authenticate with id=" + id);
-
-        try {
-            sendMessage(request);
-            Object result = readResponse(id);
-            if (!(result instanceof Boolean authenticated) || !authenticated) {
-                throw new RuntimeException("Failed to authenticate to the AppHost server.");
-            }
-        } catch (IOException e) {
-            handleDisconnect();
-            throw new RuntimeException("Failed to authenticate: " + e.getMessage(), e);
+        Object result = sendRequest("authenticate", List.of(token));
+        if (!(result instanceof Boolean authenticated) || !authenticated) {
+            throw new RuntimeException("Failed to authenticate to the AppHost server.");
         }
     }
 
@@ -590,37 +734,123 @@ public class AspireClient {
         }
     }
 
-    private Object readResponse(int expectedId) throws IOException {
-        while (true) {
-            Map<String, Object> message = readMessage();
-            
-            if (message.containsKey("method")) {
-                // This is a request from server (callback invocation)
-                handleServerRequest(message);
-                continue;
+    private void ensureReaderLoopStarted() {
+        synchronized (readerLock) {
+            if (readerStarted) {
+                return;
             }
-            
-            // This is a response
-            Object idObj = message.get("id");
-            int responseId = idObj instanceof Number ? ((Number) idObj).intValue() : Integer.parseInt(idObj.toString());
-            
-            if (responseId != expectedId) {
-                debug("Received response for different id: " + responseId + " (expected " + expectedId + ")");
-                continue;
+
+            if (inputStream == null) {
+                throw new IllegalStateException("Input stream is not initialized");
             }
-            
-            if (message.containsKey("error")) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> error = (Map<String, Object>) message.get("error");
-                String code = String.valueOf(error.get("code"));
-                String errorMessage = String.valueOf(error.get("message"));
-                Object data = error.get("data");
-                throw new CapabilityError(code, errorMessage, data);
-            }
-            
-            Object result = message.get("result");
-            return unwrapResult(result);
+
+            readerStarted = true;
+
+            Thread readerThread = new Thread(this::readLoop, "aspire-client-reader");
+            readerThread.setDaemon(true);
+            readerThread.start();
         }
+    }
+
+    private void readLoop() {
+        try {
+            while (true) {
+                Map<String, Object> message = readMessage();
+                routeMessage(message);
+            }
+        } catch (Exception e) {
+            disconnectCause = e;
+            handleDisconnect();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void routeMessage(Map<String, Object> message) throws IOException {
+        if (message.containsKey("method")) {
+            if ("$/cancelRequest".equals(message.get("method"))) {
+                routeCancellationNotification(message.get("params"));
+                return;
+            }
+
+            boolean isCallback = "invokeCallback".equals(message.get("method"));
+            Object callbackRequestId = isCallback ? message.get("id") : null;
+            String callbackCancellationId = isCallback ? getCallbackCancellationId(message.get("params")) : null;
+            if (isCallback) {
+                synchronized (connectionStateLock) {
+                    activeServerCallbacks++;
+                }
+                if (callbackRequestId != null && callbackCancellationId != null) {
+                    activeCallbackRequests.put(callbackRequestId, callbackCancellationId);
+                }
+            }
+            try {
+                Thread.startVirtualThread(() -> {
+                    try {
+                        handleServerRequest(message);
+                    } catch (IOException e) {
+                        disconnectCause = e;
+                        handleDisconnect();
+                    } finally {
+                        if (isCallback) {
+                            completeServerCallback(callbackRequestId, callbackCancellationId);
+                        }
+                    }
+                });
+            } catch (RuntimeException e) {
+                if (isCallback) {
+                    completeServerCallback(callbackRequestId, callbackCancellationId);
+                }
+                throw e;
+            }
+            return;
+        }
+
+        Integer responseId = toNumericId(message.get("id"));
+        if (responseId == null) {
+            throw new IOException("Invalid JSON-RPC response: numeric id is required.");
+        }
+
+        CompletableFuture<Object> pendingResponse = pendingRequests.get(responseId);
+        if (pendingResponse == null) {
+            return;
+        }
+
+        if (message.containsKey("error")) {
+            Map<String, Object> error = (Map<String, Object>) message.get("error");
+            String code = String.valueOf(error.get("code"));
+            String errorMessage = String.valueOf(error.get("message"));
+            Object data = error.get("data");
+            pendingResponse.completeExceptionally(new CapabilityError(code, errorMessage, data));
+            pendingRequests.remove(responseId, pendingResponse);
+            return;
+        }
+
+        pendingResponse.complete(message.get("result"));
+        pendingRequests.remove(responseId, pendingResponse);
+    }
+
+    private void completeServerCallback(Object callbackRequestId, String callbackCancellationId) {
+        if (callbackRequestId != null && callbackCancellationId != null) {
+            activeCallbackRequests.remove(callbackRequestId, callbackCancellationId);
+        }
+        synchronized (connectionStateLock) {
+            activeServerCallbacks--;
+            if (activeServerCallbacks == 0) {
+                pendingRemoteCancellations.clear();
+            }
+        }
+    }
+
+    private Integer toNumericId(Object id) {
+        if (id instanceof Number number) {
+            try {
+                return new BigDecimal(number.toString()).intValueExact();
+            } catch (ArithmeticException | NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -679,6 +909,28 @@ public class AspireClient {
         return sb.toString();
     }
 
+    private void routeCancellationNotification(Object params) {
+        Object callbackRequestId = getCancelledRequestId(params);
+        if (callbackRequestId == null) {
+            return;
+        }
+
+        // Resolve the callback request id on the reader before callback completion removes
+        // its correlation entry. Only listener execution moves to the virtual thread.
+        String cancellationId = activeCallbackRequests.get(callbackRequestId);
+        if (cancellationId == null) {
+            return;
+        }
+
+        Thread.startVirtualThread(() -> {
+            try {
+                cancelRemoteCancellationToken(cancellationId);
+            } catch (RuntimeException exception) {
+                debug("Cancellation listener failed.", exception);
+            }
+        });
+    }
+
     @SuppressWarnings("unchecked")
     private void handleServerRequest(Map<String, Object> request) throws IOException {
         String method = (String) request.get("method");
@@ -703,27 +955,54 @@ public class AspireClient {
                         Object[] unwrappedArgs = args.stream()
                             .map(this::unwrapResult)
                             .toArray();
-                        result = awaitValue(callback.apply(unwrappedArgs));
+                        AspireClient previousCallbackClient = callbackClient.get();
+                        List<CancellationToken> previousRemoteTokens = callbackRemoteTokens.get();
+                        List<CancellationToken> acquiredRemoteTokens = new ArrayList<>();
+                        callbackClient.set(this);
+                        callbackRemoteTokens.set(acquiredRemoteTokens);
+                        try {
+                            result = awaitValue(callback.apply(unwrappedArgs));
+                        } finally {
+                            for (CancellationToken token : acquiredRemoteTokens) {
+                                token.releaseRemoteReference();
+                            }
+                            if (previousCallbackClient == null) {
+                                callbackClient.remove();
+                            } else {
+                                callbackClient.set(previousCallbackClient);
+                            }
+                            if (previousRemoteTokens == null) {
+                                callbackRemoteTokens.remove();
+                            } else {
+                                callbackRemoteTokens.set(previousRemoteTokens);
+                            }
+                        }
                     } else {
                         error = createError(-32601, "Callback not found: " + callbackId);
                     }
                 }
-            } else if ("cancel".equals(method)) {
+            } else if ("cancel".equals(method) || "cancelToken".equals(method)) {
                 String cancellationId = getCancellationId(params);
                 if (cancellationId == null) {
                     error = createError(-32602, "Invalid params: cancellationId is required.");
                 } else {
+                    boolean cancelled = cancelRemoteCancellationToken(cancellationId);
                     Consumer<Void> handler = cancellations.get(cancellationId);
                     if (handler != null) {
                         handler.accept(null);
+                        cancelled = true;
                     }
-                    result = true;
+                    result = cancelled;
                 }
             } else {
                 error = createError(-32601, "Unknown method: " + method);
             }
         } catch (Exception e) {
             error = createError(-32603, e.getMessage());
+        }
+
+        if (!request.containsKey("id")) {
+            return;
         }
 
         // Send response
@@ -747,6 +1026,38 @@ public class AspireClient {
 
         if (params instanceof Map<?, ?> map) {
             return asString(map.get("callbackId"));
+        }
+
+        return null;
+    }
+
+    private String getCallbackCancellationId(Object params) {
+        Object args = null;
+        if (params instanceof List<?> list && list.size() > 1) {
+            args = list.get(1);
+        } else if (params instanceof Map<?, ?> map) {
+            args = map.get("args");
+        }
+
+        // Generated cancellable callbacks include the token id in both its positional slot and:
+        //   "args": { "p0": "<token-id>", "$cancellationToken": "<token-id>" }
+        // The named entry lets transport cancellation find the token without knowing its position.
+        if (args instanceof Map<?, ?> map) {
+            return asString(map.get("$cancellationToken"));
+        }
+
+        return null;
+    }
+
+    private Object getCancelledRequestId(Object params) {
+        // StreamJsonRpc cancels an invocation with:
+        //   { "jsonrpc": "2.0", "method": "$/cancelRequest", "params": { "id": <request-id> } }
+        // Preserve the parsed id type so a string id such as "41" never matches numeric id 41.
+        if (params instanceof Map<?, ?> map) {
+            Object id = map.get("id");
+            if (id instanceof String || id instanceof Number) {
+                return id;
+            }
         }
 
         return null;
@@ -782,6 +1093,10 @@ public class AspireClient {
     }
 
     private String getCancellationId(Object params) {
+        if (params instanceof String id) {
+            return id;
+        }
+
         if (params instanceof List<?> list && !list.isEmpty()) {
             return asString(list.get(0));
         }
@@ -855,9 +1170,56 @@ public class AspireClient {
     }
 
     private void handleDisconnect() {
-        if (disconnectHandler != null) {
-            disconnectHandler.run();
+        Runnable handler;
+        List<CancellationToken> tokensToNotify = new ArrayList<>();
+        synchronized (connectionStateLock) {
+            if (disconnected) {
+                return;
+            }
+
+            disconnected = true;
+            failAllPendingRequests(disconnectedException());
+            for (CancellationToken remoteToken : remoteCancellationTokens.values()) {
+                if (remoteToken.markCancelled()) {
+                    tokensToNotify.add(remoteToken);
+                }
+            }
+            for (CancellationToken pendingToken : pendingRemoteCancellations.values()) {
+                if (pendingToken.markCancelled()) {
+                    tokensToNotify.add(pendingToken);
+                }
+            }
+            remoteCancellationTokens.clear();
+            pendingRemoteCancellations.clear();
+            activeCallbackRequests.clear();
+            handler = disconnectHandler;
         }
+
+        for (CancellationToken remoteToken : tokensToNotify) {
+            try {
+                remoteToken.notifyCancellationListeners();
+            } catch (RuntimeException exception) {
+                debug("Cancellation listener failed during disconnect.", exception);
+            }
+        }
+
+        if (handler != null) {
+            handler.run();
+        }
+    }
+
+    private RuntimeException disconnectedException() {
+        Throwable cause = disconnectCause;
+        return cause == null
+            ? new RuntimeException("Disconnected from AppHost")
+            : new RuntimeException("Disconnected from AppHost", cause);
+    }
+
+    private void failAllPendingRequests(RuntimeException exception) {
+        for (Map.Entry<Integer, CompletableFuture<Object>> entry : pendingRequests.entrySet()) {
+            entry.getValue().completeExceptionally(exception);
+        }
+        pendingRequests.clear();
     }
 
     public String registerCallback(Function<Object[], Object> callback) {
@@ -867,9 +1229,81 @@ public class AspireClient {
     }
 
     public String registerCancellation(CancellationToken token) {
+        return registerCancellation(token, true);
+    }
+
+    private String registerCancellation(CancellationToken token, boolean enabled) {
+        if (token == null) {
+            return null;
+        }
+
+        String remoteTokenId = token.getRemoteTokenId();
+        if (remoteTokenId != null) {
+            return remoteTokenId;
+        }
+
         String id = UUID.randomUUID().toString();
-        cancellations.put(id, v -> token.cancel());
+        var registration = new CancellationRegistration(id, token, enabled);
+        cancellationRegistrations.put(id, registration);
+        registration.attach();
         return id;
+    }
+
+    public void unregisterCancellation(String cancellationId) {
+        CancellationRegistration registration = cancellationRegistrations.remove(cancellationId);
+        if (registration != null) {
+            registration.dispose();
+        }
+    }
+
+    private final class CancellationRegistration {
+        private final String id;
+        private final CancellationToken token;
+        private final Runnable listener;
+        private final AtomicBoolean enabled;
+        private final AtomicBoolean requested = new AtomicBoolean(false);
+        private final AtomicBoolean sent = new AtomicBoolean(false);
+
+        CancellationRegistration(String id, CancellationToken token, boolean enabled) {
+            this.id = id;
+            this.token = token;
+            this.enabled = new AtomicBoolean(enabled);
+            this.listener = this::requestCancellation;
+        }
+
+        void attach() {
+            token.onCancel(listener);
+        }
+
+        void enable() {
+            enabled.set(true);
+            trySend();
+        }
+
+        void dispose() {
+            token.removeCancelListener(listener);
+        }
+
+        private void requestCancellation() {
+            requested.set(true);
+            trySend();
+        }
+
+        private void trySend() {
+            if (enabled.get() && requested.get() && sent.compareAndSet(false, true)) {
+                sendCancellationRequest(id);
+            }
+        }
+    }
+
+    private void sendCancellationRequest(String cancellationId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                sendRequest("cancelToken", List.of(cancellationId));
+            } catch (RuntimeException ignored) {
+                // Cancellation is best-effort. The host may already have completed the operation.
+            }
+        });
     }
 
     public static Object awaitValue(Object value) {
@@ -877,6 +1311,15 @@ public class AspireClient {
             return stage.toCompletableFuture().join();
         }
         return value;
+    }
+
+    public static Object convertArray(Object value, Class<?> componentType, Function<Object, Object> converter) {
+        List<?> values = (List<?>) value;
+        Object array = java.lang.reflect.Array.newInstance(componentType, values.size());
+        for (int i = 0; i < values.size(); i++) {
+            java.lang.reflect.Array.set(array, i, converter.apply(values.get(i)));
+        }
+        return array;
     }
 
     // Simple JSON serialization (no external dependencies)
@@ -917,11 +1360,11 @@ public class AspireClient {
             }
             return result;
         }
-        if (value instanceof Object[]) {
-            Object[] array = (Object[]) value;
+        if (value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
             List<Object> result = new ArrayList<>();
-            for (Object item : array) {
-                result.add(serializeValue(item));
+            for (int i = 0; i < length; i++) {
+                result.add(serializeValue(java.lang.reflect.Array.get(value, i)));
             }
             return result;
         }
@@ -1116,7 +1559,7 @@ public class AspireClient {
             }
             String numStr = json.substring(start, pos);
             if (numStr.contains(".") || numStr.contains("e") || numStr.contains("E")) {
-                return Double.parseDouble(numStr);
+                return new BigDecimal(numStr);
             }
             long l = Long.parseLong(numStr);
             if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) {
@@ -1174,6 +1617,13 @@ public class AspireClient {
     private void debug(String message) {
         if (DEBUG) {
             System.err.println("[Java ATS] " + message);
+        }
+    }
+
+    private void debug(String message, Throwable error) {
+        if (DEBUG) {
+            System.err.println("[Java ATS] " + message);
+            error.printStackTrace(System.err);
         }
     }
 }
@@ -1631,23 +2081,23 @@ public final class AspireUnion {
         this.value = value;
     }
 
-    static AspireUnion of(Object value) {
+    public static AspireUnion of(Object value) {
         return value instanceof AspireUnion union ? union : new AspireUnion(value);
     }
 
-    static AspireUnion fromValue(Object value) {
+    public static AspireUnion fromValue(Object value) {
         return of(value);
     }
 
-    Object getValue() {
+    public Object getValue() {
         return value;
     }
 
-    boolean is(Class<?> type) {
+    public boolean is(Class<?> type) {
         return value != null && type.isInstance(value);
     }
 
-    <T> T getValueAs(Class<T> type) {
+    public <T> T getValueAs(Class<T> type) {
         if (value == null) {
             return null;
         }
@@ -1967,7 +2417,9 @@ public class CSharpAppResource extends ProjectResource {
         var configureId = configure == null ? null : getClient().registerCallback(args -> {
             var obj = (ContainerResource) args[0];
             configure.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (configureId != null) {
             reqArgs.put("configure", configureId);
@@ -2106,7 +2558,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2131,7 +2585,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2223,7 +2679,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2253,7 +2711,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2286,7 +2746,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2465,7 +2927,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2506,7 +2970,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2779,7 +3245,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2795,7 +3263,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -2967,7 +3437,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3023,7 +3495,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3051,7 +3525,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3102,7 +3578,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3118,7 +3596,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3134,7 +3614,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3150,7 +3632,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3166,7 +3650,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3190,7 +3676,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3294,7 +3782,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3341,7 +3831,9 @@ public class CSharpAppResource extends ProjectResource {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -3455,7 +3947,9 @@ public class CSharpAppResource extends ProjectResource {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -3589,28 +4083,35 @@ public class CSharpAppResource extends ProjectResource {
 
 package aspire;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * CancellationToken for cancelling operations.
  */
 @SuppressWarnings({"all", "unchecked", "serial"})
 public class CancellationToken {
-    private volatile boolean cancelled = false;
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    private final AtomicInteger remoteReferences = new AtomicInteger(0);
+    private final Object cancellationLock = new Object();
+    private final List<Runnable> listeners = new ArrayList<>();
 
     // Remote token id supplied by the AppHost when this token is materialized for a
     // callback argument. Null for locally-created tokens. Retained so cancellation can
     // be correlated back to the AppHost if needed.
     private final String remoteTokenId;
+    private final AspireClient remoteClient;
 
-    CancellationToken() {
+    public CancellationToken() {
         this.remoteTokenId = null;
+        this.remoteClient = null;
     }
 
-    private CancellationToken(String remoteTokenId) {
+    CancellationToken(String remoteTokenId, AspireClient remoteClient) {
         this.remoteTokenId = remoteTokenId;
+        this.remoteClient = remoteClient;
     }
 
     /**
@@ -3619,33 +4120,94 @@ public class CancellationToken {
      * remote token id (a string); generated code calls this to turn that wire value into
      * a CancellationToken instance. Mirrors the TypeScript/Go SDK behavior.
      */
-    static CancellationToken fromValue(Object value) {
+    public static CancellationToken fromValue(Object value) {
         if (value instanceof CancellationToken token) {
             return token;
         }
         if (value instanceof String tokenId) {
-            return new CancellationToken(tokenId);
+            AspireClient client = AspireClient.currentCallbackClient();
+            return client == null
+                ? new CancellationToken(tokenId, null)
+                : client.getOrCreateRemoteCancellationToken(tokenId);
         }
         return new CancellationToken();
     }
 
     String getRemoteTokenId() { return remoteTokenId; }
 
-    void cancel() {
-        cancelled = true;
-        for (Runnable listener : listeners) {
-            listener.run();
+    void retainRemoteReference() {
+        remoteReferences.incrementAndGet();
+    }
+
+    void releaseRemoteReference() {
+        if (remoteTokenId != null && remoteClient != null) {
+            remoteClient.releaseRemoteCancellationToken(remoteTokenId, this);
         }
     }
 
-    boolean isCancelled() { return cancelled; }
+    int decrementRemoteReference() {
+        return remoteReferences.decrementAndGet();
+    }
 
-    void onCancel(Runnable listener) {
-        listeners.add(listener);
-        if (cancelled) {
-            listener.run();
+    public void cancel() {
+        if (!markCancelled()) {
+            return;
+        }
+
+        if (remoteTokenId != null && remoteClient != null) {
+            remoteClient.removeRemoteCancellationToken(remoteTokenId, this);
+        }
+
+        notifyCancellationListeners();
+    }
+
+    boolean markCancelled() {
+        synchronized (cancellationLock) {
+            return cancelled.compareAndSet(false, true);
         }
     }
+
+    void notifyCancellationListeners() {
+        List<Runnable> listenersToNotify;
+        synchronized (cancellationLock) {
+            listenersToNotify = new ArrayList<>(listeners);
+            listeners.clear();
+        }
+        RuntimeException listenerFailure = null;
+        for (Runnable listener : listenersToNotify) {
+            try {
+                listener.run();
+            } catch (RuntimeException exception) {
+                if (listenerFailure == null) {
+                    listenerFailure = exception;
+                } else if (listenerFailure != exception) {
+                    listenerFailure.addSuppressed(exception);
+                }
+            }
+        }
+        if (listenerFailure != null) {
+            throw listenerFailure;
+        }
+    }
+
+    public boolean isCancelled() { return cancelled.get(); }
+
+    public void onCancel(Runnable listener) {
+        synchronized (cancellationLock) {
+            if (!cancelled.get()) {
+                listeners.add(listener);
+                return;
+            }
+        }
+        listener.run();
+    }
+
+    void removeCancelListener(Runnable listener) {
+        synchronized (cancellationLock) {
+            listeners.remove(listener);
+        }
+    }
+
 }
 
 // ===== aspire/CapabilityError.java =====
@@ -3667,8 +4229,8 @@ public class CapabilityError extends RuntimeException {
         this.data = data;
     }
 
-    String getCode() { return code; }
-    Object getData() { return data; }
+    public String getCode() { return code; }
+    public Object getData() { return data; }
 }
 
 // ===== aspire/CertificateTrustExecutionConfigurationContext.java =====
@@ -3748,9 +4310,9 @@ public class CertificateTrustExecutionConfigurationExportData implements JsonSer
         var scopeValue = map.get("Scope");
         value.setScope(CertificateTrustScope.fromValue((String) scopeValue));
         var certificateSubjectsValue = map.get("CertificateSubjects");
-        value.setCertificateSubjects((String[]) certificateSubjectsValue);
+        value.setCertificateSubjects((String[]) AspireClient.convertArray(certificateSubjectsValue, String[].class.getComponentType(), item0 -> (String) item0));
         var customBundlePathsValue = map.get("CustomBundlePaths");
-        value.setCustomBundlePaths((String[]) customBundlePathsValue);
+        value.setCustomBundlePaths((String[]) AspireClient.convertArray(customBundlePathsValue, String[].class.getComponentType(), item0 -> (String) item0));
         return value;
     }
 
@@ -3953,7 +4515,7 @@ public class CommandOptions implements JsonSerializable {
         var parameterValue = map.get("Parameter");
         value.setParameter(parameterValue);
         var argumentsValue = map.get("Arguments");
-        value.setArguments((InteractionInput[]) argumentsValue);
+        value.setArguments((InteractionInput[]) AspireClient.convertArray(argumentsValue, InteractionInput[].class.getComponentType(), item0 -> InteractionInput.fromMap((Map<String, Object>) item0)));
         var visibilityValue = map.get("Visibility");
         value.setVisibility(ResourceCommandVisibility.fromValue((String) visibilityValue));
         var confirmationMessageValue = map.get("ConfirmationMessage");
@@ -3977,7 +4539,9 @@ public class CommandOptions implements JsonSerializable {
         map.put("ValidateArguments", validateArguments == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
             var arg = (InputsDialogValidationContext) transportArg;
             validateArguments.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         }));
         map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
@@ -5063,7 +5627,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5104,7 +5670,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5204,7 +5772,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5339,7 +5909,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5367,7 +5939,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5391,7 +5965,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5407,7 +5983,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5423,7 +6001,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5439,7 +6019,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5463,7 +6045,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5544,7 +6128,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -5649,7 +6235,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -6079,7 +6667,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (DockerfileBuilderCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6303,7 +6893,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6328,7 +6920,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6420,7 +7014,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6450,7 +7046,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6483,7 +7081,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6662,7 +7262,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6703,7 +7305,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6962,7 +7566,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -6978,7 +7584,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7150,7 +7758,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7206,7 +7816,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7234,7 +7846,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7284,7 +7898,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7300,7 +7916,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7316,7 +7934,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7332,7 +7952,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7348,7 +7970,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7372,7 +7996,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7476,7 +8102,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7523,7 +8151,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -7637,7 +8267,9 @@ public class ContainerResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -7839,7 +8471,7 @@ public class CreateBuilderOptions implements JsonSerializable {
     public static CreateBuilderOptions fromMap(Map<String, Object> map) {
         var value = new CreateBuilderOptions();
         var argsValue = map.get("Args");
-        value.setArgs((String[]) argsValue);
+        value.setArgs(argsValue == null ? null : (String[]) AspireClient.convertArray(argsValue, String[].class.getComponentType(), item0 -> (String) item0));
         var projectDirectoryValue = map.get("ProjectDirectory");
         value.setProjectDirectory(projectDirectoryValue == null ? null : (String) projectDirectoryValue);
         var appHostFilePathValue = map.get("AppHostFilePath");
@@ -8155,7 +8787,7 @@ public class DistributedApplication extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/run", reqArgs);
     }
@@ -8311,7 +8943,7 @@ public class DistributedApplicationModel extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("model", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResources", reqArgs);
-        return (IResource[]) result;
+        return (IResource[]) AspireClient.convertArray(result, IResource[].class.getComponentType(), item0 -> (IResource) item0);
     }
 
     /** Finds a resource by name. */
@@ -8825,7 +9457,9 @@ public class DotnetToolResource extends ExecutableResource {
         var configureId = getClient().registerCallback(args -> {
             var obj = (ContainerResource) args[0];
             configure.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (configureId != null) {
             reqArgs.put("configure", configureId);
@@ -9022,7 +9656,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9047,7 +9683,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9139,7 +9777,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9169,7 +9809,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9202,7 +9844,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9381,7 +10025,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9422,7 +10068,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9681,7 +10329,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9697,7 +10347,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9869,7 +10521,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9925,7 +10579,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9953,7 +10609,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -9995,7 +10653,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10011,7 +10671,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10027,7 +10689,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10043,7 +10707,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10059,7 +10725,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10083,7 +10751,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10187,7 +10857,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10234,7 +10906,9 @@ public class DotnetToolResource extends ExecutableResource {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -10348,7 +11022,9 @@ public class DotnetToolResource extends ExecutableResource {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -10502,7 +11178,7 @@ public class DynamicLoadingOptions implements JsonSerializable {
         var alwaysLoadOnStartValue = map.get("AlwaysLoadOnStart");
         value.setAlwaysLoadOnStart(alwaysLoadOnStartValue == null ? null : (Boolean) alwaysLoadOnStartValue);
         var dependsOnInputsValue = map.get("DependsOnInputs");
-        value.setDependsOnInputs((String[]) dependsOnInputsValue);
+        value.setDependsOnInputs(dependsOnInputsValue == null ? null : (String[]) AspireClient.convertArray(dependsOnInputsValue, String[].class.getComponentType(), item0 -> (String) item0));
         return value;
     }
 
@@ -10651,7 +11327,7 @@ public class EndpointReference extends HandleWrapperBase {
     }
 
     /** Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`. */
-    public double targetPort() {
+    public Number targetPort() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.targetPort", reqArgs);
@@ -10691,7 +11367,7 @@ public class EndpointReference extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
         return (String) result;
@@ -10800,7 +11476,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Gets or sets the desired host port. */
-    public double port() {
+    public Number port() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", reqArgs);
@@ -10808,7 +11484,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Sets the Port property */
-    public EndpointUpdateContext setPort(double value) {
+    public EndpointUpdateContext setPort(Number value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
@@ -10817,7 +11493,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Gets or sets the target port. */
-    public double targetPort() {
+    public Number targetPort() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", reqArgs);
@@ -10825,7 +11501,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Sets the TargetPort property */
-    public EndpointUpdateContext setTargetPort(double value) {
+    public EndpointUpdateContext setTargetPort(Number value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
@@ -10902,7 +11578,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Gets or sets a value indicating whether the endpoint is proxied. */
-    public boolean isProxied() {
+    public Boolean isProxied() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied", reqArgs);
@@ -10910,7 +11586,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
     }
 
     /** Sets the IsProxied property */
-    public EndpointUpdateContext setIsProxied(boolean value) {
+    public EndpointUpdateContext setIsProxied(Boolean value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
@@ -11083,7 +11759,9 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeStartEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11099,7 +11777,9 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforePublishEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11115,7 +11795,9 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (AfterPublishEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11131,7 +11813,9 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (AfterResourcesCreatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11219,7 +11903,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var configureId = getClient().registerCallback(args -> {
             var obj = (ContainerResource) args[0];
             configure.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (configureId != null) {
             reqArgs.put("configure", configureId);
@@ -11416,7 +12102,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11441,7 +12129,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11533,7 +12223,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11563,7 +12255,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11596,7 +12290,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11775,7 +12471,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -11816,7 +12514,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12075,7 +12775,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12091,7 +12793,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12263,7 +12967,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12319,7 +13025,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12347,7 +13055,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12389,7 +13099,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12405,7 +13117,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12421,7 +13135,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12437,7 +13153,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12453,7 +13171,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12477,7 +13197,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12581,7 +13303,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12628,7 +13352,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -12742,7 +13468,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -13176,7 +13904,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13217,7 +13947,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13317,7 +14049,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13452,7 +14186,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13480,7 +14216,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13504,7 +14242,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13520,7 +14260,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13536,7 +14278,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13552,7 +14296,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13576,7 +14322,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13657,7 +14405,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -13762,7 +14512,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -14738,7 +15490,7 @@ public class IConfiguration extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getChildren", reqArgs);
-        return (IConfigurationSection[]) result;
+        return (IConfigurationSection[]) AspireClient.convertArray(result, IConfigurationSection[].class.getComponentType(), item0 -> (IConfigurationSection) item0);
     }
 
     /** Checks whether a configuration section exists. */
@@ -14946,7 +15698,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (DockerfileBuilderCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15209,7 +15963,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeStartEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15225,7 +15981,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforePublishEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15241,7 +15999,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (AfterPublishEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15257,7 +16017,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (AfterResourcesCreatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15273,7 +16035,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var subscribeId = getClient().registerCallback(args -> {
             var arg = (EventingSubscriberRegistrationContext) args[0];
             subscribe.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (subscribeId != null) {
             reqArgs.put("subscribe", subscribeId);
@@ -15288,7 +16052,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         var subscribeId = getClient().registerCallback(args -> {
             var arg = (EventingSubscriberRegistrationContext) args[0];
             subscribe.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (subscribeId != null) {
             reqArgs.put("subscribe", subscribeId);
@@ -15418,7 +16184,9 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15439,7 +16207,9 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineConfigurationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -15498,7 +16268,7 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
             reqArgs.put("resourceLogger", AspireClient.serializeValue(resourceLogger));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/buildExecutionConfiguration", reqArgs);
         return (IExecutionConfigurationResult) result;
@@ -15744,7 +16514,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptConfirmation", reqArgs);
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
@@ -15771,7 +16541,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptMessageBox", reqArgs);
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
@@ -15798,7 +16568,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptNotification", reqArgs);
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
@@ -15824,7 +16594,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptProgress", reqArgs);
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
@@ -15860,7 +16630,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptInput", reqArgs);
         return InputInteractionResult.fromMap((Map<String, Object>) result);
@@ -15888,7 +16658,7 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/promptInputs", reqArgs);
         return (InputsInteractionResult) result;
@@ -16111,7 +16881,7 @@ public class IReportingStep extends HandleWrapperBase {
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
         reqArgs.put("statusText", AspireClient.serializeValue(statusText));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/createTask", reqArgs);
         return (IReportingTask) result;
@@ -16127,7 +16897,7 @@ public class IReportingStep extends HandleWrapperBase {
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
         reqArgs.put("markdownString", AspireClient.serializeValue(markdownString));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/createMarkdownTask", reqArgs);
         return (IReportingTask) result;
@@ -16171,7 +16941,7 @@ public class IReportingStep extends HandleWrapperBase {
             reqArgs.put("completionState", AspireClient.serializeValue(completionState));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/completeStep", reqArgs);
     }
@@ -16196,7 +16966,7 @@ public class IReportingStep extends HandleWrapperBase {
             reqArgs.put("completionState", AspireClient.serializeValue(completionState));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/completeStepMarkdown", reqArgs);
     }
@@ -16228,7 +16998,7 @@ public class IReportingTask extends HandleWrapperBase {
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
         reqArgs.put("statusText", AspireClient.serializeValue(statusText));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/updateTask", reqArgs);
     }
@@ -16243,7 +17013,7 @@ public class IReportingTask extends HandleWrapperBase {
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
         reqArgs.put("markdownString", AspireClient.serializeValue(markdownString));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/updateTaskMarkdown", reqArgs);
     }
@@ -16271,7 +17041,7 @@ public class IReportingTask extends HandleWrapperBase {
             reqArgs.put("completionState", AspireClient.serializeValue(completionState));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/completeTask", reqArgs);
     }
@@ -16296,7 +17066,7 @@ public class IReportingTask extends HandleWrapperBase {
             reqArgs.put("completionState", AspireClient.serializeValue(completionState));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/completeTaskMarkdown", reqArgs);
     }
@@ -16674,7 +17444,7 @@ public class IUserSecretsManager extends HandleWrapperBase {
         reqArgs.put("userSecretsManager", AspireClient.serializeValue(getHandle()));
         reqArgs.put("json", AspireClient.serializeValue(json));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         getClient().invokeCapability("Aspire.Hosting/saveStateJson", reqArgs);
     }
@@ -17070,7 +17840,7 @@ public class InteractionInput implements JsonSerializable {
         var requiredValue = map.get("Required");
         value.setRequired(requiredValue == null ? null : (Boolean) requiredValue);
         var optionsValue = map.get("Options");
-        value.setOptions((Object[]) optionsValue);
+        value.setOptions(optionsValue == null ? null : (Object[]) AspireClient.convertArray(optionsValue, Object[].class.getComponentType(), item0 -> item0));
         var valueValue = map.get("Value");
         value.setValue(valueValue == null ? null : (String) valueValue);
         var placeholderValue = map.get("Placeholder");
@@ -17162,7 +17932,9 @@ public class InteractionInputBuilder extends HandleWrapperBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InteractionInputLoadContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -17196,7 +17968,7 @@ public class InteractionInputCollection extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/InteractionInputCollection.toArray", reqArgs);
-        return (InteractionInput[]) result;
+        return (InteractionInput[]) AspireClient.convertArray(result, InteractionInput[].class.getComponentType(), item0 -> InteractionInput.fromMap((Map<String, Object>) item0));
     }
 
     /** Gets the input with the specified name, or null if no input matches. */
@@ -17322,7 +18094,9 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
         map.put("ValidationCallback", validationCallback == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
             var arg = (InputsDialogValidationContext) transportArg;
             validationCallback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         }));
         return map;
     }
@@ -17549,7 +18323,9 @@ public class InteractionProgressOptions implements JsonSerializable {
         map.put("Work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
             var arg = (ProgressContext) transportArg;
             work.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         }));
         return map;
     }
@@ -17922,7 +18698,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -17963,7 +18741,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18063,7 +18843,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18198,7 +18980,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18226,7 +19010,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18250,7 +19036,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18266,7 +19054,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18282,7 +19072,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18298,7 +19090,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18322,7 +19116,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18403,7 +19199,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -18508,7 +19306,9 @@ public class ParameterResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -18674,7 +19474,7 @@ public class PipelineConfigurationContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("tag", AspireClient.serializeValue(tag));
         var result = getClient().invokeCapability("Aspire.Hosting.Pipelines/getSteps", reqArgs);
-        return (PipelineStep[]) result;
+        return (PipelineStep[]) AspireClient.convertArray(result, PipelineStep[].class.getComponentType(), item0 -> (PipelineStep) item0);
     }
 
 }
@@ -18739,7 +19539,7 @@ public class PipelineContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         if (value != null) {
-            reqArgs.put("value", getClient().registerCancellation(value));
+            reqArgs.put("value", value);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.setCancellationToken", reqArgs);
         return (PipelineContext) result;
@@ -18775,7 +19575,7 @@ public class PipelineEditor extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.Pipelines/steps", reqArgs);
-        return (PipelineStep[]) result;
+        return (PipelineStep[]) AspireClient.convertArray(result, PipelineStep[].class.getComponentType(), item0 -> (PipelineStep) item0);
     }
 
     /** Gets all pipeline steps that have the specified tag. */
@@ -18784,7 +19584,7 @@ public class PipelineEditor extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("tag", AspireClient.serializeValue(tag));
         var result = getClient().invokeCapability("Aspire.Hosting.Pipelines/stepsByTag", reqArgs);
-        return (PipelineStep[]) result;
+        return (PipelineStep[]) AspireClient.convertArray(result, PipelineStep[].class.getComponentType(), item0 -> (PipelineStep) item0);
     }
 
 }
@@ -19106,7 +19906,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         var executablePathValue = map.get("ExecutablePath");
         value.setExecutablePath(executablePathValue == null ? null : (String) executablePathValue);
         var argumentsValue = map.get("Arguments");
-        value.setArguments((String[]) argumentsValue);
+        value.setArguments(argumentsValue == null ? null : (String[]) AspireClient.convertArray(argumentsValue, String[].class.getComponentType(), item0 -> (String) item0));
         var workingDirectoryValue = map.get("WorkingDirectory");
         value.setWorkingDirectory(workingDirectoryValue == null ? null : (String) workingDirectoryValue);
         var environmentVariablesValue = map.get("EnvironmentVariables");
@@ -19124,7 +19924,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         var displayImmediatelyValue = map.get("DisplayImmediately");
         value.setDisplayImmediately(displayImmediatelyValue == null ? null : (Boolean) displayImmediatelyValue);
         var successExitCodesValue = map.get("SuccessExitCodes");
-        value.setSuccessExitCodes((double[]) successExitCodesValue);
+        value.setSuccessExitCodes(successExitCodesValue == null ? null : (double[]) AspireClient.convertArray(successExitCodesValue, double[].class.getComponentType(), item0 -> ((Number) item0).doubleValue()));
         return value;
     }
 
@@ -19184,7 +19984,7 @@ public class ProcessCommandResultExportOptions implements JsonSerializable {
         var displayImmediatelyValue = map.get("DisplayImmediately");
         value.setDisplayImmediately(displayImmediatelyValue == null ? null : (Boolean) displayImmediatelyValue);
         var successExitCodesValue = map.get("SuccessExitCodes");
-        value.setSuccessExitCodes((double[]) successExitCodesValue);
+        value.setSuccessExitCodes(successExitCodesValue == null ? null : (double[]) AspireClient.convertArray(successExitCodesValue, double[].class.getComponentType(), item0 -> ((Number) item0).doubleValue()));
         return value;
     }
 
@@ -19238,7 +20038,7 @@ public class ProcessCommandSpecExportData implements JsonSerializable {
         var executablePathValue = map.get("ExecutablePath");
         value.setExecutablePath(executablePathValue == null ? null : (String) executablePathValue);
         var argumentsValue = map.get("Arguments");
-        value.setArguments((String[]) argumentsValue);
+        value.setArguments(argumentsValue == null ? null : (String[]) AspireClient.convertArray(argumentsValue, String[].class.getComponentType(), item0 -> (String) item0));
         var workingDirectoryValue = map.get("WorkingDirectory");
         value.setWorkingDirectory(workingDirectoryValue == null ? null : (String) workingDirectoryValue);
         var environmentVariablesValue = map.get("EnvironmentVariables");
@@ -19412,7 +20212,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var configureId = configure == null ? null : getClient().registerCallback(args -> {
             var obj = (ContainerResource) args[0];
             configure.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (configureId != null) {
             reqArgs.put("configure", configureId);
@@ -19551,7 +20353,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19576,7 +20380,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19668,7 +20474,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19698,7 +20506,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19731,7 +20541,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19910,7 +20722,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -19951,7 +20765,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20224,7 +21040,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20240,7 +21058,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20412,7 +21232,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20468,7 +21290,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20496,7 +21320,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20547,7 +21373,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20563,7 +21391,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20579,7 +21409,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20595,7 +21427,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20611,7 +21445,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20635,7 +21471,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20739,7 +21577,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20786,7 +21626,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -20900,7 +21742,9 @@ public class ProjectResource extends ResourceBuilderBase {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -21476,7 +22320,7 @@ public class ReferenceExpression {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(handle));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", client.registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
 
         return (String) client.invokeCapability("Aspire.Hosting.ApplicationModel/getValue", reqArgs);
@@ -21740,7 +22584,7 @@ public class ResourceCommandService extends HandleWrapperBase {
             reqArgs.put("arguments", AspireClient.serializeValue(arguments));
         }
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting/executeResourceCommand", reqArgs);
         return ExecuteCommandResult.fromMap((Map<String, Object>) result);
@@ -22378,7 +23222,7 @@ public class TestCallbackContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         if (value != null) {
-            reqArgs.put("value", getClient().registerCancellation(value));
+            reqArgs.put("value", value);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken", reqArgs);
         return (TestCallbackContext) result;
@@ -22794,7 +23638,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (DockerfileBuilderCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23018,7 +23864,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23043,7 +23891,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23135,7 +23985,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23165,7 +24017,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23198,7 +24052,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23377,7 +24233,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23418,7 +24276,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23677,7 +24537,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23693,7 +24555,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23865,7 +24729,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23921,7 +24787,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23949,7 +24817,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -23999,7 +24869,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24015,7 +24887,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24031,7 +24905,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24047,7 +24923,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24063,7 +24941,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24087,7 +24967,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24191,7 +25073,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24238,7 +25122,9 @@ public class TestDatabaseResource extends ContainerResource {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -24352,7 +25238,9 @@ public class TestDatabaseResource extends ContainerResource {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -24507,7 +25395,7 @@ public class TestDeeplyNestedDto implements JsonSerializable {
         var nestedDataValue = map.get("NestedData");
         value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
         var metadataArrayValue = map.get("MetadataArray");
-        value.setMetadataArray((Map<String, String>[]) metadataArrayValue);
+        value.setMetadataArray((Map<String, String>[]) AspireClient.convertArray(metadataArrayValue, Map[].class.getComponentType(), item0 -> (Map<String, String>) item0));
         return value;
     }
 
@@ -25019,7 +25907,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (DockerfileBuilderCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25243,7 +26133,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25286,7 +26178,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25387,7 +26281,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25417,7 +26313,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25450,7 +26348,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25629,7 +26529,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25670,7 +26572,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25929,7 +26833,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -25945,7 +26851,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26117,7 +27025,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26173,7 +27083,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26201,7 +27113,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26251,7 +27165,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26267,7 +27183,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26283,7 +27201,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ConnectionStringAvailableEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26299,7 +27219,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26315,7 +27237,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26331,7 +27255,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26355,7 +27281,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26561,7 +27489,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26608,7 +27538,9 @@ public class TestRedisResource extends ContainerResource {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -26668,7 +27600,7 @@ public class TestRedisResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getEndpoints", reqArgs);
-        return (String[]) result;
+        return (String[]) AspireClient.convertArray(result, String[].class.getComponentType(), item0 -> (String) item0);
     }
 
     /** Sets connection string using direct interface target */
@@ -26750,7 +27682,7 @@ public class TestRedisResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getStatusAsync", reqArgs);
         return (String) result;
@@ -26763,7 +27695,9 @@ public class TestRedisResource extends ContainerResource {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);
@@ -26782,7 +27716,7 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("timeout", AspireClient.serializeValue(timeout));
         if (cancellationToken != null) {
-            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+            reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/waitForReadyAsync", reqArgs);
         return (Boolean) result;
@@ -26796,7 +27730,10 @@ public class TestRedisResource extends ContainerResource {
             var arg1 = (TestCallbackContext) args[0];
             var arg2 = (TestEnvironmentContext) args[1];
             callback.invoke(arg1, arg2);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg1);
+            __aspireCallbackArguments.put("p1", arg2);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27364,7 +28301,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (DockerfileBuilderCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27588,7 +28527,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (EnvironmentCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27613,7 +28554,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (CommandLineArgsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27705,7 +28648,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27735,7 +28680,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27768,7 +28715,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (EndpointUpdateContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27947,7 +28896,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (ResourceUrlsCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -27988,7 +28939,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = ResourceUrlAnnotation.fromMap((Map<String, Object>) args[0]);
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28247,7 +29200,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28263,7 +29218,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (HttpsEndpointUpdateCallbackContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28435,7 +29392,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerImagePushOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28491,7 +29450,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (PipelineStepContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28519,7 +29480,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var obj = (PipelineConfigurationContext) args[0];
             callback.invoke(obj);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28569,7 +29532,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (BeforeResourceStartedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28585,7 +29550,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceStoppedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28601,7 +29568,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (InitializeResourceEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28617,7 +29586,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceEndpointsAllocatedEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28633,7 +29604,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ResourceReadyEvent) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28657,7 +29630,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (ContainerBuildOptionsCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28761,7 +29736,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = getClient().registerCallback(args -> {
             var arg = (TestEnvironmentContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28808,7 +29785,9 @@ public class TestVaultResource extends ContainerResource {
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
             var arg = (TestCallbackContext) args[0];
             callback.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
@@ -28922,7 +29901,9 @@ public class TestVaultResource extends ContainerResource {
         var operationId = getClient().registerCallback(args -> {
             var arg = CancellationToken.fromValue(args[0]);
             operation.invoke(arg);
-            return null;
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
         });
         if (operationId != null) {
             reqArgs.put("operation", operationId);

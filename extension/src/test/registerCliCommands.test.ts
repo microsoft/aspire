@@ -27,6 +27,7 @@ suite('registerCliCommands', () => {
     let getWorkspaceFolderStub: sinon.SinonStub;
     let getAppHostPathStub: sinon.SinonStub;
     let tryExecuteDoAppHostStub: sinon.SinonStub;
+    let tryExecuteRunAppHostStub: sinon.SinonStub;
     let editorCommandProvider: AspireEditorCommandProvider;
     let tempDir: string;
 
@@ -58,9 +59,11 @@ suite('registerCliCommands', () => {
         getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
         getAppHostPathStub = sinon.stub().resolves(null);
         tryExecuteDoAppHostStub = sinon.stub().resolves();
+        tryExecuteRunAppHostStub = sinon.stub().resolves();
         editorCommandProvider = {
             getAppHostPath: getAppHostPathStub,
             tryExecuteDoAppHost: tryExecuteDoAppHostStub,
+            tryExecuteRunAppHost: tryExecuteRunAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
         registerCliCommands(terminalProvider, editorCommandProvider, new ConfigInfoProvider(terminalProvider));
@@ -157,6 +160,30 @@ suite('registerCliCommands', () => {
                 { command: 'aspire-vscode.new', source: 'tree' },
                 { command: 'aspire-vscode.init', source: 'tree' },
             ]);
+    });
+
+    test('Explorer AppHost run and debug commands propagate the selected resource', async () => {
+        const resource = vscode.Uri.file('/repo/b/AppHost/AppHost.csproj');
+        const runFromExplorer = callbacks.get('aspire-vscode.runAppHostFromExplorer');
+        const debugFromExplorer = callbacks.get('aspire-vscode.debugAppHostFromExplorer');
+
+        assert.ok(runFromExplorer);
+        assert.ok(debugFromExplorer);
+        await runFromExplorer(resource);
+        await debugFromExplorer(resource);
+
+        assert.ok(tryExecuteRunAppHostStub.firstCall.calledWithExactly(true, resource, false));
+        assert.ok(tryExecuteRunAppHostStub.secondCall.calledWithExactly(false, resource, false));
+    });
+
+    test('editor-title AppHost run and debug commands ignore the supplied resource', async () => {
+        const resource = vscode.Uri.file('/repo/b/Service/Program.cs');
+
+        await callbacks.get('aspire-vscode.runAppHostFromEditorCommand')!(resource);
+        await callbacks.get('aspire-vscode.debugAppHostFromEditorCommand')!(resource);
+
+        assert.ok(tryExecuteRunAppHostStub.firstCall.calledWithExactly(true));
+        assert.ok(tryExecuteRunAppHostStub.secondCall.calledWithExactly(false));
     });
 
     test('workspace folder selection cancellation returns a handled outcome without running the gate or command body', async () => {

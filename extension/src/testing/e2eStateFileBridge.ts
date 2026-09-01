@@ -788,6 +788,26 @@ export async function executeE2eControlCommand(
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
     }
+    case 'getDefinitions': {
+      const filePath = getE2eRunPath(command.filePath);
+      markStarted();
+      const definitions = await vscode.commands.executeCommand<Array<vscode.Location | vscode.LocationLink>>(
+        'vscode.executeDefinitionProvider',
+        vscode.Uri.file(filePath),
+        new vscode.Position(command.line, command.character));
+
+      return (definitions ?? []).map(definition => ({
+        filePath: 'targetUri' in definition ? definition.targetUri.fsPath : definition.uri.fsPath,
+        line: 'targetUri' in definition
+          ? (definition.targetSelectionRange ?? definition.targetRange).start.line
+          : definition.range.start.line,
+      }));
+    }
+    case 'getJavaProjects': {
+      markStarted();
+      const projects = await vscode.commands.executeCommand<Array<vscode.Uri | string>>('java.project.getAll');
+      return (projects ?? []).map(project => typeof project === 'string' ? project : project.toString());
+    }
     case 'getCodeLenses': {
       const filePath = getE2eRunPath(command.filePath, command.name);
       markStarted();

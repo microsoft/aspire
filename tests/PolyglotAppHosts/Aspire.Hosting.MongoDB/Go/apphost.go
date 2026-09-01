@@ -28,7 +28,7 @@ func main() {
 
 	builder.AddMongoDB("mongo-express").WithMongoExpress(&aspire.WithMongoExpressOptions{
 		ConfigureContainer: func(container aspire.MongoExpressContainerResource) {
-			container.WithHostPort(8082)
+			container.WithHostPort(aspire.Float64Ptr(8082))
 		},
 	})
 

@@ -545,7 +545,7 @@ suite('Debug Adapter Tracker Tests', () => {
         unrelatedDisposable.dispose();
     });
 
-    test('apphost lifecycle only feeds the tracker that owns its debug session', async () => {
+    test('apphost lifecycle events are not sent as DCP run-session notifications', async () => {
         const unrelatedDcpServer = sinon.createStubInstance(AspireDcpServer);
         const owningDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
             debugSessionId: 'debug-456'
@@ -557,51 +557,28 @@ suite('Debug Adapter Tracker Tests', () => {
         const unrelatedFactory = registerFactoryStub.lastCall.args[1];
         const appHostSession = {
             ...debugSession,
-            configuration: { ...debugSession.configuration, isApphost: true }
+            configuration: { ...debugSession.configuration, runId: '', isApphost: true }
         };
         const owningTracker = owningFactory.createDebugAdapterTracker(appHostSession);
         const unrelatedTracker = unrelatedFactory.createDebugAdapterTracker(appHostSession);
-        const trackers = [owningTracker, unrelatedTracker];
 
-        for (const tracker of trackers) {
-            tracker?.onDidSendMessage({
-                type: 'event',
-                event: 'process',
-                body: { systemProcessId: 4242 }
-            });
-        }
-        for (const tracker of trackers) {
-            tracker?.onDidSendMessage({
-                type: 'event',
-                event: 'exited',
-                body: { exitCode: 7 }
-            });
-        }
-        for (const tracker of trackers) {
-            tracker?.onExit(0);
-        }
-
-        assert.deepStrictEqual(
-            dcpServer.sendNotification.getCalls().map(call => call.args[0]),
-            [
-                {
-                    notification_type: 'processRestarted',
-                    session_id: 'run-123',
-                    dcp_id: 'debug-456',
-                    pid: 4242
-                },
-                {
-                    notification_type: 'sessionTerminated',
-                    session_id: 'run-123',
-                    dcp_id: 'debug-456',
-                    exit_code: 7
-                }
-            ]);
-        assert.strictEqual(
-            unrelatedDcpServer.sendNotification.callCount,
-            0,
-            'The unowned factory must not duplicate AppHost lifecycle notifications');
+        assert.notStrictEqual(owningTracker, undefined);
         assert.strictEqual(unrelatedTracker, undefined);
+
+        owningTracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+        owningTracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 7 }
+        });
+        owningTracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.callCount, 0);
+        assert.strictEqual(unrelatedDcpServer.sendNotification.callCount, 0);
 
         owningDisposable.dispose();
         unrelatedDisposable.dispose();

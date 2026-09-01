@@ -27,6 +27,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         AuxiliaryBackchannelCapabilities.V3,
         AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
     ];
+    private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ILogger _logger;
     private JsonRpc? _rpc;
@@ -154,8 +155,18 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="logger">Logger.</param>
     /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
-    /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
+    internal static Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
+        string hash,
+        string socketPath,
+        bool isInScope,
+        ILogger logger,
+        ProfilingTelemetry profilingTelemetry,
+        Socket? socket,
+        CancellationToken cancellationToken) =>
+        CreateFromSocketAsync(hash, socketPath, isInScope, logger, profilingTelemetry, socket, s_handshakeTimeout, cancellationToken);
+
     internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
         string hash,
         string socketPath,
@@ -163,9 +174,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         ILogger logger,
         ProfilingTelemetry profilingTelemetry,
         Socket? socket,
+        TimeSpan handshakeTimeout,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(handshakeTimeout, TimeSpan.Zero);
 
         // Connect if no socket provided
         if (socket is null)
@@ -183,22 +196,58 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             ActivityTracingStrategy = new ActivityTracingStrategy()
         };
-        rpc.StartListening();
+        Task? pendingHandshakeRpcTask = null;
 
-        logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
+        try
+        {
+            rpc.StartListening();
 
-        // Fetch all connection info
-        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
-            profilingTelemetry,
-            "auxiliary",
-            "GetAppHostInformationAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
-        var capabilities = await FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
+            logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
 
-        var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+            using var handshakeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            handshakeCancellation.CancelAfter(handshakeTimeout);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+            // Fetch all connection info
+            var appHostInfoTask = rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+                profilingTelemetry,
+                "auxiliary",
+                "GetAppHostInformationAsync",
+                [],
+                handshakeCancellation.Token);
+            pendingHandshakeRpcTask = appHostInfoTask;
+            var appHostInfo = await appHostInfoTask.WaitAsync(handshakeCancellation.Token).ConfigureAwait(false);
+
+            var capabilitiesTask = FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, handshakeCancellation.Token);
+            pendingHandshakeRpcTask = capabilitiesTask;
+            var capabilities = await capabilitiesTask.WaitAsync(handshakeCancellation.Token).ConfigureAwait(false);
+
+            var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+
+            return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+        }
+        catch
+        {
+            // JsonRpc owns the message handler, stream, and socket, so failed initialization must release
+            // that chain before propagating.
+            rpc.Dispose();
+            if (pendingHandshakeRpcTask is not null)
+            {
+                // WaitAsync can abandon the invocation when the local deadline wins. JsonRpc disposal
+                // completes it independently, so observe any later fault without extending cleanup.
+                ObserveFaults(pendingHandshakeRpcTask);
+            }
+
+            throw;
+        }
+    }
+
+    private static void ObserveFaults(Task task)
+    {
+        _ = task.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -224,6 +273,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             var capabilities = response?.Capabilities;
             logger.LogDebug("AppHost capabilities: {Capabilities}", capabilities is not null ? string.Join(", ", capabilities) : "null");
             return capabilities;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (RemoteMethodNotFoundException)
         {
