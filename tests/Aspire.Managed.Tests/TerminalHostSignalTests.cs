@@ -207,7 +207,7 @@ public partial class TerminalHostSignalTests
         };
         if (hostAssemblyPath is null)
         {
-            startInfo.ArgumentList.Add(typeof(LayoutCommand).Assembly.Location);
+            startInfo.ArgumentList.Add(typeof(ManifestCommand).Assembly.Location);
             startInfo.ArgumentList.Add("terminalhost");
         }
         else
