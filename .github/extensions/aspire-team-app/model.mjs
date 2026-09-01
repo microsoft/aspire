@@ -75,6 +75,17 @@ function isCopilotAttributedAuthor(author) {
   // punctuation) as part of keying to the human owner, so it can never end with "/copilot".
   return String(author || "").toLowerCase().endsWith("/copilot");
 }
+// Strip a trailing "/copilot" attribution so ownership checks compare the human base.
+// A Copilot-agent PR started by a team member surfaces as "{human}/copilot" (e.g.
+// "someone_microsoft/copilot"); the human owns it, so core-team matching must run against
+// the base. actorIdentityKey already drops "/copilot" on its direct-match path, but the
+// alias-suffix strip and the explicit roster allowlist compare raw logins -- without this
+// normalization those two checks miss and a team member's Copilot PR is wrongly treated as
+// external, landing it in the review queue.
+function copilotHumanBase(author) {
+  const raw = String(author || "");
+  return raw.toLowerCase().endsWith("/copilot") ? raw.slice(0, -"/copilot".length) : raw;
+}
 function isBotAuthor(author, authorType) {
   if (isCopilotAttributedAuthor(author)) return false;
   // GraphQL __typename is the most precise signal when present; the string checks mirror
@@ -98,9 +109,13 @@ const coreTeamEmuLoginSet = new Set(coreTeamEmuLogins.map((login) => login.toLow
 // whose bases frequently differ from public logins). Everyone else -- including any
 // unlisted "*_microsoft" account -- returns null so they remain review targets.
 function coreTeamOwnershipActor(author) {
-  const member = matchingCoreTeamMember(author);
+  // Resolve ownership against the human base so a "{member}/copilot" mirror PR isn't treated
+  // as external: both the alias-suffix strip (via matchingCoreTeamMember) and the roster
+  // allowlist below otherwise compare the raw "/copilot"-suffixed login and miss.
+  const base = copilotHumanBase(author);
+  const member = matchingCoreTeamMember(base);
   if (member) return member;
-  return coreTeamEmuLoginSet.has(String(author || "").toLowerCase()) ? author : null;
+  return coreTeamEmuLoginSet.has(base.toLowerCase()) ? base : null;
 }
 function matchingCoreTeamMember(author) {
   const authorKey = actorIdentityKey(author);

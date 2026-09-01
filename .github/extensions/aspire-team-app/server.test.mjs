@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { SLA_REPOS } from "./constants.mjs";
+
 const artifactsRoot = fileURLToPath(new URL("../../../artifacts/copilot-extension-server-tests/", import.meta.url));
 const copilotHome = join(artifactsRoot, "copilot-home");
 const preferencesPath = join(copilotHome, "extensions", "aspire-team-app", "artifacts", "preferences.json");
@@ -429,6 +431,38 @@ test("dashboard load retries after an inflight account probe rejection", async (
   assert.equal(retried.status, 200);
   const payload = await retried.json();
   assert.equal(payload.dashboard.authenticated, true);
+});
+
+test("computeSlaReport forces the review path without mutating the persisted mode", async (t) => {
+  // The user is on a non-review mode ("health"); the hourly notifier still needs SLA data.
+  // computeSlaReport must run a private review-mode load (so dashboard.sla is produced) while
+  // leaving the user's persisted canvas mode untouched.
+  await resetTestHome({
+    mode: "health",
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  globalThis.fetch = makeGitHubMock();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=sla-report-${Date.now()}`);
+  const report = await server.computeSlaReport();
+
+  // The review path ran: dashboard.sla is always attached in review mode, so its dedicated
+  // panel shape (scoped to SLA_REPOS) is present even when nothing is currently at risk.
+  assert.equal(report.authenticated, true);
+  assert.ok(report.sla, "expected an SLA report object from the forced review-mode load");
+  assert.deepEqual(report.sla.repos, SLA_REPOS);
+  assert.ok(Array.isArray(report.sla.breached));
+  assert.ok(Array.isArray(report.sla.approaching));
+  assert.ok(Array.isArray(report.externalOpenPrs));
+
+  // The persisted preference must still be the mode the user actually chose, not "review".
+  const persisted = JSON.parse(await readFile(preferencesPath, "utf8"));
+  assert.equal(persisted.mode, "health");
 });
 
 test("card action route bridges { prompt, log } to the session and echoes the queued flag", async (t) => {
