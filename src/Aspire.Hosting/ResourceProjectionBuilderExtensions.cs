@@ -23,13 +23,10 @@ internal static class ResourceProjectionBuilderExtensions
             return builder;
         }
 
-        foreach (var annotation in builder.Resource.Annotations.OfType<ResourceProjectionAnnotation>())
+        // Reuse the shared selection helper so registering a second projection and resolving the
+        // effective resource fail the same way instead of one silently picking the first match.
+        if (builder.Resource.TrySelectProjection(executionContext, out var selectedProjection))
         {
-            if (!annotation.Source.TrySelect(executionContext, out var selectedProjection))
-            {
-                continue;
-            }
-
             if (selectedProjection is not ContainerResource containerProjection)
             {
                 throw new DistributedApplicationException(

@@ -55,6 +55,12 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         }
     }
 
+    /// <summary>
+    /// Monotonically increasing mutation counter used by layered collections to invalidate
+    /// their cached merged snapshot when this collection changes.
+    /// </summary>
+    internal int Version => ((IResourceAnnotationList)Items).Version;
+
     internal void ConfigureProjection(Action configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
@@ -108,6 +114,12 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
 
     private interface IResourceAnnotationList : IList<IResourceAnnotation>
     {
+        /// <summary>
+        /// Monotonically increasing counter bumped on every mutation. A layered collection uses
+        /// the owner's version to know when its cached merged snapshot is stale.
+        /// </summary>
+        int Version { get; }
+
         void SafeInsert(int index, IResourceAnnotation item);
 
         void SafeRemoveAt(int index);
@@ -128,9 +140,11 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         // (LINQ queries) vastly outnumber writes (Add during setup).
         private ImmutableArray<IResourceAnnotation> _items = [];
         private readonly object _writeLock = new();
-        private readonly Dictionary<int, (int Index, IResourceAnnotation Item)> _indexedItemsByThread = [];
+        private int _version;
 
         public int Count => _items.Length;
+
+        public int Version => Volatile.Read(ref _version);
 
         public bool IsReadOnly => false;
 
@@ -142,6 +156,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                 lock (_writeLock)
                 {
                     _items = _items.SetItem(index, value);
+                    _version++;
                 }
             }
         }
@@ -151,6 +166,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             lock (_writeLock)
             {
                 _items = _items.Add(item);
+                _version++;
             }
         }
 
@@ -159,6 +175,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             lock (_writeLock)
             {
                 _items = [];
+                _version++;
             }
         }
 
@@ -166,25 +183,14 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
 
         public void CopyTo(IResourceAnnotation[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
 
-        public int IndexOf(IResourceAnnotation item)
-        {
-            var index = _items.IndexOf(item);
-            if (index >= 0)
-            {
-                lock (_writeLock)
-                {
-                    _indexedItemsByThread[Environment.CurrentManagedThreadId] = (index, item);
-                }
-            }
-
-            return index;
-        }
+        public int IndexOf(IResourceAnnotation item) => _items.IndexOf(item);
 
         public void Insert(int index, IResourceAnnotation item)
         {
             lock (_writeLock)
             {
                 _items = _items.Insert(index, item);
+                _version++;
             }
         }
 
@@ -198,6 +204,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             {
                 index = Math.Clamp(index, 0, _items.Length);
                 _items = _items.Insert(index, item);
+                _version++;
             }
         }
 
@@ -207,23 +214,18 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         /// </summary>
         public void SafeRemoveAt(int index)
         {
+            // Only an out-of-range index can be corrected here. Collection<T>.Remove(item) computes
+            // IndexOf outside the lock and then calls RemoveItem(index), so a concurrent insert can
+            // still shift the target. Resolving by item identity instead is not an option: RemoveItem
+            // cannot distinguish that case from a deliberate RemoveAt(index) whose index intentionally
+            // refers to a different element, and guessing corrupts the collection in the common
+            // single-threaded case. Callers that need atomic remove-by-identity must serialize.
             lock (_writeLock)
             {
-                if (_indexedItemsByThread.Remove(Environment.CurrentManagedThreadId, out var indexedItem) &&
-                    indexedItem.Index == index)
-                {
-                    var currentIndex = _items.IndexOf(indexedItem.Item);
-                    if (currentIndex >= 0)
-                    {
-                        _items = _items.RemoveAt(currentIndex);
-                    }
-
-                    return;
-                }
-
                 if ((uint)index < (uint)_items.Length)
                 {
                     _items = _items.RemoveAt(index);
+                    _version++;
                 }
             }
         }
@@ -239,6 +241,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                 if ((uint)index < (uint)_items.Length)
                 {
                     _items = _items.SetItem(index, item);
+                    _version++;
                 }
             }
         }
@@ -253,6 +256,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                     return false;
                 }
                 _items = _items.RemoveAt(index);
+                _version++;
                 return true;
             }
         }
@@ -262,6 +266,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             lock (_writeLock)
             {
                 _items = _items.RemoveAt(index);
+                _version++;
             }
         }
 
@@ -283,11 +288,20 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         private readonly HashSet<IResourceAnnotation> _removedInheritedItems = new(ReferenceEqualityComparer.Instance);
         private readonly HashSet<Type> _suppressedInheritedTypes = [];
         private readonly Dictionary<Type, KeyedAnnotationSuppression> _suppressedInheritedKeys = [];
-        private readonly Dictionary<int, (int Index, IResourceAnnotation Item)> _indexedItemsByThread = [];
         private readonly object _writeLock = new();
         private List<IResourceAnnotation>? _detachedItems;
         private int? _hiddenInheritedAnnotationsThreadId;
         private int _hiddenInheritedAnnotationsDepth;
+        private int _version;
+
+        // Reads rebuild the merged owner + local view, which is hot enough (every LINQ query over
+        // Resource.Annotations) that recomputing it per read is measurable. Cache the merged
+        // snapshot and invalidate whenever this layer or the owner layer changes.
+        private ImmutableArray<IResourceAnnotation> _cachedSnapshot;
+        private bool _hasCachedSnapshot;
+        private int _cachedInheritedVersion = -1;
+
+        public int Version => Volatile.Read(ref _version);
 
         public int Count
         {
@@ -331,6 +345,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                 _removedInheritedItems.Clear();
                 _suppressedInheritedTypes.Clear();
                 _suppressedInheritedKeys.Clear();
+                Invalidate();
             }
         }
 
@@ -362,14 +377,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                var snapshot = GetSnapshot();
-                var index = snapshot.IndexOf(item);
-                if (index >= 0)
-                {
-                    _indexedItemsByThread[Environment.CurrentManagedThreadId] = (index, snapshot[index]);
-                }
-
-                return index;
+                return GetSnapshot().IndexOf(item);
             }
         }
 
@@ -403,24 +411,15 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
 
         public void SafeRemoveAt(int index)
         {
+            // See ThreadSafeAnnotationList.SafeRemoveAt: only an out-of-range index can be
+            // corrected here, because RemoveItem cannot tell a shifted Remove(item) apart from a
+            // deliberate RemoveAt(index).
             lock (_writeLock)
             {
-                IResourceAnnotation? target = null;
-                if (_indexedItemsByThread.Remove(Environment.CurrentManagedThreadId, out var indexedItem) &&
-                    indexedItem.Index == index)
-                {
-                    target = indexedItem.Item;
-                }
-
                 var snapshot = GetSnapshot();
-                if (target is null && (uint)index < (uint)snapshot.Length)
+                if ((uint)index < (uint)snapshot.Length)
                 {
-                    target = snapshot[index];
-                }
-
-                if (target is not null)
-                {
-                    RemoveItem(target);
+                    RemoveItem(snapshot[index]);
                 }
             }
         }
@@ -435,7 +434,9 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                     return;
                 }
 
+                ThrowIfIndexedMutationDuringConfiguration();
                 Detach(snapshot)[index] = item;
+                Invalidate();
             }
         }
 
@@ -461,10 +462,12 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
+                // Never throw here. This runs in a finally block, so throwing would replace any
+                // exception the configuration callback raised with an unrelated state error.
                 if (_hiddenInheritedAnnotationsThreadId != Environment.CurrentManagedThreadId ||
                     _hiddenInheritedAnnotationsDepth == 0)
                 {
-                    throw new InvalidOperationException("Projection configuration scope is not active on this thread.");
+                    return;
                 }
 
                 _hiddenInheritedAnnotationsDepth--;
@@ -492,6 +495,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                         }
                     }
 
+                    Invalidate();
                     return;
                 }
 
@@ -520,6 +524,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                 }
 
                 _localItems.AddRange(inherited.Select(clone));
+                Invalidate();
             }
         }
 
@@ -527,9 +532,9 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         {
             lock (_writeLock)
             {
-                if (_detachedItems is null)
+                if (_detachedItems is null && _suppressedInheritedTypes.Add(annotationType))
                 {
-                    _suppressedInheritedTypes.Add(annotationType);
+                    Invalidate();
                 }
             }
         }
@@ -550,7 +555,23 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             }
             else
             {
+                ThrowIfIndexedMutationDuringConfiguration();
                 Detach(snapshot).Insert(index, item);
+            }
+
+            Invalidate();
+        }
+
+        // Inserting or replacing by index forces the layered view to collapse into a flat list,
+        // which requires a snapshot that includes inherited annotations. Inside a configuration
+        // callback the caller only sees the local layer, so collapsing there would silently drop
+        // every owner annotation. Append and remove-by-identity stay layered and remain allowed.
+        private void ThrowIfIndexedMutationDuringConfiguration()
+        {
+            if (AreInheritedAnnotationsHidden())
+            {
+                throw new InvalidOperationException(
+                    "Annotations cannot be inserted or replaced by index while a projection configuration callback is running. Use Add or Remove instead.");
             }
         }
 
@@ -562,6 +583,7 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
                 if (index >= 0)
                 {
                     _detachedItems.RemoveAt(index);
+                    Invalidate();
                 }
 
                 return;
@@ -571,11 +593,29 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             if (localIndex >= 0)
             {
                 _localItems.RemoveAt(localIndex);
+                Invalidate();
             }
-            else if (inheritedAnnotations.Any(candidate => ReferenceEquals(candidate, item)))
+            else if (ContainsInherited(item))
             {
                 _removedInheritedItems.Add(item);
+                Invalidate();
             }
+        }
+
+        // Enumerating the owner collection here is safe under _writeLock because the owner's
+        // backing store performs lock-free reads, so no owner lock is acquired while this
+        // projection's lock is held and the two layers cannot deadlock against each other.
+        private bool ContainsInherited(IResourceAnnotation item)
+        {
+            foreach (var candidate in inheritedAnnotations)
+            {
+                if (ReferenceEquals(candidate, item))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private List<IResourceAnnotation> Detach(ImmutableArray<IResourceAnnotation> snapshot)
@@ -585,32 +625,96 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             _removedInheritedItems.Clear();
             _suppressedInheritedTypes.Clear();
             _suppressedInheritedKeys.Clear();
+            Invalidate();
 
             return _detachedItems;
         }
+
+        private void Invalidate()
+        {
+            _version++;
+            _hasCachedSnapshot = false;
+        }
+
+        private bool AreInheritedAnnotationsHidden() =>
+            _hiddenInheritedAnnotationsDepth > 0 &&
+            _hiddenInheritedAnnotationsThreadId == Environment.CurrentManagedThreadId;
 
         private ImmutableArray<IResourceAnnotation> GetSnapshot()
         {
             if (_detachedItems is not null)
             {
-                return [.. _detachedItems];
+                if (!_hasCachedSnapshot)
+                {
+                    _cachedSnapshot = [.. _detachedItems];
+                    _hasCachedSnapshot = true;
+                }
+
+                return _cachedSnapshot;
             }
 
-            var hideInherited = _hiddenInheritedAnnotationsThreadId == Environment.CurrentManagedThreadId &&
-                _hiddenInheritedAnnotationsDepth > 0;
+            // The hidden view is thread dependent, so it must never populate the shared cache.
+            if (AreInheritedAnnotationsHidden())
+            {
+                return [.. _localItems];
+            }
 
-            return hideInherited
-                ? [.. _localItems]
-                : [.. inheritedAnnotations.Where(IsInheritedAnnotationVisible), .. _localItems];
+            var inheritedVersion = inheritedAnnotations.Version;
+            if (!_hasCachedSnapshot || _cachedInheritedVersion != inheritedVersion)
+            {
+                var builder = ImmutableArray.CreateBuilder<IResourceAnnotation>(_localItems.Count);
+                foreach (var annotation in inheritedAnnotations)
+                {
+                    if (IsInheritedAnnotationVisible(annotation))
+                    {
+                        builder.Add(annotation);
+                    }
+                }
+
+                builder.AddRange(_localItems);
+
+                _cachedSnapshot = builder.ToImmutable();
+                _hasCachedSnapshot = true;
+                _cachedInheritedVersion = inheritedVersion;
+            }
+
+            return _cachedSnapshot;
         }
 
         private bool IsInheritedAnnotationVisible(IResourceAnnotation annotation)
         {
-            return !_removedInheritedItems.Contains(annotation) &&
-                !_suppressedInheritedTypes.Any(type => type.IsAssignableFrom(annotation.GetType())) &&
-                !_suppressedInheritedKeys.Any(pair =>
-                    pair.Key.IsAssignableFrom(annotation.GetType()) &&
-                    pair.Value.Keys.Contains(pair.Value.KeySelector(annotation)));
+            if (_removedInheritedItems.Count == 0 &&
+                _suppressedInheritedTypes.Count == 0 &&
+                _suppressedInheritedKeys.Count == 0)
+            {
+                return true;
+            }
+
+            if (_removedInheritedItems.Contains(annotation))
+            {
+                return false;
+            }
+
+            var annotationType = annotation.GetType();
+
+            foreach (var suppressedType in _suppressedInheritedTypes)
+            {
+                if (suppressedType.IsAssignableFrom(annotationType))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var pair in _suppressedInheritedKeys)
+            {
+                if (pair.Key.IsAssignableFrom(annotationType) &&
+                    pair.Value.Keys.Contains(pair.Value.KeySelector(annotation)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private void SuppressMatchingInheritedKey(IResourceAnnotation annotation)

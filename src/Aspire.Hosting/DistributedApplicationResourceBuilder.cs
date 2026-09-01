@@ -26,12 +26,16 @@ internal sealed class DistributedApplicationResourceBuilder<T>(IDistributedAppli
         // allows us to easily spot these bugs.
         if (behavior == ResourceAnnotationMutationBehavior.Replace)
         {
-            Resource.Annotations.SuppressInheritedAnnotations<TAnnotation>();
-
+            // Keep the SingleOrDefault check ahead of suppression so the diagnostic above still
+            // fires for genuine duplicates. Suppression afterwards makes the replacement win over
+            // annotations of the same type that a projection owner adds later, which a one-time
+            // Remove of the current instance cannot do.
             if (Resource.Annotations.OfType<TAnnotation>().SingleOrDefault() is { } existingAnnotation)
             {
                 Resource.Annotations.Remove(existingAnnotation);
             }
+
+            Resource.Annotations.SuppressInheritedAnnotations<TAnnotation>();
         }
 
         Resource.Annotations.Add(annotation);

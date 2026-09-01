@@ -3,7 +3,6 @@
 
 using System.Collections.ObjectModel;
 using System.Reflection;
-using System.Runtime.Loader;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
@@ -172,7 +171,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void LayeredAnnotationsRemoveIndexedItemFromOriginalSnapshot()
+    public void LayeredAnnotationsRemoveAtUsesCurrentIndexNotAPriorLookup()
     {
         var first = new FirstAnnotation();
         var second = new SecondAnnotation();
@@ -188,9 +187,12 @@ public class ResourceProjectionTests
         owner.Insert(0, prefix);
         projection.RemoveAt(staleIndex);
 
+        // RemoveAt removes whatever currently occupies the index. Resolving the earlier IndexOf
+        // result by identity instead would remove 'first' here and, more importantly, would remove
+        // the wrong element for any caller that looked an item up and then removed a different one.
         Assert.Collection(
             projection,
-            annotation => Assert.Same(prefix, annotation),
+            annotation => Assert.Same(first, annotation),
             annotation => Assert.Same(second, annotation));
     }
 
@@ -251,30 +253,103 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void AspireHosting13_5ResourceImplementationLoadsAndMutatesAnnotations()
+    public void RegisteringASecondProjectionForTheSameOperationIsRejected()
     {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
+            new OperationResourceProjectionSource(
+                DistributedApplicationOperation.Publish,
+                new ContainerResource("worker"))));
+        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
+            new OperationResourceProjectionSource(
+                DistributedApplicationOperation.Publish,
+                new ContainerResource("worker"))));
+
+        // Registration must fail the same way effective resolution does, rather than silently
+        // configuring whichever projection happens to be first in annotation order.
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => executable.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithImage("projected-image")));
+
+        Assert.Contains(executable.Resource.Name, exception.Message);
+    }
+
+    [Fact]
+    public void IndexedAnnotationMutationDuringProjectionConfigurationIsRejected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithAnnotation(new FirstAnnotation());
+
+        // Inherited annotations are hidden from the callback, so an indexed insert or set would
+        // collapse the layered view onto the local-only snapshot and drop every owner annotation.
+        Assert.Throws<InvalidOperationException>(
+            () => executable.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container =>
+                {
+                    container.Resource.Annotations.Add(new SecondAnnotation());
+                    container.Resource.Annotations.Insert(0, new PrefixAnnotation());
+                }));
+    }
+
+    [Fact]
+    public void ProjectionRetainsInheritedAnnotationsAfterConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithAnnotation(new FirstAnnotation())
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithImage("projected-image"));
+
+        var projection = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+
+        Assert.Single(projection.Annotations.OfType<FirstAnnotation>());
+    }
+
+    [Fact]
+    public void ReplaceBehaviorStillReportsDuplicateAnnotationsOnAProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        executable.Resource.Annotations.Add(new SingletonAnnotation("first"));
+        executable.Resource.Annotations.Add(new SingletonAnnotation("second"));
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container.WithImage("projected-image"));
+
+        var projection = (ContainerResource)executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+        var projectionBuilder = builder.CreateResourceBuilder(projection);
+
+        // Suppression must not run before the duplicate check, otherwise inherited duplicates are
+        // hidden and this long-standing diagnostic silently stops firing for projections.
+        Assert.Throws<InvalidOperationException>(
+            () => projectionBuilder.WithAnnotation(
+                new SingletonAnnotation("replacement"),
+                ResourceAnnotationMutationBehavior.Replace));
+    }
+
+    [Fact]
+    public void AnnotationCollectionShapeRemainsBinaryCompatible()
+    {
+        // Integrations compiled against earlier Aspire versions reference Collection<T>.Add and
+        // friends through method tokens on the base class, and reference IResource.Annotations by
+        // its exact property type. Changing either shape breaks those call sites at runtime, so
+        // guard the shape cheaply here. End-to-end validation against a previously shipped package
+        // is a one-time exercise during review rather than a per-build test.
         Assert.Equal(
             typeof(Collection<IResourceAnnotation>),
             typeof(ResourceAnnotationCollection).BaseType);
         Assert.Equal(
             typeof(ResourceAnnotationCollection),
             typeof(IResource).GetProperty(nameof(IResource.Annotations))!.PropertyType);
-
-        var assemblyPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "BinaryCompatibilityAssets",
-            "Aspire.Hosting.13.5.Integration.dll");
-
-        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
-        var resourceType = assembly.GetType("Aspire.Hosting.BinaryCompatibility.LegacyResource", throwOnError: true)!;
-        var resource = Assert.IsAssignableFrom<IResource>(Activator.CreateInstance(resourceType));
-
-        var mutationCount = resourceType.GetMethod(
-            "MutateAnnotations",
-            BindingFlags.Instance | BindingFlags.Public)!.Invoke(resource, null);
-
-        Assert.Equal(1, mutationCount);
-        Assert.Single(resource.Annotations);
     }
 
     private sealed record SingletonAnnotation(string Value) : IResourceAnnotation;

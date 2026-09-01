@@ -26,12 +26,28 @@ public static class ResourceExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(executionContext);
 
+        return resource.TrySelectProjection(executionContext, out var projection) ? projection : resource;
+    }
+
+    /// <summary>
+    /// Selects the projection that is authoritative for the current operation, if any. Throws when
+    /// more than one projection matches, because the effective shape would otherwise depend on
+    /// annotation ordering.
+    /// </summary>
+    internal static bool TrySelectProjection(
+        this IResource resource,
+        DistributedApplicationExecutionContext executionContext,
+        [NotNullWhen(true)] out IResource? selectedProjection)
+    {
+        selectedProjection = null;
+
+        // A projection never projects again; returning it unchanged keeps realization from
+        // recursing through the owner's projection annotations.
         if (resource is IResourceProjection)
         {
-            return resource;
+            return false;
         }
 
-        IResource? selectedProjection = null;
         foreach (var annotation in resource.Annotations.OfType<ResourceProjectionAnnotation>())
         {
             if (!annotation.Source.TrySelect(executionContext, out var projection))
@@ -48,7 +64,7 @@ public static class ResourceExtensions
             selectedProjection = projection;
         }
 
-        return selectedProjection ?? resource;
+        return selectedProjection is not null;
     }
 
     /// <summary>

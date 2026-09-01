@@ -309,6 +309,29 @@ public class ResourceAnnotationCollectionTests
         Assert.Equal(2, collection.Count);
     }
 
+    [Fact]
+    public void RemoveAt_AfterIndexOfAndInsert_RemovesRequestedIndex()
+    {
+        var collection = new ResourceAnnotationCollection();
+        var first = new TestAnnotation("first");
+        var second = new TestAnnotation("second");
+        var inserted = new TestAnnotation("inserted");
+        collection.Add(first);
+        collection.Add(second);
+
+        // A prior IndexOf must not influence a later RemoveAt. Caching the looked-up item and
+        // removing it by identity removes the wrong element once an insert shifts positions.
+        Assert.Equal(0, collection.IndexOf(first));
+
+        collection.Insert(0, inserted);
+        collection.RemoveAt(0);
+
+        Assert.Collection(
+            collection,
+            annotation => Assert.Same(first, annotation),
+            annotation => Assert.Same(second, annotation));
+    }
+
     private sealed class TestAnnotation(string name) : IResourceAnnotation
     {
         public string Name { get; } = name;
