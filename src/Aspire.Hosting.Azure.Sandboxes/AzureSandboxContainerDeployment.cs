@@ -1448,7 +1448,8 @@ internal static class AzureSandboxContainerDeployment
         var resolvedEndpoints = resource.TargetResource.ResolveEndpoints();
         var defaultProjectEndpoint = resource.TargetResource is ProjectResource &&
             !resolvedEndpoints.Any(static endpoint => endpoint.Endpoint.IsExternal)
-                ? resolvedEndpoints.FirstOrDefault(static endpoint => endpoint.Endpoint.Transport is "http" or "http2")
+                ? resolvedEndpoints.FirstOrDefault(static endpoint =>
+                    string.Equals(endpoint.Endpoint.UriScheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
                 : null;
         var endpoints = new Dictionary<int, SandboxEndpoint>();
         foreach (var resolvedEndpoint in resolvedEndpoints)

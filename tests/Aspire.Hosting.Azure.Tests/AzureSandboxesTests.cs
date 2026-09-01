@@ -2522,6 +2522,32 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SandboxProjectDefaultEndpointUsesPlaintextHttpListener()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpsEndpoint(targetPort: 7001)
+            .WithHttpEndpoint(targetPort: 5001);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(
+            app.Services.GetRequiredService<DistributedApplicationModel>().GetProjectResources(),
+            resource => resource.Name == "frontend");
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal(5001, endpoint.TargetPort);
+        Assert.Equal("Http", endpoint.Protocol);
+        Assert.True(endpoint.IsExternal);
+    }
+
+    [Fact]
     public async Task SandboxProjectSharedHttpHttpsPortUsesConfiguredAccessPolicy()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

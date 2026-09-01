@@ -26,7 +26,6 @@ const publishedApi = await api.publishAsAzureSandbox({
     autoDeleteEnabled: true,
     autoDeleteInterval: 3_600_000,
     autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
-    publicEndpointReadyTimeout: 120_000,
     endpoints: [
         {
             name: "http",
