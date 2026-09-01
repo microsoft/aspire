@@ -88,11 +88,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         PrDogfoodNewTemplateCase.DotNet(KnownTemplateId.DotNetEmptyAppHost, ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-apphost", ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-servicedefaults"),
-    ];
-
-    private static readonly PrDogfoodNewTemplateExclusion[] s_prDogfoodNewTemplateExclusions =
-    [
-        new("aspire-test", "This wrapper requires an interactive framework sub-template selection before it reaches package resolution.")
+        PrDogfoodNewTemplateCase.DotNet(KnownTemplateId.IntegrationTest, ["--test-framework", "MSTest"]),
     ];
 
     public static TheoryData<PrDogfoodNewTemplateCase> PrDogfoodNewTemplateCases()
@@ -226,12 +222,10 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             .ToArray();
 
         var accountedForTemplateKeys = s_prDogfoodNewTemplateCases.Select(static testCase => testCase.CoverageKey)
-            .Concat(s_prDogfoodNewTemplateExclusions.Select(static exclusion => exclusion.CoverageKey))
             .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         Assert.Equal(accountedForTemplateKeys, registeredTemplateKeys);
-        Assert.All(s_prDogfoodNewTemplateExclusions, static exclusion => Assert.False(string.IsNullOrWhiteSpace(exclusion.Reason)));
     }
 
     /// <summary>
@@ -564,8 +558,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             return CoverageKey;
         }
     }
-
-    private sealed record PrDogfoodNewTemplateExclusion(string CoverageKey, string Reason);
 
     private sealed record DotNetTemplateInstall(string PackageName, string Version, string? NuGetConfigFile, string? NuGetSource);
 
