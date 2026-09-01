@@ -225,6 +225,12 @@ const session = await joinSession({
             return {
               authenticated: true,
               viewer: report.viewer,
+              // partial = a watched SLA repo failed to fetch this run, so the lists below are
+              // known-incomplete. Only the boolean + our own repo slugs are exposed here (NOT the
+              // raw error text, which is provider-controlled) to keep this agent-facing result
+              // free of smuggled instructions — same rationale as dropping PR titles above.
+              partial: !!report.partial,
+              unfetchedRepos: report.unfetchedRepos ?? [],
               sla: sla
                 ? {
                     repos: sla.repos,

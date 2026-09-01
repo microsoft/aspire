@@ -50,6 +50,13 @@ export async function main() {
     authenticated: true,
     viewer: report.viewer,
     generatedAt: new Date().toISOString(),
+    // partial = at least one watched SLA repo did not fetch authoritatively this run. The
+    // workflow should treat the queue below as known-incomplete and leave its tracker alone
+    // (don't clear or announce) rather than reacting to a transient outage. errors carries the
+    // raw per-repo failure text for diagnostics — this stream is not fed back into an agent.
+    partial: !!report.partial,
+    unfetchedRepos: report.unfetchedRepos ?? [],
+    errors: report.errors ?? [],
     sla: sla
       ? {
           repos: sla.repos,

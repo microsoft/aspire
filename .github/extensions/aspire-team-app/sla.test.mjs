@@ -278,3 +278,40 @@ test("annotateDashboardSla: freshly-qualified candidates populate the ok panel l
   assert.ok(focusCard.sla);
   assert.equal(focusCard.sla.state, "ok");
 });
+
+test("annotateDashboardSla: an unfetched SLA repo marks the report partial", async () => {
+  const repo = SLA_REPOS[0];
+  // An empty candidate list is ambiguous on its own: it can mean "nothing to review" OR "the
+  // watched repo failed to fetch this run". expectedSlaRepos vs authoritativeRepos disambiguates.
+  const dashboard = { attention: { focus: [], slaCandidates: [] } };
+  await annotateDashboardSla(dashboard, {
+    now: pt(2025, 1, 6, 10),
+    persist: false,
+    expectedSlaRepos: new Set([repo.toLowerCase()]),
+    authoritativeRepos: new Set(),
+  });
+  assert.equal(dashboard.sla.partial, true);
+  assert.deepEqual(dashboard.sla.unfetchedRepos, [repo.toLowerCase()]);
+});
+
+test("annotateDashboardSla: a fully-fetched run is not partial", async () => {
+  const repo = SLA_REPOS[0];
+  const dashboard = { attention: { focus: [], slaCandidates: [] } };
+  await annotateDashboardSla(dashboard, {
+    now: pt(2025, 1, 6, 10),
+    persist: false,
+    expectedSlaRepos: new Set([repo.toLowerCase()]),
+    authoritativeRepos: new Set([repo.toLowerCase()]),
+  });
+  assert.equal(dashboard.sla.partial, false);
+  assert.deepEqual(dashboard.sla.unfetchedRepos, []);
+});
+
+test("annotateDashboardSla: absent expectedSlaRepos defaults to a complete fetch", async () => {
+  // Focused callers (unit tests, persist:false paths) omit the fetch-scope sets entirely; the
+  // report must default to partial:false so they don't spuriously look incomplete.
+  const dashboard = { attention: { focus: [], slaCandidates: [] } };
+  await annotateDashboardSla(dashboard, { now: pt(2025, 1, 6, 10), persist: false });
+  assert.equal(dashboard.sla.partial, false);
+  assert.deepEqual(dashboard.sla.unfetchedRepos, []);
+});

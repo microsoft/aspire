@@ -903,7 +903,16 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const repo = entry.slice(entry.indexOf("\n") + 1).toLowerCase();
       if (isSlaRepo(repo)) authoritativeRepos.add(repo);
     }
-    await annotateDashboardSla(snap, { now: Date.now(), authoritativeRepos });
+    // The SLA repos this run was actually supposed to fetch (watched by some active account).
+    // annotateDashboardSla compares this against authoritativeRepos to flag a partial fetch, so
+    // the report can distinguish a genuinely empty queue from a run where the watched repo failed.
+    const expectedSlaRepos = new Set();
+    for (const acct of usable) {
+      for (const repo of acct.repos ?? []) {
+        if (isSlaRepo(repo)) expectedSlaRepos.add(repo.toLowerCase());
+      }
+    }
+    await annotateDashboardSla(snap, { now: Date.now(), authoritativeRepos, expectedSlaRepos });
   }
   return snap;
 }

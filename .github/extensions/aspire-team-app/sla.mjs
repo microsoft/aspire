@@ -425,6 +425,19 @@ export async function annotateDashboardSla(dashboard, opts = {}) {
   const approaching = panelCards.filter((c) => c.sla.state === "approaching").sort(byDeadline);
   const ok = cards.filter((c) => c.sla && c.sla.state === "ok").sort(byDeadline);
 
+  // Flag a *partial* fetch: an in-scope SLA repo that did not come back authoritatively this
+  // run (transient GitHub outage, throttling, etc.). Consumers such as the hourly notifier use
+  // this to tell "the queue is genuinely empty" apart from "the watched repo failed to fetch",
+  // so they don't clear or miss alerts on a run that never saw the repo. Absent expectedSlaRepos
+  // (e.g. focused unit tests), assume a complete fetch.
+  const authoritative = opts.authoritativeRepos instanceof Set
+    ? opts.authoritativeRepos
+    : new Set(opts.authoritativeRepos || []);
+  const expected = opts.expectedSlaRepos instanceof Set
+    ? opts.expectedSlaRepos
+    : new Set(opts.expectedSlaRepos || []);
+  const unfetchedRepos = [...expected].filter((r) => !authoritative.has(r));
+
   dashboard.sla = {
     repos: SLA_REPOS,
     budgetHours: SLA_BUDGET_HOURS,
@@ -437,6 +450,10 @@ export async function annotateDashboardSla(dashboard, opts = {}) {
     ok,
     okCount: cards.length - panelCards.length,
     total: cards.length,
+    // True when at least one watched SLA repo did not fetch authoritatively this run, so the
+    // panels/lists above are known-incomplete and must not be treated as a clean empty queue.
+    partial: unfetchedRepos.length > 0,
+    unfetchedRepos,
   };
 
   // Drop the scratch field so it doesn't bloat the broadcast payload.
