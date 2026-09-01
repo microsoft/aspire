@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildResponseFile } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildResponseFile } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -223,7 +223,7 @@ export class DotNetService implements IDotNetService {
                     !runCommand ||
                     typeof properties.RunArguments !== 'string' ||
                     typeof properties.RunWorkingDirectory !== 'string') {
-                    throw new Error('dotnet msbuild returned an invalid run-command response.');
+                    throw new Error(invalidMsBuildRunCommandResponse);
                 }
 
                 return {
@@ -258,7 +258,7 @@ export class DotNetService implements IDotNetService {
                 env: createDotNetProcessEnvironment(cliPath, environment)
             }));
         } catch (err) {
-            throw new Error(buildFailedForProjectWithError(projectFile, String(err)));
+            throw new Error(buildFailedForProjectWithError(projectFile, formatDotNetProcessError(err)));
         }
 
         const output = stdout.trim();

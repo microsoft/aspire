@@ -19,6 +19,7 @@
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Utils\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
     <Compile Include="$(SharedDir)ProjectPathResolver.cs" Link="Utils\ProjectPathResolver.cs" />
+    <Compile Include="$(SharedDir)DebugSessionInfoParser.cs" Link="Utils\DebugSessionInfoParser.cs" />
     <Compile Include="$(SharedDir)\LaunchProfiles\*.cs" />
   </ItemGroup>
 

@@ -378,8 +378,8 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
             !context.Resource.TryGetProjectMetadata(out _))
         {
             throw new FailedToApplyEnvironmentException(
-                $"Resource '{context.Resource.Name}' declares \"project\" debug launch support (WithDebugSupport) but has no project metadata. " +
-                $"The \"project\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
+                $"Resource '{context.Resource.Name}' declares \"{debugSupport.LaunchConfigurationType}\" debug launch support (WithDebugSupport) but has no project metadata. " +
+                $"The \"{debugSupport.LaunchConfigurationType}\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
         }
 
         var launchConfiguration = await ProduceLaunchConfigurationAsync(context, debugSupport).ConfigureAwait(false);

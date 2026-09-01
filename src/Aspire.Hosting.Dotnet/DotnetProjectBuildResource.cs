@@ -22,6 +22,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     private readonly Dictionary<string, string> _projectPathsByIdentity = new(StringComparer.Ordinal);
     private readonly DotnetProjectBuildArtifactManager _artifactManager;
     private bool _buildProjectGenerationStarted;
+    private string? _buildConfiguration;
     private string? _directProjectPath;
 
     public DotnetProjectBuildResource(string name, string workingDirectory, TimeProvider timeProvider)
@@ -59,6 +60,17 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         }
     }
 
+    internal string? BuildConfiguration
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _buildConfiguration;
+            }
+        }
+    }
+
     /// <summary>
     /// Adds a project to the generated build project and returns the path used by the coordinated build.
     /// </summary>
@@ -89,7 +101,10 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         }
     }
 
-    internal void ConfigureTraversalBuild(IEnumerable<string> projectPaths, string workingDirectory)
+    internal void ConfigureTraversalBuild(
+        IEnumerable<string> projectPaths,
+        string workingDirectory,
+        string? buildConfiguration)
     {
         ArgumentNullException.ThrowIfNull(projectPaths);
         ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
@@ -97,6 +112,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         lock (_lock)
         {
             ThrowIfGenerationStarted();
+            _buildConfiguration = buildConfiguration;
             _directProjectPath = null;
             _projectPaths.Clear();
             _projectPathsByIdentity.Clear();
@@ -109,7 +125,10 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         }
     }
 
-    internal void ConfigureDirectBuild(string projectPath, string workingDirectory)
+    internal void ConfigureDirectBuild(
+        string projectPath,
+        string workingDirectory,
+        string? buildConfiguration)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
         ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
@@ -117,10 +136,20 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         lock (_lock)
         {
             ThrowIfGenerationStarted();
+            _buildConfiguration = buildConfiguration;
             _projectPaths.Clear();
             _projectPathsByIdentity.Clear();
             _directProjectPath = AddProject(projectPath);
             SetWorkingDirectory(workingDirectory);
+        }
+    }
+
+    internal void SetBuildConfiguration(string? buildConfiguration)
+    {
+        lock (_lock)
+        {
+            ThrowIfGenerationStarted();
+            _buildConfiguration = buildConfiguration;
         }
     }
 

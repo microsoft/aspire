@@ -17,6 +17,7 @@ import * as hotReload from '../debugger/hotReload';
 import * as cliPathModule from '../utils/cliPath';
 import * as cliPathEnvironmentModule from '../utils/cliPathEnvironment';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { invalidMsBuildRunCommandResponse } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 class TestDotNetService {
@@ -1246,6 +1247,50 @@ suite('Dotnet Debugger Extension Tests', () => {
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
+    });
+
+    test('file-app build failures format process errors and deduplicate diagnostics', async () => {
+        const projectPath = '/workspace/app.cs';
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            const command = `dotnet ${args.join(' ')}`;
+            const error = Object.assign(
+                new Error(`Command failed: ${command}\nrepeated diagnostic`),
+                {
+                    cmd: command,
+                    stdout: 'repeated diagnostic',
+                    stderr: 'repeated diagnostic'
+                });
+            callArgs.at(-1)(error);
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await assert.rejects(
+            service.getDotNetFileAppRunProperties(projectPath, 'Debug'),
+            (error: Error) => {
+                assert.ok(!error.message.includes('Command failed:'));
+                assert.ok(error.message.includes(projectPath));
+                assert.strictEqual(error.message.split('repeated diagnostic').length - 1, 1);
+                return true;
+            });
+    });
+
+    test('project run properties use the localized invalid-response message', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(childProcess, 'execFile').yields(null, {
+            stdout: JSON.stringify({ Properties: { RunCommand: '/workspace/bin/app' } }),
+            stderr: ''
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await assert.rejects(
+            service.getDotNetProjectRunProperties('/workspace/app.csproj'),
+            (error: Error) => {
+                assert.ok(error.message.includes(invalidMsBuildRunCommandResponse));
+                return true;
+            });
     });
 
     test('dotnet run-api does not time out or spawn while CLI resolution is pending', async () => {

@@ -45,8 +45,8 @@ internal static class DotnetProjectBuildEnvironment
             };
             if (!OperatingSystem.IsWindows())
             {
-                // Build environment values can be sensitive. Set the final mode atomically at creation so
-                // another local user never gets a window in which the response file is broadly readable.
+                // Build environment values are not a secret transport, but the response file still belongs only to
+                // this process. Set the final mode atomically so another local user cannot read project-specific values.
                 options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             }
 

@@ -16,6 +16,7 @@ using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -150,6 +151,31 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void MalformedExternalBuildCapabilityUsesLegacyProjectLaunchConsistently()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = $$"""
+            {
+              "supported_launch_configurations": ["{{KnownLaunchConfigurationTypes.ProjectWithExternalBuild}}"]
+            }
+            """;
+
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+        Assert.Equal(
+            KnownLaunchConfigurationTypes.Project,
+            Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
+        Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
     }
 
     [Fact]
@@ -896,6 +922,86 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CancelingFirstConsumerDoesNotCancelSharedBuildEnvironmentEvaluation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackCount = 0;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(async context =>
+            {
+                Interlocked.Increment(ref callbackCount);
+                callbackStarted.TrySetResult();
+                await releaseCallback.Task.WaitAsync(context.CancellationToken);
+                context.EnvironmentVariables["BUILD_FLAVOR"] = "custom";
+            });
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        using var firstConsumerCts = new CancellationTokenSource();
+
+        var firstEvaluation = EvaluateEnvironmentAsync(
+            buildResource,
+            app.Services,
+            firstConsumerCts.Token);
+        await callbackStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var secondEvaluation = EvaluateEnvironmentAsync(
+            rebuilder,
+            app.Services,
+            TestContext.Current.CancellationToken);
+        firstConsumerCts.Cancel();
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstEvaluation);
+        }
+        finally
+        {
+            releaseCallback.TrySetResult();
+        }
+
+        var secondResult = await secondEvaluation;
+        var secondEnvironment = secondResult.EnvironmentVariables.ToDictionary();
+        Assert.Equal(1, callbackCount);
+        Assert.Equal("custom", secondEnvironment["BUILD_FLAVOR"]);
+    }
+
+    [Fact]
+    public async Task ApplicationStoppingCancelsSharedBuildEnvironmentEvaluation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(async context =>
+            {
+                callbackStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            });
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+
+        var evaluation = EvaluateEnvironmentAsync(
+            buildResource,
+            app.Services,
+            TestContext.Current.CancellationToken);
+        await callbackStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => evaluation);
+    }
+
+    [Fact]
     public async Task LaunchProfileEnvironmentRemainsRuntimeOnlyAndProjectsShareTraversalBuild()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1234,6 +1340,36 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal("build", args[0]);
         Assert.EndsWith(".proj", Assert.IsType<string>(args[1]), StringComparison.Ordinal);
         Assert.Equal(["--configuration", "DebugLocal"], args[2..]);
+    }
+
+    [Fact]
+    public async Task MaterializedPrimaryBuildUsesConfigurationFromFirstActiveStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var removedProjectPath = CreateProject(workspace.Path, "Removed", "Removed.csproj");
+        var removedMetadata = new DotnetProjectMetadata(removedProjectPath, "RemovedConfiguration");
+        var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, removedMetadata);
+        var removedResource = new DotnetProjectResource("removed", Path.GetDirectoryName(removedProjectPath)!);
+        var removedBuilder = builder.AddResource(removedResource).WithAnnotation(removedMetadata);
+        DotnetProjectBuildCoordinator.Configure(removedBuilder, coordinator);
+
+        var activeProjectPath = CreateProject(workspace.Path, "Active", "Active.csproj");
+        var activeMetadata = new DotnetProjectMetadata(activeProjectPath, "ActiveConfiguration");
+        coordinator = DotnetProjectBuildCoordinator.Prepare(builder, activeMetadata);
+        var activeResource = new DotnetProjectResource("active", Path.GetDirectoryName(activeProjectPath)!);
+        var activeBuilder = builder.AddResource(activeResource).WithAnnotation(activeMetadata);
+        DotnetProjectBuildCoordinator.Configure(activeBuilder, coordinator);
+        builder.Resources.Remove(removedResource);
+        await using var app = builder.Build();
+
+        await PublishBeforeStartAsync(builder, app);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        Assert.Equal(["--configuration", "ActiveConfiguration"], args[2..]);
     }
 
     [Fact]
@@ -2259,6 +2395,22 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                           new BeforeStartEvent(app.Services, model),
                           TestContext.Current.CancellationToken);
         await coordinator.MaterializeBuildPlan(model, app.Services);
+    }
+
+    private static Task<IExecutionConfigurationResult> EvaluateEnvironmentAsync(
+        IResource resource,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = services,
+            });
+
+        return ExecutionConfigurationBuilder.Create(resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, cancellationToken);
     }
 
     private static string[] FindResponseFilesContaining(string value)

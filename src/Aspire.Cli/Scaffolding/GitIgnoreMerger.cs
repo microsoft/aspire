@@ -22,6 +22,7 @@ internal static class GitIgnoreMerger
         }
 
         var existingEntries = ReadEntries(existingContent).ToArray();
+        var existingEntrySet = existingEntries.ToHashSet(StringComparer.Ordinal);
         var existingPositiveEntries = existingEntries
             .Where(entry => !IsNegated(entry))
             .ToHashSet(StringComparer.Ordinal);
@@ -39,9 +40,11 @@ internal static class GitIgnoreMerger
             .ToHashSet(StringComparer.Ordinal);
 
         var missingEntries = ReadEntries(scaffoldContent)
-            .Where(entry => !existingPositiveEntries.Contains(entry)
+            .Where(entry => !existingEntrySet.Contains(entry)
                 && !ContainsCoveringEntry(existingUnanchoredEntries, existingAnchoredEntries, entry)
-                && !ContainsCoveringEntry(existingNegatedEntries, RemoveRoot(entry)))
+                && !ContainsCoveringEntry(
+                    existingNegatedEntries,
+                    RemoveRoot(IsNegated(entry) ? RemoveNegation(entry) : entry)))
             .ToArray();
 
         if (missingEntries.Length == 0)

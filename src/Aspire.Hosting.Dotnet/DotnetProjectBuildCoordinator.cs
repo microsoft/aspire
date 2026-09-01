@@ -5,7 +5,6 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
@@ -25,7 +24,6 @@ internal static class DotnetProjectBuildCoordinator
     internal const string BuildResourceName = "__dotnet-project-build";
     private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
     private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
-    private const string SupportedLaunchConfigurationsPropertyName = "supported_launch_configurations";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
@@ -74,6 +72,7 @@ internal static class DotnetProjectBuildCoordinator
             builder.AppHostDirectory,
             buildDirectory,
             TimeProvider.System);
+        buildResource.SetBuildConfiguration(configuration);
         buildResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.AddResource(buildResource)
@@ -86,10 +85,11 @@ internal static class DotnetProjectBuildCoordinator
                 context.Args.Add("build");
                 context.Args.Add(buildTargetPath);
 
-                if (!string.IsNullOrEmpty(configuration))
+                var buildConfiguration = buildResource.BuildConfiguration;
+                if (!string.IsNullOrEmpty(buildConfiguration))
                 {
                     context.Args.Add("--configuration");
-                    context.Args.Add(configuration);
+                    context.Args.Add(buildConfiguration);
                 }
             })
             .WithIconName("CodeCsRectangle")
@@ -196,28 +196,11 @@ internal static class DotnetProjectBuildCoordinator
             return true;
         }
 
-        try
-        {
-            if (builder.Configuration[DebugSessionInfoConfigurationKey] is not { } debugSessionInfoJson)
-            {
-                return false;
-            }
-
-            using var document = JsonDocument.Parse(debugSessionInfoJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty(
-                    SupportedLaunchConfigurationsPropertyName,
-                    out var supportedLaunchConfigurations)
-                && supportedLaunchConfigurations.ValueKind == JsonValueKind.Array
-                && supportedLaunchConfigurations.EnumerateArray().Any(
-                    element => element.ValueKind == JsonValueKind.String
-                        && element.GetString() == KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
-        }
-        catch (JsonException)
-        {
-            // IDEs that omit or cannot provide a usable capability list use the legacy project launch path.
-            return false;
-        }
+        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+                builder.Configuration[DebugSessionInfoConfigurationKey],
+                out var supportedLaunchConfigurations)
+            && supportedLaunchConfigurations?.Contains(
+                KnownLaunchConfigurationTypes.ProjectWithExternalBuild) is true;
     }
 
     internal sealed class CoordinatorState : IDisposable
@@ -375,6 +358,7 @@ internal static class DotnetProjectBuildCoordinator
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
             var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
+            var originalPrimaryBuildConfiguration = primaryBuildResource.BuildConfiguration;
             var rollbackActions = new Stack<Action>();
 
             try
@@ -382,7 +366,8 @@ internal static class DotnetProjectBuildCoordinator
                 rollbackActions.Push(() =>
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
-                        originalPrimaryWorkingDirectory));
+                        originalPrimaryWorkingDirectory,
+                        originalPrimaryBuildConfiguration));
 
                 var buildResources = new List<DotnetProjectBuildResource>(buildSteps.Count);
                 for (var index = 0; index < buildSteps.Count; index++)
@@ -406,13 +391,17 @@ internal static class DotnetProjectBuildCoordinator
                     {
                         buildResource.ConfigureTraversalBuild(
                             step.Projects.Select(entry => entry.Metadata.ProjectPath),
-                            step.WorkingDirectory);
+                            step.WorkingDirectory,
+                            step.Configuration);
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                     }
                     else
                     {
                         var entry = step.Projects.Single();
-                        buildResource.ConfigureDirectBuild(entry.Metadata.ProjectPath, step.WorkingDirectory);
+                        buildResource.ConfigureDirectBuild(
+                            entry.Metadata.ProjectPath,
+                            step.WorkingDirectory,
+                            step.Configuration);
 
                         // One coordinator-owned evaluation feeds the coordinated build, the rebuilder, and the IDE
                         // launch configuration, so build callbacks run once and every consumer observes identical values.
@@ -854,20 +843,19 @@ internal static class DotnetProjectBuildCoordinator
                 Task<IReadOnlyDictionary<string, string>> evaluation;
                 lock (_lock)
                 {
-                    // A faulted or canceled evaluation is deliberately not retained. The failure usually belongs to the
-                    // consumer that happened to trigger it - a canceled resource start, for example - and the other
-                    // consumers must still be able to obtain a build environment. Every attempt starts from a fresh
-                    // dictionary, so a retry can never observe a half-applied environment.
+                    // A faulted or canceled callback evaluation is deliberately not retained so a later build or rebuild
+                    // can retry a transient failure. Every attempt starts from a fresh dictionary, so a retry can never
+                    // observe a half-applied environment.
                     if (_evaluation is null || _evaluation.IsFaulted || _evaluation.IsCanceled)
                     {
-                        _evaluation = EvaluateAsync(executionContext, logger, cancellationToken);
+                        _evaluation = EvaluateAsync(executionContext, logger, _applicationStopping);
                     }
 
                     evaluation = _evaluation;
                 }
 
-                // Observe the shared evaluation through the caller's own token so no consumer is held hostage by the
-                // cancellation lifetime of whichever consumer started it.
+                // The shared work belongs to the application lifetime. Each consumer can cancel only its own wait,
+                // without canceling the evaluation for concurrent build, rebuild, or launch consumers.
                 return evaluation.WaitAsync(cancellationToken);
             }
 

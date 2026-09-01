@@ -539,4 +539,17 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("\\!.aspire/\n.aspire/\n", mergedContent);
     }
+
+    [Fact]
+    public void GitIgnoreMerger_RepeatedMergeDoesNotDuplicateNegatedEntry()
+    {
+        const string existingContent = "node_modules/\n";
+        const string scaffoldContent = ".vscode/*\n!.vscode/extensions.json\n";
+
+        var firstMerge = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
+        var secondMerge = GitIgnoreMerger.Merge(firstMerge, scaffoldContent);
+
+        Assert.Equal("node_modules/\n.vscode/*\n!.vscode/extensions.json\n", firstMerge);
+        Assert.Equal(firstMerge, secondMerge);
+    }
 }

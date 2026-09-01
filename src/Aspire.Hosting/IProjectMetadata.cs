@@ -37,8 +37,8 @@ public interface IProjectMetadata : IResourceAnnotation
     /// Gets the resolved environment variables that affected an externally produced build.
     /// </summary>
     /// <remarks>
-    /// IDE launchers use these values when evaluating build properties such as <c>TargetPath</c>. Values can contain
-    /// sensitive data and must not be logged.
+    /// IDE launchers use these values when evaluating build properties such as <c>TargetPath</c>. These values are
+    /// not a secret transport and can appear in build diagnostics and IDE launch metadata.
     /// </remarks>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyDictionary<string, string> BuildEnvironment => ReadOnlyDictionary<string, string>.Empty;

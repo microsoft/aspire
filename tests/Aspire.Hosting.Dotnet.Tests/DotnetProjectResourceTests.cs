@@ -743,6 +743,36 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenProjectLaunchUnsupported()
+    {
+        // When the IDE does not advertise project support, the resource runs as a plain process, so the full
+        // `dotnet run --project ...` command must be preserved.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["python"]
+        });
+
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--config", "prod.yaml");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        // run --project <path> [--configuration <cfg>] --no-launch-profile --config prod.yaml
+        Assert.Equal("run", args[0]);
+        Assert.Equal("--project", args[1]);
+        Assert.Equal(projectPath, args[2]);
+        Assert.Contains("--no-launch-profile", args);
+        Assert.Equal("--config", args[^2]);
+        Assert.Equal("prod.yaml", args[^1]);
+    }
+
+    [Fact]
     public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenActiveCustomDebugSupportDoesNotOwnInvocation()
     {
         // SupportsDebugging() consults only the LAST SupportsDebuggingAnnotation. When a caller stacks a
