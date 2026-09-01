@@ -31,15 +31,10 @@ on:
 permissions: {}
 
 concurrency:
-  group: >-
-    create-failing-test-issue-${{
-      github.event_name == 'workflow_dispatch'
-      && format('dispatch-{0}', github.run_id)
-      || format('{0}-{1}',
-          github.event.issue.pull_request && 'pr' || 'issue',
-          github.event.issue.number)
-    }}
+  # Issue comments cannot atomically reserve occurrence markers, so serialize writers.
+  group: create-failing-test-issue
   cancel-in-progress: false
+  queue: max
 
 jobs:
   create_failing_test_issue:

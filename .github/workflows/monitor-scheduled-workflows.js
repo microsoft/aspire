@@ -179,10 +179,11 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
         });
     }
 
-    // List once and reuse across watched workflows; each workflow's marker is
-    // distinct, so a fresh issue filed for one cannot affect another's lookup.
-    // Failure recording must include closed issues so a recurring failure reopens
-    // the canonical tracker instead of filing a duplicate.
+    // Reuse the initial all-state inventory while recording failures so a recurring
+    // failure reopens its canonical tracker instead of filing a duplicate. Trusted
+    // success handling re-lists through the selected transport immediately before
+    // auto-close, and that live or simulated inventory becomes the shared snapshot
+    // for later watched workflows.
     const liveTransport = tracking.createOctokitIssueTransport(github, context);
     let issues = await liveTransport.listIssues(label);
     const transport = dryRun

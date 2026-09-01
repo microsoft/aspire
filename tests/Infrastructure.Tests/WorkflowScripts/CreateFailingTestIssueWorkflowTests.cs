@@ -265,6 +265,18 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void WorkflowSerializesIssueReconciliation()
+    {
+        var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.DoesNotContain("github.run_id", workflow, StringComparison.Ordinal);
+        Assert.Equal(
+            "cancel-in-progress=false;group=create-failing-test-issue;queue=max",
+            AnalyzeCiFailureWorkflowTests.ExtractTopLevelMapping(workflow, "concurrency"));
+    }
+
+    [Fact]
     public void CheckedInLifecycleAdapterExists()
     {
         var adapterPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue-tracking.js");

@@ -226,19 +226,24 @@ internal static class FailingTestIssueCommand
                 else
                 {
                     existingIssue = new ExistingIssueInfo(result.Number, result.Url);
+                    if (result.Reopened)
+                    {
+                        Log($"Found closed issue #{result.Number}. Reopening...");
+                    }
+                    else if (!result.Skipped)
+                    {
+                        Log($"Found open issue #{result.Number}. Adding comment...");
+                    }
+                    foreach (var duplicateNumber in result.DuplicatesClosed)
+                    {
+                        Log($"Closing newer duplicate issue #{duplicateNumber} in favor of #{result.Number}...");
+                    }
                     if (result.Skipped)
                     {
                         Log($"Run {resolutionSection.RunId} is already recorded on issue #{result.Number}; skipping duplicate comment.");
                     }
                     else
                     {
-                        Log(result.PreviousState is "closed"
-                            ? $"Found closed issue #{result.Number}. Reopening..."
-                            : $"Found open issue #{result.Number}. Adding comment...");
-                        foreach (var duplicateNumber in result.DuplicatesClosed)
-                        {
-                            Log($"Closing newer duplicate issue #{duplicateNumber} in favor of #{result.Number}...");
-                        }
                         Log($"Recorded run {resolutionSection.RunId} on issue #{result.Number}.");
                     }
                     Log($"Updated existing issue #{result.Number}: {result.Url}");

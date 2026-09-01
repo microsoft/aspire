@@ -391,6 +391,61 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
+    public async Task CreateFlagLogsReconciliationActionsWhenOccurrenceAlreadyRecordedOnDuplicate()
+    {
+        var fixtureDirectory = CreateFixtureDirectory();
+
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            $$"""
+            [
+              {
+                "number": 55555,
+                "html_url": "https://github.com/microsoft/aspire/issues/55555",
+                "state": "open",
+                "body": "{{StableMetadataMarker}}"
+              },
+              {
+                "number": 44444,
+                "html_url": "https://github.com/microsoft/aspire/issues/44444",
+                "state": "closed",
+                "body": "{{StableMetadataMarker}}"
+              }
+            ]
+            """);
+        File.WriteAllText(Path.Combine(fixtureDirectory, "reopen-issue.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "close-issue.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-comments-44444.json"), "[]");
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "list-comments-55555.json"),
+            """
+            [
+              {
+                "body": "Earlier failure.\n\n<!-- run:123 -->"
+              }
+            ]
+            """);
+
+        var result = await RunToolAsync(
+            fixtureDirectory,
+            "--test", "Tests.Namespace.Type.Method",
+            "--url", "https://github.com/microsoft/aspire/actions/runs/123",
+            "--workflow", "ci",
+            "--repo", "microsoft/aspire",
+            "--create");
+
+        Assert.Equal(0, result.ExitCode);
+        var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
+        Assert.Contains("Found closed issue #44444. Reopening...", diagnosticsLog, StringComparison.Ordinal);
+        Assert.Contains("Closing newer duplicate issue #55555 in favor of #44444...", diagnosticsLog, StringComparison.Ordinal);
+        Assert.Contains("Run 123 is already recorded on issue #44444; skipping duplicate comment.", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recorded run 123", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Adding comment", diagnosticsLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StableSignatureNormalizesCaseWhitespaceAndWorkflowSeparators()
     {
         var fixtureDirectory = CreateFixtureDirectory(

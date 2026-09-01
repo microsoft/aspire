@@ -549,6 +549,7 @@ Remove-Item tools/scripts/artifact_* -Recurse -Force -ErrorAction SilentlyContin
 
 - .NET 10 SDK or later
 - GitHub CLI (`gh`) installed and authenticated
+- Node.js (`node` on `PATH`) for shared reconciliation by standalone `CreateFailingTestIssue --create`
 - Access to the microsoft/aspire repository
 
 ## See Also
