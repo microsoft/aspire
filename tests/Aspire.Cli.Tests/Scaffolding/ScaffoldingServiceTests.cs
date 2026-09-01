@@ -2,13 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
-public class ScaffoldingServiceTests
+public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
 {
     private static readonly LanguageInfo s_typeScriptLanguage = new(
         LanguageId: new LanguageId(KnownLanguageId.TypeScript),
@@ -262,6 +267,61 @@ public class ScaffoldingServiceTests
         {
             rootDirectory.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task ScaffoldAsync_RejectsGitIgnoreSymlinkWithoutChangingConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var targetDirectory = workspace.WorkspaceRoot.CreateSubdirectory("config");
+        var targetPath = Path.Combine(targetDirectory.FullName, "shared.gitignore");
+        await File.WriteAllTextAsync(targetPath, "custom/\n");
+        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
+        try
+        {
+            File.CreateSymbolicLink(gitIgnorePath, targetPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+        }
+
+        var originalConfig = new AspireConfigFile
+        {
+            Channel = "stable",
+            SdkVersion = "13.3.0"
+        };
+        originalConfig.Save(workspace.WorkspaceRoot.FullName);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var originalConfigContent = await File.ReadAllTextAsync(configPath);
+
+        var scaffoldingService = new ScaffoldingService(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) =>
+                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            },
+            serverSessionFactory: FakeAppHostServerSessionFactory.CreateForScaffolding(
+                new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" }),
+            languageDiscovery: new TestLanguageDiscovery(s_typeScriptLanguage),
+            interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+        var context = new ScaffoldContext(
+            Language: s_typeScriptLanguage,
+            TargetDirectory: workspace.WorkspaceRoot,
+            ProjectName: "test",
+            SdkVersion: "13.4.0",
+            Channel: "daily");
+
+        var result = await scaffoldingService.ScaffoldAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.False(result);
+        Assert.Equal(originalConfigContent, await File.ReadAllTextAsync(configPath));
+        Assert.NotNull(new FileInfo(gitIgnorePath).LinkTarget);
+        Assert.Equal("custom/\n", await File.ReadAllTextAsync(targetPath));
     }
 
     [Fact]
