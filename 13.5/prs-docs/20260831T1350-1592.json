@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal version bump of the AppHost SDK reference for aspire.dev tooling; not a documentation content change and no matching changelog entry",
+  "mergedAt": "2026-08-31T13:50:31Z",
+  "number": 1592,
+  "runDate": "2026-09-01T00:08:21Z",
+  "status": "excluded",
+  "title": "Update aspire.dev to Aspire 13.5.3"
+}
