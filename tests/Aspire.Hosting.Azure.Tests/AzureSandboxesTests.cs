@@ -351,8 +351,8 @@ public class AzureSandboxesTests
                     TenantId = "22222222-2222-2222-2222-222222222222"
                 });
 
-        Assert.Equal("9-office365-policy-reader", Assert.Single(office365.Resource.AccessPolicies).Name);
-        Assert.Equal("10-sharepoint-policy-reader", Assert.Single(sharepoint.Resource.AccessPolicies).Name);
+        Assert.Equal("p9-office365-policy-reader", Assert.Single(office365.Resource.AccessPolicies).Name);
+        Assert.Equal("p10-sharepoint-policy-reader", Assert.Single(sharepoint.Resource.AccessPolicies).Name);
         Assert.NotEqual(
             Assert.Single(compoundParentName.Resource.AccessPolicies).Name,
             Assert.Single(compoundPolicyName.Resource.AccessPolicies).Name);
@@ -399,6 +399,71 @@ public class AzureSandboxesTests
             $"Access policy resource '{secondResourceName}' is already registered on connector connection 'office365'.",
             exception.Message);
         Assert.Single(connection.Resource.AccessPolicies);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConnectorNamespaceChildrenRequireUniqueBicepIdentifiersWithAccessPolicies(
+        bool addAccessPolicyFirst,
+        bool useMcpServerConfig)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        const string collidingResourceName = "p4-mail-policy-reader";
+        if (!addAccessPolicyFirst)
+        {
+            if (useMcpServerConfig)
+            {
+                gateway.AddMcpServerConfig(collidingResourceName);
+            }
+            else
+            {
+                gateway.AddConnection(collidingResourceName, "sharepointonline");
+            }
+        }
+
+        var connection = gateway.AddConnection("mail", "office365");
+        if (addAccessPolicyFirst)
+        {
+            connection.WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+
+            var exception = useMcpServerConfig
+                ? Assert.Throws<InvalidOperationException>(() => gateway.AddMcpServerConfig(collidingResourceName))
+                : Assert.Throws<InvalidOperationException>(() => gateway.AddConnection(collidingResourceName, "sharepointonline"));
+
+            var resourceType = useMcpServerConfig ? "MCP server configuration" : "Connector connection";
+            Assert.Equal(
+                $"{resourceType} resource '{collidingResourceName}' conflicts with an existing resource on Connector Namespace " +
+                "'gateway' after Bicep identifier normalization.",
+                exception.Message);
+            Assert.Single(connection.Resource.AccessPolicies);
+        }
+        else
+        {
+            var exception = Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                }));
+
+            Assert.Equal(
+                $"Access policy resource '{collidingResourceName}' conflicts with an existing resource on Connector Namespace " +
+                "'gateway' after Bicep identifier normalization.",
+                exception.Message);
+            Assert.Empty(connection.Resource.AccessPolicies);
+        }
     }
 
     [Fact]

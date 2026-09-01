@@ -837,10 +837,25 @@ public static class AzureSandboxesExtensions
     }
 
     private static string GetAccessPolicyResourceName(AzureConnectorNamespaceConnectionResource connection, string name)
-        => $"{connection.Name.Length}-{connection.Name}-policy-{name}";
+        => $"p{connection.Name.Length}-{connection.Name}-policy-{name}";
 
     private static IEnumerable<IResource> GetConnectorNamespaceChildren(AzureConnectorNamespaceResource connectorNamespace)
-        => connectorNamespace.Connections.Concat<IResource>(connectorNamespace.McpServerConfigs);
+    {
+        foreach (var connection in connectorNamespace.Connections)
+        {
+            yield return connection;
+
+            foreach (var accessPolicy in connection.AccessPolicies)
+            {
+                yield return accessPolicy;
+            }
+        }
+
+        foreach (var mcpServerConfig in connectorNamespace.McpServerConfigs)
+        {
+            yield return mcpServerConfig;
+        }
+    }
 
     private static void ValidateUniqueBicepIdentifier(
         IEnumerable<IResource> resources,
@@ -884,6 +899,12 @@ public static class AzureSandboxesExtensions
             throw new InvalidOperationException(
                 $"Access policy '{policyName}' is already registered on connector connection '{connection.Name}'.");
         }
+
+        ValidateUniqueBicepIdentifier(
+            GetConnectorNamespaceChildren(connection.Parent),
+            resourceName,
+            "Access policy",
+            connection.Parent.Name);
 
         return resourceName;
     }

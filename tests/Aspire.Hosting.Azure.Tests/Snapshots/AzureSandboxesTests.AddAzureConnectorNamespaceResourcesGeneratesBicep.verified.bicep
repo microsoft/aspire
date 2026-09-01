@@ -23,7 +23,7 @@ resource office365 'Microsoft.Web/connectorGateways/connections@2026-05-01-previ
   parent: gateway
 }
 
-resource _9_office365_policy_worker_access 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource p9_office365_policy_worker_access 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-acl'
   location: resourceGroup().location
   properties: {
@@ -38,7 +38,7 @@ resource _9_office365_policy_worker_access 'Microsoft.Web/connectorGateways/conn
   parent: office365
 }
 
-resource _9_office365_policy_worker_identity_access 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource p9_office365_policy_worker_identity_access 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-identity-acl'
   location: resourceGroup().location
   properties: {
