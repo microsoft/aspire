@@ -492,7 +492,7 @@ public class DotNetTemplateFactoryTests
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<ITemplate> PromptForTemplateAsync(ITemplate[] templates, CancellationToken cancellationToken)
+        public Task<ITemplate> PromptForTemplateAsync(ITemplate[] templates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null)
             => throw new NotImplementedException();
     }
 

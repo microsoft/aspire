@@ -72,8 +72,13 @@ public partial class TemplateTestsBase
         var appHostProjectPath = Assert.Single(Directory.EnumerateFiles(project.AppHostProjectDirectory, "*.csproj", SearchOption.TopDirectoryOnly));
         var appHostProjectName = Path.GetFileNameWithoutExtension(appHostProjectPath);
         var relativeAppHostProjectPath = Path.GetRelativePath(testProjectDir, appHostProjectPath);
+        // ProcessStartInfo.Arguments parses a quoted path such as:
+        //   --AppHostProjectPath "../quote\"path/AppHost.csproj"
+        // Escape embedded quotes for that command-line layer while preserving the literal quote received by the template.
+        var escapedAppHostProjectPath = EscapeMSBuildItemValue(relativeAppHostProjectPath)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
         var appHostArgs = withAppHostReference
-            ? $"--WithAppHostReference true --AppHostProjectPath \"{EscapeMSBuildItemValue(relativeAppHostProjectPath)}\" --AppHostProjectName \"{appHostProjectName}\""
+            ? $"--WithAppHostReference true --AppHostProjectPath \"{escapedAppHostProjectPath}\" --AppHostProjectName \"{appHostProjectName}\""
             : "";
         using var newTestCmd = new DotNetNewCommand(
                                     _testOutput,
