@@ -55,7 +55,7 @@ suite('Aspire launch profiles E2E', function () {
         assert.strictEqual(debugConfiguration.type, 'pwa-node');
         assert.strictEqual(debugConfiguration.request, 'launch');
         assert.strictEqual(debugConfiguration.runtimeExecutable, 'deno');
-        assert.deepStrictEqual(debugConfiguration.runtimeArgs, ['run', '-A', '--sloppy-imports', appHostPath]);
+        assert.strictEqual(debugConfiguration.runtimeArgs, '<redacted>');
         assert.strictEqual(debugConfiguration.program, undefined);
         assert.strictEqual(debugConfiguration.args, undefined);
     });
@@ -223,7 +223,7 @@ interface PreparedDebugConfiguration {
     type?: string;
     request?: string;
     runtimeExecutable?: string;
-    runtimeArgs?: string[];
+    runtimeArgs?: string;
     program?: string;
     args?: string[];
 }
