@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents source PR #19754 which is not part of the 13.5 milestone (targets release/13.6); no matching changelog entry found",
+  "mergedAt": "2026-09-01T11:42:45Z",
+  "number": 1598,
+  "runDate": "2026-09-01T12:06:06Z",
+  "status": "excluded",
+  "title": "[docs] Note Aspire view no longer steals sidebar focus on reload"
+}
