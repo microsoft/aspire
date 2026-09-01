@@ -24,7 +24,14 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_StandardDescription,
         Path.Combine(".agents", "skills"),
         isDefault: true,
-        scopes: AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User);
+        scopes: AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User,
+        defaultForClients:
+        [
+            AgentClientKind.CopilotCli,
+            AgentClientKind.CopilotApp,
+            AgentClientKind.VsCode,
+            AgentClientKind.OpenCode,
+        ]);
 
     /// <summary>
     /// Claude Code <c>.claude/skills/</c> location.
@@ -36,7 +43,8 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_ClaudeCodeDescription,
         Path.Combine(".claude", "skills"),
         isDefault: false,
-        scopes: AgentAssetLocationScope.Workspace);
+        scopes: AgentAssetLocationScope.Workspace,
+        defaultForClients: [AgentClientKind.ClaudeCode]);
 
     /// <summary>
     /// VS Code and GitHub Copilot <c>.github/skills/</c> location.
@@ -48,7 +56,8 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_GitHubSkillsDescription,
         Path.Combine(".github", "skills"),
         isDefault: false,
-        scopes: AgentAssetLocationScope.Workspace);
+        scopes: AgentAssetLocationScope.Workspace,
+        defaultForClients: []);
 
     /// <summary>
     /// OpenCode <c>.opencode/skill/</c> location.
@@ -60,7 +69,8 @@ internal sealed class AgentAssetLocation
         AgentCommandStrings.SkillLocation_OpenCodeDescription,
         Path.Combine(".opencode", "skill"),
         isDefault: false,
-        scopes: AgentAssetLocationScope.Workspace);
+        scopes: AgentAssetLocationScope.Workspace,
+        defaultForClients: []);
 
     private AgentAssetLocation(
         AgentAssetKind assetKind,
@@ -70,6 +80,7 @@ internal sealed class AgentAssetLocation
         string relativeAssetDirectory,
         bool isDefault,
         AgentAssetLocationScope scopes,
+        IEnumerable<AgentClientKind> defaultForClients,
         Func<DirectoryInfo, IEnvironment, AgentAssetInstallTarget>? userInstallTargetResolver = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -88,6 +99,7 @@ internal sealed class AgentAssetLocation
         RelativeAssetDirectory = relativeAssetDirectory;
         IsDefault = isDefault;
         Scopes = scopes;
+        DefaultForClients = defaultForClients.ToHashSet();
         _userInstallTargetResolver = userInstallTargetResolver;
     }
 
@@ -127,6 +139,11 @@ internal sealed class AgentAssetLocation
     public AgentAssetLocationScope Scopes { get; }
 
     /// <summary>
+    /// Gets the clients for which this location is the recommended default.
+    /// </summary>
+    public IReadOnlySet<AgentClientKind> DefaultForClients { get; }
+
+    /// <summary>
     /// Gets all available file-system locations.
     /// </summary>
     public static IReadOnlyList<AgentAssetLocation> All { get; } =
@@ -137,6 +154,23 @@ internal sealed class AgentAssetLocation
     /// </summary>
     public static IReadOnlyList<AgentAssetLocation> GetLocations(AgentAssetKind assetKind)
         => All.Where(location => location.AssetKind == assetKind).ToList();
+
+    /// <summary>
+    /// Gets the recommended default locations for the detected clients.
+    /// </summary>
+    public static IReadOnlyList<AgentAssetLocation> GetDefaultLocations(
+        AgentAssetKind assetKind,
+        IReadOnlyCollection<AgentClientKind> detectedClients)
+    {
+        var locations = GetLocations(assetKind);
+        var clientLocations = locations
+            .Where(location => location.DefaultForClients.Overlaps(detectedClients))
+            .ToList();
+
+        return clientLocations.Count > 0
+            ? clientLocations
+            : locations.Where(static location => location.IsDefault).ToList();
+    }
 
     /// <summary>
     /// Resolves the user-scoped installation target.

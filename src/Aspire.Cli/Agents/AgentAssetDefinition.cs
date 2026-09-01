@@ -75,9 +75,9 @@ internal sealed class AgentFileAssetDefinition : AgentAssetDefinition
         IReadOnlyList<string>? applicableLanguages = null)
         : base(assetKind, name, description, isDefault)
     {
-        if (assetKind is not AgentAssetKind.Skill)
+        if (assetKind.GetBackingKind() is not AgentAssetBackingKind.File)
         {
-            throw new ArgumentException("Only Skill assets can be file-backed in this layer.", nameof(assetKind));
+            throw new ArgumentException($"Agent asset kind '{assetKind}' is not file-backed.", nameof(assetKind));
         }
 
         SourceKind = sourceKind;
@@ -198,9 +198,9 @@ internal sealed class AgentActionAssetDefinition : AgentAssetDefinition
         bool isDefault)
         : base(assetKind, name, description, isDefault)
     {
-        if (assetKind is not AgentAssetKind.Mcp)
+        if (assetKind.GetBackingKind() is not AgentAssetBackingKind.Action)
         {
-            throw new ArgumentException("Only MCP assets can be action-backed in this layer.", nameof(assetKind));
+            throw new ArgumentException($"Agent asset kind '{assetKind}' is not action-backed.", nameof(assetKind));
         }
     }
 }

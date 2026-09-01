@@ -259,11 +259,20 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No detected agent environment supports {0} assets. Skipping their default installation..
+        ///   Looks up a localized string similar to No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection..
         /// </summary>
-        internal static string InitCommand_NoCompatibleClientForAssetKind {
+        internal static string InitCommand_NoDetectedClientForMcp {
             get {
-                return ResourceManager.GetString("InitCommand_NoCompatibleClientForAssetKind", resourceCulture);
+                return ResourceManager.GetString("InitCommand_NoDetectedClientForMcp", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway..
+        /// </summary>
+        internal static string InitCommand_NoDetectedClientForSkills {
+            get {
+                return ResourceManager.GetString("InitCommand_NoDetectedClientForSkills", resourceCulture);
             }
         }
 

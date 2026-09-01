@@ -95,12 +95,14 @@ internal sealed class AgentInitCommand : BaseCommand
         AgentCommandStrings.InitCommand_FailedToInstallSkill,
         AgentCommandStrings.InitCommand_InstalledSkillsSummary,
         AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
-        AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations);
+        AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
+        AgentCommandStrings.InitCommand_NoDetectedClientForSkills);
 
     private static readonly ActionAssetKindConfiguration s_mcpAssets = new(
         AgentAssetKind.Mcp,
         AgentCommandStrings.InitCommand_SelectMcpServers,
         AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments,
+        AgentCommandStrings.InitCommand_NoDetectedClientForMcp,
         AgentCommandStrings.InitCommand_NoCompatibleClientForSelectedMcp);
 
     /// <summary>
@@ -312,6 +314,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         return new(
             hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            [.. context.DetectedClients],
             [
                 skillSelection.ToResult(),
                 mcpSelection.ToResult(),
@@ -339,18 +342,21 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Resolve(assetsBinding).WasProvided;
         if (!hasExplicitSelection && !HasDetectedClient(context))
         {
-            DisplayNoCompatibleClientWarning(configuration.AssetKind);
+            DisplayNoDetectedClientWarning(configuration.NoDetectedClientWarning);
             return SelectedFileAssets.Empty(configuration.AssetKind);
         }
 
+        var defaultLocations = AgentAssetLocation.GetDefaultLocations(
+            configuration.AssetKind,
+            context.DetectedClients);
         var defaultLocationIds = string.Join(
             ",",
-            availableLocations.Where(static location => location.IsDefault).Select(static location => location.Id));
+            defaultLocations.Select(static location => location.Id));
         var selectedLocations = await InteractionService.PromptForSelectionsAsync(
             configuration.LocationSelectionPrompt,
             availableLocations,
             location => $"{location.DisplayName} — {location.Description}",
-            preSelected: availableLocations.Where(static location => location.IsDefault),
+            preSelected: defaultLocations,
             optional: true,
             binding: locationsBinding.WithDefault(defaultLocationIds),
             echoSelected: false,
@@ -424,7 +430,7 @@ internal sealed class AgentInitCommand : BaseCommand
         var hasDetectedClient = HasDetectedClient(context);
         if (!hasDetectedClient && !assetsWereProvided)
         {
-            DisplayNoCompatibleClientWarning(configuration.AssetKind);
+            DisplayNoDetectedClientWarning(configuration.NoDetectedClientWarning);
             return SelectedActionAssets.Empty(configuration.AssetKind);
         }
 
@@ -464,14 +470,9 @@ internal sealed class AgentInitCommand : BaseCommand
     private static bool HasDetectedClient(AgentEnvironmentScanContext context)
         => context.DetectedClients.Count > 0;
 
-    private void DisplayNoCompatibleClientWarning(AgentAssetKind assetKind)
+    private void DisplayNoDetectedClientWarning(string message)
     {
-        InteractionService.DisplayMessage(
-            KnownEmojis.Warning,
-            string.Format(
-                CultureInfo.CurrentCulture,
-                AgentCommandStrings.InitCommand_NoCompatibleClientForAssetKind,
-                assetKind.ToString().ToLowerInvariant()));
+        InteractionService.DisplayMessage(KnownEmojis.Warning, message);
     }
 
     private async Task<bool> ApplySkillAssetsAsync(
@@ -998,12 +999,14 @@ internal sealed class AgentInitCommand : BaseCommand
         string InstallFailureMessage,
         string InstalledSummary,
         string InstalledAssetsSummary,
-        string InstalledLocationsSummary);
+        string InstalledLocationsSummary,
+        string NoDetectedClientWarning);
 
     private sealed record ActionAssetKindConfiguration(
         AgentAssetKind AssetKind,
         string AssetSelectionPrompt,
         string TargetDescription,
+        string NoDetectedClientWarning,
         string NoCompatibleClientError);
 
     private sealed record AvailableFileAssets(
@@ -1040,9 +1043,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
 internal sealed record AgentInitExecutionResult(
     int ExitCode,
+    IReadOnlyCollection<AgentClientKind> DetectedClients,
     IReadOnlyList<AgentAssetSelection> Selections)
 {
-    public static AgentInitExecutionResult Empty(int exitCode) => new(exitCode, []);
+    public static AgentInitExecutionResult Empty(int exitCode) => new(exitCode, [], []);
 
     public IReadOnlyList<AgentAssetLocation> GetLocations(AgentAssetKind assetKind)
         => Selections.FirstOrDefault(selection => selection.AssetKind == assetKind)?.Locations ?? [];

@@ -50,6 +50,41 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_WithoutDetectedClients_UsesStaticDefault()
+    {
+        AssertDefaultLocations([], AgentAssetLocation.Standard);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_ClaudeCode_UsesClaudeLocation()
+    {
+        AssertDefaultLocations([AgentClientKind.ClaudeCode], AgentAssetLocation.ClaudeCode);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_VsCode_UsesStandardLocation()
+    {
+        AssertDefaultLocations([AgentClientKind.VsCode], AgentAssetLocation.Standard);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_MixedClients_UsesEachRecommendedLocation()
+    {
+        AssertDefaultLocations(
+            [AgentClientKind.VsCode, AgentClientKind.ClaudeCode],
+            AgentAssetLocation.Standard,
+            AgentAssetLocation.ClaudeCode);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_McpHasNoLocations()
+    {
+        Assert.Empty(AgentAssetLocation.GetDefaultLocations(
+            AgentAssetKind.Mcp,
+            [AgentClientKind.VsCode]));
+    }
+
+    [Fact]
     public void AgentAssetDefinition_CliDefined_ContainsExpectedAssets()
     {
         Assert.Equal(
@@ -209,6 +244,13 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public void AgentAssetKind_GetBackingKind_ReturnsExpectedBacking()
+    {
+        Assert.Equal(AgentAssetBackingKind.File, AgentAssetKind.Skill.GetBackingKind());
+        Assert.Equal(AgentAssetBackingKind.Action, AgentAssetKind.Mcp.GetBackingKind());
+    }
+
+    [Fact]
     public void AgentAssetFile_NormalizedTextComparison_IgnoresBomAndLineEndings()
     {
         var file = new AgentAssetFile("SKILL.md", "first\nsecond\n");
@@ -237,6 +279,15 @@ public class CommonAgentApplicatorsTests
 
         Assert.True(file.ContentEquals([0x00, 0x01, 0xFF]));
         Assert.False(file.ContentEquals([0x00, 0x01, 0xFE]));
+    }
+
+    private static void AssertDefaultLocations(
+        IReadOnlyCollection<AgentClientKind> detectedClients,
+        params AgentAssetLocation[] expectedLocations)
+    {
+        Assert.Equal(
+            expectedLocations,
+            AgentAssetLocation.GetDefaultLocations(AgentAssetKind.Skill, detectedClients));
     }
 
     private static string? GetFrontmatterValue(string content, string key)

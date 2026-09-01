@@ -527,6 +527,35 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_WhenOnlyClaudeCodeDetected_DefaultsToClaudeFollowUpCommand()
+    {
+        var subtleMessages = await RunInitWithDetectedClientAsync(AgentClientKind.ClaudeCode);
+
+        Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
+        Assert.DoesNotContain(subtleMessages, message => message.Contains("copilot", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(subtleMessages, message => message.Contains("opencode", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenOnlyOpenCodeDetected_DefaultsToOpenCodeFollowUpCommand()
+    {
+        var subtleMessages = await RunInitWithDetectedClientAsync(AgentClientKind.OpenCode);
+
+        Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
+        Assert.DoesNotContain(subtleMessages, message => message.Contains("claude", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenClaudeCodeDetectedButStandardLocationSelected_DoesNotPrintClaudeFollowUpCommand()
+    {
+        var subtleMessages = await RunInitWithDetectedClientAsync(
+            AgentClientKind.ClaudeCode,
+            AgentAssetLocation.Standard);
+
+        Assert.DoesNotContain(subtleMessages, message => message.Contains("claude", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task InitCommand_WhenAspireifySkillNotSelected_DoesNotPrintFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2175,6 +2204,50 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(channels)
         };
+    }
+
+    private async Task<IReadOnlyList<string>> RunInitWithDetectedClientAsync(
+        AgentClientKind client,
+        AgentAssetLocation? selectedLocation = null)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+        if (selectedLocation is not null)
+        {
+            interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+            {
+                var items = choices.Cast<object>().ToList();
+                return items.FirstOrDefault() is AgentAssetLocation
+                    ? [selectedLocation]
+                    : items
+                        .OfType<AgentFileAssetDefinition>()
+                        .Where(static asset => asset.HasName(CommonAgentApplicators.AspireifySkillName))
+                        .Cast<object>()
+                        .ToList();
+            };
+        }
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(client);
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+        var parseResult = initCommand.Parse("init --language typescript");
+
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        return subtleMessages;
     }
 
     private static string SourceForChannel(string channelName)

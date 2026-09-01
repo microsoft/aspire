@@ -152,14 +152,19 @@
         <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_NoCompatibleClientForAssetKind">
-        <source>No detected agent environment supports {0} assets. Skipping their default installation.</source>
-        <target state="new">No detected agent environment supports {0} assets. Skipping their default installation.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_NoCompatibleClientForSelectedMcp">
         <source>No compatible detected agent environment is available for the selected MCP server configuration.</source>
         <target state="new">No compatible detected agent environment is available for the selected MCP server configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoDetectedClientForMcp">
+        <source>No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</source>
+        <target state="new">No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoDetectedClientForSkills">
+        <source>No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</source>
+        <target state="new">No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">

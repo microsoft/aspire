@@ -36,7 +36,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PromptAndChainAsync_WithoutCompatibleClients_SkipsEveryAssetKindWithWarning()
+    public async Task PromptAndChainAsync_WithoutDetectedClients_SkipsEveryAssetKindWithSpecificWarnings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService
@@ -67,16 +67,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.GetLocations(AgentAssetKind.Skill));
         Assert.Empty(result.GetAssets(AgentAssetKind.Skill));
         Assert.Empty(result.GetAssets(AgentAssetKind.Mcp));
-        foreach (var assetKind in Enum.GetValues<AgentAssetKind>())
-        {
-            Assert.Single(
-                interactionService.DisplayedMessages,
-                message => message.Emoji.Equals(KnownEmojis.Warning) &&
-                    message.Message == string.Format(
-                        CultureInfo.CurrentCulture,
-                        AgentCommandStrings.InitCommand_NoCompatibleClientForAssetKind,
-                        assetKind.ToString().ToLowerInvariant()));
-        }
+        Assert.Collection(
+            interactionService.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.Warning)),
+            message => Assert.Equal(AgentCommandStrings.InitCommand_NoDetectedClientForSkills, message.Message),
+            message => Assert.Equal(AgentCommandStrings.InitCommand_NoDetectedClientForMcp, message.Message));
     }
 
     [Fact]
@@ -103,10 +97,28 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CommonAgentApplicators.AspireSkillName);
         Assert.DoesNotContain(
             interactionService.DisplayedMessages,
-            message => message.Message == string.Format(
-                CultureInfo.CurrentCulture,
-                AgentCommandStrings.InitCommand_NoCompatibleClientForAssetKind,
-                "skill"));
+            message => message.Message == AgentCommandStrings.InitCommand_NoDetectedClientForSkills);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Message == AgentCommandStrings.InitCommand_NoDetectedClientForMcp);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_WithoutExplicitSkillLocations_ClaudeCodeUsesClaudeDefault()
+    {
+        await AssertDetectedClientDefaultSkillLocationAsync(
+            AgentClientKind.ClaudeCode,
+            Path.Combine(".claude", "skills"),
+            ".agents");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_WithoutExplicitSkillLocations_VsCodeUsesStandardDefault()
+    {
+        await AssertDetectedClientDefaultSkillLocationAsync(
+            AgentClientKind.VsCode,
+            Path.Combine(".agents", "skills"),
+            ".github");
     }
 
     [Fact]
@@ -1157,6 +1169,31 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // aspireify was not requested, so it should not be installed.
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+    }
+
+    private async Task AssertDetectedClientDefaultSkillLocationAsync(
+        AgentClientKind client,
+        string expectedSkillsDirectory,
+        string unexpectedParentDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(client);
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skills {CommonAgentApplicators.AspireSkillName} --mcps none");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSkillFileExists(
+            workspace.WorkspaceRoot,
+            expectedSkillsDirectory,
+            CommonAgentApplicators.AspireSkillName);
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, unexpectedParentDirectory)));
     }
 
     private static void AssertSkillFileExists(DirectoryInfo workspaceRoot, string relativeSkillDirectory, string skillName)

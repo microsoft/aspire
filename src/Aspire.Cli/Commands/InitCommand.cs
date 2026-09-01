@@ -180,7 +180,9 @@ internal sealed class InitCommand : BaseCommand
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.GetAssets(AgentAssetKind.Skill).Any(static asset => asset.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
-            var commands = GetAspireifyCommands(agentInitResult.GetLocations(AgentAssetKind.Skill));
+            var commands = GetAspireifyCommands(
+                agentInitResult.DetectedClients,
+                agentInitResult.GetLocations(AgentAssetKind.Skill));
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -218,21 +220,42 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentAssetLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(
+        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyList<AgentAssetLocation> selectedLocations)
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(AgentAssetLocation.ClaudeCode))
+        if (IsLocationSelectedForClient(
+            AgentClientKind.ClaudeCode,
+            AgentAssetLocation.ClaudeCode,
+            detectedClients,
+            selectedLocations))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(AgentAssetLocation.OpenCode))
+        if (IsLocationSelectedForClient(
+            AgentClientKind.OpenCode,
+            AgentAssetLocation.OpenCode,
+            detectedClients,
+            selectedLocations))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
 
         return commands;
+    }
+
+    private static bool IsLocationSelectedForClient(
+        AgentClientKind client,
+        AgentAssetLocation clientSpecificLocation,
+        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyList<AgentAssetLocation> selectedLocations)
+    {
+        return selectedLocations.Contains(clientSpecificLocation) ||
+            (detectedClients.Contains(client) &&
+                selectedLocations.Any(location => location.DefaultForClients.Contains(client)));
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)
