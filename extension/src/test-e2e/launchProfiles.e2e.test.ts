@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ProjectLaunchConfiguration } from '../dcp/types';
+import type { NodeLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import { waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, runE2eTeardown, writeFileWithRetry } from './helpers/fixtures';
 import { getProcessEntry } from './helpers/processArguments';
@@ -29,6 +29,35 @@ suite('Aspire launch profiles E2E', function () {
             () => restoreFile(launchJsonPath, originalLaunchJson),
             () => removeDirectoryIfCreated(launchSettingsDirectory, launchSettingsDirectoryExisted),
         ], 'Launch profiles E2E teardown failed.');
+    });
+
+    test('maps the Deno runtime through the built-in JavaScript debugger', async () => {
+        await openAspireView();
+
+        const workspaceRoot = getWorkspaceRoot();
+        const appHostPath = path.join(workspaceRoot, 'apphost.mts');
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            script_path: appHostPath,
+            working_directory: workspaceRoot,
+            runtime_executable: 'deno',
+        };
+
+        const controlStatus = await executeE2eControlCommand({
+            name: 'createResourceDebugConfiguration',
+            launchConfig,
+            args: ['run', '-A', '--sloppy-imports', appHostPath],
+            debug: true,
+            isApphost: true,
+        });
+        const debugConfiguration = controlStatus.result as PreparedDebugConfiguration;
+
+        assert.strictEqual(debugConfiguration.type, 'pwa-node');
+        assert.strictEqual(debugConfiguration.request, 'launch');
+        assert.strictEqual(debugConfiguration.runtimeExecutable, 'deno');
+        assert.deepStrictEqual(debugConfiguration.runtimeArgs, ['run', '-A', '--sloppy-imports', appHostPath]);
+        assert.strictEqual(debugConfiguration.program, undefined);
+        assert.strictEqual(debugConfiguration.args, undefined);
     });
 
     test('uses the AppHost launch profile selected by launch.json', async () => {
@@ -191,6 +220,12 @@ suite('Aspire launch profiles E2E', function () {
 
 interface PreparedDebugConfiguration {
     environment: Record<string, string | undefined>;
+    type?: string;
+    request?: string;
+    runtimeExecutable?: string;
+    runtimeArgs?: string[];
+    program?: string;
+    args?: string[];
 }
 
 interface LifecycleToolResult {

@@ -22,7 +22,8 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     {
         "bun",
         "yarn",
-        "pnpm"
+        "pnpm",
+        "deno"
     };
 
     [Fact]

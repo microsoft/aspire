@@ -60,6 +60,19 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenDenoJsoncExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.jsonc"), "{ /* Deno configuration */ }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.jsonc found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenPnpmLockExists_ReturnsPnpm()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
