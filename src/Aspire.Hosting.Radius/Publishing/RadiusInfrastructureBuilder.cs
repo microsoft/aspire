@@ -118,10 +118,19 @@ internal sealed class RadiusInfrastructureBuilder
     // finished, so callback-only consumers are seen. See WarnForDatabasesNotCreatedByTheRecipe.
     private readonly List<(IResource Resource, string RadiusType)> _databasesNotCreatedByTheRecipe = [];
 
-    // Manifest expressions of the database children in _databasesNotCreatedByTheRecipe, keyed to the
-    // child's name. Built on first use, after backing resources are wired and before any container
-    // environment is resolved. See RecordConnectionStringExpressionConsumption.
+    // Manifest expressions of every database child of a backing resource this environment emits,
+    // keyed to the child's name. Built on first use; complete from the moment the emitted-type table
+    // is filled, which is before any credential is wired.
+    // See RecordConnectionStringExpressionConsumption.
     private Dictionary<string, string>? _databaseChildConnectionStringExpressions;
+
+    // The single database each recipe-backed resource was told to provision, recorded while
+    // credentials are applied and validated once environment resolution has finished. The selection
+    // can only consider WithReference annotations, because it must run before any container
+    // environment is resolved; a WithEnvironment callback that consumes a *different* database child
+    // records no annotation and is therefore invisible at selection time. See
+    // ValidateRecipeDatabaseSelections.
+    private readonly List<(IResource Resource, string SelectedDatabaseName)> _recipeDatabaseSelections = [];
 
     // Radius.Security/secrets resources emitted to carry a credential that a UDT backing resource
     // consumes by resource ID, paired with the resource and property that consume them. Recorded so
@@ -442,8 +451,11 @@ internal sealed class RadiusInfrastructureBuilder
 
         // Every container's environment has now been resolved, so consumption of a database child
         // through a WithEnvironment callback (which records no reference annotation) is finally
-        // visible. Report the databases the recipe cannot create against that complete picture.
-        WarnForDatabasesNotCreatedByTheRecipe(GetReferencedResourceNames());
+        // visible. Report the databases the recipe cannot create against that complete picture, and
+        // reject a model whose consumers connect to a database other than the one selected.
+        var consumptionAwareReferences = GetReferencedResourceNames();
+        WarnForDatabasesNotCreatedByTheRecipe(consumptionAwareReferences);
+        ValidateRecipeDatabaseSelections(consumptionAwareReferences);
 
         // A container whose environment carries a credential emits its own Radius.Security/secrets
         // resource, and that is only known once every container's environment has been resolved —
@@ -2220,6 +2232,49 @@ internal sealed class RadiusInfrastructureBuilder
     }
 
     /// <summary>
+    /// Fails when a consumer connects to a database child other than the single one the resource's
+    /// recipe was told to provision.
+    /// </summary>
+    /// <remarks>
+    /// The selection in <see cref="ApplyRecipeInputPropertyCredentialsAsync"/> has to run before any
+    /// container environment is resolved, so the only consumption signal available to it is the
+    /// <see cref="ResourceRelationshipAnnotation"/> set that <c>WithReference</c> records. A mixed
+    /// model defeats that: with <c>WithReference(first)</c> plus a <c>WithEnvironment</c> callback
+    /// resolving <c>second.ConnectionStringExpression</c>, the selection sees only <c>first</c> and
+    /// provisions it, while the consumer receives a connection string naming <c>second</c> — a
+    /// database the recipe never creates, failing at run time with nothing in the generated Bicep to
+    /// explain it. Running the check here, once <see cref="_resolvedConnectionStringConsumption"/> is
+    /// complete, is what makes the callback-only consumer visible.
+    /// </remarks>
+    private void ValidateRecipeDatabaseSelections(HashSet<string> referencedResourceNames)
+    {
+        foreach (var (resource, selectedDatabaseName) in _recipeDatabaseSelections)
+        {
+            // Union of both signals, because either one on its own is incomplete: annotations miss a
+            // callback-only consumer, and the resolved-consumption set misses a database that is
+            // referenced but whose value no container happened to resolve.
+            var wronglyConsumed = FindDatabaseChildren(resource)
+                .Where(d => !string.Equals(d.Name, selectedDatabaseName, StringComparison.Ordinal))
+                .Where(d => referencedResourceNames.Contains(d.Name) ||
+                            _resolvedConnectionStringConsumption.Contains(d.Name))
+                .Select(d => d.Name)
+                .ToList();
+
+            if (wronglyConsumed.Count == 0)
+            {
+                continue;
+            }
+
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' has a Radius recipe that provisions the single database " +
+                $"'{selectedDatabaseName}', but '{string.Join("', '", wronglyConsumed)}' " +
+                $"{(wronglyConsumed.Count == 1 ? "is" : "are")} also consumed by the application, so those consumers " +
+                $"would receive a connection string naming a database the deployment will not contain. Consume only " +
+                $"'{selectedDatabaseName}', or declare one database per resource. Diagnostic: ASPIRERADIUS072.");
+        }
+    }
+
+    /// <summary>
     /// Wires a type whose recipe generates its own credentials and exposes them through
     /// <c>listSecrets()</c>: Aspire's parameters are substituted for the recipe's own values
     /// wherever they appear, so every composed value carries what is actually deployed.
@@ -2451,6 +2506,11 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         await SetTypePropertyAsync(construct, "database", databaseChild, "databasename").ConfigureAwait(false);
+
+        // Validated rather than acted on here: a WithEnvironment callback that consumes a different
+        // database child is only observable once every container's environment has been resolved,
+        // which happens after this runs. See ValidateRecipeDatabaseSelections.
+        _recipeDatabaseSelections.Add((resource, databaseChild.Name));
     }
 
     /// <summary>
@@ -4040,9 +4100,9 @@ internal sealed class RadiusInfrastructureBuilder
     /// </remarks>
     private void RecordConnectionStringExpressionConsumption(ReferenceExpression expression, IResource owner)
     {
-        // Built lazily rather than in the constructor: _databasesNotCreatedByTheRecipe is filled
-        // while backing resources are wired, which runs before any container environment is
-        // resolved, so the first lookup from this path already sees the complete set.
+        // Built lazily rather than in the constructor: it is derived from the emitted-type table,
+        // which is only filled once resource types have been resolved. Every call site runs after
+        // that, so the first lookup already sees the complete set.
         _databaseChildConnectionStringExpressions ??= BuildDatabaseChildConnectionStringExpressions();
 
         if (_databaseChildConnectionStringExpressions.Count == 0 ||
@@ -4065,9 +4125,19 @@ internal sealed class RadiusInfrastructureBuilder
     {
         var expressions = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (resource, _) in _databasesNotCreatedByTheRecipe)
+        // Enumerated from the model rather than from _databasesNotCreatedByTheRecipe or
+        // _recipeDatabaseSelections, because both of those are filled *during* the credential pass
+        // that also triggers this map's first lookup: a resource wired before its own selection is
+        // recorded would be missing from the map, and its consumers would then go unobserved. Keying
+        // off the emitted-type table instead makes the result independent of resource order — it is
+        // complete from step 4 onwards, before any credential is wired.
+        //
+        // Extra entries are harmless: both consumers of _resolvedConnectionStringConsumption filter
+        // it back down to the database children of the specific resource they are reporting on.
+        foreach (var child in _model.Resources.OfType<IResourceWithConnectionString>())
         {
-            foreach (var child in FindDatabaseChildren(resource))
+            if (child is IResourceWithParent { Parent: { } parent } &&
+                _radiusTypeByResourceName.ContainsKey(parent.Name))
             {
                 expressions[child.ConnectionStringExpression.ValueExpression] = child.Name;
             }

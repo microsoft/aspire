@@ -298,6 +298,38 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The mixed case the two tests above do not cover: one database is referenced with
+    /// <c>WithReference</c> while a <c>WithEnvironment</c> callback consumes a *different* one.
+    /// Selection runs before any container environment is resolved, so it sees only the annotation
+    /// and provisions <c>first</c> — while the callback's consumer receives a connection string
+    /// naming <c>second</c>, a database the recipe never creates. The deferred validation pass is
+    /// what catches this, since no annotation-only signal can.
+    /// </summary>
+    [Fact]
+    public void ReferencedDatabaseAndCallbackConsumingAnother_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            var first = pg.AddDatabase("first");
+            var second = pg.AddDatabase("second");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(first)
+                .WithEnvironment(context =>
+                {
+                    context.EnvironmentVariables["DB"] = second.Resource.ConnectionStringExpression;
+                });
+        }));
+
+        Assert.Contains("ASPIRERADIUS072", ex.Message, StringComparison.Ordinal);
+        // The message has to name both the database being created and the one being consumed:
+        // knowing only that they disagree does not tell the author which end to change.
+        Assert.Contains("'first'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("'second'", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The failure above exists because a <c>WithEnvironment</c> callback consumer records no
     /// reference annotation. With no consumer in the model at all there is provably no wrong
     /// connection string to protect against, so a server whose databases nobody uses keeps
