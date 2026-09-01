@@ -36,8 +36,6 @@
          AssemblyMetadata below so the runtime IdentityChannelReader can read it without
          reflection-unsafe lookups. -->
     <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
-    <NuGetClientRepoRoot Condition="'$(NuGetClientRepoRoot)' == ''">$([System.IO.Path]::GetFullPath('$(RepoRoot)..\NuGet.Client'))</NuGetClientRepoRoot>
-    <NuGetClientArtifactsRoot>$(NuGetClientRepoRoot)\artifacts</NuGetClientArtifactsRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -136,30 +134,10 @@
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="NuGet.Protocol" ExcludeAssets="all" />
-    <PackageReference Include="NuGet.Resolver" ExcludeAssets="all" />
-    <Reference Include="NuGet.Common" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Common\bin\Release\net10.0\NuGet.Common.dll" />
-    <Reference Include="NuGet.Configuration" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Configuration\bin\Release\net10.0\NuGet.Configuration.dll" />
-    <Reference Include="NuGet.Credentials" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Credentials\bin\Release\net10.0\NuGet.Credentials.dll" />
-    <Reference Include="NuGet.Frameworks" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Frameworks\bin\Release\net10.0\NuGet.Frameworks.dll" />
-    <Reference Include="NuGet.Packaging" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Packaging\bin\Release\net10.0\NuGet.Packaging.dll" />
-    <Reference Include="NuGet.Protocol" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Protocol\bin\Release\net10.0\NuGet.Protocol.dll" />
-    <Reference Include="NuGet.Resolver" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Resolver\bin\Release\net10.0\NuGet.Resolver.dll" />
-    <Reference Include="NuGet.Versioning" HintPath="$(NuGetClientArtifactsRoot)\NuGet.Versioning\bin\Release\net10.0\NuGet.Versioning.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Common\bin\Release\net10.0\NuGet.Common.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Configuration\bin\Release\net10.0\NuGet.Configuration.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Credentials\bin\Release\net10.0\NuGet.Credentials.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Frameworks\bin\Release\net10.0\NuGet.Frameworks.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Packaging\bin\Release\net10.0\NuGet.Packaging.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Protocol\bin\Release\net10.0\NuGet.Protocol.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Resolver\bin\Release\net10.0\NuGet.Resolver.dll" />
-    <_LocalNuGetAssembly Include="$(NuGetClientArtifactsRoot)\NuGet.Versioning\bin\Release\net10.0\NuGet.Versioning.dll" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="7.10.0-dev.1" />
   </ItemGroup>
-
-  <Target Name="EnsureLocalNuGetBuild" BeforeTargets="ResolveAssemblyReferences">
-    <Error Condition="!Exists('%(_LocalNuGetAssembly.Identity)')"
-           Text="The local NuGet assembly was not found at '%(_LocalNuGetAssembly.Identity)'. Build '$(NuGetClientRepoRoot)\src\NuGet.Core\NuGet.Resolver\NuGet.Resolver.csproj' in Release configuration, or set NuGetClientRepoRoot." />
-  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
