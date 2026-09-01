@@ -10,6 +10,7 @@ import {
 } from './configInfoProvider';
 import { CliPathResolutionTarget, getCliPathTargetKey } from './cliPathVariables';
 import { extensionLogOutputChannel } from './logging';
+import { OutdatedCliSuppressionStore } from './outdatedCliSuppressionStore';
 import { getComparisonKey } from './paths/comparison';
 
 const updateAspireCliCommand = 'aspire-vscode.updateSelf';
@@ -19,7 +20,6 @@ const completedUpdateRefreshIntervalMs = 6 * 60 * 60 * 1_000;
 const unavailableRetryBaseMs = 60 * 1_000;
 const unavailableRetryMaximumMs = 30 * 60 * 1_000;
 const maximumUnavailableAttemptsPerIdentity = 3;
-const persistedSuppressionKey = 'outdatedCliNotification.suppressedCliVersions';
 
 type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliVersion' | 'getCliUpdateRecommendation'>;
 
@@ -66,9 +66,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         private readonly _versionProvider: CliVersionProvider,
         private readonly _surface: OutdatedCliNotificationSurface = defaultSurface,
         private readonly _now: () => number = Date.now,
-        private readonly _globalState?: vscode.Memento,
+        private readonly _suppressionStore?: OutdatedCliSuppressionStore,
     ) {
-        this._persistentlySuppressedCliVersions = new Set(readPersistedSuppressions(_globalState));
+        this._persistentlySuppressedCliVersions = new Set();
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
@@ -79,6 +79,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         const workingDirectory = resolveConfigInfoWorkingDirectory(target);
         const checkKey = getCliCheckKey(target, cliPath, workingDirectory);
         if ((this._stateByCheckKey.get(checkKey)?.versionValidUntil ?? 0) > this._now()) {
+            return;
+        }
+        if (!await this._refreshPersistedSuppressions() || this._disposed) {
             return;
         }
         const existingProbe = this._inFlightByCheckKey.get(checkKey);
@@ -105,6 +108,16 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
+        if (!await this._refreshPersistedSuppressions() || this._disposed) {
+            const state = this._stateByCheckKey.get(checkKey);
+            if (state?.identity && areCliIdentitiesEqual(state.identity, notification.cli)) {
+                state.versionValidUntil = 0;
+                state.updateStatus = undefined;
+                state.updateValidUntil = 0;
+                state.failureCount = 0;
+            }
+            return;
+        }
         const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
         if (this._notifiedCliVersions.has(notificationKey) ||
             this._persistentlySuppressedCliVersions.has(notificationKey)) {
@@ -143,6 +156,23 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         await this._surface.executeCommand(updateAspireCliCommand, notification.target, notification.cli.cliPath);
+    }
+
+    private async _refreshPersistedSuppressions(): Promise<boolean> {
+        if (!this._suppressionStore) {
+            return true;
+        }
+
+        try {
+            for (const notificationKey of await this._suppressionStore.readAll()) {
+                this._persistentlySuppressedCliVersions.add(notificationKey);
+            }
+            return true;
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Unable to read Aspire CLI warning suppressions: ${String(error)}`);
+            return false;
+        }
     }
 
     private _getCliVersion(
@@ -289,9 +319,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         this._persistentlySuppressedCliVersions.add(notificationKey);
 
         try {
-            await this._globalState?.update(
-                persistedSuppressionKey,
-                [...this._persistentlySuppressedCliVersions]);
+            await this._suppressionStore?.add(notificationKey);
         }
         catch (error) {
             extensionLogOutputChannel.warn(`Unable to persist Aspire CLI warning suppression: ${String(error)}`);
@@ -323,13 +351,6 @@ function getCliCheckKey(
     workingDirectory: string,
 ): string {
     return `${getCliPathTargetKey(target)}\u0000${getComparisonKey(path.normalize(cliPath))}\u0000${getComparisonKey(path.normalize(workingDirectory))}`;
-}
-
-function readPersistedSuppressions(globalState: vscode.Memento | undefined): string[] {
-    const values = globalState?.get<unknown>(persistedSuppressionKey);
-    return Array.isArray(values)
-        ? values.filter((value): value is string => typeof value === 'string')
-        : [];
 }
 
 function areCliIdentitiesEqual(left: CliVersionInfo | undefined, right: CliVersionInfo): boolean {

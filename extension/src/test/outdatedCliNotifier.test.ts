@@ -10,6 +10,7 @@ import {
 } from '../utils/configInfoProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { OutdatedCliNotificationSurface, OutdatedCliNotifier } from '../utils/outdatedCliNotifier';
+import { OutdatedCliSuppressionStore } from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliNotifier', () => {
     class FakeVersionProvider {
@@ -24,6 +25,7 @@ suite('outdatedCliNotifier', () => {
             currentVersion: '13.5.0',
             version: '13.6.0',
         };
+        recommendationPromise: Promise<CliUpdateRecommendation> | undefined;
         readonly versionCalls: Array<CliVersionStatusOptions | undefined> = [];
         readonly recommendationCalls: Array<CliUpdateRecommendationOptions | undefined> = [];
 
@@ -36,7 +38,7 @@ suite('outdatedCliNotifier', () => {
 
         async getCliUpdateRecommendation(options?: CliUpdateRecommendationOptions): Promise<CliUpdateRecommendation> {
             this.recommendationCalls.push(options);
-            return this.recommendation;
+            return await (this.recommendationPromise ?? this.recommendation);
         }
     }
 
@@ -57,7 +59,7 @@ suite('outdatedCliNotifier', () => {
         }
     }
 
-    function createNotifier(now: () => number = Date.now, globalState?: vscode.Memento): {
+    function createNotifier(now: () => number = Date.now, suppressionStore?: OutdatedCliSuppressionStore): {
         notifier: OutdatedCliNotifier;
         versionProvider: FakeVersionProvider;
         surface: FakeSurface;
@@ -65,25 +67,16 @@ suite('outdatedCliNotifier', () => {
         const versionProvider = new FakeVersionProvider();
         const surface = new FakeSurface();
         return {
-            notifier: new OutdatedCliNotifier(versionProvider, surface, now, globalState),
+            notifier: new OutdatedCliNotifier(versionProvider, surface, now, suppressionStore),
             versionProvider,
             surface,
         };
     }
 
-    function createMemento(): vscode.Memento {
-        const values = new Map<string, unknown>();
+    function createSuppressionStore(values = new Set<string>()): OutdatedCliSuppressionStore {
         return {
-            keys: () => [...values.keys()],
-            get: <T>(key: string, defaultValue?: T): T | undefined =>
-                values.has(key) ? values.get(key) as T : defaultValue,
-            update: async (key: string, value: unknown): Promise<void> => {
-                if (value === undefined) {
-                    values.delete(key);
-                } else {
-                    values.set(key, value);
-                }
-            },
+            readAll: async () => [...values],
+            add: async notificationKey => void values.add(notificationKey),
         };
     }
 
@@ -135,22 +128,33 @@ suite('outdatedCliNotifier', () => {
     });
 
     test("Don't Show Again persists for the exact CLI path and version", async () => {
-        const globalState = createMemento();
-        const first = createNotifier(Date.now, globalState);
+        const values = new Set<string>();
+        const first = createNotifier(Date.now, createSuppressionStore(values));
+        const second = createNotifier(Date.now, createSuppressionStore(values));
         first.surface.selection = strings.dontShowAgainLabel;
+        let completeSecondRecommendation!: (recommendation: CliUpdateRecommendation) => void;
+        second.versionProvider.recommendationPromise = new Promise(resolve => completeSecondRecommendation = resolve);
+
+        const secondNotification = second.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await waitFor(
+            () => second.versionProvider.recommendationCalls.length === 1,
+            'Expected the second window update probe to start.');
 
         await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        completeSecondRecommendation({
+            status: 'available',
+            currentVersion: '13.5.0',
+            version: '13.6.0',
+        });
+        await secondNotification;
 
         assert.strictEqual(first.surface.warnings.length, 1);
         assert.deepStrictEqual(first.surface.commands, []);
         first.notifier.dispose();
 
-        const second = createNotifier(Date.now, globalState);
-        await second.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
-
         assert.deepStrictEqual(second.surface.warnings, []);
         assert.strictEqual(second.versionProvider.versionCalls.length, 1);
-        assert.deepStrictEqual(second.versionProvider.recommendationCalls, []);
+        assert.strictEqual(second.versionProvider.recommendationCalls.length, 1);
         second.notifier.dispose();
     });
 
