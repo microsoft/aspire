@@ -895,6 +895,10 @@ export async function executeE2eControlCommand(
       markStarted();
       return getActiveEditorInfo();
     }
+    case 'getOpenEditors': {
+      markStarted();
+      return getOpenEditorInfo();
+    }
     case 'runAspireCli': {
       if (!Array.isArray(command.args) || !command.args.every(argument => typeof argument === 'string')) {
         throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
@@ -907,7 +911,11 @@ export async function executeE2eControlCommand(
         [...command.args],
         workingDirectory,
         timeoutMs,
-        terminalProvider.createEnvironment());
+        terminalProvider.createEnvironment(),
+        {
+          noExtensionVariables: false,
+          rejectOnNonZero: command.allowNonZeroExit !== true,
+        });
       markStarted();
       return await commandPromise;
     }
@@ -1373,7 +1381,8 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
       resourceStartTimeoutMs,
-      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false));
+      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false),
+      { noExtensionVariables: true, rejectOnNonZero: true });
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
@@ -1503,7 +1512,8 @@ async function runAspireCliForE2E(
   args: string[],
   workingDirectory: string,
   timeoutMs: number,
-  environment: Record<string, string | undefined>
+  environment: Record<string, string | undefined>,
+  options: { noExtensionVariables: boolean; rejectOnNonZero: boolean }
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
   const diagnosticCommand = [cliPath, ...redactCliArgsForLogging(args)].join(' ');
@@ -1535,7 +1545,7 @@ async function runAspireCliForE2E(
         completed = true;
         clearTimeout(timeout);
         const result = { exitCode: code, stdout: stdout.join(''), stderr: stderr.join('') };
-        if (code === 0) {
+        if (code === 0 || !options.rejectOnNonZero) {
           resolve(result);
         } else {
           reject(new Error(`${diagnosticCommand} exited with code ${code}.`));
@@ -1550,7 +1560,7 @@ async function runAspireCliForE2E(
         clearTimeout(timeout);
         reject(error);
       },
-      noExtensionVariables: true,
+      noExtensionVariables: options.noExtensionVariables,
       createProcessGroup: true,
       env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
@@ -2213,6 +2223,18 @@ function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string
     fileName: document?.fileName,
     text: document?.getText(),
   };
+}
+
+function getOpenEditorInfo(): Array<{ label: string; uri?: string; isPreview: boolean }> {
+  return vscode.window.tabGroups.all.flatMap(group =>
+    group.tabs.map(tab => {
+      const uri = tab.input instanceof vscode.TabInputText ? tab.input.uri : undefined;
+      return {
+        label: tab.label,
+        uri: uri?.toString(),
+        isPreview: tab.isPreview,
+      };
+    }));
 }
 
 function cloneTerminalCommandEvent(event: AspireTerminalCommandEvent, sequence: number): AspireExtensionE2ETerminalCommand {

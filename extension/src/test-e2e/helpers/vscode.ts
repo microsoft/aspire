@@ -418,6 +418,28 @@ export async function getNotificationMessages(): Promise<string[]> {
     return await Promise.all(notifications.map(notification => notification.getMessage()));
 }
 
+export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            if (notifications.length === 0) {
+                return true;
+            }
+
+            await notifications[0].dismiss();
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.StaleElementReferenceError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, 'Timed out dismissing VS Code notifications.');
+}
+
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {
     await VSBrowser.instance.driver.wait(async () => {
         const currentCount = await getNotificationCount();
