@@ -3,11 +3,13 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPIPELINES001
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.ContainerRegistry;
@@ -26,6 +28,7 @@ public static class AzureSandboxesExtensions
 {
     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#container-apps-sandboxgroup-data-owner
     private const string SandboxGroupDataOwnerRoleId = "c24cf47c-5077-412d-a19c-45202126392c";
+    private const string ValidateSandboxPublishersStepName = "validate-azure-sandbox-publishers";
 
     /// <summary>
     /// Adds an Azure Container Apps sandbox group resource to the application model.
@@ -168,6 +171,7 @@ public static class AzureSandboxesExtensions
 
         var sandboxOptions = options ?? new AzureSandboxOptions();
         ValidateSandboxOptions(sandboxOptions);
+        EnsureSandboxPublisherValidationAdded(builder.ApplicationBuilder);
 
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
@@ -443,6 +447,59 @@ public static class AzureSandboxesExtensions
         }
     }
 
+    private static void EnsureSandboxPublisherValidationAdded(IDistributedApplicationBuilder builder)
+    {
+        if (builder.Services.Any(static descriptor => descriptor.ServiceType == typeof(AzureSandboxPipelineStepMarker)))
+        {
+            return;
+        }
+
+        builder.Services.AddSingleton<AzureSandboxPipelineStepMarker>();
+        builder.Pipeline.AddStep(
+            name: ValidateSandboxPublishersStepName,
+            action: static context =>
+            {
+                if (!context.ExecutionContext.IsPublishMode)
+                {
+                    return Task.CompletedTask;
+                }
+
+                var sandboxGroups = context.Model.Resources
+                    .OfType<AzureSandboxGroupResource>()
+                    .Where(static group => !group.IsExcludedFromPublish())
+                    .ToHashSet();
+
+                foreach (var resource in context.Model.GetComputeResources())
+                {
+                    if (!resource.HasAnnotationOfType<AzureSandboxContainerOptionsAnnotation>())
+                    {
+                        continue;
+                    }
+
+                    if (sandboxGroups.Count == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{resource.Name}' is configured to publish as an Azure sandbox, but there are no '{nameof(AzureSandboxGroupResource)}' resources. " +
+                            $"Ensure you have added one by calling '{nameof(AddAzureSandboxGroup)}'.");
+                    }
+
+                    var computeEnvironment = resource.GetComputeEnvironment();
+                    if (computeEnvironment is not null &&
+                        (computeEnvironment is not AzureSandboxGroupResource sandboxGroup ||
+                         !sandboxGroups.Contains(sandboxGroup)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{resource.Name}' is configured to publish as an Azure sandbox, but it is assigned to compute environment '{computeEnvironment.Name}', which is not an active Azure sandbox group. " +
+                            $"Assign it to an '{nameof(AzureSandboxGroupResource)}' by calling 'WithComputeEnvironment'.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            },
+            dependsOn: WellKnownPipelineSteps.ValidateComputeEnvironments,
+            requiredBy: WellKnownPipelineSteps.BeforeStart);
+    }
+
     private static void ApplyManagedServiceIdentity(
         ManagedServiceIdentity identity,
         AzureSandboxGroupResource resource,
@@ -477,4 +534,6 @@ public static class AzureSandboxesExtensions
 
         return resource;
     }
+
+    private sealed class AzureSandboxPipelineStepMarker;
 }

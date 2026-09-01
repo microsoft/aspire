@@ -2455,6 +2455,43 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task PublishAsAzureSandboxRequiresSandboxGroup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddContainer("frontend", "image")
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Resource 'frontend' is configured to publish as an Azure sandbox, but there are no 'AzureSandboxGroupResource' resources. Ensure you have added one by calling 'AddAzureSandboxGroup'.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsAzureSandboxRequiresMatchingSandboxGroup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var containerApps = builder.AddAzureContainerAppEnvironment("containerapps");
+        builder.AddContainer("frontend", "image")
+            .WithComputeEnvironment(containerApps)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Resource 'frontend' is configured to publish as an Azure sandbox, but it is assigned to compute environment 'containerapps', which is not an active Azure sandbox group. Assign it to an 'AzureSandboxGroupResource' by calling 'WithComputeEnvironment'.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
     public async Task SandboxGroupAutomaticallyDeploysDotNetProjectWithDefaultEndpoint()
     {
         using var tempDir = new TemporaryDirectory();
