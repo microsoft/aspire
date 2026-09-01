@@ -29,31 +29,24 @@ export const coreTeamMembers = [
 // (isEmuLogin) to detect Enterprise Managed User accounts for per-account repo defaults.
 export const coreTeamMemberAliasSuffixes = ["_microsoft"];
 
-// Explicit allowlist of Enterprise Managed User (EMU) logins that ARE the Aspire core
-// team on the private first-party mirror (devdiv-microsoft/aspire-1p). Membership here
-// is authoritative for EMU-form authors: on the mirror every author is an EMU account,
-// and an EMU login is treated as core team ONLY if it appears in this list. Any other
-// "*_microsoft" author is a review target (a candidate for the review SLA queue).
-//
-// This is deliberately explicit rather than "anything ending in _microsoft", because the
-// EMU base often differs from the person's public GitHub login (e.g. David Pine is
-// @IEvangelist publicly but "dapine_microsoft" on the mirror), so a suffix-strip against
-// the public coreTeamMembers roster can't recognize them. Keep in sync with the team's
-// EMU roster. Logins are compared case-insensitively.
+// Allowlist of first-party logins that count as Aspire core team. An author in this
+// list is treated as core team; anyone else is a review-SLA candidate. This is an
+// explicit roster (not a suffix rule) because these logins don't always match a
+// person's public login. Compared case-insensitively; keep in sync with the roster.
 export const coreTeamEmuLogins = [
-  "eerhardt_microsoft",     // Eric Erhardt
-  "ankj_microsoft",         // Ankit Jain
-  "dapine_microsoft",       // David Pine
-  "midenn_microsoft",       // Mitch Denny
-  "adamratzman_microsoft",  // Adam Ratzman
-  "danegsta_microsoft",     // David Negstad
-  "jamesnk_microsoft",      // James Newton-King
-  "karolz_microsoft",       // Karol Zadora-Przylecki
-  "sebros_microsoft",       // Sebastien Ros
-  "ellahathaway_microsoft", // Ella Hathaway
-  "joperezr_microsoft",     // Jose Perez Rodriguez
-  "dedward_microsoft",      // Damian Edwards
-  "maleger_microsoft",      // Maddy Montaquila
+  "eerhardt_microsoft",
+  "ankj_microsoft",
+  "dapine_microsoft",
+  "midenn_microsoft",
+  "adamratzman_microsoft",
+  "danegsta_microsoft",
+  "jamesnk_microsoft",
+  "karolz_microsoft",
+  "sebros_microsoft",
+  "ellahathaway_microsoft",
+  "joperezr_microsoft",
+  "dedward_microsoft",
+  "maleger_microsoft",
 ];
 
 // Repos where specific check failures are non-blocking (informational only), so an
