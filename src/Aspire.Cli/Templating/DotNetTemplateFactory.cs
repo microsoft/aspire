@@ -32,6 +32,7 @@ internal class DotNetTemplateFactory(
     : ITemplateFactory
 {
     private const string NoTestFramework = "None";
+    private const string IntegrationTestSourceFileName = "IntegrationTest1.cs";
 
     // Template-specific options
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
@@ -186,7 +187,7 @@ internal class DotNetTemplateFactory(
 
         // Folded into the last yielded template.
         var msTestTemplate = new CallbackTemplate(
-            "aspire-mstest",
+            KnownTemplateId.MSTest,
             TemplatingStrings.AspireMSTest_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -196,7 +197,7 @@ internal class DotNetTemplateFactory(
 
         // Folded into the last yielded template.
         var nunitTemplate = new CallbackTemplate(
-            "aspire-nunit",
+            KnownTemplateId.NUnit,
             TemplatingStrings.AspireNUnit_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -206,7 +207,7 @@ internal class DotNetTemplateFactory(
 
         // Folded into the last yielded template.
         var xunitTemplate = new CallbackTemplate(
-            "aspire-xunit",
+            KnownTemplateId.XUnit,
             TemplatingStrings.AspireXUnit_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -217,7 +218,7 @@ internal class DotNetTemplateFactory(
         // Prepends a test framework selection step then calls the
         // underlying test template.
         yield return new CallbackTemplate(
-            "aspire-test",
+            KnownTemplateId.IntegrationTest,
             TemplatingStrings.IntegrationTestsTemplate_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             command =>
@@ -242,7 +243,7 @@ internal class DotNetTemplateFactory(
                 );
 
                 var testCallbackTemplate = (CallbackTemplate)testTemplate;
-                Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback = testCallbackTemplate.Name == "aspire-xunit"
+                Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback = testCallbackTemplate.Name == KnownTemplateId.XUnit
                     ? PromptForExtraAspireXUnitOptionsAsync
                     : (_, _) => Task.FromResult(Array.Empty<string>());
 
@@ -619,7 +620,7 @@ internal class DotNetTemplateFactory(
             return new TemplateResult(
                 CliExitCodes.Success,
                 outputPath,
-                appHostProject is null ? null : Path.Combine(outputPath, "IntegrationTest1.cs"));
+                appHostProject is null ? null : Path.Combine(outputPath, IntegrationTestSourceFileName));
         }
         catch (OperationCanceledException)
         {
