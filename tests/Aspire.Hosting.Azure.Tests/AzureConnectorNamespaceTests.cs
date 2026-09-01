@@ -7,11 +7,25 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureConnectorNamespaceTests
 {
+    [Fact]
+    public void AddAzureConnectorNamespaceDoesNotEnableTargetedRoleAssignments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureConnectorNamespace("gateway");
+
+        using var app = builder.Build();
+        var options = app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
+
+        Assert.False(options.Value.SupportsTargetedRoleAssignments);
+    }
+
     [Fact]
     public async Task AddAzureConnectorNamespaceResourcesGeneratesBicep()
     {

@@ -7,7 +7,6 @@ using Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -51,9 +50,8 @@ public static class AzureConnectorNamespaceExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         builder.AddAzureProvisioning();
-        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+        builder.AddAzureProvisioning();
 
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
