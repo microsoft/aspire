@@ -49,12 +49,7 @@ builder.AddUvicornApp("agui-acp-agent", "../agui-acp-agent-python", "agui_acp_ag
     .AsAgent(AgentProtocol.AgUi)
     .AsAgent(AgentProtocol.Acp);
 
-builder.AddExecutable(
-        "agent-env-dump",
-        "sh",
-        ".",
-        "-c",
-        "echo A2A_JSONRPC_AGENT_AGENTCARD_URL=$A2A_JSONRPC_AGENT_AGENTCARD_URL && sleep 3600")
+builder.AddProject<Projects.AgentEnvDump>("agent-env-dump")
     .WithReference(a2aAgent).WaitFor(a2aAgent);
 
 #if !SKIP_DASHBOARD_REFERENCE

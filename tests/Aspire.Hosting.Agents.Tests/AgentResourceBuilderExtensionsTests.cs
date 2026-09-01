@@ -28,6 +28,7 @@ public class AgentResourceBuilderExtensionsTests
 
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
         Assert.Equal(AgentProtocol.A2A, annotation.Protocol);
+        Assert.Equal(A2AInvocationMode.NonStreaming, annotation.InvocationMode);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name == "agent-a2a-agent-card");
@@ -118,6 +119,19 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public void AsAgent_RejectsA2AInvocationModeForOtherProtocols()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent", "image")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        var ex = Assert.Throws<ArgumentException>(() => agent.AsAgent(AgentProtocol.Responses, A2AInvocationMode.Streaming));
+
+        Assert.Equal("invocationMode", ex.ParamName);
+    }
+
+    [Fact]
     public async Task AsAgent_A2AInjectsBaseUrlIntoAgent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -133,26 +147,35 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Theory]
-    [InlineData("JSONRPC", "1.0", false, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
-    [InlineData("JSONRPC", "1.0", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendStreamingMessage", "ROLE_USER", "parts")]
-    [InlineData("JSONRPC", "0.3", false, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/send", "user", "parts")]
-    [InlineData("JSONRPC", "0.3", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/stream", "user", "parts")]
-    [InlineData("HTTP+JSON", "1.0", false, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
-    [InlineData("HTTP+JSON", "1.0", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:stream", null, "ROLE_USER", "parts")]
-    [InlineData("HTTP+JSON", "0.3", false, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "user", "content")]
-    [InlineData("HTTP+JSON", "0.3", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "user", "content")]
-    [InlineData("JSONRPC", "1.0", false, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
-    [InlineData("HTTP+JSON", "1.0", false, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
-    public async Task InvokeA2AReadsAgentCardAndChoosesBinding(string protocolBinding, string protocolVersion, bool streaming, string interfaceUrl, string expectedUrl, string? expectedJsonRpcMethod, string expectedRole, string expectedPartsPropertyName)
+    [InlineData("JSONRPC", "1.0", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
+    [InlineData("JSONRPC", "1.0", true, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
+    [InlineData("JSONRPC", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/send", "user", "parts")]
+    [InlineData("JSONRPC", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/stream", "user", "parts")]
+    [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
+    [InlineData("HTTP+JSON", "1.0", true, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
+    [InlineData("HTTP+JSON", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "user", "content")]
+    [InlineData("HTTP+JSON", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "user", "content")]
+    [InlineData("JSONRPC", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
+    [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
+    public async Task InvokeA2AReadsAgentCardAndChoosesBinding(
+        string protocolBinding,
+        string protocolVersion,
+        bool supportsStreaming,
+        A2AInvocationMode invocationMode,
+        string interfaceUrl,
+        string expectedUrl,
+        string? expectedJsonRpcMethod,
+        string expectedRole,
+        string expectedPartsPropertyName)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var handler = new A2ACommandHandler(protocolBinding, protocolVersion, streaming, interfaceUrl);
+        var handler = new A2ACommandHandler(protocolBinding, protocolVersion, supportsStreaming, interfaceUrl);
         builder.Services.AddHttpClient(string.Empty)
             .ConfigurePrimaryHttpMessageHandler(() => handler);
 
         var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
-            .AsAgent(AgentProtocol.A2A);
+            .AsAgent(AgentProtocol.A2A, invocationMode);
 
         using var app = builder.Build();
         await app.StartAsync().DefaultTimeout();
@@ -164,7 +187,7 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal(new Uri(expectedUrl), handler.InvocationRequest?.RequestUri);
         Assert.Equal(HttpMethod.Post, handler.InvocationRequest?.Method);
         Assert.Equal(protocolVersion, handler.InvocationRequest?.Headers.GetValues("A2A-Version").Single());
-        Assert.Equal(streaming, handler.InvocationRequest?.Headers.Accept.Any(h => h.MediaType == "text/event-stream"));
+        Assert.Equal(invocationMode is A2AInvocationMode.Streaming, handler.InvocationRequest?.Headers.Accept.Any(h => h.MediaType == "text/event-stream"));
 
         Assert.NotNull(handler.InvocationBody);
         var body = JsonNode.Parse(handler.InvocationBody);
@@ -186,11 +209,34 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task InvokeA2AStreamingRequiresAgentSupport()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new A2ACommandHandler("JSONRPC", "1.0", supportsStreaming: false, "http://localhost:8080/a2a");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A, A2AInvocationMode.Streaming);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Contains("does not advertise streaming support", result.Message);
+        Assert.Null(handler.InvocationRequest);
+    }
+
+    [Fact]
     public async Task InvokeA2ARequiresMessageArgument()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var handler = new A2ACommandHandler("JSONRPC", "1.0", streaming: false, "http://localhost:8080/a2a");
+        var handler = new A2ACommandHandler("JSONRPC", "1.0", supportsStreaming: false, "http://localhost:8080/a2a");
         builder.Services.AddHttpClient(string.Empty)
             .ConfigurePrimaryHttpMessageHandler(() => handler);
 
@@ -265,7 +311,7 @@ public class AgentResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public void WithReference_NonAgentEndpointOnlyResourceStillThrows()
+    public void WithReference_NonAgentContainerUsesGenericValidation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -349,7 +395,7 @@ public class AgentResourceBuilderExtensionsTests
         Assert.False(string.IsNullOrWhiteSpace(argument.Placeholder));
     }
 
-    private sealed class A2ACommandHandler(string protocolBinding, string protocolVersion, bool streaming, string interfaceUrl) : HttpMessageHandler
+    private sealed class A2ACommandHandler(string protocolBinding, string protocolVersion, bool supportsStreaming, string interfaceUrl) : HttpMessageHandler
     {
         public HttpRequestMessage? InvocationRequest { get; private set; }
 
@@ -365,7 +411,7 @@ public class AgentResourceBuilderExtensionsTests
                         $$"""
                           {
                             "capabilities": {
-                              "streaming": {{streaming.ToString().ToLowerInvariant()}}
+                              "streaming": {{supportsStreaming.ToString().ToLowerInvariant()}}
                             },
                             "supportedInterfaces": [
                               {
@@ -388,7 +434,7 @@ public class AgentResourceBuilderExtensionsTests
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = streaming
+                Content = request.Headers.Accept.Any(h => h.MediaType == "text/event-stream")
                     ? new StringContent("event: message\ndata: {}\n\n", Encoding.UTF8, "text/event-stream")
                     : new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json")
             };

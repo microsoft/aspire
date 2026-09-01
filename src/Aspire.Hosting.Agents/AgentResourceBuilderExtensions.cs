@@ -62,7 +62,26 @@ public static class AgentResourceBuilderExtensions
     public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, protocol);
+        return AsAgent(builder, agentCustomPath: null, protocol, A2AInvocationMode.NonStreaming);
+    }
+
+    /// <summary>
+    /// Configures the resource as an A2A agent using the specified dashboard invocation mode.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
+    /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    [AspireExport("asAgentWithInvocationMode")]
+    public static IResourceBuilder<T> AsAgent<T>(
+        this IResourceBuilder<T> builder,
+        AgentProtocol protocol,
+        A2AInvocationMode invocationMode)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        return AsAgent(builder, agentCustomPath: null, protocol, invocationMode);
     }
 
     /// <summary>
@@ -77,10 +96,35 @@ public static class AgentResourceBuilderExtensions
     public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        return AsAgent(builder, agentCustomPath, protocol, A2AInvocationMode.NonStreaming);
+    }
+
+    /// <summary>
+    /// Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="agentCustomPath">The custom path for protocol-specific dashboard commands and URLs.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
+    /// <param name="invocationMode">The invocation mode used by dashboard commands.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="invocationMode"/> is used with a protocol other than A2A.</exception>
+    [AspireExport("asAgentWithPathAndInvocationMode")]
+    public static IResourceBuilder<T> AsAgent<T>(
+        this IResourceBuilder<T> builder,
+        string? agentCustomPath,
+        AgentProtocol protocol,
+        A2AInvocationMode invocationMode)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
+        if (protocol is not AgentProtocol.A2A && invocationMode is not A2AInvocationMode.NonStreaming)
+        {
+            throw new ArgumentException("A2A invocation modes can only be configured for the A2A protocol.", nameof(invocationMode));
+        }
 
         var normalizedPath = NormalizePath(agentCustomPath);
-        var annotation = new AgentResourceAnnotation(protocol, normalizedPath);
+        var annotation = new AgentResourceAnnotation(protocol, normalizedPath, invocationMode);
 
         builder.WithAnnotation(annotation);
         builder.WithIconName("Agents");
@@ -92,7 +136,7 @@ public static class AgentResourceBuilderExtensions
 
         if (IsA2AProtocol(protocol))
         {
-            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, ShouldHighlightCommand);
+            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, invocationMode, ShouldHighlightCommand);
         }
 
         if (protocol is AgentProtocol.Responses)
@@ -124,65 +168,6 @@ public static class AgentResourceBuilderExtensions
         }
     }
 
-    /// <summary>
-    /// Adds a reference from the destination resource to an agent container resource.
-    /// </summary>
-    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
-    /// <param name="builder">The destination resource builder.</param>
-    /// <param name="source">The agent container resource builder to reference.</param>
-    /// <param name="name">An optional name used for the injected environment variables.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination>(
-        this IResourceBuilder<TDestination> builder,
-        IResourceBuilder<ContainerResource> source,
-        string? name = null)
-        where TDestination : IResourceWithEnvironment
-    {
-        return WithAgentReference(builder, source, name);
-    }
-
-    /// <summary>
-    /// Adds a reference from the destination resource to an agent executable resource.
-    /// </summary>
-    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
-    /// <param name="builder">The destination resource builder.</param>
-    /// <param name="source">The agent executable resource builder to reference.</param>
-    /// <param name="name">An optional name used for the injected environment variables.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination>(
-        this IResourceBuilder<TDestination> builder,
-        IResourceBuilder<ExecutableResource> source,
-        string? name = null)
-        where TDestination : IResourceWithEnvironment
-    {
-        return WithAgentReference(builder, source, name);
-    }
-
-    /// <summary>
-    /// Adds a reference from the destination resource to an agent resource with endpoints.
-    /// </summary>
-    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
-    /// <typeparam name="TSource">The type of the agent resource.</typeparam>
-    /// <param name="builder">The destination resource builder.</param>
-    /// <param name="source">The agent resource builder to reference.</param>
-    /// <param name="name">An optional name used for the injected environment variables.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination, TSource>(
-        this IResourceBuilder<TDestination> builder,
-        IResourceBuilder<TSource> source,
-        string? name = null)
-        where TDestination : IResourceWithEnvironment
-        where TSource : IResourceWithEndpoints
-    {
-        return WithAgentReference(builder, source, name);
-    }
-
     internal static string GetAgentCardEnvironmentVariableName(string agentName)
     {
         return $"{EnvironmentVariableNameEncoder.Encode(agentName).ToUpperInvariant()}_AGENTCARD_URL";
@@ -203,103 +188,7 @@ public static class AgentResourceBuilderExtensions
         return protocol is AgentProtocol.A2A;
     }
 
-    private static IResourceBuilder<TDestination> WithAgentReference<TDestination, TSource>(
-        IResourceBuilder<TDestination> builder,
-        IResourceBuilder<TSource> source,
-        string? name)
-        where TDestination : IResourceWithEnvironment
-        where TSource : IResourceWithEndpoints
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(source);
-
-        var agentAnnotations = source.Resource.Annotations.OfType<AgentResourceAnnotation>()
-            .Where(a => IsA2AProtocol(a.Protocol))
-            .ToArray();
-
-        if (agentAnnotations.Length == 0)
-        {
-            throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
-        }
-
-        var referenceName = name ?? source.Resource.Name;
-        builder.WithReferenceRelationship(source.Resource);
-
-        if (source.Resource is IResourceWithServiceDiscovery)
-        {
-            builder = AddServiceDiscoveryReference(builder, source.Resource, referenceName);
-        }
-
-        foreach (var agentAnnotation in agentAnnotations)
-        {
-            builder = builder.WithEnvironment(context =>
-            {
-                context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
-                var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
-                if (!flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
-                {
-                    return;
-                }
-
-                var network = context.Resource.IsContainer()
-                    ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
-                    : KnownNetworkIdentifiers.LocalhostNetwork;
-                var endpoint = GetDefaultAgentEndpoint(source.Resource, network);
-                var envVarName = GetAgentCardEnvironmentVariableName(referenceName);
-                context.EnvironmentVariables[envVarName] = CreateA2AAgentCardUrl(endpoint, GetA2AAgentCardPath(agentAnnotation));
-            });
-        }
-
-        return builder;
-    }
-
-    private static IResourceBuilder<TDestination> AddServiceDiscoveryReference<TDestination>(
-        IResourceBuilder<TDestination> builder,
-        IResourceWithEndpoints source,
-        string referenceName)
-        where TDestination : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(context =>
-        {
-            context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
-            var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
-
-            var network = context.Resource.IsContainer()
-                ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
-                : KnownNetworkIdentifiers.LocalhostNetwork;
-            var schemeIndexTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var endpoint in source.GetEndpoints(network))
-            {
-                if (endpoint.Exists && flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
-                {
-                    var encodedEndpointName = EnvironmentVariableNameEncoder.Encode(endpoint.EndpointName);
-                    context.EnvironmentVariables[$"{EnvironmentVariableNameEncoder.Encode(referenceName).ToUpperInvariant()}_{encodedEndpointName.ToUpperInvariant()}"] = endpoint;
-                }
-
-                if (endpoint.Exists && flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
-                {
-                    var schemeKey = endpoint.IsHttpSchemeNamedEndpoint ? endpoint.Scheme : endpoint.EndpointName;
-                    if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
-                    {
-                        index = 0;
-                    }
-
-                    var key = $"services__{referenceName}__{schemeKey}__{index}";
-                    while (context.EnvironmentVariables.ContainsKey(key))
-                    {
-                        index++;
-                        key = $"services__{referenceName}__{schemeKey}__{index}";
-                    }
-
-                    context.EnvironmentVariables[key] = endpoint;
-                    schemeIndexTracker[schemeKey] = index + 1;
-                }
-            }
-        });
-    }
-
-    private static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
+    internal static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
     {
         var endpointName = source.Annotations
             .OfType<EndpointAnnotation>()
@@ -315,6 +204,7 @@ public static class AgentResourceBuilderExtensions
         IResourceBuilder<T> builder,
         EndpointReference endpoint,
         string agentCardPath,
+        A2AInvocationMode invocationMode,
         Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -340,7 +230,7 @@ public static class AgentResourceBuilderExtensions
                 IsHighlighted = shouldHighlightCommand(),
                 Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
                 EndpointSelector = () => endpoint,
-                PrepareRequest = PrepareA2ARequestAsync,
+                PrepareRequest = ctx => PrepareA2ARequestAsync(ctx, invocationMode),
                 GetCommandResult = GetAgentCommandResultAsync
             });
     }
@@ -426,10 +316,10 @@ public static class AgentResourceBuilderExtensions
             });
     }
 
-    private static async Task PrepareA2ARequestAsync(HttpCommandRequestContext ctx)
+    private static async Task PrepareA2ARequestAsync(HttpCommandRequestContext ctx, A2AInvocationMode invocationMode)
     {
         var cardUri = ctx.Request.RequestUri ?? throw new InvalidOperationException("Could not determine the A2A agent card URL.");
-        var invocation = await ResolveA2AInvocationAsync(ctx, cardUri).ConfigureAwait(true);
+        var invocation = await ResolveA2AInvocationAsync(ctx, cardUri, invocationMode).ConfigureAwait(true);
 
         var message = GetAgentMessage(ctx.Arguments);
 
@@ -488,7 +378,10 @@ public static class AgentResourceBuilderExtensions
         return protocolVersion is not null && protocolVersion.StartsWith("0.", StringComparison.Ordinal);
     }
 
-    private static async Task<A2AInvocation> ResolveA2AInvocationAsync(HttpCommandRequestContext ctx, Uri cardUri)
+    private static async Task<A2AInvocation> ResolveA2AInvocationAsync(
+        HttpCommandRequestContext ctx,
+        Uri cardUri,
+        A2AInvocationMode invocationMode)
     {
         using var response = await ctx.HttpClient.GetAsync(cardUri, ctx.CancellationToken).ConfigureAwait(true);
         if (!response.IsSuccessStatusCode)
@@ -499,7 +392,12 @@ public static class AgentResourceBuilderExtensions
         var card = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: ctx.CancellationToken).ConfigureAwait(true)
             ?? throw new InvalidOperationException($"The A2A agent card at '{cardUri}' was empty.");
 
-        var streaming = card["capabilities"]?["streaming"]?.GetValue<bool>() is true;
+        var supportsStreaming = card["capabilities"]?["streaming"]?.GetValue<bool>() is true;
+        var streaming = invocationMode is A2AInvocationMode.Streaming;
+        if (streaming && !supportsStreaming)
+        {
+            throw new InvalidOperationException($"The A2A agent card at '{cardUri}' does not advertise streaming support.");
+        }
         var interfaces = GetA2AInterfaces(card, cardUri).ToArray();
 
         foreach (var agentInterface in interfaces)

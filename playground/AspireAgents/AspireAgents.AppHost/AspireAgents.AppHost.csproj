@@ -20,6 +20,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Foundry" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
+    <ProjectReference Include="..\AgentEnvDump\AgentEnvDump.csproj" />
     <ProjectReference Include="..\McpAgent\McpAgent.csproj" />
     <ProjectReference Include="..\ResponsesAgent\ResponsesAgent.csproj" />
   </ItemGroup>

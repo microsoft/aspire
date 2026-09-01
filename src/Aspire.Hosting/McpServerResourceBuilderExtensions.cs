@@ -123,7 +123,7 @@ public static class McpServerResourceBuilderExtensions
 
         foreach (var scheme in s_httpSchemes)
         {
-            var endpoint = endpoints.FirstOrDefault(e => string.Equals(e.EndpointName, scheme, StringComparisons.EndpointAnnotationName));
+            var endpoint = endpoints.FirstOrDefault(e => string.Equals(e.Scheme, scheme, StringComparison.OrdinalIgnoreCase));
             if (endpoint is not null)
             {
                 return endpoint;
@@ -131,7 +131,7 @@ public static class McpServerResourceBuilderExtensions
         }
 
         throw new DistributedApplicationException(
-            $"Could not create MCP server for resource '{resource.Name}' as no endpoint was found matching one of the specified names: {string.Join(", ", s_httpSchemes)}");
+            $"Could not create MCP server for resource '{resource.Name}' as no endpoint was found matching one of the supported schemes: {string.Join(", ", s_httpSchemes)}");
     }
 
     private static void AddMcpEndpointUrl<T>(IResourceBuilder<T> builder, string? path, string? endpointName)
@@ -215,19 +215,19 @@ public static class McpServerResourceBuilderExtensions
 
     private static async Task PrepareMcpToolCallRequestAsync(HttpCommandRequestContext ctx)
     {
-        var initializeResponse = await SendMcpJsonRpcRequestAsync(ctx, CreateMcpInitializeRequest(), sessionId: null).ConfigureAwait(true);
+        var initializeResponse = await SendMcpJsonRpcRequestAsync(
+            ctx,
+            CreateMcpInitializeRequest(),
+            sessionId: null,
+            protocolVersion: null).ConfigureAwait(true);
         using var initializeHttpResponse = initializeResponse.Response;
         var sessionId = initializeResponse.Response.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds) ? sessionIds.FirstOrDefault() : null;
+        var protocolVersion = initializeResponse.Payload["result"]?["protocolVersion"]?.GetValue<string>()
+            ?? throw new InvalidOperationException("MCP server did not return a negotiated protocol version.");
 
-        await SendMcpJsonRpcNotificationAsync(ctx, "notifications/initialized", sessionId).ConfigureAwait(true);
+        await SendMcpJsonRpcNotificationAsync(ctx, "notifications/initialized", sessionId, protocolVersion).ConfigureAwait(true);
 
-        var toolsListResponse = await SendMcpJsonRpcRequestAsync(
-            ctx,
-            CreateMcpJsonRpcRequest("tools/list", new JsonObject()),
-            sessionId).ConfigureAwait(true);
-        using var toolsListHttpResponse = toolsListResponse.Response;
-
-        var tools = ReadMcpTools(toolsListResponse.Payload);
+        var tools = await ReadAllMcpToolsAsync(ctx, sessionId, protocolVersion).ConfigureAwait(true);
         if (tools.Count == 0)
         {
             throw new InvalidOperationException("MCP server did not return any tools.");
@@ -244,7 +244,47 @@ public static class McpServerResourceBuilderExtensions
                     ["name"] = selectedTool.Name,
                     ["arguments"] = arguments
                 }),
-            sessionId);
+            sessionId,
+            protocolVersion);
+    }
+
+    private static async Task<IReadOnlyList<McpTool>> ReadAllMcpToolsAsync(
+        HttpCommandRequestContext ctx,
+        string? sessionId,
+        string protocolVersion)
+    {
+        var tools = new List<McpTool>();
+        var seenCursors = new HashSet<string>(StringComparer.Ordinal);
+        string? cursor = null;
+        do
+        {
+            var parameters = new JsonObject();
+            if (cursor is not null)
+            {
+                parameters["cursor"] = cursor;
+            }
+
+            var response = await SendMcpJsonRpcRequestAsync(
+                ctx,
+                CreateMcpJsonRpcRequest("tools/list", parameters),
+                sessionId,
+                protocolVersion).ConfigureAwait(true);
+            using (response.Response)
+            {
+                tools.AddRange(ReadMcpTools(response.Payload));
+                cursor = response.Payload["result"]?["nextCursor"]?.GetValue<string>() is { Length: > 0 } nextCursor
+                    ? nextCursor
+                    : null;
+            }
+
+            if (cursor is not null && !seenCursors.Add(cursor))
+            {
+                throw new InvalidOperationException($"MCP server returned the tools/list cursor '{cursor}' more than once.");
+            }
+        }
+        while (cursor is not null);
+
+        return tools;
     }
 
     private static InteractionInput CreateMcpToolArgument()
@@ -287,12 +327,27 @@ public static class McpServerResourceBuilderExtensions
                 CommandResultFormat.Text);
         }
 
-        var result = TryExtractServerSentEventData(responseBody, out var sseData) ? sseData : responseBody;
+        var result = TryExtractServerSentEventResponseData(responseBody, expectedId: null, out var sseData) ? sseData : responseBody;
         try
         {
-            var responseJson = JsonNode.Parse(result);
-            if (responseJson is not null)
+            if (JsonNode.Parse(result) is JsonObject responseJson)
             {
+                if (responseJson["error"] is { } error)
+                {
+                    return CommandResults.Failure(
+                        "MCP tool call returned a JSON-RPC error.",
+                        JsonSerializer.Serialize(error, s_indentedJsonOptions),
+                        CommandResultFormat.Json);
+                }
+
+                if (responseJson["result"]?["isError"]?.GetValue<bool>() is true)
+                {
+                    return CommandResults.Failure(
+                        "MCP tool reported an error.",
+                        JsonSerializer.Serialize(responseJson["result"], s_indentedJsonOptions),
+                        CommandResultFormat.Json);
+                }
+
                 return CommandResults.Success(
                     message: "MCP tool response received.",
                     result: JsonSerializer.Serialize(responseJson, s_indentedJsonOptions),
@@ -349,20 +404,28 @@ public static class McpServerResourceBuilderExtensions
         };
     }
 
-    private static async Task<(HttpResponseMessage Response, JsonObject Payload)> SendMcpJsonRpcRequestAsync(HttpCommandRequestContext ctx, JsonObject request, string? sessionId)
+    private static async Task<(HttpResponseMessage Response, JsonObject Payload)> SendMcpJsonRpcRequestAsync(
+        HttpCommandRequestContext ctx,
+        JsonObject request,
+        string? sessionId,
+        string? protocolVersion)
     {
         using var requestMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
-        ConfigureMcpRequest(requestMessage, request, sessionId);
+        ConfigureMcpRequest(requestMessage, request, sessionId, protocolVersion);
 
         var response = await ctx.HttpClient.SendAsync(requestMessage, ctx.CancellationToken).ConfigureAwait(true);
-        var payload = await ReadMcpJsonRpcPayloadAsync(response, ctx.CancellationToken).ConfigureAwait(true);
+        var payload = await ReadMcpJsonRpcPayloadAsync(response, request["id"], ctx.CancellationToken).ConfigureAwait(true);
         return (response, payload);
     }
 
-    private static async Task SendMcpJsonRpcNotificationAsync(HttpCommandRequestContext ctx, string method, string? sessionId)
+    private static async Task SendMcpJsonRpcNotificationAsync(
+        HttpCommandRequestContext ctx,
+        string method,
+        string? sessionId,
+        string protocolVersion)
     {
         using var requestMessage = new HttpRequestMessage(HttpMethod.Post, ctx.Request.RequestUri);
-        ConfigureMcpRequest(requestMessage, CreateMcpJsonRpcNotification(method), sessionId);
+        ConfigureMcpRequest(requestMessage, CreateMcpJsonRpcNotification(method), sessionId, protocolVersion);
 
         using var response = await ctx.HttpClient.SendAsync(requestMessage, ctx.CancellationToken).ConfigureAwait(true);
         if (!response.IsSuccessStatusCode)
@@ -372,7 +435,11 @@ public static class McpServerResourceBuilderExtensions
         }
     }
 
-    private static void ConfigureMcpRequest(HttpRequestMessage request, JsonObject payload, string? sessionId)
+    private static void ConfigureMcpRequest(
+        HttpRequestMessage request,
+        JsonObject payload,
+        string? sessionId,
+        string? protocolVersion)
     {
         request.Headers.Accept.ParseAdd("application/json");
         request.Headers.Accept.ParseAdd("text/event-stream");
@@ -381,10 +448,18 @@ public static class McpServerResourceBuilderExtensions
             request.Headers.Add("Mcp-Session-Id", sessionId);
         }
 
+        if (!string.IsNullOrWhiteSpace(protocolVersion))
+        {
+            request.Headers.Add("MCP-Protocol-Version", protocolVersion);
+        }
+
         request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
     }
 
-    private static async Task<JsonObject> ReadMcpJsonRpcPayloadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<JsonObject> ReadMcpJsonRpcPayloadAsync(
+        HttpResponseMessage response,
+        JsonNode? expectedId,
+        CancellationToken cancellationToken)
     {
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
         if (!response.IsSuccessStatusCode)
@@ -392,9 +467,20 @@ public static class McpServerResourceBuilderExtensions
             throw new InvalidOperationException($"MCP request failed with status code {(int)response.StatusCode} ({response.StatusCode}): {responseBody}");
         }
 
-        var payload = TryExtractServerSentEventData(responseBody, out var sseData) ? sseData : responseBody;
-        return JsonNode.Parse(payload) as JsonObject
+        var payload = TryExtractServerSentEventResponseData(responseBody, expectedId, out var sseData) ? sseData : responseBody;
+        var responseJson = JsonNode.Parse(payload) as JsonObject
             ?? throw new InvalidOperationException("MCP server returned an empty or invalid JSON-RPC response.");
+        if (!JsonNode.DeepEquals(responseJson["id"], expectedId))
+        {
+            throw new InvalidOperationException("MCP server returned a JSON-RPC response with an unexpected id.");
+        }
+
+        if (responseJson["error"] is { } error)
+        {
+            throw new InvalidOperationException($"MCP server returned a JSON-RPC error: {error.ToJsonString()}");
+        }
+
+        return responseJson;
     }
 
     private static IReadOnlyList<McpTool> ReadMcpTools(JsonObject payload)
@@ -684,14 +770,7 @@ public static class McpServerResourceBuilderExtensions
             };
         }
 
-        return parameter.Type switch
-        {
-            "boolean" => "false",
-            "integer" or "number" => null,
-            "array" => "[]",
-            "object" => "{}",
-            _ => null
-        };
+        return null;
     }
 
     private static string? GetMcpToolParameterPlaceholder(McpToolParameter parameter)
@@ -837,9 +916,18 @@ public static class McpServerResourceBuilderExtensions
             return result;
         }
 
+        var requiredParameters = ReadMcpRequiredParameters(tool.InputSchema);
         foreach (var property in properties)
         {
-            result[property.Key] = GetMcpDefaultArgumentValue(property.Value as JsonObject);
+            var propertySchema = property.Value as JsonObject;
+            if (propertySchema?["default"] is { } defaultValue)
+            {
+                result[property.Key] = defaultValue.DeepClone();
+            }
+            else if (requiredParameters.Contains(property.Key))
+            {
+                result[property.Key] = GetMcpDefaultArgumentValue(propertySchema);
+            }
         }
 
         return result;
@@ -897,25 +985,30 @@ public static class McpServerResourceBuilderExtensions
         }
     }
 
-    private static bool TryExtractServerSentEventData(string responseBody, out string data)
+    private static bool TryExtractServerSentEventResponseData(string responseBody, JsonNode? expectedId, out string data)
     {
-        // MCP streamable HTTP responses can arrive as a single SSE message:
+        // MCP Streamable HTTP can send notifications before the matching response:
+        //   event: message
+        //   data: {"jsonrpc":"2.0","method":"notifications/progress","params":{...}}
+        //
         //   event: message
         //   data: {"jsonrpc":"2.0","id":"...","result":{...}}
-        // Join consecutive data lines from the first event and leave JSON parsing to the caller.
+        // Join consecutive data lines within each event and return only a JSON-RPC response
+        // whose id matches the request. When the caller does not have the request id, return
+        // the first response-shaped event and skip request/notification events without an id.
         using var reader = new StringReader(responseBody);
         var builder = new StringBuilder();
-        var sawData = false;
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
             if (line.Length == 0)
             {
-                if (sawData)
+                if (TryUseEventData(builder, expectedId, out data))
                 {
-                    break;
+                    return true;
                 }
 
+                builder.Clear();
                 continue;
             }
 
@@ -930,17 +1023,41 @@ public static class McpServerResourceBuilderExtensions
                 value = value[1..];
             }
 
-            if (sawData)
+            if (builder.Length > 0)
             {
                 builder.Append('\n');
             }
 
             builder.Append(value);
-            sawData = true;
         }
 
-        data = builder.ToString();
-        return sawData;
+        return TryUseEventData(builder, expectedId, out data);
+    }
+
+    private static bool TryUseEventData(StringBuilder builder, JsonNode? expectedId, out string data)
+    {
+        data = string.Empty;
+        if (builder.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(builder.ToString()) is not JsonObject payload ||
+                payload["id"] is null ||
+                expectedId is not null && !JsonNode.DeepEquals(payload["id"], expectedId))
+            {
+                return false;
+            }
+
+            data = builder.ToString();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private sealed record McpTool(string Name, string? Description, JsonObject? InputSchema);

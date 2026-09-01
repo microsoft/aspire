@@ -501,6 +501,14 @@ type IServiceProviderHandle = Handle<'System.ComponentModel/System.IServiceProvi
 // Enum Types
 // ============================================================================
 
+/** Specifies how dashboard commands invoke an A2A agent. */
+export enum A2AInvocationMode {
+    /** Sends a non-streaming A2A message. */
+    NonStreaming = "NonStreaming",
+    /** Streams the A2A response when the agent advertises streaming support. */
+    Streaming = "Streaming",
+}
+
 /** Specifies the protocols supported by an agent resource. */
 export enum AgentProtocol {
     /** The Agent2Agent protocol. */
@@ -17433,12 +17441,27 @@ export interface ContainerResource {
      */
     asAgent(protocol: AgentProtocol): ContainerResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -18255,12 +18278,27 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     asAgent(protocol: AgentProtocol): ContainerResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -20668,6 +20706,26 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -20685,6 +20743,27 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -21482,8 +21561,16 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
@@ -22167,12 +22254,27 @@ export interface CSharpAppResource {
      */
     asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22813,12 +22915,27 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -24809,6 +24926,26 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -24826,6 +24963,27 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -25559,8 +25717,16 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
@@ -26266,12 +26432,27 @@ export interface DotnetToolResource {
      */
     asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -26934,12 +27115,27 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -29001,6 +29197,26 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -29018,6 +29234,27 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -29767,8 +30004,16 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
@@ -30448,12 +30693,27 @@ export interface ExecutableResource {
      */
     asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -31083,12 +31343,27 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -33046,6 +33321,26 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -33063,6 +33358,27 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -33788,8 +34104,16 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
@@ -38905,12 +39229,27 @@ export interface ProjectResource {
      */
     asAgent(protocol: AgentProtocol): ProjectResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -39551,12 +39890,27 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     asAgent(protocol: AgentProtocol): ProjectResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -41548,6 +41902,26 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -41565,6 +41939,27 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -42298,8 +42693,16 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
@@ -43159,12 +43562,27 @@ export interface TestDatabaseResource {
      */
     asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -43981,12 +44399,27 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -46393,6 +46826,26 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -46410,6 +46863,27 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -47207,8 +47681,16 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
@@ -48090,12 +48572,27 @@ export interface TestRedisResource {
      */
     asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures a Redis resource with parameter-only resources whose generated names collide.
      * @param resource The resource whose unused Promise wrapper would collide.
@@ -48996,12 +49493,27 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures a Redis resource with parameter-only resources whose generated names collide.
      * @param resource The resource whose unused Promise wrapper would collide.
@@ -51530,6 +52042,26 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -51547,6 +52079,27 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -52607,8 +53160,16 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise {
@@ -53528,12 +54089,27 @@ export interface TestVaultResource {
      */
     asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -54352,12 +54928,27 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -56766,6 +57357,26 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -56783,6 +57394,27 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
     /** @internal */
@@ -57595,8 +58227,16 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
@@ -60722,12 +61362,27 @@ export interface ResourceWithEndpoints {
      */
     asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
 }
 
 export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {
@@ -60835,12 +61490,27 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      */
     asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
     /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
+    /**
      * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
      * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
      * @param protocol The protocol supported by the agent.
      * @returns A reference to the `IResourceBuilder`1` for chaining.
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
 }
 
 // ============================================================================
@@ -61291,6 +61961,26 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
@@ -61308,6 +61998,27 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      */
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
     }
 
 }
@@ -61393,8 +62104,16 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
     }
 
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
     asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
 }

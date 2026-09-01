@@ -154,6 +154,27 @@ public class WithMcpServerTests
     }
 
     [Fact]
+    public async Task WithMcpServer_SelectsHttpEndpointBySchemeWhenNameDiffers()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        appBuilder.AddContainer("app", "image")
+            .WithHttpEndpoint(name: "api", targetPort: 8080)
+            .WithEndpoint("api", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080))
+            .WithMcpServer();
+
+        using var app = await appBuilder.BuildAsync();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ContainerResource>());
+        var mcpAnnotation = Assert.Single(resource.Annotations.OfType<McpServerEndpointAnnotation>());
+
+        var resolvedUri = await mcpAnnotation.EndpointUrlResolver(resource, CancellationToken.None);
+
+        Assert.Equal("http://localhost:8080/mcp", resolvedUri?.ToString());
+    }
+
+    [Fact]
     public async Task WithMcpServer_ResolvesDefaultMcpPath()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();
@@ -269,6 +290,138 @@ public class WithMcpServerTests
         Assert.Equal("Seattle", handler.ToolCallRequest?["params"]?["arguments"]?["location"]?.GetValue<string>());
         Assert.Equal("celsius", handler.ToolCallRequest?["params"]?["arguments"]?["units"]?.GetValue<string>());
         Assert.Equal("session-1", handler.ToolCallSessionId);
+        Assert.All(handler.ProtocolVersions, version => Assert.Equal("2025-06-18", version));
+    }
+
+    [Fact]
+    public async Task WithMcpServer_InvokeCommandFindsToolOnLaterPage()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new McpCommandHandler(paginateTools: true);
+        appBuilder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var container = AddMcpContainer(appBuilder);
+
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource,
+            "app-mcp-call-tool",
+            CreateMcpArguments("get_weather", """{"location":"Seattle"}""")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal([null, "page-2"], handler.ToolListCursors);
+    }
+
+    [Theory]
+    [InlineData(McpToolCallResponse.JsonRpcError, "MCP tool call returned a JSON-RPC error.")]
+    [InlineData(McpToolCallResponse.ToolError, "MCP tool reported an error.")]
+    public async Task WithMcpServer_InvokeCommandReportsProtocolErrors(McpToolCallResponse toolCallResponse, string expectedMessage)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new McpCommandHandler(toolCallResponse: toolCallResponse);
+        appBuilder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var container = AddMcpContainer(appBuilder);
+
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource,
+            "app-mcp-call-tool",
+            CreateMcpArguments("get_weather", """{"location":"Seattle"}""")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal(expectedMessage, result.Message);
+    }
+
+    [Fact]
+    public async Task WithMcpServer_InvokeCommandSkipsSseNotificationsBeforeResponse()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new McpCommandHandler(useSseResponses: true);
+        appBuilder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var container = AddMcpContainer(appBuilder);
+
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            container.Resource,
+            "app-mcp-call-tool",
+            CreateMcpArguments("get_weather", """{"location":"Seattle"}""")).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(handler.ToolCallRequest);
+    }
+
+    [Fact]
+    public async Task WithMcpServer_InteractiveCommandOmitsOptionalParametersWithoutDefaults()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var interactionService = new TestInteractionService();
+        appBuilder.Services.AddSingleton<IInteractionService>(interactionService);
+        var handler = new McpCommandHandler(includeOptionalParameters: true);
+        appBuilder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var container = AddMcpContainer(appBuilder);
+
+        using var app = appBuilder.Build();
+        await app.StartAsync().DefaultTimeout();
+        await MoveResourceToRunningStateAsync(app, container.Resource).DefaultTimeout();
+
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(container.Resource, "app-mcp-call-tool-interactive");
+
+        var toolInteraction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        var toolInput = Assert.Single(toolInteraction.Inputs);
+        toolInput.Value = "get_weather";
+        toolInteraction.CompletionTcs.SetResult(InteractionResult.Ok(toolInput));
+
+        var argumentsInteraction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Collection(
+            argumentsInteraction.Inputs,
+            optionalBoolean =>
+            {
+                Assert.Equal("include_details", optionalBoolean.Name);
+                Assert.Null(optionalBoolean.Value);
+            },
+            optionalArray =>
+            {
+                Assert.Equal("tags", optionalArray.Name);
+                Assert.Null(optionalArray.Value);
+            },
+            optionalObject =>
+            {
+                Assert.Equal("metadata", optionalObject.Name);
+                Assert.Null(optionalObject.Value);
+            },
+            defaultedBoolean =>
+            {
+                Assert.Equal("use_cache", defaultedBoolean.Name);
+                Assert.Equal("true", defaultedBoolean.Value);
+            });
+        argumentsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(argumentsInteraction.Inputs));
+
+        var result = await commandTask.DefaultTimeout();
+
+        Assert.True(result.Success);
+        var arguments = Assert.IsType<JsonObject>(handler.ToolCallRequest?["params"]?["arguments"]);
+        Assert.Equal(["use_cache"], arguments.Select(argument => argument.Key));
+        Assert.True(arguments["use_cache"]?.GetValue<bool>() is true);
     }
 
     [Fact]
@@ -404,11 +557,26 @@ public class WithMcpServerTests
                  e.Snapshot.Commands.FirstOrDefault(c => c.Name == "app-mcp-call-tool-interactive")?.State == ResourceCommandState.Enabled).DefaultTimeout();
     }
 
-    private sealed class McpCommandHandler : HttpMessageHandler
+    public enum McpToolCallResponse
+    {
+        Success,
+        JsonRpcError,
+        ToolError
+    }
+
+    private sealed class McpCommandHandler(
+        bool paginateTools = false,
+        McpToolCallResponse toolCallResponse = McpToolCallResponse.Success,
+        bool useSseResponses = false,
+        bool includeOptionalParameters = false) : HttpMessageHandler
     {
         public JsonObject? ToolCallRequest { get; private set; }
 
         public string? ToolCallSessionId { get; private set; }
+
+        public List<string?> ProtocolVersions { get; } = [];
+
+        public List<string?> ToolListCursors { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -417,37 +585,79 @@ public class WithMcpServerTests
                 : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(true);
             var payload = string.IsNullOrEmpty(body) ? null : JsonNode.Parse(body) as JsonObject;
             var method = payload?["method"]?.GetValue<string>();
+            if (method is not "initialize")
+            {
+                ProtocolVersions.Add(request.Headers.TryGetValues("MCP-Protocol-Version", out var versions) ? versions.Single() : null);
+            }
 
             return method switch
             {
-                "initialize" => CreateJsonResponse("""{"jsonrpc":"2.0","id":"1","result":{"protocolVersion":"2025-06-18","capabilities":{}}}""", sessionId: "session-1"),
-                "notifications/initialized" => CreateJsonResponse("""{"jsonrpc":"2.0","result":{}}"""),
-                "tools/list" => CreateJsonResponse(
-                    """
+                "initialize" => CreateJsonRpcResponse(
+                    payload?["id"],
+                    new JsonObject
                     {
-                      "jsonrpc": "2.0",
-                      "id": "2",
-                      "result": {
-                        "tools": [
-                          {
-                            "name": "get_weather",
-                            "description": "Gets the weather.",
-                            "inputSchema": {
-                              "type": "object",
-                              "properties": {
-                                "location": { "type": "string" },
-                                "units": { "type": "string" }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    }
-                    """),
+                        ["protocolVersion"] = "2025-06-18",
+                        ["capabilities"] = new JsonObject()
+                    },
+                    sessionId: "session-1"),
+                "notifications/initialized" => new HttpResponseMessage(HttpStatusCode.Accepted),
+                "tools/list" => HandleToolsList(payload!),
                 "tools/call" => HandleToolCall(payload!, request),
                 _ => new HttpResponseMessage(HttpStatusCode.BadRequest)
                 {
                     Content = new StringContent($$"""{"error":"Unexpected method '{{method}}'."}""", Encoding.UTF8, "application/json")
+                }
+            };
+        }
+
+        private HttpResponseMessage HandleToolsList(JsonObject payload)
+        {
+            var cursor = payload["params"]?["cursor"]?.GetValue<string>();
+            ToolListCursors.Add(cursor);
+
+            if (paginateTools && cursor is null)
+            {
+                return CreateJsonRpcResponse(
+                    payload["id"],
+                    new JsonObject
+                    {
+                        ["tools"] = new JsonArray(CreateTool("first_tool")),
+                        ["nextCursor"] = "page-2"
+                    });
+            }
+
+            return CreateJsonRpcResponse(
+                payload["id"],
+                new JsonObject
+                {
+                    ["tools"] = new JsonArray(CreateTool("get_weather"))
+                });
+        }
+
+        private JsonObject CreateTool(string name)
+        {
+            var properties = includeOptionalParameters
+                ? new JsonObject
+                {
+                    ["include_details"] = new JsonObject { ["type"] = "boolean" },
+                    ["tags"] = new JsonObject { ["type"] = "array" },
+                    ["metadata"] = new JsonObject { ["type"] = "object" },
+                    ["use_cache"] = new JsonObject { ["type"] = "boolean", ["default"] = true }
+                }
+                : new JsonObject
+                {
+                    ["location"] = new JsonObject { ["type"] = "string" },
+                    ["units"] = new JsonObject { ["type"] = "string" }
+                };
+
+            return new JsonObject
+            {
+                ["name"] = name,
+                ["description"] = $"Gets data from {name}.",
+                ["inputSchema"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = properties
                 }
             };
         }
@@ -459,25 +669,68 @@ public class WithMcpServerTests
                 ? values.Single()
                 : null;
 
-            return CreateJsonResponse(
-                """
-                {
-                  "jsonrpc": "2.0",
-                  "id": "3",
-                  "result": {
-                    "content": [
-                      { "type": "text", "text": "Sunny in Seattle." }
-                    ]
-                  }
-                }
-                """);
+            return toolCallResponse switch
+            {
+                McpToolCallResponse.JsonRpcError => CreateJsonRpcErrorResponse(payload["id"]),
+                McpToolCallResponse.ToolError => CreateJsonRpcResponse(
+                    payload["id"],
+                    new JsonObject
+                    {
+                        ["isError"] = true,
+                        ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = "Tool failed." })
+                    }),
+                _ => CreateJsonRpcResponse(
+                    payload["id"],
+                    new JsonObject
+                    {
+                        ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = "Sunny in Seattle." })
+                    })
+            };
         }
 
-        private static HttpResponseMessage CreateJsonResponse(string json, string? sessionId = null)
+        private HttpResponseMessage CreateJsonRpcErrorResponse(JsonNode? id)
+        {
+            var response = new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = id?.DeepClone(),
+                ["error"] = new JsonObject
+                {
+                    ["code"] = -32000,
+                    ["message"] = "Tool failed."
+                }
+            };
+            return CreateResponse(response);
+        }
+
+        private HttpResponseMessage CreateJsonRpcResponse(JsonNode? id, JsonObject result, string? sessionId = null)
+        {
+            var response = new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = id?.DeepClone(),
+                ["result"] = result
+            };
+            return CreateResponse(response, sessionId);
+        }
+
+        private HttpResponseMessage CreateResponse(JsonObject payload, string? sessionId = null)
         {
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(json, Encoding.UTF8, "application/json")
+                Content = useSseResponses
+                    ? new StringContent(
+                        $$$"""
+                         event: message
+                         data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}
+
+                         event: message
+                         data: {{{payload.ToJsonString()}}}
+
+                         """,
+                        Encoding.UTF8,
+                        "text/event-stream")
+                    : new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
             };
 
             if (sessionId is not null)

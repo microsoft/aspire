@@ -3,11 +3,12 @@
 
 # Handle Types
 
-# Data Types
-
 # Enum Types
+enum:Aspire.Hosting.Agents.A2AInvocationMode = NonStreaming | Streaming
 enum:Aspire.Hosting.Agents.AgentProtocol = A2A | Responses | AgUi | Acp
 
 # Capabilities
 Aspire.Hosting.Agents/asAgent(protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgentWithInvocationMode(protocol: enum:Aspire.Hosting.Agents.AgentProtocol, invocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Agents/asAgentWithPath(agentCustomPath: string, protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: enum:Aspire.Hosting.Agents.AgentProtocol, invocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints

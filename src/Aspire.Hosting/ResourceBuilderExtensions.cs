@@ -932,8 +932,20 @@ public static class ResourceBuilderExtensions
         };
     }
 
-    // Preserve the historical dispatcher signature for internal reflection-based tests.
-    internal static IResourceBuilder<TDestination> WithReference<TDestination>(
+    /// <summary>
+    /// Adds a reference to a resource using its supported connection string, service discovery, external service,
+    /// or resource-specific reference annotations.
+    /// </summary>
+    /// <typeparam name="TDestination">The destination resource type.</typeparam>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="source">The source resource builder.</param>
+    /// <param name="connectionName">An optional connection string or service discovery name.</param>
+    /// <param name="optional">Whether a connection string reference is optional.</param>
+    /// <param name="name">An optional service discovery or resource-specific reference name.</param>
+    /// <returns>The destination resource builder.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the source does not support references or the supplied options are incompatible with the source.</exception>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the object-based generic withReference dispatcher export.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
         IResourceBuilder<IResource> source,
         string? connectionName = null,
