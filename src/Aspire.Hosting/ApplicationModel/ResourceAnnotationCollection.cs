@@ -25,6 +25,11 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
     {
     }
 
+    internal ResourceAnnotationCollection(ResourceAnnotationCollection inheritedAnnotations)
+        : base(new LayeredAnnotationList(inheritedAnnotations))
+    {
+    }
+
     // Override Collection<T> virtual methods to perform mutations atomically on the backing
     // store. Collection<T>.Add/Remove read items.Count/items.IndexOf outside any lock, then
     // pass the (potentially stale) index to these virtuals. By overriding, we can clamp or
@@ -34,19 +39,19 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
     /// <inheritdoc/>
     protected override void InsertItem(int index, IResourceAnnotation item)
     {
-        ((ThreadSafeAnnotationList)Items).SafeInsert(index, item);
+        ((IResourceAnnotationList)Items).SafeInsert(index, item);
     }
 
     /// <inheritdoc/>
     protected override void RemoveItem(int index)
     {
-        ((ThreadSafeAnnotationList)Items).SafeRemoveAt(index);
+        ((IResourceAnnotationList)Items).SafeRemoveAt(index);
     }
 
     /// <inheritdoc/>
     protected override void SetItem(int index, IResourceAnnotation item)
     {
-        ((ThreadSafeAnnotationList)Items).SafeSetItem(index, item);
+        ((IResourceAnnotationList)Items).SafeSetItem(index, item);
     }
 
     /// <inheritdoc/>
@@ -60,7 +65,16 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
     /// Reads are lock-free (they read the current immutable snapshot). Writes lock to swap
     /// the snapshot atomically.
     /// </summary>
-    private sealed class ThreadSafeAnnotationList : IList<IResourceAnnotation>
+    private interface IResourceAnnotationList : IList<IResourceAnnotation>
+    {
+        void SafeInsert(int index, IResourceAnnotation item);
+
+        void SafeRemoveAt(int index);
+
+        void SafeSetItem(int index, IResourceAnnotation item);
+    }
+
+    private sealed class ThreadSafeAnnotationList : IResourceAnnotationList
     {
         // Using ImmutableArray<T> provides lock-free reads and snapshot semantics without
         // per-enumeration allocations. Writes create a new array (O(n)), but reads are very
@@ -185,5 +199,188 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
 
         IEnumerator IEnumerable.GetEnumerator() =>
             ((IEnumerable<IResourceAnnotation>)_items).GetEnumerator();
+    }
+
+    /// <summary>
+    /// Exposes owner annotations followed by projection-local annotations. Mutations are always
+    /// applied to the local layer; removing an inherited annotation records a tombstone so
+    /// replace-style builder APIs can override owner configuration without mutating the owner.
+    /// </summary>
+    private sealed class LayeredAnnotationList(ResourceAnnotationCollection inheritedAnnotations) : IResourceAnnotationList
+    {
+        private readonly List<IResourceAnnotation> _localItems = [];
+        private readonly HashSet<IResourceAnnotation> _removedInheritedItems = new(ReferenceEqualityComparer.Instance);
+        private readonly object _writeLock = new();
+        private bool _clearInherited;
+
+        public int Count
+        {
+            get
+            {
+                lock (_writeLock)
+                {
+                    return GetSnapshot().Length;
+                }
+            }
+        }
+
+        public bool IsReadOnly => false;
+
+        public IResourceAnnotation this[int index]
+        {
+            get
+            {
+                lock (_writeLock)
+                {
+                    return GetSnapshot()[index];
+                }
+            }
+            set => SafeSetItem(index, value);
+        }
+
+        public void Add(IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                _localItems.Add(item);
+            }
+        }
+
+        public void Clear()
+        {
+            lock (_writeLock)
+            {
+                foreach (var annotation in inheritedAnnotations)
+                {
+                    _removedInheritedItems.Add(annotation);
+                }
+
+                _clearInherited = true;
+                _localItems.Clear();
+            }
+        }
+
+        public bool Contains(IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                return GetSnapshot().Contains(item);
+            }
+        }
+
+        public void CopyTo(IResourceAnnotation[] array, int arrayIndex)
+        {
+            lock (_writeLock)
+            {
+                GetSnapshot().CopyTo(array, arrayIndex);
+            }
+        }
+
+        public IEnumerator<IResourceAnnotation> GetEnumerator()
+        {
+            lock (_writeLock)
+            {
+                return ((IEnumerable<IResourceAnnotation>)GetSnapshot()).GetEnumerator();
+            }
+        }
+
+        public int IndexOf(IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                return GetSnapshot().IndexOf(item);
+            }
+        }
+
+        public void Insert(int index, IResourceAnnotation item) => SafeInsert(index, item);
+
+        public bool Remove(IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                var localIndex = _localItems.IndexOf(item);
+                if (localIndex >= 0)
+                {
+                    _localItems.RemoveAt(localIndex);
+                    return true;
+                }
+
+                if (inheritedAnnotations.Contains(item) && !_removedInheritedItems.Contains(item))
+                {
+                    _removedInheritedItems.Add(item);
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        public void RemoveAt(int index) => SafeRemoveAt(index);
+
+        public void SafeInsert(int index, IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                var inheritedCount = GetInheritedSnapshot().Length;
+                var localIndex = Math.Clamp(index - inheritedCount, 0, _localItems.Count);
+                _localItems.Insert(localIndex, item);
+            }
+        }
+
+        public void SafeRemoveAt(int index)
+        {
+            lock (_writeLock)
+            {
+                var inherited = GetInheritedSnapshot();
+                if ((uint)index < (uint)inherited.Length)
+                {
+                    _removedInheritedItems.Add(inherited[index]);
+                    return;
+                }
+
+                var localIndex = index - inherited.Length;
+                if ((uint)localIndex < (uint)_localItems.Count)
+                {
+                    _localItems.RemoveAt(localIndex);
+                }
+            }
+        }
+
+        public void SafeSetItem(int index, IResourceAnnotation item)
+        {
+            lock (_writeLock)
+            {
+                var inherited = GetInheritedSnapshot();
+                if ((uint)index < (uint)inherited.Length)
+                {
+                    _removedInheritedItems.Add(inherited[index]);
+                    _localItems.Insert(0, item);
+                    return;
+                }
+
+                var localIndex = index - inherited.Length;
+                if ((uint)localIndex < (uint)_localItems.Count)
+                {
+                    _localItems[localIndex] = item;
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private ImmutableArray<IResourceAnnotation> GetInheritedSnapshot()
+        {
+            if (_clearInherited)
+            {
+                return [];
+            }
+
+            return [.. inheritedAnnotations.Where(annotation => !_removedInheritedItems.Contains(annotation))];
+        }
+
+        private ImmutableArray<IResourceAnnotation> GetSnapshot()
+        {
+            return [.. GetInheritedSnapshot(), .. _localItems];
+        }
     }
 }

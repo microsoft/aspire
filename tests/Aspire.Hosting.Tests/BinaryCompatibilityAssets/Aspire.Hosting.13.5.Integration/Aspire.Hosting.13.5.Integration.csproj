@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Aspire.Hosting.13.5.Integration</AssemblyName>
+    <RootNamespace>Aspire.Hosting.BinaryCompatibility</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" VersionOverride="13.5.0" />
+  </ItemGroup>
+
+</Project>

@@ -19,6 +19,38 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
+    internal static IResource GetEffectiveResource(
+        this IResource resource,
+        DistributedApplicationExecutionContext executionContext)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(executionContext);
+
+        if (resource is IResourceProjection)
+        {
+            return resource;
+        }
+
+        IResource? selectedProjection = null;
+        foreach (var annotation in resource.Annotations.OfType<ResourceProjectionAnnotation>())
+        {
+            if (!annotation.Source.TrySelect(executionContext, out var projection))
+            {
+                continue;
+            }
+
+            if (selectedProjection is not null)
+            {
+                throw new DistributedApplicationException(
+                    $"Resource '{resource.Name}' has more than one projection selected for the '{executionContext.Operation}' operation.");
+            }
+
+            selectedProjection = projection;
+        }
+
+        return selectedProjection ?? resource;
+    }
+
     /// <summary>
     /// Attempts to get the last annotation of the specified type from the resource.
     /// </summary>
