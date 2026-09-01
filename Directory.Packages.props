@@ -96,9 +96,10 @@
     <PackageVersion Include="Microsoft.Build.Framework" Version="18.3.3" />
     <PackageVersion Include="Microsoft.Build.Locator" Version="1.9.1" />
     <!-- NuGet dependencies -->
-    <PackageVersion Include="NuGet.ProjectModel" Version="7.9.0" />
-    <PackageVersion Include="NuGet.Protocol" Version="7.9.0" />
-    <PackageVersion Include="NuGet.Resolver" Version="7.9.0" />
+    <PackageVersion Include="NuGet.Commands" Version="7.6.0" />
+    <PackageVersion Include="NuGet.ProjectModel" Version="7.6.0" />
+    <PackageVersion Include="NuGet.Protocol" Version="7.6.0" />
+    <PackageVersion Include="NuGet.Resolver" Version="7.6.0" />
     <!-- external dependencies -->
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
@@ -289,8 +290,6 @@
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageVersion Update="NuGet.Protocol" Version="7.10.0-dev.1" />
-    <PackageVersion Update="NuGet.Resolver" Version="7.10.0-dev.1" />
     <!-- EF -->
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosPreviewVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignPreviewVersion)" />

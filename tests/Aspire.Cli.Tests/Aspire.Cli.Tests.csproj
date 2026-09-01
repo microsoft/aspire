@@ -45,6 +45,9 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="7.10.0-dev.1" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
