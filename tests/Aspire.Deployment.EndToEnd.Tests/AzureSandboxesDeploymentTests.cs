@@ -17,6 +17,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
     private const string EnableSandboxesEnvironmentVariable = "ASPIRE_DEPLOYMENT_TEST_ENABLE_SANDBOXES";
     private const string ExpectedResponseText = "Sandbox TS AppHost service is running.";
     private const string ExpectedDotNetResponseText = "Sandbox .NET service is running.";
+    private const string ExpectedDotNetStorageResponseText = "Sandbox .NET service accessed Azure Blob Storage with managed identity.";
 
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(90);
 
@@ -31,16 +32,16 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandbox()
+    public async Task DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandbox()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
 
-        await DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandboxCore(linkedCts.Token);
+        await DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandboxCore(linkedCts.Token);
     }
 
-    private async Task DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandboxCore(CancellationToken cancellationToken)
+    private async Task DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandboxCore(CancellationToken cancellationToken)
     {
         var subscriptionId = GetSandboxDeploymentSubscriptionId();
         const string projectName = "SandboxDotNet";
@@ -55,7 +56,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         var deployOutputFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-deploy-output.txt");
         var stateMarkerFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-state-marker");
 
-        output.WriteLine($"Test: {nameof(DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandbox)}");
+        output.WriteLine($"Test: {nameof(DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandbox)}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
         output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
@@ -83,12 +84,19 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
             await auto.RunCommandAsync($"cd {projectName}", counter);
 
-            output.WriteLine("Step 3: Adding the Azure sandboxes hosting package...");
+            output.WriteLine("Step 3a: Adding the Azure sandboxes hosting package...");
             await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.Sandboxes");
+
+            output.WriteLine("Step 3b: Adding the Azure Storage hosting package...");
+            await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.Storage");
 
             output.WriteLine("Step 4: Creating the .NET web services...");
             await auto.RunCommandAsync($"dotnet new web -n {defaultServiceName} --no-restore", counter, TimeSpan.FromMinutes(2));
             await auto.RunCommandAsync($"dotnet new web -n {anonymousServiceName} --no-restore", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync(
+                $"dotnet add {anonymousServiceName} package Aspire.Azure.Storage.Blobs --prerelease",
+                counter,
+                TimeSpan.FromMinutes(2));
             WriteDotNetSandboxAppHost(workspace, projectName, defaultServiceName, anonymousServiceName);
 
             await auto.RunCommandAsync($"touch {BashQuote(stateMarkerFile)}", counter);
@@ -134,7 +142,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromMinutes(7));
 
-            output.WriteLine("Step 8: Verifying the anonymous endpoint reaches the .NET HTTP listener through Sandbox TLS termination...");
+            output.WriteLine("Step 8: Verifying the anonymous endpoint reaches Azure Blob Storage using its Sandbox managed identity...");
             await auto.RunCommandAsync(
                 VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, anonymousUrlFile, "anonymous", anonymous: true),
                 counter,
@@ -151,7 +159,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             terminalExited = true;
 
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandbox),
+                nameof(DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandbox),
                 resourceGroupName,
                 deploymentUrls,
                 DateTime.UtcNow - startTime);
@@ -159,7 +167,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         catch (Exception ex)
         {
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployDotNetProjectsWithDefaultAndAnonymousEndpointsToAzureSandbox),
+                nameof(DeployDotNetProjectsWithEndpointsAndAzureStorageToAzureSandbox),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -430,8 +438,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             Environment.NewLine,
             File.ReadLines(appHostFilePath).Where(line => line.StartsWith("#:", StringComparison.Ordinal)));
 
-        WriteDotNetSandboxService(projectDir, defaultServiceName);
-        WriteDotNetSandboxService(projectDir, anonymousServiceName);
+        WriteDotNetSandboxService(projectDir, defaultServiceName, useBlobStorage: false);
+        WriteDotNetSandboxService(projectDir, anonymousServiceName, useBlobStorage: true);
 
         File.WriteAllText(appHostFilePath, $$"""
             {{appHostDirectives}}
@@ -444,9 +452,13 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
             builder.AddAzureSandboxGroup("env");
 
+            var blobs = builder.AddAzureStorage("storage")
+                .AddBlobs("blobs");
+
             builder.AddProject("frontend", "{{defaultServiceName}}/{{defaultServiceName}}.csproj");
 
             builder.AddProject("anonymous", "{{anonymousServiceName}}/{{anonymousServiceName}}.csproj")
+                .WithReference(blobs)
                 .PublishAsAzureSandbox(new AzureSandboxOptions
                 {
                     Endpoints =
@@ -463,19 +475,51 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             """);
     }
 
-    private static void WriteDotNetSandboxService(string projectDir, string serviceName)
+    private static void WriteDotNetSandboxService(string projectDir, string serviceName, bool useBlobStorage)
     {
         var serviceDir = Path.Combine(projectDir, serviceName);
         var propertiesDir = Directory.CreateDirectory(Path.Combine(serviceDir, "Properties"));
 
-        File.WriteAllText(Path.Combine(serviceDir, "Program.cs"), $$"""
-            var builder = WebApplication.CreateBuilder(args);
-            var app = builder.Build();
+        var program = useBlobStorage
+            ? $$"""
+                using Azure.Storage.Blobs;
 
-            app.MapGet("/", () => "{{ExpectedDotNetResponseText}}");
+                var builder = WebApplication.CreateBuilder(args);
+                builder.AddAzureBlobServiceClient("blobs");
+                var app = builder.Build();
 
-            app.Run();
-            """);
+                app.MapGet("/", async (BlobServiceClient blobServiceClient, CancellationToken cancellationToken) =>
+                {
+                    // A successful response proves the sandbox workload identity can create, write, and read a blob.
+                    var containerClient = blobServiceClient.GetBlobContainerClient("sandbox-managed-identity-test");
+                    await containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+
+                    var blobClient = containerClient.GetBlobClient($"test-{Guid.NewGuid():N}.txt");
+                    var expectedContent = $"Hello from Azure Sandbox at {DateTime.UtcNow:O}";
+                    await blobClient.UploadAsync(BinaryData.FromString(expectedContent), overwrite: true, cancellationToken: cancellationToken);
+                    var downloadedContent = await blobClient.DownloadContentAsync(cancellationToken);
+                    await blobClient.DeleteIfExistsAsync(cancellationToken: cancellationToken);
+
+                    if (!string.Equals(expectedContent, downloadedContent.Value.Content.ToString(), StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException("The downloaded blob content did not match the uploaded content.");
+                    }
+
+                    return "{{ExpectedDotNetStorageResponseText}}";
+                });
+
+                app.Run();
+                """
+            : $$"""
+                var builder = WebApplication.CreateBuilder(args);
+                var app = builder.Build();
+
+                app.MapGet("/", () => "{{ExpectedDotNetResponseText}}");
+
+                app.Run();
+                """;
+
+        File.WriteAllText(Path.Combine(serviceDir, "Program.cs"), program);
         File.WriteAllText(Path.Combine(propertiesDir.FullName, "launchSettings.json"), """
             {
               "$schema": "http://json.schemastore.org/launchsettings.json",
@@ -520,7 +564,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             ? "success=0 && " +
               "for i in $(seq 1 18); do " +
               "BODY=$(curl -fsS \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && " +
-              $"echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetResponseText)} && {{ echo \"  Anonymous .NET endpoint returned the expected response (attempt $i)\"; success=1; break; }}; " +
+              $"echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetStorageResponseText)} && {{ echo \"  Anonymous .NET endpoint wrote and read an Azure blob using managed identity (attempt $i)\"; success=1; break; }}; " +
               "echo \"  Attempt $i failed; retrying in 10s...\"; sleep 10; " +
               "done; "
             : "success=0 && " +
