@@ -663,6 +663,7 @@ async function executeAzureCli(args, suffixArgs) {
       command.path,
       commandArgs,
       {
+        env: azureCliEnvironment(),
         timeout: COMMAND_TIMEOUT_MS,
         maxBuffer: COMMAND_MAX_BUFFER,
         windowsHide: true,
@@ -673,6 +674,15 @@ async function executeAzureCli(args, suffixArgs) {
   } catch (error) {
     throw classifyCommandError(error);
   }
+}
+
+export function azureCliEnvironment(environment = process.env) {
+  const env = { ...environment };
+  // Copilot sets this for agent correlation, but MSAL Runtime forwards it as AAD's
+  // client_session parameter and rejects otherwise valid Azure CLI token requests.
+  // https://github.com/ianphil/chamber/issues/419
+  delete env.COPILOT_AGENT_SESSION_ID;
+  return env;
 }
 
 export async function resolveAzureCliCommand({

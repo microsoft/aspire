@@ -141,6 +141,9 @@ public class ExtensionGuestLauncherTests
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
         public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
 
         public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
         {
@@ -156,6 +159,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayConsolePlainText(string message) => throw new NotImplementedException();
         public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null) => throw new NotImplementedException();
         public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle) => throw new NotImplementedException();
+        public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry) => throw new NotImplementedException();
         public Task RequestAppHostAttachAsync(int processId, string projectName) => throw new NotImplementedException();
         public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) => throw new NotImplementedException();

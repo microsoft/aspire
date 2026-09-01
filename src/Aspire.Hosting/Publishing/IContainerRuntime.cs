@@ -90,4 +90,22 @@ public interface IContainerRuntime
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A list of running services, or <c>null</c> if the query could not be completed.</returns>
     Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Inspects a container image configuration.
+    /// </summary>
+    /// <param name="imageName">The image name or reference to inspect.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The image configuration inspection result.</returns>
+    Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+        => Task.FromResult(ContainerImageConfigInspectionResult.Unsupported);
+
+    /// <summary>
+    /// Inspects a container image manifest.
+    /// </summary>
+    /// <param name="imageName">The image name or reference to inspect.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The image manifest inspection result.</returns>
+    Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+        => Task.FromResult(ContainerImageManifestInspectionResult.Unsupported);
 }

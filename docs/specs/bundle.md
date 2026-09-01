@@ -1242,7 +1242,7 @@ This section tracks the implementation progress of the bundle feature.
 - [x] **NuGet operations** - embedded in `src/Aspire.Managed/NuGet/`
   - [x] Search command (NuGet v3 HTTP API)
   - [x] Restore command (NuGet RestoreRunner)
-  - [x] Layout command (flat DLL + XML doc layout from project.assets.json)
+  - [x] Manifest command (package probe manifest from project.assets.json)
 - [x] **Layout services registered in DI** - `src/Aspire.Cli/Program.cs`
 - [x] **Pre-built AppHost server class** - `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs`
 - [x] **DCP/Dashboard/Runtime env var support** - `src/Aspire.Hosting/Dcp/DcpOptions.cs`, `src/Aspire.Hosting/Dashboard/DashboardEventHandlers.cs`

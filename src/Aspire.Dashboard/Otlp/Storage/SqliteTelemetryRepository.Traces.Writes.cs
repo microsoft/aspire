@@ -497,7 +497,7 @@ public sealed partial class SqliteTelemetryRepository
             MaxSpanBatchSize,
             "telemetry_spans",
             [
-                "trace_id", "span_id", "parent_span_id", "resource_id", "resource_view_id", "scope_id", "name", "kind",
+                "trace_id", "span_id", "parent_span_id", "resource_id", "resource_view_id", "scope_id", "name", "display_summary", "kind",
                 "start_time_ticks", "end_time_ticks", "status", "status_message", "trace_state", "uninstrumented_peer_resource_id"
             ],
             static (pendingSpan, parameters) =>
@@ -510,13 +510,14 @@ public sealed partial class SqliteTelemetryRepository
                 parameters[4].Value = pendingSpan.ResourceViewId;
                 parameters[5].Value = pendingSpan.ScopeId;
                 parameters[6].Value = span.Name;
-                parameters[7].Value = (int)span.Kind;
-                parameters[8].Value = span.StartTime.Ticks;
-                parameters[9].Value = span.EndTime.Ticks;
-                parameters[10].Value = (int)span.Status;
-                parameters[11].Value = span.StatusMessage ?? (object)DBNull.Value;
-                parameters[12].Value = span.State ?? (object)DBNull.Value;
-                parameters[13].Value = pendingSpan.PeerResourceId ?? (object)DBNull.Value;
+                parameters[7].Value = span.GetDisplaySummary();
+                parameters[8].Value = (int)span.Kind;
+                parameters[9].Value = span.StartTime.Ticks;
+                parameters[10].Value = span.EndTime.Ticks;
+                parameters[11].Value = (int)span.Status;
+                parameters[12].Value = span.StatusMessage ?? (object)DBNull.Value;
+                parameters[13].Value = span.State ?? (object)DBNull.Value;
+                parameters[14].Value = pendingSpan.PeerResourceId ?? (object)DBNull.Value;
             });
     }
 

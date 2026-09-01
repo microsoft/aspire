@@ -51,7 +51,7 @@ Add a persistent volume to the AKS environment and mount it into a workload:
 var data = aks.AddPersistentVolume("data")
     .WithCapacity("20Gi");
 
-myService.WithPersistentVolume(data, "/data");
+myService.WithPersistentVolume(data, "/data", env: "DATA_PATH");
 ```
 
 **TypeScript**
@@ -60,10 +60,12 @@ myService.WithPersistentVolume(data, "/data");
 const data = await aks.addPersistentVolume("data");
 await data.withCapacity("20Gi");
 
-await myService.withKubernetesPersistentVolumeMount(data, "/data");
+await myService.withKubernetesPersistentVolumeMount(data, "/data", { env: "DATA_PATH" });
 ```
 
-When no storage class is specified, the generated claim uses the cluster's default storage class. A standard AKS cluster dynamically provisions an Azure managed disk. To request Premium SSD storage explicitly, call `WithStorageClass("managed-csi-premium")` in C# or `withStorageClass("managed-csi-premium")` in TypeScript.
+When a project or executable runs locally, `DATA_PATH` points to a persistent directory in the AppHost's Aspire store. That store is normally under the AppHost intermediate-output directory, so cleaning build outputs can remove the local data. Local containers use a worktree-scoped container volume instead when the mount names an environment variable, and one persistent-volume resource cannot be shared between local containers and local projects or executables.
+
+In AKS, `DATA_PATH` contains `/data`, the mounted volume path. When no storage class is specified, the generated claim uses the cluster's default storage class. A standard AKS cluster dynamically provisions an Azure managed disk. To request Premium SSD storage explicitly, call `WithStorageClass("managed-csi-premium")` in C# or `withStorageClass("managed-csi-premium")` in TypeScript.
 
 ## Additional documentation
 
