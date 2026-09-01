@@ -141,6 +141,9 @@ public class ExtensionGuestLauncherTests
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
         public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
 
         public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
         {

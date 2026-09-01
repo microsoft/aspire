@@ -255,7 +255,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getWorkspaceFolders' }
     | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
-    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number }
+    | { name: 'getOpenEditors' }
+    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; allowNonZeroExit?: boolean }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
