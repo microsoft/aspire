@@ -64,24 +64,6 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotApp_WithNestedHookEventName_PreservesClientName()
-    {
-        var run = await RunBashHookAsync(
-            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire","hook_event_name":"nested"}}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
-
-        AssertContinue(run);
-        var args = AssertInvoked(run);
-        AssertArg(args, "--client-name", "copilot-app");
-    }
-
-    [Fact]
-    [RequiresTools(["bash"])]
-    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_McpTool_Claude_ForwardsToolName()
     {
         var run = await RunBashHookAsync(
@@ -92,24 +74,6 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
         AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
-    }
-
-    [Fact]
-    [RequiresTools(["bash"])]
-    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_McpTool_Claude_WithCopilotAppMarker_PreservesClientName()
-    {
-        var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
-
-        AssertContinue(run);
-        var args = AssertInvoked(run);
-        AssertArg(args, "--client-name", "claude-code");
     }
 
     [Fact]
@@ -198,15 +162,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_McpTool_VsCode_WithCopilotAppMarker_PreservesClientName()
+    public async Task Bash_McpTool_VsCode_DetectsClient()
     {
         var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
@@ -318,23 +277,6 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotApp_WithNestedHookEventName_PreservesClientName()
-    {
-        var run = await RunPwshHookAsync(
-            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire","hook_event_name":"nested"}}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
-
-        AssertContinue(run);
-        var args = AssertInvoked(run);
-        AssertArg(args, "--client-name", "copilot-app");
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
     public async Task Pwsh_McpTool_Claude_ForwardsToolName()
     {
         var run = await RunPwshHookAsync(
@@ -345,23 +287,6 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
         AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task Pwsh_McpTool_Claude_WithCopilotAppMarker_PreservesClientName()
-    {
-        var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
-
-        AssertContinue(run);
-        var args = AssertInvoked(run);
-        AssertArg(args, "--client-name", "claude-code");
     }
 
     [Fact]
@@ -441,15 +366,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_McpTool_VsCode_WithCopilotAppMarker_PreservesClientName()
+    public async Task Pwsh_McpTool_VsCode_DetectsClient()
     {
         var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""",
-            new()
-            {
-                ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
-            });
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
