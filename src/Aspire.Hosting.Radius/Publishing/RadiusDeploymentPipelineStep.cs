@@ -110,12 +110,22 @@ internal sealed class RadiusDeploymentPipelineStep
     /// <see cref="RadiusWorkspaceKubeContext"/> — the same resolver
     /// <see cref="SealedSecretApplyStep"/> uses, including the
     /// <c>ASPIRE_RADIUS_KUBE_CONTEXT</c> override — then flattens that single context into a
-    /// throwaway kubeconfig with <c>kubectl config view --minify</c> and points the child
-    /// <c>rad version</c> at it via <c>KUBECONFIG</c>. Redirecting <c>KUBECONFIG</c> is the only
-    /// lever available because the Radius CLI resolves its client config through client-go's
-    /// standard loading rules. When the context cannot be resolved the gate is skipped rather than
-    /// falling back to ambient state, because a verdict about the wrong cluster is worse than no
-    /// verdict.
+    /// throwaway kubeconfig with <c>kubectl config view --minify</c> and runs the child
+    /// <c>rad version</c> against a private home directory holding that kubeconfig. When the
+    /// context cannot be resolved the gate is skipped rather than falling back to ambient state,
+    /// because a verdict about the wrong cluster is worse than no verdict.
+    /// </para>
+    /// <para>
+    /// Setting <c>KUBECONFIG</c> alone is not sufficient. Parts of the Radius CLI load
+    /// <c>clientcmd.RecommendedHomeFile</c> (<c>~/.kube/config</c>) directly instead of going
+    /// through client-go's standard loading rules, so they ignore <c>KUBECONFIG</c> entirely — the
+    /// same behavior documented in <c>KubernetesDeployTestHelpers.InstallRadiusControlPlaneAsync</c>
+    /// and visible in <c>pkg/kubeutil.NewClientConfigFromLocal</c>. Because a supported ambient
+    /// cluster could then let an unsupported workspace target pass the gate (or the reverse), the
+    /// isolation redirects the home directory the CLI resolves <c>~/.kube/config</c> against, and
+    /// sets <c>KUBECONFIG</c> as well for the code paths that do honor it. Both point at the same
+    /// minified file, so every loader inside <c>rad</c> reaches the workspace's cluster.
+    /// See https://github.com/radius-project/radius/blob/main/pkg/kubeutil/config.go.
     /// </para>
     /// </remarks>
     internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
@@ -130,11 +140,15 @@ internal sealed class RadiusDeploymentPipelineStep
 
         // Created with restrictive permissions because the minified kubeconfig written into it can
         // carry client certificates or tokens for the target cluster.
-        var kubeConfigDirectory = Directory.CreateTempSubdirectory("aspire-radius-kubeconfig");
+        var kubeConfigHome = Directory.CreateTempSubdirectory("aspire-radius-kubeconfig");
 
         try
         {
-            var kubeConfigPath = Path.Combine(kubeConfigDirectory.FullName, "config");
+            // Laid out as a real home directory (<home>/.kube/config) rather than an arbitrary
+            // path, because the isolation works by redirecting HOME: the parts of `rad` that ignore
+            // KUBECONFIG resolve exactly this location.
+            var kubeConfigPath = Path.Combine(kubeConfigHome.FullName, ".kube", "config");
+            Directory.CreateDirectory(Path.GetDirectoryName(kubeConfigPath)!);
 
             var minified = await RunAsync(
                 "kubectl",
@@ -155,7 +169,7 @@ internal sealed class RadiusDeploymentPipelineStep
             var version = await RunAsync(
                 "rad",
                 ["version", "--output", "json"],
-                environment: new Dictionary<string, string> { ["KUBECONFIG"] = kubeConfigPath },
+                environment: BuildIsolatedKubeConfigEnvironment(kubeConfigHome.FullName),
                 cancellationToken).ConfigureAwait(false);
 
             if (version is not { ExitCode: 0 } versionResult)
@@ -186,7 +200,7 @@ internal sealed class RadiusDeploymentPipelineStep
         {
             try
             {
-                kubeConfigDirectory.Delete(recursive: true);
+                kubeConfigHome.Delete(recursive: true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -195,14 +209,40 @@ internal sealed class RadiusDeploymentPipelineStep
         }
     }
 
+    /// <summary>
+    /// Builds the environment for the child <c>rad version</c> so every kubeconfig loader inside the
+    /// CLI resolves to <paramref name="kubeConfigHome"/>'s <c>.kube/config</c> rather than the
+    /// developer's ambient cluster. A <see langword="null"/> value means the variable is removed
+    /// from the child's environment.
+    /// </summary>
+    /// <remarks>
+    /// <c>HOME</c>, <c>USERPROFILE</c> and <c>HOMEDRIVE</c>/<c>HOMEPATH</c> are all set or cleared
+    /// because client-go's <c>homedir.HomeDir()</c> — which computes the
+    /// <c>clientcmd.RecommendedHomeFile</c> that <c>rad</c> reads directly — consults <c>HOME</c> on
+    /// Unix and <c>USERPROFILE</c> then <c>HOMEDRIVE</c>+<c>HOMEPATH</c> on Windows. Leaving any of
+    /// them pointing at the real profile would let the ambient kubeconfig win on that platform.
+    /// See https://github.com/kubernetes/client-go/blob/master/util/homedir/homedir.go.
+    /// </remarks>
+    internal static Dictionary<string, string?> BuildIsolatedKubeConfigEnvironment(string kubeConfigHome) =>
+        new(StringComparer.Ordinal)
+        {
+            ["KUBECONFIG"] = Path.Combine(kubeConfigHome, ".kube", "config"),
+            ["HOME"] = kubeConfigHome,
+            ["USERPROFILE"] = kubeConfigHome,
+            // Cleared rather than split into a drive/path pair: an empty HOMEDRIVE or HOMEPATH makes
+            // homedir.HomeDir() skip the combination entirely and fall through to USERPROFILE above.
+            ["HOMEDRIVE"] = null,
+            ["HOMEPATH"] = null,
+        };
+
     private readonly record struct ProcessRunResult(int ExitCode, string StandardOutput);
 
     // Returns null when the executable is not on PATH, which every caller here treats as "unknown"
-    // rather than "unsupported".
+    // rather than "unsupported". A null value in `environment` removes that variable from the child.
     private static async Task<ProcessRunResult?> RunAsync(
         string fileName,
         string[] arguments,
-        IReadOnlyDictionary<string, string>? environment,
+        IReadOnlyDictionary<string, string?>? environment,
         CancellationToken cancellationToken)
     {
         using var process = new Process();
@@ -224,7 +264,14 @@ internal sealed class RadiusDeploymentPipelineStep
         {
             foreach (var (key, value) in environment)
             {
-                process.StartInfo.Environment[key] = value;
+                if (value is null)
+                {
+                    process.StartInfo.Environment.Remove(key);
+                }
+                else
+                {
+                    process.StartInfo.Environment[key] = value;
+                }
             }
         }
 

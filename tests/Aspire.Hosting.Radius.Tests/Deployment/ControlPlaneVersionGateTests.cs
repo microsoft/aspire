@@ -70,6 +70,33 @@ public class ControlPlaneVersionGateTests
     }
 
     /// <summary>
+    /// Setting <c>KUBECONFIG</c> is not enough to aim <c>rad version</c> at the workspace's cluster:
+    /// parts of the Radius CLI load <c>clientcmd.RecommendedHomeFile</c> (<c>~/.kube/config</c>)
+    /// directly and ignore <c>KUBECONFIG</c>, so a supported ambient cluster could let an
+    /// unsupported workspace target pass the gate — exactly the silent broken deployment the gate
+    /// exists to prevent. The isolation therefore has to redirect the home directory as well, on
+    /// every variable client-go's <c>homedir.HomeDir()</c> consults.
+    /// </summary>
+    [Fact]
+    public void ControlPlaneGate_IsolatesTheHomeKubeconfigRadActuallyReads()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "aspire-radius-kubeconfig-test");
+        var expectedKubeConfig = Path.Combine(home, ".kube", "config");
+
+        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(home);
+
+        // KUBECONFIG must name the file *inside* the redirected home, so the loaders that honor it
+        // and the loaders that hardcode ~/.kube/config resolve to the same minified kubeconfig.
+        Assert.Equal(expectedKubeConfig, environment["KUBECONFIG"]);
+        Assert.Equal(home, environment["HOME"]);
+        Assert.Equal(home, environment["USERPROFILE"]);
+        // Removed, not merely blanked: homedir.HomeDir() only skips the HOMEDRIVE+HOMEPATH pair when
+        // either is empty, and a surviving pair would point Windows back at the real profile.
+        Assert.Null(environment["HOMEDRIVE"]);
+        Assert.Null(environment["HOMEPATH"]);
+    }
+
+    /// <summary>
     /// The gate is a separate step precisely so it runs before anything mutates the cluster or the
     /// machine: registering cloud credentials rewrites installation-global <c>rad</c> state and
     /// applying sealed secrets writes to the cluster. Folding it back into the deploy step, or
