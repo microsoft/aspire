@@ -1,0 +1,29 @@
+{
+  "run_id": 33564722037,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33564722037",
+  "analyzed_at": "2026-09-01T22:40:01Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19832,
+    "title": "Bound AppHost auxiliary backchannel handshake",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-fix-orphaned-apphost-stop",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19832"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 100049281622,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33564722037/job/100049281622",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 and no fetchable logs. The PR only modifies src/Aspire.Cli/Backchannel/AppHostAuxiliaryBackchannel.cs and its test file, unrelated to the VS Code extension E2E test infrastructure. This matches a known recurring flaky pattern for the 'apphost-tree' shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-apphost-tree-flaky"]
+}

@@ -2,6 +2,7 @@
   "id": "vscode-e2e-windows-apphost-tree-flaky",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (Windows, apphost-tree) shard fails with generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (Windows, apphost-tree)",
   "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Windows, apphost-tree)' shard.",
   "occurrences": [
     {
@@ -10,6 +11,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
       "pr_number": 19474,
       "observed_at": "2026-08-19T02:39:41Z"
+    },
+    {
+      "run_id": 33564722037,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33564722037",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "pr_number": 19832,
+      "observed_at": "2026-09-01T22:40:01Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19485"
