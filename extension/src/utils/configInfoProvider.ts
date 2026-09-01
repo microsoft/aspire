@@ -836,7 +836,7 @@ export function parseCliUpdateRecommendationOutput(output: string): CliUpdateRec
     // `aspire doctor --format json` emits:
     //   { "checks": [{ "name": "cli-version", "metadata": {
     //       "currentVersion": "13.5.0", "latestVersion": "13.6.0",
-    //       "latestVersionChannel": "stable" } }] }
+    //       "identityChannel": "stable", "latestVersionChannel": "stable" } }] }
     // Doctor reports the channel baked into the installed assembly. This keeps local/PR/run builds
     // silent even when their process environment emulates a published channel.
     const response = JSON.parse(output.trim()) as { checks?: unknown };
