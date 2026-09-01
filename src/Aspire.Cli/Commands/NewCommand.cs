@@ -91,6 +91,8 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
         Options.Add(AgentInitCommand.s_mcpsOption);
+        Options.Add(AgentInitCommand.s_extensionLocationsOption);
+        Options.Add(AgentInitCommand.s_extensionsOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -600,6 +602,8 @@ internal sealed class NewCommand : BaseCommand
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         var mcpsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_mcpsOption);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionsOption);
         // The template already produced the AppHost, so don't pre-select the one-time aspireify
         // wiring skill — users can still opt into it from the prompt.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
@@ -610,6 +614,8 @@ internal sealed class NewCommand : BaseCommand
             skillLocationsBinding,
             skillsBinding,
             mcpsBinding,
+            extensionLocationsBinding,
+            extensionsBinding,
             AgentInitCommand.ExcludeOneTimeSetupAssetsFromDefaults,
             cancellationToken);
 

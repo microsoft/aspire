@@ -46,6 +46,131 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentTelemetry_EmitsExtensionToolInvocationTags()
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse(
+                "agent telemetry --event-type extension_tool_invocation --client-name copilot-cli " +
+                "--session-id 11111111-1111-1111-1111-111111111111 --extension-name aspire-doctor " +
+                "--tool-name open_aspire_doctor --timestamp 2026-01-01T00:00:00Z");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            var activity = Assert.Single(capturedActivities);
+            var tags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
+            Assert.Equal("extension_tool_invocation", tags[TelemetryConstants.Tags.AgentEventType]);
+            Assert.Equal("aspire-doctor", tags[TelemetryConstants.Tags.AgentExtensionName]);
+            Assert.Equal("open_aspire_doctor", tags[TelemetryConstants.Tags.AgentToolName]);
+            Assert.Equal("copilot-cli", tags[TelemetryConstants.Tags.AgentClientName]);
+            Assert.Equal("11111111-1111-1111-1111-111111111111", tags[TelemetryConstants.Tags.AgentSessionId]);
+            Assert.Equal("2026-01-01T00:00:00Z", tags[TelemetryConstants.Tags.AgentEventTimestamp]);
+        }
+    }
+
+    [Theory]
+    [InlineData("private-project", "open_aspire_doctor")]
+    [InlineData("aspire-doctor", "custom_tool")]
+    [InlineData("aspire-doctor", "OPEN_ASPIRE_DOCTOR")]
+    [InlineData(null, "open_aspire_doctor")]
+    [InlineData("aspire-doctor", null)]
+    public async Task AgentTelemetry_DropsUnknownExtensionToolPair(string? extensionName, string? toolName)
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var arguments = new List<string> { "agent", "telemetry", "--event-type", "extension_tool_invocation" };
+            if (extensionName is not null)
+            {
+                arguments.AddRange(["--extension-name", extensionName]);
+            }
+            if (toolName is not null)
+            {
+                arguments.AddRange(["--tool-name", toolName]);
+            }
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse(arguments);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Empty(capturedActivities);
+        }
+    }
+
+    [Theory]
+    [InlineData("--skill-name", "aspire")]
+    [InlineData("--file-reference", "aspire/references/deploy.md")]
+    public async Task AgentTelemetry_DropsExtensionToolInvocationWithUnrelatedFields(string option, string value)
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse(
+            [
+                "agent", "telemetry",
+                "--event-type", "extension_tool_invocation",
+                "--extension-name", "aspire-doctor",
+                "--tool-name", "open_aspire_doctor",
+                option, value,
+            ]);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Empty(capturedActivities);
+        }
+    }
+
+    [Fact]
+    public async Task AgentTelemetry_DropsExtensionNameOutsideExtensionToolInvocation()
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse(
+                "agent telemetry --event-type tool_invocation " +
+                "--extension-name aspire-doctor --tool-name open_aspire_doctor");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Empty(capturedActivities);
+        }
+    }
+
+    [Fact]
     public async Task AgentTelemetry_DoesNotEmitTagsForMissingOptions()
     {
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);

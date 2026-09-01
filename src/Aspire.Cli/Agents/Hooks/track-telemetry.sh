@@ -3,9 +3,9 @@
 # Telemetry tracking hook for Aspire Skills.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
-# low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
-# actual opt-out + publishing logic; this script only classifies the event and shells out.
+# Aspire skill, Aspire MCP tool, Aspire Extension tool, or Aspire skill reference file was
+# used, and forwards a low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI
+# command owns the actual opt-out + publishing logic; this script only classifies the event.
 #
 # Hook contract: a PostToolUse hook MUST always print a single JSON object to stdout and exit
 # 0, otherwise it can break the agent session. A single EXIT trap guarantees that response is
@@ -43,11 +43,13 @@
 # 1. skill_invocation     - the skill/Skill tool ran with an Aspire skill name, OR a SKILL.md
 #                           under .../skills/<aspire-skill>/SKILL.md was read.   (--skill-name)
 # 2. tool_invocation      - a tool matching an Aspire MCP prefix ran.            (--tool-name)
-# 3. reference_file_read  - a non-SKILL.md file under .../skills/<aspire-skill>/ was read.
+# 3. extension_tool_invocation - an allowlisted Aspire Extension tool ran.
+#                                                     (--extension-name, --tool-name)
+# 4. reference_file_read  - a non-SKILL.md file under .../skills/<aspire-skill>/ was read.
 #                                                                                (--file-reference)
 #
-# Privacy: only Aspire-owned identifiers are forwarded. Skill/tool names are matched against an
-# allowlist of the skills shipped by github.com/microsoft/aspire-skills, and reference files are
+# Privacy: only Aspire-owned identifiers are forwarded. Skill and Extension tool names are matched
+# against exact allowlists shipped by github.com/microsoft/aspire-skills, and reference files are
 # only forwarded as the repo-relative path *after* skills/<skill>/ — never absolute paths, repo
 # names, or user names. The Aspire CLI command independently re-validates and drops anything else.
 
@@ -71,6 +73,11 @@ trap emit_continue EXIT
 # third-party skills (dotnet-inspect, playwright, ...), so a path/name is only treated as
 # Aspire when its skill segment is one of these.
 ASPIRE_SKILLS="aspire aspire-init aspireify aspire-orchestration aspire-deployment aspire-monitoring"
+
+# Exact Extension tool-to-extension mappings (keep in sync with the extensions shipped by
+# github.com/microsoft/aspire-skills). Do not match a broad open_* prefix because users can install
+# third-party Extensions into the same host.
+ASPIRE_EXTENSION_TOOLS="aspire-doctor:open_aspire_doctor"
 
 # Opt out when the Aspire CLI telemetry switch is set. This is the single opt-out that also
 # gates the `aspire agent telemetry` command path, so honoring it here avoids spawning the CLI
@@ -117,6 +124,20 @@ is_aspire_skill() {
     local candidate="$1" name
     for name in $ASPIRE_SKILLS; do
         if [ "$candidate" = "$name" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Print the owning Aspire Extension name when $1 is an allowlisted tool.
+get_aspire_extension_name() {
+    local candidate="$1" mapping extension_name tool_name
+    for mapping in $ASPIRE_EXTENSION_TOOLS; do
+        extension_name="${mapping%%:*}"
+        tool_name="${mapping#*:}"
+        if [ "$candidate" = "$tool_name" ]; then
+            printf '%s' "$extension_name"
             return 0
         fi
     done
@@ -178,7 +199,8 @@ fi
 shouldTrack=false
 eventType=""
 skillName=""
-mcpToolName=""
+trackedToolName=""
+extensionName=""
 fileReference=""
 
 # --- skill_invocation via the skill/Skill tool ---
@@ -239,11 +261,19 @@ fi
 #   Copilot: aspire-<tool>   Claude: mcp__aspire__<tool>   VS Code: mcp_aspire_<tool>
 case "$toolName" in
     aspire-*|mcp__aspire__*|mcp_aspire_*)
-        mcpToolName="$toolName"
+        trackedToolName="$toolName"
         eventType="tool_invocation"
         shouldTrack=true
         ;;
 esac
+
+# --- extension_tool_invocation via an exact Aspire Extension tool allowlist ---
+extensionName=$(get_aspire_extension_name "$toolName")
+if [ -n "$extensionName" ]; then
+    trackedToolName="$toolName"
+    eventType="extension_tool_invocation"
+    shouldTrack=true
+fi
 
 if [ "$shouldTrack" != true ]; then
     exit 0
@@ -257,7 +287,8 @@ aspireCmd="${ASPIRE_CLI_COMMAND:-aspire}"
 args=(agent telemetry --event-type "$eventType" --client-name "$clientName" --timestamp "$timestamp")
 [ -n "$sessionId" ] && args+=(--session-id "$sessionId")
 [ -n "$skillName" ] && args+=(--skill-name "$skillName")
-[ -n "$mcpToolName" ] && args+=(--tool-name "$mcpToolName")
+[ -n "$extensionName" ] && args+=(--extension-name "$extensionName")
+[ -n "$trackedToolName" ] && args+=(--tool-name "$trackedToolName")
 [ -n "$fileReference" ] && args+=(--file-reference "$fileReference")
 
 # Redirect all child output to null so a banner/log line can never contaminate hook stdout.

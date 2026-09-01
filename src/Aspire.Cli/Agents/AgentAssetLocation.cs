@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Agents;
@@ -71,6 +72,37 @@ internal sealed class AgentAssetLocation
         isDefault: false,
         scopes: AgentAssetLocationScope.Workspace,
         defaultForClients: []);
+
+    /// <summary>
+    /// Project-level <c>.github/extensions/</c> location.
+    /// </summary>
+    public static readonly AgentAssetLocation ProjectExtensions = new(
+        AgentAssetKind.Extension,
+        "project",
+        AgentCommandStrings.ExtensionLocation_ProjectName,
+        AgentCommandStrings.ExtensionLocation_ProjectDescription,
+        Path.Combine(".github", "extensions"),
+        isDefault: true,
+        scopes: AgentAssetLocationScope.Workspace,
+        defaultForClients: [AgentClientKind.CopilotApp]);
+
+    /// <summary>
+    /// User-level <c>~/.copilot/extensions/</c> location.
+    /// </summary>
+    /// <remarks>
+    /// The Copilot CLI honors <c>COPILOT_HOME</c>, so the user-scoped target is resolved through
+    /// <see cref="CopilotPaths"/> rather than assuming <c>~/.copilot</c>.
+    /// </remarks>
+    public static readonly AgentAssetLocation UserExtensions = new(
+        AgentAssetKind.Extension,
+        "user",
+        AgentCommandStrings.ExtensionLocation_UserName,
+        AgentCommandStrings.ExtensionLocation_UserDescription,
+        Path.Combine(".copilot", "extensions"),
+        isDefault: false,
+        scopes: AgentAssetLocationScope.User,
+        defaultForClients: [],
+        userInstallTargetResolver: ResolveCopilotExtensionsInstallTarget);
 
     private AgentAssetLocation(
         AgentAssetKind assetKind,
@@ -147,7 +179,7 @@ internal sealed class AgentAssetLocation
     /// Gets all available file-system locations.
     /// </summary>
     public static IReadOnlyList<AgentAssetLocation> All { get; } =
-        [Standard, ClaudeCode, GitHubSkills, OpenCode];
+        [Standard, ClaudeCode, GitHubSkills, OpenCode, ProjectExtensions, UserExtensions];
 
     /// <summary>
     /// Gets the file-system locations available for the specified asset kind.
@@ -196,6 +228,25 @@ internal sealed class AgentAssetLocation
             .Replace(Path.AltDirectorySeparatorChar, '/');
 
         return $"~/{displayRelativeAssetDirectory}";
+    }
+
+    private static AgentAssetInstallTarget ResolveCopilotExtensionsInstallTarget(DirectoryInfo homeDirectory, IEnvironment environment)
+    {
+        const string relativeExtensionsDirectory = "extensions";
+
+        var configDirectory = new DirectoryInfo(CopilotPaths.GetConfigDirectory(homeDirectory, environment));
+        var defaultConfigDirectory = Path.Combine(homeDirectory.FullName, ".copilot");
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        // Only the default location can be abbreviated as "~/.copilot/extensions"; a COPILOT_HOME
+        // override points somewhere else entirely, so show the resolved path instead.
+        var displayDirectory = string.Equals(configDirectory.FullName, defaultConfigDirectory, pathComparison)
+            ? GetUserDisplayDirectory(UserExtensions.RelativeAssetDirectory)
+            : Path.Combine(configDirectory.FullName, relativeExtensionsDirectory);
+
+        return new(configDirectory, relativeExtensionsDirectory, displayDirectory);
     }
 }
 

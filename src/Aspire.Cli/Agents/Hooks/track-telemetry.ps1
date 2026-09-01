@@ -1,9 +1,9 @@
 # Telemetry tracking hook for Aspire Skills.
 #
 # Runs on every agent PostToolUse event. Reads the hook JSON from stdin, detects when an
-# Aspire skill, Aspire MCP tool, or Aspire skill reference file was used, and forwards a
-# low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI command owns the
-# actual opt-out + publishing logic; this script only classifies the event and shells out.
+# Aspire skill, Aspire MCP tool, Aspire Extension tool, or Aspire skill reference file was
+# used, and forwards a low-cardinality usage event to `aspire agent telemetry`. The Aspire CLI
+# command owns the actual opt-out + publishing logic; this script only classifies the event.
 #
 # Hook contract: a PostToolUse hook MUST always print a single JSON object to stdout and exit
 # 0, otherwise it can break the agent session. Intentional exits call Write-Success; a top-level
@@ -27,6 +27,11 @@ trap {
 # A shared .agents/skills directory can also contain third-party skills, so a path/name is only
 # treated as Aspire when its skill segment is one of these.
 $AspireSkills = @('aspire', 'aspire-init', 'aspireify', 'aspire-orchestration', 'aspire-deployment', 'aspire-monitoring')
+
+# Exact Extension tool-to-extension mappings (keep in sync with the extensions shipped by
+# github.com/microsoft/aspire-skills). A broad open_* match would capture third-party Extensions.
+$AspireExtensionTools = [System.Collections.Generic.Dictionary[string,string]]::new([System.StringComparer]::Ordinal)
+$AspireExtensionTools['open_aspire_doctor'] = 'aspire-doctor'
 
 function Write-Success {
     Write-Output '{"continue":true}'
@@ -126,7 +131,8 @@ function Test-AspireSkill([string] $candidate) {
 $shouldTrack = $false
 $eventType = $null
 $skillName = $null
-$mcpToolName = $null
+$trackedToolName = $null
+$extensionName = $null
 $fileReference = $null
 
 # --- skill_invocation via the skill/Skill tool ---
@@ -178,8 +184,16 @@ if ($toolName -eq 'view' -or $toolName -eq 'Read' -or $toolName -eq 'read_file')
 # Conservative exact prefixes:
 #   Copilot: aspire-<tool>   Claude: mcp__aspire__<tool>   VS Code: mcp_aspire_<tool>
 if ($toolName.StartsWith('aspire-') -or $toolName.StartsWith('mcp__aspire__') -or $toolName.StartsWith('mcp_aspire_')) {
-    $mcpToolName = $toolName
+    $trackedToolName = $toolName
     $eventType = 'tool_invocation'
+    $shouldTrack = $true
+}
+
+# --- extension_tool_invocation via an exact Aspire Extension tool allowlist ---
+if ($AspireExtensionTools.ContainsKey([string]$toolName)) {
+    $extensionName = $AspireExtensionTools[[string]$toolName]
+    $trackedToolName = [string]$toolName
+    $eventType = 'extension_tool_invocation'
     $shouldTrack = $true
 }
 
@@ -195,7 +209,8 @@ if (-not $aspireCmd) { $aspireCmd = 'aspire' }
 $cmdArgs = @('agent', 'telemetry', '--event-type', $eventType, '--client-name', $clientName, '--timestamp', $timestamp)
 if ($sessionId) { $cmdArgs += @('--session-id', [string]$sessionId) }
 if ($skillName) { $cmdArgs += @('--skill-name', $skillName) }
-if ($mcpToolName) { $cmdArgs += @('--tool-name', $mcpToolName) }
+if ($extensionName) { $cmdArgs += @('--extension-name', $extensionName) }
+if ($trackedToolName) { $cmdArgs += @('--tool-name', $trackedToolName) }
 if ($fileReference) { $cmdArgs += @('--file-reference', $fileReference) }
 
 # Bound the call so a hung or slow CLI can't stall the agent's tool loop (mirrors the bash

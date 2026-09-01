@@ -177,6 +177,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InitCommand_SelectExtensionLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensionLocations", resourceCulture);
+            }
+        }
+
+        internal static string InitCommand_SelectExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensions", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Install Aspire MCP server.
         /// </summary>
@@ -249,12 +261,45 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InitCommand_InstalledExtensionsSummary {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummary", resourceCulture);
+            }
+        }
+
+        internal static string InitCommand_InstalledExtensionsSummaryExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryExtensions", resourceCulture);
+            }
+        }
+
+        internal static string InitCommand_InstalledExtensionsSummaryLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledExtensionsSummaryLocations", resourceCulture);
+            }
+        }
+
+        internal static string InitCommand_FailedToInstallExtension {
+            get {
+                return ResourceManager.GetString("InitCommand_FailedToInstallExtension", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to (configures detected agent environments).
         /// </summary>
         internal static string InitCommand_ConfiguresDetectedAgentEnvironments {
             get {
                 return ResourceManager.GetString("InitCommand_ConfiguresDetectedAgentEnvironments", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The GitHub Copilot App was not detected, so default extension installation was skipped. Pass --extension-locations and --extensions to install extensions anyway..
+        /// </summary>
+        internal static string InitCommand_NoDetectedClientForExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_NoDetectedClientForExtensions", resourceCulture);
             }
         }
 
@@ -286,11 +331,20 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, Extension tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
         /// </summary>
         internal static string InitCommand_TelemetryHooksInstalled {
             get {
                 return ResourceManager.GetString("InitCommand_TelemetryHooksInstalled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The GitHub Copilot App was not detected. Continuing because explicit Extension options were provided..
+        /// </summary>
+        internal static string InitCommand_NoCompatibleClientForExplicitExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_NoCompatibleClientForExplicitExtensions", resourceCulture);
             }
         }
 
@@ -438,8 +492,32 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string ExtensionLocation_ProjectName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_ProjectName", resourceCulture);
+            }
+        }
+
+        internal static string ExtensionLocation_ProjectDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_ProjectDescription", resourceCulture);
+            }
+        }
+
+        internal static string ExtensionLocation_UserName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_UserName", resourceCulture);
+            }
+        }
+
+        internal static string ExtensionLocation_UserDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_UserDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
-        ///   Looks up a localized string similar to Installing Aspire skills....
+        ///   Looks up a localized string similar to Installing {0}....
         /// </summary>
         internal static string AspireSkillsInstaller_InstallingStatus {
             get {
@@ -448,7 +526,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
+        ///   Looks up a localized string similar to The {0} bundle could not be downloaded from GitHub, and no valid cached or embedded bundle is available..
         /// </summary>
         internal static string AspireSkillsInstaller_GitHubUnavailable {
             get {
@@ -457,7 +535,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The Aspire skills bundle is invalid: {0}.
+        ///   Looks up a localized string similar to The {0} bundle is invalid: {1}.
         /// </summary>
         internal static string AspireSkillsInstaller_InvalidBundle {
             get {
@@ -466,7 +544,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills bundle metadata is invalid: {0}.
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata is invalid: {1}.
         /// </summary>
         internal static string AspireSkillsInstaller_InvalidMetadata {
             get {
@@ -475,7 +553,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a version..
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata must specify a version..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataVersion {
             get {
@@ -484,7 +562,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'..
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata repository '{1}' does not match expected repository '{2}'..
         /// </summary>
         internal static string AspireSkillsInstaller_MetadataRepositoryMismatch {
             get {
@@ -493,7 +571,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a GitHub release tag..
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata must specify a GitHub release tag..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataTag {
             get {
@@ -502,7 +580,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a release asset name..
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata must specify an asset name..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataAssetName {
             get {
@@ -511,7 +589,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-512 hash..
+        ///   Looks up a localized string similar to Embedded {0} bundle metadata must specify the archive SHA-512 hash..
         /// </summary>
         internal static string AspireSkillsInstaller_MissingMetadataSha512 {
             get {
@@ -520,7 +598,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'..
+        ///   Looks up a localized string similar to Embedded {0} bundle archive failed SHA-512 verification. Expected '{1}', got '{2}'..
         /// </summary>
         internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
             get {
@@ -636,6 +714,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InitCommand_ExtensionLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string InitCommand_ExtensionsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ExtensionsOptionDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Comma-separated list of MCP servers to configure (e.g. {0}), &apos;{1}&apos;, or &apos;{2}&apos;.
         /// </summary>
@@ -646,7 +736,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        ///   Looks up a localized string similar to Record AI agent skill, MCP tool, Extension tool, and reference-file usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
         /// </summary>
         internal static string AgentTelemetryCommand_Description {
             get {
@@ -655,7 +745,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, or reference_file_read).
+        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, extension_tool_invocation, or reference_file_read).
         /// </summary>
         internal static string AgentTelemetryCommand_EventTypeDescription {
             get {
@@ -691,7 +781,16 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The Aspire MCP tool name for a tool_invocation event.
+        ///   Looks up a localized string similar to The Aspire Extension name for an extension_tool_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_ExtensionNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ExtensionNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire MCP or Extension tool name for a tool invocation event.
         /// </summary>
         internal static string AgentTelemetryCommand_ToolNameDescription {
             get {

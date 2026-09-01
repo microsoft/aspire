@@ -17,6 +17,11 @@ internal enum AgentAssetKind
     /// Model Context Protocol server configuration.
     /// </summary>
     Mcp,
+
+    /// <summary>
+    /// Agent extensions.
+    /// </summary>
+    Extension,
 }
 
 /// <summary>
@@ -43,7 +48,7 @@ internal static class AgentAssetKindExtensions
     public static AgentAssetBackingKind GetBackingKind(this AgentAssetKind assetKind)
         => assetKind switch
         {
-            AgentAssetKind.Skill => AgentAssetBackingKind.File,
+            AgentAssetKind.Skill or AgentAssetKind.Extension => AgentAssetBackingKind.File,
             AgentAssetKind.Mcp => AgentAssetBackingKind.Action,
             _ => throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, "Unknown agent asset kind."),
         };

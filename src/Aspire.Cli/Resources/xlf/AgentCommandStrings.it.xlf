@@ -8,13 +8,18 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <source>Record AI agent skill, MCP tool, Extension tool, and reference-file usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
+        <target state="new">Record AI agent skill, MCP tool, Extension tool, and reference-file usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
-        <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
-        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <source>The telemetry event type (skill_invocation, tool_invocation, extension_tool_invocation, or reference_file_read)</source>
+        <target state="new">The telemetry event type (skill_invocation, tool_invocation, extension_tool_invocation, or reference_file_read)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_ExtensionNameDescription">
+        <source>The Aspire Extension name for an extension_tool_invocation event</source>
+        <target state="new">The Aspire Extension name for an extension_tool_invocation event</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
@@ -38,48 +43,48 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
-        <source>The Aspire MCP tool name for a tool_invocation event</source>
-        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <source>The Aspire MCP or Extension tool name for a tool invocation event</source>
+        <target state="new">The Aspire MCP or Extension tool name for a tool invocation event</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
+        <source>Embedded {0} bundle archive failed SHA-512 verification. Expected '{1}', got '{2}'.</source>
+        <target state="new">Embedded {0} bundle archive failed SHA-512 verification. Expected '{1}', got '{2}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <source>The {0} bundle could not be downloaded from GitHub, and no valid cached or embedded bundle is available.</source>
+        <target state="new">The {0} bundle could not be downloaded from GitHub, and no valid cached or embedded bundle is available.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <source>Embedded {0} bundle metadata is invalid: {1}</source>
+        <target state="new">Embedded {0} bundle metadata is invalid: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <source>Embedded {0} bundle metadata repository '{1}' does not match expected repository '{2}'.</source>
+        <target state="new">Embedded {0} bundle metadata repository '{1}' does not match expected repository '{2}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <source>Embedded {0} bundle metadata must specify an asset name.</source>
+        <target state="new">Embedded {0} bundle metadata must specify an asset name.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
+        <source>Embedded {0} bundle metadata must specify the archive SHA-512 hash.</source>
+        <target state="new">Embedded {0} bundle metadata must specify the archive SHA-512 hash.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <source>Embedded {0} bundle metadata must specify a GitHub release tag.</source>
+        <target state="new">Embedded {0} bundle metadata must specify a GitHub release tag.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <source>Embedded {0} bundle metadata must specify a version.</source>
+        <target state="new">Embedded {0} bundle metadata must specify a version.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
@@ -107,6 +112,26 @@
         <target state="needs-review-translation">Gestire le integrazioni dell'agente AI.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ExtensionLocation_ProjectDescription">
+        <source>Available to agents in this project</source>
+        <target state="new">Available to agents in this project</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_ProjectName">
+        <source>Project (.github/extensions/)</source>
+        <target state="new">Project (.github/extensions/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_UserDescription">
+        <source>Available to agents for the current user</source>
+        <target state="new">Available to agents for the current user</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_UserName">
+        <source>User (~/.copilot/extensions/)</source>
+        <target state="new">User (~/.copilot/extensions/)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
@@ -122,9 +147,39 @@
         <target state="new">(configures detected agent environments)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ExtensionLocationsOptionDescription">
+        <source>Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ExtensionsOptionDescription">
+        <source>Comma-separated list of extensions to install. Bundle extensions are loaded dynamically. Use '{0}' or '{1}'</source>
+        <target state="new">Comma-separated list of extensions to install. Bundle extensions are loaded dynamically. Use '{0}' or '{1}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_FailedToInstallExtension">
+        <source>Failed to install {0} extension at {1}: {2}</source>
+        <target state="new">Failed to install {0} extension at {1}: {2}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
         <source>Failed to install {0} skill at {1}: {2}</source>
         <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummary">
+        <source>Installed Aspire extensions:</source>
+        <target state="new">Installed Aspire extensions:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummaryExtensions">
+        <source>Extensions: {0}</source>
+        <target state="new">Extensions: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledExtensionsSummaryLocations">
+        <source>Locations: {0}</source>
+        <target state="new">Locations: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
@@ -152,9 +207,19 @@
         <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_NoCompatibleClientForExplicitExtensions">
+        <source>The GitHub Copilot App was not detected. Continuing because explicit Extension options were provided.</source>
+        <target state="new">The GitHub Copilot App was not detected. Continuing because explicit Extension options were provided.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_NoCompatibleClientForSelectedMcp">
         <source>No compatible detected agent environment is available for the selected MCP server configuration.</source>
         <target state="new">No compatible detected agent environment is available for the selected MCP server configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoDetectedClientForExtensions">
+        <source>The GitHub Copilot App was not detected, so default extension installation was skipped. Pass --extension-locations and --extensions to install extensions anyway.</source>
+        <target state="new">The GitHub Copilot App was not detected, so default extension installation was skipped. Pass --extension-locations and --extensions to install extensions anyway.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoDetectedClientForMcp">
@@ -170,6 +235,16 @@
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensionLocations">
+        <source>Where should extension files be installed?</source>
+        <target state="new">Where should extension files be installed?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensions">
+        <source>Which extensions should be installed?</source>
+        <target state="new">Which extensions should be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectMcpServers">
@@ -203,8 +278,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, Extension tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, Extension tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
@@ -213,13 +288,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
+        <source>Installing {0}...</source>
+        <target state="new">Installing {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <source>The {0} bundle is invalid: {1}</source>
+        <target state="new">The {0} bundle is invalid: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
