@@ -897,14 +897,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData((int)AgentClientKind.CopilotCli, "GitHub Copilot CLI")]
-    [InlineData((int)AgentClientKind.CopilotApp, "GitHub Copilot App")]
-    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient(int clientKind, string displayName)
+    [InlineData(nameof(AgentClientKind.CopilotCli), "GitHub Copilot CLI")]
+    [InlineData(nameof(AgentClientKind.CopilotApp), "GitHub Copilot App")]
+    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient(string clientKind, string displayName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var client = (AgentClientKind)clientKind;
+        var client = Enum.Parse<AgentClientKind>(clientKind);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);

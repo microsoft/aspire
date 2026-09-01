@@ -86,6 +86,56 @@ extract_json_field() {
     printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
 }
 
+# Return 0 when the root JSON object contains the requested property. Unlike a raw grep, this
+# distinguishes a top-level Claude/VS Code marker from a Copilot tool argument such as:
+#   {"toolName":"skill","toolArgs":{"hook_event_name":"not-a-client-marker"}}
+has_top_level_json_field() {
+    printf '%s' "$1" | awk -v target="$2" '
+        {
+            for (i = 1; i <= length($0); i++) {
+                char = substr($0, i, 1)
+
+                if (in_string) {
+                    if (escaped) {
+                        escaped = 0
+                        text = text char
+                    } else if (char == "\\") {
+                        escaped = 1
+                    } else if (char == "\"") {
+                        in_string = 0
+                        pending_key = string_depth == 1 && text == target
+                    } else {
+                        text = text char
+                    }
+                    continue
+                }
+
+                if (pending_key) {
+                    if (char ~ /[[:space:]]/) {
+                        continue
+                    }
+                    if (char == ":") {
+                        found = 1
+                        exit
+                    }
+                    pending_key = 0
+                }
+
+                if (char == "\"") {
+                    in_string = 1
+                    string_depth = depth
+                    text = ""
+                } else if (char == "{" || char == "[") {
+                    depth++
+                } else if (char == "}" || char == "]") {
+                    depth--
+                }
+            }
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
 # Read a string field's value from anywhere in the payload, best-effort, without assuming the
 # payload's shape or which client produced it. The nested tool input arrives in two shapes:
 #   - Claude/VS Code send a real nested object:   "tool_input":{"file_path":"..."}
@@ -153,7 +203,7 @@ timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Detect the client (used only for a low-cardinality client-name tag). Claude/VS Code payload
 # identity wins over inherited environment markers. Keep the App marker before COPILOT_CLI because
 # App sessions also set COPILOT_CLI=1.
-if printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
+if has_top_level_json_field "$rawInput" "hook_event_name"; then
     toolUseId=$(extract_json_field "$rawInput" "tool_use_id")
     transcriptPath=$(extract_json_field "$rawInput" "transcript_path")
     transcriptPathNorm=$(printf '%s' "$transcriptPath" | tr '\\' '/')

@@ -64,6 +64,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_CopilotApp_WithNestedHookEventName_PreservesClientName()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire","hook_event_name":"nested"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--client-name", "copilot-app");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_McpTool_Claude_ForwardsToolName()
     {
         var run = await RunBashHookAsync(
@@ -283,6 +301,23 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillInvocation_CopilotApp_WithNestedHookEventName_PreservesClientName()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire","hook_event_name":"nested"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--client-name", "copilot-app");
     }
 
     [Fact]

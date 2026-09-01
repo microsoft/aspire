@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.Copilot;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Hooks;
@@ -21,10 +22,8 @@ namespace Aspire.Cli.Agents.Hooks;
 /// </remarks>
 internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 {
-    private const string CopilotFolderName = ".copilot";
     private const string CopilotHooksDirectoryName = "hooks";
     private const string CopilotHookFileName = "aspire-telemetry.json";
-    private const string CopilotHomeEnvironmentVariable = "COPILOT_HOME";
 
     private const string ClaudeFolderName = ".claude";
     private const string ClaudeSettingsFileName = "settings.json";
@@ -309,13 +308,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
     {
         // The Copilot CLI hooks reference resolves the user-level hooks directory from COPILOT_HOME when
         // set, otherwise ~/.copilot/hooks. Mirror that so the hook lands where Copilot actually reads it.
-        var copilotHome = _environment.GetEnvironmentVariable(CopilotHomeEnvironmentVariable);
-        if (!string.IsNullOrEmpty(copilotHome))
-        {
-            return Path.Combine(copilotHome, CopilotHooksDirectoryName);
-        }
-
-        return Path.Combine(_executionContext.HomeDirectory.FullName, CopilotFolderName, CopilotHooksDirectoryName);
+        var configDirectory = CopilotPaths.GetConfigDirectory(_executionContext.HomeDirectory, _environment);
+        return Path.Combine(configDirectory, CopilotHooksDirectoryName);
     }
 
     private static void RemoveExistingAspireEntries(JsonArray postToolUse)

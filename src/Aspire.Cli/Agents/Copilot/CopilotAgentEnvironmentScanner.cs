@@ -14,7 +14,6 @@ namespace Aspire.Cli.Agents.Copilot;
 /// </summary>
 internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    private const string CopilotFolderName = ".copilot";
     private const string McpConfigFileName = "mcp-config.json";
     private const string AspireServerName = "aspire";
     private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
@@ -107,11 +106,12 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         // The Copilot App automatically loads MCP servers and skills configured for Copilot CLI.
         // See https://docs.github.com/en/copilot/how-tos/github-copilot-app/customize-github-copilot-app.
         // Configure the shared Copilot locations once when either client is present.
+        var configDirectory = CopilotPaths.GetConfigDirectory(homeDirectory, _environment);
         _logger.LogDebug("Checking if Aspire MCP server is already configured in GitHub Copilot");
-        if (!HasAspireServerConfigured(homeDirectory))
+        if (!HasAspireServerConfigured(configDirectory))
         {
             _logger.LogDebug("Adding GitHub Copilot applicator for global MCP configuration");
-            context.AddApplicator(CreateApplicator(homeDirectory));
+            context.AddApplicator(CreateApplicator(configDirectory));
         }
         else
         {
@@ -122,85 +122,48 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
     }
 
     /// <summary>
-    /// Gets the path to the GitHub Copilot global configuration directory.
-    /// </summary>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    private static string GetCopilotConfigDirectory(DirectoryInfo homeDirectory)
-    {
-        return Path.Combine(homeDirectory.FullName, CopilotFolderName);
-    }
-
-    /// <summary>
     /// Gets the path to the GitHub Copilot MCP configuration file.
     /// </summary>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    private static string GetMcpConfigFilePath(DirectoryInfo homeDirectory)
+    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
+    private static string GetMcpConfigFilePath(string configDirectory)
     {
-        return Path.Combine(GetCopilotConfigDirectory(homeDirectory), McpConfigFileName);
+        return Path.Combine(configDirectory, McpConfigFileName);
     }
 
     /// <summary>
     /// Checks if the GitHub Copilot global configuration has an "aspire" MCP server configured.
     /// </summary>
-    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
     /// <returns>True if the aspire server is already configured, false otherwise.</returns>
-    private static bool HasAspireServerConfigured(DirectoryInfo homeDirectory)
-    {
-        var configFilePath = GetMcpConfigFilePath(homeDirectory);
-
-        if (!File.Exists(configFilePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            var content = File.ReadAllText(configFilePath);
-            var config = JsonNode.Parse(content)?.AsObject();
-
-            if (config is null)
-            {
-                return false;
-            }
-
-            if (config.TryGetPropertyValue("mcpServers", out var serversNode) && serversNode is JsonObject servers)
-            {
-                return servers.ContainsKey(AspireServerName);
-            }
-
-            return false;
-        }
-        catch (JsonException)
-        {
-            // If the JSON is malformed, assume aspire is not configured
-            return false;
-        }
-    }
+    private static bool HasAspireServerConfigured(string configDirectory)
+        => McpConfigFileHelper.HasServerConfigured(
+            GetMcpConfigFilePath(configDirectory),
+            "mcpServers",
+            AspireServerName);
 
     /// <summary>
     /// Creates an applicator for configuring the MCP server in the GitHub Copilot global configuration.
     /// </summary>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    private static AgentEnvironmentApplicator CreateApplicator(DirectoryInfo homeDirectory)
+    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
+    private static AgentEnvironmentApplicator CreateApplicator(string configDirectory)
     {
         return new AgentEnvironmentApplicator(
             CopilotAgentEnvironmentScannerStrings.ApplicatorDescription,
             ct => ApplyMcpConfigurationAsync(
-                homeDirectory,
+                configDirectory,
                 ct));
     }
 
     /// <summary>
     /// Creates or updates the mcp-config.json file in the GitHub Copilot global configuration directory.
     /// </summary>
-    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     private static async Task ApplyMcpConfigurationAsync(
-        DirectoryInfo homeDirectory,
+        string configDirectory,
         CancellationToken cancellationToken)
     {
-        var configDirectory = GetCopilotConfigDirectory(homeDirectory);
-        var configFilePath = GetMcpConfigFilePath(homeDirectory);
+        var configFilePath = GetMcpConfigFilePath(configDirectory);
 
         // Ensure the .copilot directory exists
         if (!Directory.Exists(configDirectory))
