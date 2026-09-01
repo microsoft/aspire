@@ -10,7 +10,7 @@ import {
 } from './configInfoProvider';
 import { CliPathResolutionTarget, getCliPathTargetKey } from './cliPathVariables';
 import { extensionLogOutputChannel } from './logging';
-import { OutdatedCliSuppressionStore } from './outdatedCliSuppressionStore';
+import { OutdatedCliNotificationClaim, OutdatedCliSuppressionStore } from './outdatedCliSuppressionStore';
 import { getComparisonKey } from './paths/comparison';
 
 const updateAspireCliCommand = 'aspire-vscode.updateSelf';
@@ -108,30 +108,48 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
-        if (!await this._refreshPersistedSuppressions() || this._disposed) {
-            const state = this._stateByCheckKey.get(checkKey);
-            if (state?.identity && areCliIdentitiesEqual(state.identity, notification.cli)) {
-                state.versionValidUntil = 0;
-                state.updateStatus = undefined;
-                state.updateValidUntil = 0;
-                state.failureCount = 0;
-            }
-            return;
-        }
         const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
         if (this._notifiedCliVersions.has(notificationKey) ||
             this._persistentlySuppressedCliVersions.has(notificationKey)) {
             return;
         }
-
         this._notifiedCliVersions.add(notificationKey);
-        const selection = await this._surface.showWarning(
-            strings.outdatedAspireCliWarning(
-                notification.cli.version,
-                notification.cli.cliPath,
-                notification.recommendedVersion),
-            strings.updateAspireCliAction,
-            strings.dontShowAgainLabel);
+
+        let claim: OutdatedCliNotificationClaim | undefined;
+        if (this._suppressionStore) {
+            try {
+                claim = await this._suppressionStore.tryClaimNotification(notificationKey);
+            }
+            catch (error) {
+                this._notifiedCliVersions.delete(notificationKey);
+                extensionLogOutputChannel.warn(`Unable to claim Aspire CLI update notification: ${String(error)}`);
+                this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
+                return;
+            }
+            if (!claim) {
+                this._persistentlySuppressedCliVersions.add(notificationKey);
+                return;
+            }
+        }
+        if (this._disposed) {
+            await this._releaseNotificationClaim(claim);
+            return;
+        }
+
+        let selectionPromise: Thenable<string | undefined>;
+        try {
+            selectionPromise = this._surface.showWarning(
+                strings.outdatedAspireCliWarning(
+                    notification.cli.version,
+                    notification.cli.cliPath,
+                    notification.recommendedVersion),
+                strings.updateAspireCliAction,
+                strings.dontShowAgainLabel);
+        }
+        finally {
+            await this._releaseNotificationClaim(claim);
+        }
+        const selection = await selectionPromise;
         if (this._disposed) {
             return;
         }
@@ -172,6 +190,28 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         catch (error) {
             extensionLogOutputChannel.warn(`Unable to read Aspire CLI warning suppressions: ${String(error)}`);
             return false;
+        }
+    }
+
+    private _invalidateRecommendationAfterSuppressionFailure(
+        checkKey: string,
+        identity: CliVersionInfo,
+    ): void {
+        const state = this._stateByCheckKey.get(checkKey);
+        if (state?.identity && areCliIdentitiesEqual(state.identity, identity)) {
+            state.versionValidUntil = 0;
+            state.updateStatus = undefined;
+            state.updateValidUntil = 0;
+            state.failureCount = 0;
+        }
+    }
+
+    private async _releaseNotificationClaim(claim: OutdatedCliNotificationClaim | undefined): Promise<void> {
+        try {
+            await claim?.release();
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Unable to release Aspire CLI update notification claim: ${String(error)}`);
         }
     }
 

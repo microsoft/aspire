@@ -10,7 +10,10 @@ import {
 } from '../utils/configInfoProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { OutdatedCliNotificationSurface, OutdatedCliNotifier } from '../utils/outdatedCliNotifier';
-import { OutdatedCliSuppressionStore } from '../utils/outdatedCliSuppressionStore';
+import {
+    OutdatedCliNotificationClaim,
+    OutdatedCliSuppressionStore,
+} from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliNotifier', () => {
     class FakeVersionProvider {
@@ -77,7 +80,14 @@ suite('outdatedCliNotifier', () => {
         return {
             readAll: async () => [...values],
             add: async notificationKey => void values.add(notificationKey),
+            tryClaimNotification: async notificationKey => values.has(notificationKey)
+                ? undefined
+                : createNotificationClaim(),
         };
+    }
+
+    function createNotificationClaim(): OutdatedCliNotificationClaim {
+        return { release: async () => undefined };
     }
 
     async function waitFor(predicate: () => boolean, message: string): Promise<void> {
@@ -156,6 +166,67 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(second.versionProvider.versionCalls.length, 1);
         assert.strictEqual(second.versionProvider.recommendationCalls.length, 1);
         second.notifier.dispose();
+    });
+
+    test('reserves the notification before awaiting a cross-window claim', async () => {
+        const target = workspaceFolderCliPathTarget({
+            uri: vscode.Uri.file('/workspace/a'),
+            name: 'a',
+            index: 0,
+        });
+        let completeClaim!: (claim: OutdatedCliNotificationClaim) => void;
+        let claimCalls = 0;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => [],
+            add: async () => undefined,
+            tryClaimNotification: async () => {
+                claimCalls++;
+                return claimCalls === 1
+                    ? await new Promise(resolve => completeClaim = resolve)
+                    : createNotificationClaim();
+            },
+        };
+        const { notifier, surface } = createNotifier(Date.now, suppressionStore);
+
+        const first = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await waitFor(() => claimCalls === 1, 'Expected the first notification claim.');
+        const second = notifier.notifyIfOutdated(target, '/cli/aspire');
+        await second;
+        completeClaim(createNotificationClaim());
+        await first;
+
+        assert.strictEqual(claimCalls, 1);
+        assert.strictEqual(surface.warnings.length, 1);
+        notifier.dispose();
+    });
+
+    test('holds the cross-window claim only through warning dispatch', async () => {
+        let claimReleased = false;
+        let completeSelection!: (selection: string | undefined) => void;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => [],
+            add: async () => undefined,
+            tryClaimNotification: async () => ({
+                release: async () => {
+                    claimReleased = true;
+                },
+            }),
+        };
+        const { notifier, surface } = createNotifier(Date.now, suppressionStore);
+        surface.selectionPromise = new Promise(resolve => completeSelection = resolve);
+        const showWarning = surface.showWarning.bind(surface);
+        surface.showWarning = (message, ...actions) => {
+            assert.strictEqual(claimReleased, false);
+            return showWarning(message, ...actions);
+        };
+
+        const notification = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await waitFor(() => claimReleased, 'Expected the claim to be released after warning dispatch.');
+        assert.strictEqual(surface.warnings.length, 1);
+
+        completeSelection(undefined);
+        await notification;
+        notifier.dispose();
     });
 
     test('uses five-minute version and six-hour update refresh intervals', async () => {
