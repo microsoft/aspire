@@ -1,0 +1,17 @@
+{
+  "id": "infrastructure-tests-extensionchangelog-stale-state",
+  "type": "flaky-test",
+  "title": "Flaky: ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails fails on unrelated PRs, likely due to repo/branch state assumptions",
+  "test_name": "Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails",
+  "error_pattern": "Assert.Contains() Failure: Sub-string not found\nString:    \"::error file=extension/CHANGELOG.md,line=3,title=F\"...\nNot found: \"Finalized changelog range ends at\"\nat Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails() in /_/tests/Infrastructure.Tests/WorkflowScripts/ExtensionChangelogFinalizedWorkflowTests.cs:line 226",
+  "occurrences": [
+    {
+      "run_id": 33458228838,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33458228838",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 15671,
+      "observed_at": "2026-09-01T01:50:41Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19835"
+}

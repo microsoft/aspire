@@ -1,0 +1,83 @@
+{
+  "run_id": 33458228838,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33458228838",
+  "analyzed_at": "2026-09-01T01:50:41Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 15671,
+    "title": "Emit otel from Cosmos Db Preview Emulator",
+    "author": "afscrome",
+    "state": "closed",
+    "head_branch": "cosmosdb-otel",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/15671"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "id": 99703165908,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703165908",
+      "classification": "flaky-test",
+      "reason": "Job failed due to a test assertion failure in Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails, which tests CHANGELOG.md extension workflow scripts unrelated to any file changed by this PR (only CosmosDB hosting/test files were changed). A benign annotation also notes a git merge-base fallback due to shallow history, unrelated to the actual failure.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 99703178268,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703178268",
+      "classification": "code-issue",
+      "reason": "'Build test project' step failed. This job builds the Aspire.Hosting.Azure test solution, which includes tests/Aspire.Hosting.Azure.Tests/AzureCosmosDBExtensionsTests.cs, a file modified by this PR alongside the new/renamed AzureCosmosDBEmulatorResource.cs and AzureCosmosDBExtensions.cs source files. The consistent build failure across all Hosting.Azure* build-test-project jobs strongly correlates with the PR's CosmosDB changes rather than being an isolated transient issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (ubuntu-latest)",
+      "id": 99703178361,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703178361",
+      "classification": "code-issue",
+      "reason": "Same 'Build test project' failure as the windows-latest counterpart, consistent with a compile-time issue introduced by the PR's changes to Aspire.Hosting.Azure.CosmosDB source and test files shared by this build.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "id": 99703178363,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703178363",
+      "classification": "code-issue",
+      "reason": "'Build test project' step failed directly in the Hosting.Azure test project, which contains tests/Aspire.Hosting.Azure.Tests/AzureCosmosDBExtensionsTests.cs modified by this PR. This is the most directly implicated job for the PR's code changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Playground / Playground (ubuntu-latest)",
+      "id": 99703178434,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703178434",
+      "classification": "code-issue",
+      "reason": "'Build test project' step failed. The Playground build includes playground/CosmosEndToEnd/CosmosEndToEnd.AppHost/AppHost.cs, which was modified by this PR to use the new RunAsEmulator/OTLP APIs, so a compile break here is directly attributable to the PR changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 99703178440,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33458228838/job/99703178440",
+      "classification": "code-issue",
+      "reason": "Same 'Build test project' failure as the windows-latest Hosting.Azure job, consistent with a compile issue in the PR-modified AzureCosmosDBExtensionsTests.cs / AzureCosmosDBExtensions.cs / AzureCosmosDBEmulatorResource.cs files.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Sub-string not found\nString:    \"::error file=extension/CHANGELOG.md,line=3,title=F\"···\nNot found: \"Finalized changelog range ends at\"",
+      "stack_trace": "at Infrastructure.Tests.ExtensionChangelogFinalizedWorkflowTests.ReleaseBranchWithStaleExtensionBaseAdvanceFails() in /_/tests/Infrastructure.Tests/WorkflowScripts/ExtensionChangelogFinalizedWorkflowTests.cs:line 226\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "This test validates the extension CHANGELOG.md finalized-workflow script logic and is unrelated to any file changed by this PR (which only touches Aspire.Hosting.Azure.CosmosDB source, its tests, and a Playground AppHost). The failure appears to depend on stale/shared repository state (e.g., extension/CHANGELOG.md content or base branch history) rather than PR content."
+    }
+  ],
+  "causes": ["infrastructure-tests-extensionchangelog-stale-state"]
+}
