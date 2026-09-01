@@ -1,0 +1,11 @@
+---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "web-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "web"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  QDB_CLIENT_CONF: "{{ .Values.config.web.QDB_CLIENT_CONF }}"

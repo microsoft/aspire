@@ -8,7 +8,7 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReleasePreservation_DeletesPreservedWorkspaceWhenRequested()
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var workspacePath = workspace.WorkspaceRoot.FullName;
 
         workspace.Preserve();
@@ -24,7 +24,7 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ReleasePreservation_LeavesPreservedWorkspaceWhenDeletionDisabled()
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var workspacePath = workspace.WorkspaceRoot.FullName;
 
         workspace.Preserve();

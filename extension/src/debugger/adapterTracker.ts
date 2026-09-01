@@ -20,7 +20,16 @@ export type AppHostRestartHandler = (debugSessionId: string) => boolean;
 export type DapOutputCategory = 'console' | 'important' | 'stdout' | 'stderr' | 'debug' | 'telemetry' | (string & {}) | undefined;
 export type AppHostOutputHandler = (output: string, category: DapOutputCategory) => void;
 
-export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler): vscode.Disposable {
+export interface AppHostTrackerOptions {
+    // VS Code invokes every factory registered for an adapter type for every matching
+    // debug session. Scope AppHost output to the synthetic Aspire session that
+    // registered this tracker so concurrent AppHosts cannot consume each other's logs.
+    debugSessionId: string;
+    onRestartRequested?: AppHostRestartHandler;
+    onOutput?: AppHostOutputHandler;
+}
+
+export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, appHostTracker?: AppHostTrackerOptions): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
             const configuration = session.configuration;
@@ -28,6 +37,12 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                 return undefined;
             }
             const debugSessionId = configuration.debugSessionId;
+            const isOwnedAppHostSession = configuration.isApphost && appHostTracker?.debugSessionId === debugSessionId;
+            if (configuration.isApphost && !isOwnedAppHostSession) {
+                return undefined;
+            }
+
+            let debuggeeExitCode: number | undefined;
 
             return {
                 onWillReceiveMessage: message => {
@@ -36,11 +51,11 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     // suppress VS Code's automatic child restart so the Aspire debug
                     // session can restart entirely instead.
                     if (configuration.isApphost
+                        && isOwnedAppHostSession
                         && (message.command === 'disconnect' || message.command === 'terminate')
                         && message.arguments?.restart
-                        && onAppHostRestartRequested
-                        && debugSessionId) {
-                        const shouldSuppress = onAppHostRestartRequested(debugSessionId);
+                        && appHostTracker?.onRestartRequested) {
+                        const shouldSuppress = appHostTracker.onRestartRequested(debugSessionId);
                         if (shouldSuppress) {
                             message.arguments.restart = false;
                         }
@@ -51,7 +66,15 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                         const { category, output } = message.body;
                         if (typeof output === 'string' && category !== 'telemetry') {
                             if (configuration.isApphost) {
-                                onAppHostOutput?.(output, category);
+                                if (isOwnedAppHostSession) {
+                                    // Only mirror into the Aspire parent console. The AppHost child
+                                    // session keeps its own DAP event because it owns a separate
+                                    // debug console: the extension starts it without
+                                    // `DebugConsoleMode.MergeWithParent`, and VS Code maps an
+                                    // unset console mode to a separate REPL.
+                                    // https://github.com/microsoft/vscode/blob/main/src/vs/workbench/api/common/extHostDebugService.ts
+                                    appHostTracker.onOutput?.(output, category);
+                                }
                                 return;
                             }
 
@@ -69,6 +92,11 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                     // Listen for process event with isRestart (if supported by adapter)
                     if (message.type === 'event' && message.event === 'process') {
+                        // A new debuggee process invalidates any exit code captured from a prior run.
+                        // Reset before the PID guard: `systemProcessId` is optional in DAP, so a
+                        // restart reported without it must still clear the stale exit code.
+                        debuggeeExitCode = undefined;
+
                         if (typeof message.body?.systemProcessId !== 'number') {
                             extensionLogOutputChannel.warn(`Debug session ${session.id} does not have a valid system process ID.`);
                             return;
@@ -87,18 +115,24 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                         dcpServer.sendNotification(processNotification);
                     }
+
+                    if (message.type === 'event' && message.event === 'exited' && typeof message.body?.exitCode === 'number') {
+                        debuggeeExitCode = message.body.exitCode;
+                    }
                 },
                 onExit(code: number | undefined) {
+                    let exitCode = debuggeeExitCode ?? code;
+
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux
-                    if ((process.platform === 'darwin' || process.platform === 'linux') && code === 143) {
-                        code = 0;
+                    if ((process.platform === 'darwin' || process.platform === 'linux') && exitCode === 143) {
+                        exitCode = 0;
                     }
 
                     const notification: SessionTerminatedNotification = {
                         notification_type: 'sessionTerminated',
                         session_id: configuration.runId,
                         dcp_id: debugSessionId,
-                        exit_code: code ?? 0
+                        exit_code: exitCode ?? 0
                     };
 
                     dcpServer.sendNotification(notification);

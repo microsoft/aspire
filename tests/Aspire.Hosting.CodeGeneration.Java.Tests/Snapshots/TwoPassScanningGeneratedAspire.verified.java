@@ -1,12 +1,13 @@
-﻿// ===== AddContainerOptions.java =====
+﻿// ===== aspire/AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** AddContainerOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AddContainerOptions implements JsonSerializable {
     private String image;
     private String tag;
@@ -34,15 +35,13 @@ public class AddContainerOptions implements JsonSerializable {
     }
 }
 
-// ===== AddDockerfileOptions.java =====
+// ===== aspire/AddDockerfileOptions.java =====
 // AddDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddDockerfile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddDockerfileOptions {
     private String dockerfilePath;
     private String stage;
@@ -61,15 +60,13 @@ public final class AddDockerfileOptions {
 
 }
 
-// ===== AddParameterOptions.java =====
+// ===== aspire/AddParameterOptions.java =====
 // AddParameterOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddParameter. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddParameterOptions {
     private String value;
     private Boolean publishValueAsDefault;
@@ -95,15 +92,13 @@ public final class AddParameterOptions {
 
 }
 
-// ===== AddParameterWithGeneratedValueOptions.java =====
+// ===== aspire/AddParameterWithGeneratedValueOptions.java =====
 // AddParameterWithGeneratedValueOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddParameterWithGeneratedValue. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddParameterWithGeneratedValueOptions {
     private Boolean secret;
     private Boolean persist;
@@ -122,15 +117,13 @@ public final class AddParameterWithGeneratedValueOptions {
 
 }
 
-// ===== AddStepOptions.java =====
+// ===== aspire/AddStepOptions.java =====
 // AddStepOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddStepOptions {
     private String[] dependsOn;
     private String[] requiredBy;
@@ -149,15 +142,16 @@ public final class AddStepOptions {
 
 }
 
-// ===== AfterPublishEvent.java =====
+// ===== aspire/AfterPublishEvent.java =====
 // AfterPublishEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AfterPublishEvent extends HandleWrapperBase {
     AfterPublishEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -181,15 +175,16 @@ public class AfterPublishEvent extends HandleWrapperBase {
 
 }
 
-// ===== AfterResourcesCreatedEvent.java =====
+// ===== aspire/AfterResourcesCreatedEvent.java =====
 // AfterResourcesCreatedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AfterResourcesCreatedEvent extends HandleWrapperBase {
     AfterResourcesCreatedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -213,15 +208,16 @@ public class AfterResourcesCreatedEvent extends HandleWrapperBase {
 
 }
 
-// ===== Aspire.java =====
+// ===== aspire/Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Main entry point for Aspire SDK. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class Aspire {
     /** Connect to the AppHost server. */
     public static AspireClient connect() throws Exception {
@@ -250,8 +246,10 @@ public class Aspire {
             resolvedOptions.putAll(options.toMap());
         }
         if (resolvedOptions.get("Args") == null) {
-            // Note: Java doesn't have easy access to command line args from here
-            resolvedOptions.put("Args", new String[0]);
+            String forwardedArgs = System.getenv("ASPIRE_APPHOST_ARGS");
+            resolvedOptions.put("Args", forwardedArgs == null || forwardedArgs.isEmpty()
+                ? new String[0]
+                : forwardedArgs.split("\n", -1));
         }
         if (resolvedOptions.get("ProjectDirectory") == null) {
             String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
@@ -272,93 +270,106 @@ public class Aspire {
     }
 }
 
-// ===== AspireAction0.java =====
+// ===== aspire/AspireAction0.java =====
 // AspireAction0.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction0 {
     void invoke();
 }
 
-// ===== AspireAction1.java =====
+// ===== aspire/AspireAction1.java =====
 // AspireAction1.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction1<T1> {
     void invoke(T1 arg1);
 }
 
-// ===== AspireAction2.java =====
+// ===== aspire/AspireAction2.java =====
 // AspireAction2.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction2<T1, T2> {
     void invoke(T1 arg1, T2 arg2);
 }
 
-// ===== AspireAction3.java =====
+// ===== aspire/AspireAction3.java =====
 // AspireAction3.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction3<T1, T2, T3> {
     void invoke(T1 arg1, T2 arg2, T3 arg3);
 }
 
-// ===== AspireAction4.java =====
+// ===== aspire/AspireAction4.java =====
 // AspireAction4.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction4<T1, T2, T3, T4> {
     void invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4);
 }
 
-// ===== AspireClient.java =====
+// ===== aspire/AspireClient.java =====
 // AspireClient.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * AspireClient handles JSON-RPC communication with the AppHost server.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireClient {
     private static final boolean DEBUG = System.getenv("ASPIRE_DEBUG") != null;
     
     private final String socketPath;
     private OutputStream outputStream;
     private InputStream inputStream;
+    // Windows only. inputStream/outputStream are built from this file's descriptor, so the
+    // RandomAccessFile has to outlive connect() -- closing it would close the descriptor they share
+    // and break the connection. Holding it in a field also makes that lifetime explicit to a
+    // compiler's resource-leak analysis, which cannot see the escape through FileDescriptor.
+    private RandomAccessFile namedPipe;
     private final AtomicInteger requestId = new AtomicInteger(0);
     private final Map<String, Function<Object[], Object>> callbacks = new ConcurrentHashMap<>();
     private final Map<String, Consumer<Void>> cancellations = new ConcurrentHashMap<>();
     private Runnable disconnectHandler;
-    private volatile boolean connected = false;
 
     // Handle wrapper factory registry
     private static final Map<String, BiFunction<Handle, AspireClient, Object>> handleWrappers = new ConcurrentHashMap<>();
@@ -380,7 +391,6 @@ public class AspireClient {
             connectUnixSocket();
         }
         
-        connected = true;
         debug("Connected successfully");
     }
 
@@ -395,10 +405,10 @@ public class AspireClient {
         debug("Opening Windows named pipe: " + pipePath);
         
         // Use RandomAccessFile to open the named pipe
-        RandomAccessFile pipe = new RandomAccessFile(pipePath, "rw");
-        
+        namedPipe = new RandomAccessFile(pipePath, "rw");
+
         // Create streams from the RandomAccessFile
-        FileDescriptor fd = pipe.getFD();
+        FileDescriptor fd = namedPipe.getFD();
         inputStream = new FileInputStream(fd);
         outputStream = new FileOutputStream(fd);
         
@@ -560,7 +570,6 @@ public class AspireClient {
     @SuppressWarnings("unchecked")
     private Map<String, Object> readMessage() throws IOException {
         // Read headers
-        StringBuilder headerBuilder = new StringBuilder();
         int contentLength = -1;
         
         while (true) {
@@ -790,7 +799,6 @@ public class AspireClient {
     }
 
     private void handleDisconnect() {
-        connected = false;
         if (disconnectHandler != null) {
             disconnectHandler.run();
         }
@@ -1114,16 +1122,19 @@ public class AspireClient {
     }
 }
 
-// ===== AspireDict.java =====
+// ===== aspire/AspireDict.java =====
 // AspireDict.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AspireDict is a handle-backed dictionary with lazy handle resolution.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireDict<K, V> extends HandleWrapperBase {
     private final String getterCapabilityId;
     private Handle resolvedHandle;
@@ -1195,83 +1206,116 @@ public class AspireDict<K, V> extends HandleWrapperBase {
         return Boolean.TRUE.equals(result);
     }
 
+    /**
+     * Gets the keys in the dictionary.
+     *
+     * @return a snapshot of the keys
+     */
     @SuppressWarnings("unchecked")
     public List<K> keys() {
         Object result = getClient().invokeCapability("Aspire.Hosting/Dict.keys", Map.of("dict", ensureHandle().toJson()));
         return (List<K>) result;
     }
+
+    /**
+     * Gets the values in the dictionary.
+     *
+     * @return a snapshot of the values
+     */
+    @SuppressWarnings("unchecked")
+    public List<V> values() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.values", Map.of("dict", ensureHandle().toJson()));
+        return (List<V>) result;
+    }
+
+    /**
+     * Removes all entries from the dictionary.
+     */
+    public void clear() {
+        getClient().invokeCapability("Aspire.Hosting/Dict.clear", Map.of("dict", ensureHandle().toJson()));
+    }
+
+    /**
+     * Copies the dictionary into a plain {@link Map}. Later mutations of the
+     * underlying app model are not reflected in the returned copy.
+     *
+     * @return a snapshot of the dictionary contents
+     */
+    @SuppressWarnings("unchecked")
+    public Map<K, V> toMap() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.toObject", Map.of("dict", ensureHandle().toJson()));
+        return (Map<K, V>) result;
+    }
 }
 
-// ===== AspireFunc0.java =====
+// ===== aspire/AspireFunc0.java =====
 // AspireFunc0.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc0<R> {
     R invoke();
 }
 
-// ===== AspireFunc1.java =====
+// ===== aspire/AspireFunc1.java =====
 // AspireFunc1.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc1<T1, R> {
     R invoke(T1 arg1);
 }
 
-// ===== AspireFunc2.java =====
+// ===== aspire/AspireFunc2.java =====
 // AspireFunc2.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc2<T1, T2, R> {
     R invoke(T1 arg1, T2 arg2);
 }
 
-// ===== AspireFunc3.java =====
+// ===== aspire/AspireFunc3.java =====
 // AspireFunc3.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc3<T1, T2, T3, R> {
     R invoke(T1 arg1, T2 arg2, T3 arg3);
 }
 
-// ===== AspireFunc4.java =====
+// ===== aspire/AspireFunc4.java =====
 // AspireFunc4.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc4<T1, T2, T3, T4, R> {
     R invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4);
 }
 
-// ===== AspireList.java =====
+// ===== aspire/AspireList.java =====
 // AspireList.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AspireList is a handle-backed list with lazy handle resolution.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireList<T> extends HandleWrapperBase {
     private final String getterCapabilityId;
     private Handle resolvedHandle;
@@ -1305,17 +1349,86 @@ public class AspireList<T> extends HandleWrapperBase {
         }
         return resolvedHandle;
     }
+
+    /**
+     * Gets the number of elements in the list.
+     *
+     * @return the element count
+     */
+    public int size() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.length", Map.of("list", ensureHandle().toJson()));
+        return ((Number) result).intValue();
+    }
+
+    /**
+     * Gets the element at the specified index.
+     *
+     * @param index the zero-based index
+     * @return the element at {@code index}
+     */
+    @SuppressWarnings("unchecked")
+    public T get(int index) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("index", index);
+        return (T) getClient().invokeCapability("Aspire.Hosting/List.get", args);
+    }
+
+    /**
+     * Appends an element to the end of the list.
+     *
+     * @param item the element to append
+     */
+    public void add(T item) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("item", AspireClient.serializeValue(item));
+        getClient().invokeCapability("Aspire.Hosting/List.add", args);
+    }
+
+    /**
+     * Removes the element at the specified index.
+     *
+     * @param index the zero-based index
+     * @return {@code true} if an element was removed
+     */
+    public boolean remove(int index) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("index", index);
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.removeAt", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    /**
+     * Removes all elements from the list.
+     */
+    public void clear() {
+        getClient().invokeCapability("Aspire.Hosting/List.clear", Map.of("list", ensureHandle().toJson()));
+    }
+
+    /**
+     * Copies the list into a plain {@link List}. Later mutations of the underlying
+     * app model are not reflected in the returned copy.
+     *
+     * @return a snapshot of the list contents
+     */
+    @SuppressWarnings("unchecked")
+    public List<T> toList() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.toArray", Map.of("list", ensureHandle().toJson()));
+        return (List<T>) result;
+    }
 }
 
-// ===== AspireRegistrations.java =====
+// ===== aspire/AspireRegistrations.java =====
 // AspireRegistrations.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.List;
 
 /** Static initializer to register handle wrappers. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireRegistrations {
     static {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", (h, c) -> new IDistributedApplicationBuilder(h, c));
@@ -1420,21 +1533,25 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles", (h, c) -> new IResourceWithContainerFiles(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource", (h, c) -> new IComputeEnvironmentResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", (h, c) -> new TestCallbackContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource", (h, c) -> new ITestMutablePromiseCollisionResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", (h, c) -> new ITestPromiseCollisionResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", (h, c) -> new ITestPromiseCollisionResourcePromise(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise", (h, c) -> new ITestMutablePromiseCollisionResourcePromise(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", (h, c) -> new TestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", (h, c) -> new ITestVaultResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", (h, c) -> new TestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource", (h, c) -> new IContainerFilesDestinationResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", (h, c) -> new IComputeResource(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,any>", (h, c) -> new AspireDict(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/List<any>", (h, c) -> new AspireList(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,any>", (h, c) -> new AspireDict<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/List<any>", (h, c) -> new AspireList<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict<>(h, c));
     }
 
     static void ensureRegistered() {
@@ -1442,16 +1559,15 @@ public class AspireRegistrations {
     }
 }
 
-// ===== AspireUnion.java =====
+// ===== aspire/AspireUnion.java =====
 // AspireUnion.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Represents a runtime union value for generated Java APIs.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AspireUnion {
     private final Object value;
 
@@ -1491,16 +1607,15 @@ public final class AspireUnion {
     }
 }
 
-// ===== BaseRegistrations.java =====
+// ===== aspire/BaseRegistrations.java =====
 // BaseRegistrations.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Registers runtime-owned wrappers defined in Base.java.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class BaseRegistrations {
     private BaseRegistrations() {
     }
@@ -1513,15 +1628,16 @@ public final class BaseRegistrations {
     }
 }
 
-// ===== BeforePublishEvent.java =====
+// ===== aspire/BeforePublishEvent.java =====
 // BeforePublishEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforePublishEvent extends HandleWrapperBase {
     BeforePublishEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1545,15 +1661,16 @@ public class BeforePublishEvent extends HandleWrapperBase {
 
 }
 
-// ===== BeforeResourceStartedEvent.java =====
+// ===== aspire/BeforeResourceStartedEvent.java =====
 // BeforeResourceStartedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforeResourceStartedEvent extends HandleWrapperBase {
     BeforeResourceStartedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1577,15 +1694,16 @@ public class BeforeResourceStartedEvent extends HandleWrapperBase {
 
 }
 
-// ===== BeforeStartEvent.java =====
+// ===== aspire/BeforeStartEvent.java =====
 // BeforeStartEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforeStartEvent extends HandleWrapperBase {
     BeforeStartEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1609,15 +1727,16 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
-// ===== BoolInteractionResult.java =====
+// ===== aspire/BoolInteractionResult.java =====
 // BoolInteractionResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** BoolInteractionResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BoolInteractionResult implements JsonSerializable {
     private boolean canceled;
     private Boolean value;
@@ -1645,15 +1764,13 @@ public class BoolInteractionResult implements JsonSerializable {
     }
 }
 
-// ===== BuildOptions.java =====
+// ===== aspire/BuildOptions.java =====
 // BuildOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for Build. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class BuildOptions {
     private ILogger resourceLogger;
     private CancellationToken cancellationToken;
@@ -1672,15 +1789,17 @@ public final class BuildOptions {
 
 }
 
-// ===== CSharpAppResource.java =====
+// ===== aspire/CSharpAppResource.java =====
 // CSharpAppResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CSharpAppResource extends ProjectResource {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1986,6 +2105,10 @@ public class CSharpAppResource extends ProjectResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public CSharpAppResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public CSharpAppResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -2140,7 +2263,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a network endpoint */
-    private CSharpAppResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private CSharpAppResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2195,7 +2318,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP endpoint */
-    private CSharpAppResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private CSharpAppResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2232,7 +2355,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private CSharpAppResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private CSharpAppResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2423,7 +2546,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public CSharpAppResource waitForCompletion(IResource dependency, Double exitCode) {
+    public CSharpAppResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -2434,7 +2557,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    public CSharpAppResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public CSharpAppResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -2460,7 +2583,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private CSharpAppResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private CSharpAppResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -2711,7 +2834,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private CSharpAppResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private CSharpAppResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -2768,7 +2891,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private CSharpAppResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private CSharpAppResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -2878,6 +3001,24 @@ public class CSharpAppResource extends ProjectResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    public CSharpAppResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
         return this;
     }
 
@@ -3265,7 +3406,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging */
-    private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -3291,7 +3432,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging with file path */
-    private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -3333,22 +3474,18 @@ public class CSharpAppResource extends ProjectResource {
 
 }
 
-// ===== CancellationToken.java =====
+// ===== aspire/CancellationToken.java =====
 // CancellationToken.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * CancellationToken for cancelling operations.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CancellationToken {
     private volatile boolean cancelled = false;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
@@ -3401,22 +3538,15 @@ public class CancellationToken {
     }
 }
 
-// ===== CapabilityError.java =====
+// ===== aspire/CapabilityError.java =====
 // CapabilityError.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
-
 /**
  * CapabilityError represents an error from a capability invocation.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CapabilityError extends RuntimeException {
     private final String code;
     private final Object data;
@@ -3431,15 +3561,16 @@ public class CapabilityError extends RuntimeException {
     Object getData() { return data; }
 }
 
-// ===== CertificateTrustExecutionConfigurationContext.java =====
+// ===== aspire/CertificateTrustExecutionConfigurationContext.java =====
 // CertificateTrustExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CertificateTrustExecutionConfigurationContext DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CertificateTrustExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificateBundlePath;
     private ReferenceExpression certificateDirectoriesPath;
@@ -3479,15 +3610,16 @@ public class CertificateTrustExecutionConfigurationContext implements JsonSerial
     }
 }
 
-// ===== CertificateTrustExecutionConfigurationExportData.java =====
+// ===== aspire/CertificateTrustExecutionConfigurationExportData.java =====
 // CertificateTrustExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CertificateTrustExecutionConfigurationExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CertificateTrustExecutionConfigurationExportData implements JsonSerializable {
     private CertificateTrustScope scope;
     private String[] certificateSubjects;
@@ -3521,15 +3653,13 @@ public class CertificateTrustExecutionConfigurationExportData implements JsonSer
     }
 }
 
-// ===== CertificateTrustScope.java =====
+// ===== aspire/CertificateTrustScope.java =====
 // CertificateTrustScope.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** CertificateTrustScope enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum CertificateTrustScope implements WireValueEnum {
     NONE("None"),
     APPEND("Append"),
@@ -3552,15 +3682,16 @@ public enum CertificateTrustScope implements WireValueEnum {
     }
 }
 
-// ===== CommandLineArgsCallbackContext.java =====
+// ===== aspire/CommandLineArgsCallbackContext.java =====
 // CommandLineArgsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandLineArgsCallbackContext extends HandleWrapperBase {
     CommandLineArgsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3600,15 +3731,16 @@ public class CommandLineArgsCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== CommandLineArgsEditor.java =====
+// ===== aspire/CommandLineArgsEditor.java =====
 // CommandLineArgsEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandLineArgsEditor extends HandleWrapperBase {
     CommandLineArgsEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3656,15 +3788,17 @@ public class CommandLineArgsEditor extends HandleWrapperBase {
 
 }
 
-// ===== CommandOptions.java =====
+// ===== aspire/CommandOptions.java =====
 // CommandOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** CommandOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandOptions implements JsonSerializable {
     private String description;
     private Object parameter;
@@ -3749,15 +3883,16 @@ public class CommandOptions implements JsonSerializable {
     }
 }
 
-// ===== CommandProgressOptions.java =====
+// ===== aspire/CommandProgressOptions.java =====
 // CommandProgressOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CommandProgressOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandProgressOptions implements JsonSerializable {
     private String message;
     private String title;
@@ -3791,15 +3926,16 @@ public class CommandProgressOptions implements JsonSerializable {
     }
 }
 
-// ===== CommandResultData.java =====
+// ===== aspire/CommandResultData.java =====
 // CommandResultData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CommandResultData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandResultData implements JsonSerializable {
     private String value;
     private CommandResultFormat format;
@@ -3833,15 +3969,13 @@ public class CommandResultData implements JsonSerializable {
     }
 }
 
-// ===== CommandResultFormat.java =====
+// ===== aspire/CommandResultFormat.java =====
 // CommandResultFormat.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** CommandResultFormat enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum CommandResultFormat implements WireValueEnum {
     TEXT("Text"),
     JSON("Json"),
@@ -3863,15 +3997,13 @@ public enum CommandResultFormat implements WireValueEnum {
     }
 }
 
-// ===== CompleteStepMarkdownOptions.java =====
+// ===== aspire/CompleteStepMarkdownOptions.java =====
 // CompleteStepMarkdownOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteStepMarkdown. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteStepMarkdownOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3890,15 +4022,13 @@ public final class CompleteStepMarkdownOptions {
 
 }
 
-// ===== CompleteStepOptions.java =====
+// ===== aspire/CompleteStepOptions.java =====
 // CompleteStepOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteStepOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3917,15 +4047,13 @@ public final class CompleteStepOptions {
 
 }
 
-// ===== CompleteTaskMarkdownOptions.java =====
+// ===== aspire/CompleteTaskMarkdownOptions.java =====
 // CompleteTaskMarkdownOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteTaskMarkdown. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteTaskMarkdownOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3944,15 +4072,13 @@ public final class CompleteTaskMarkdownOptions {
 
 }
 
-// ===== CompleteTaskOptions.java =====
+// ===== aspire/CompleteTaskOptions.java =====
 // CompleteTaskOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteTask. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteTaskOptions {
     private String completionMessage;
     private String completionState;
@@ -3978,15 +4104,16 @@ public final class CompleteTaskOptions {
 
 }
 
-// ===== ConnectionStringAvailableEvent.java =====
+// ===== aspire/ConnectionStringAvailableEvent.java =====
 // ConnectionStringAvailableEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ConnectionStringAvailableEvent extends HandleWrapperBase {
     ConnectionStringAvailableEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4010,15 +4137,16 @@ public class ConnectionStringAvailableEvent extends HandleWrapperBase {
 
 }
 
-// ===== ContainerBuildOptionsCallbackContext.java =====
+// ===== aspire/ContainerBuildOptionsCallbackContext.java =====
 // ContainerBuildOptionsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerBuildOptionsCallbackContext extends HandleWrapperBase {
     ContainerBuildOptionsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4168,15 +4296,16 @@ public class ContainerBuildOptionsCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== ContainerFileSystemCallbackContext.java =====
+// ===== aspire/ContainerFileSystemCallbackContext.java =====
 // ContainerFileSystemCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
     ContainerFileSystemCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4214,7 +4343,7 @@ public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
     }
 
     /** Creates a container file entry with inline contents or a host source path. */
-    private ContainerFileSystemItem createFileImpl(String name, String contents, String sourcePath, Double owner, Double group, Double mode, Boolean continueOnError) {
+    private ContainerFileSystemItem createFileImpl(String name, String contents, String sourcePath, Number owner, Number group, Number mode, Boolean continueOnError) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -4256,7 +4385,7 @@ public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
     }
 
     /** Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink. */
-    private ContainerFileSystemItem createCertificateFileImpl(String name, String contents, String sourcePath, Double owner, Double group, Double mode, Boolean continueOnError) {
+    private ContainerFileSystemItem createCertificateFileImpl(String name, String contents, String sourcePath, Number owner, Number group, Number mode, Boolean continueOnError) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -4295,7 +4424,7 @@ public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
     }
 
     /** Creates a container directory entry containing the specified child entries. */
-    private ContainerFileSystemItem createDirectoryImpl(String name, ContainerFileSystemItem[] entries, Double owner, Double group, Double mode) {
+    private ContainerFileSystemItem createDirectoryImpl(String name, ContainerFileSystemItem[] entries, Number owner, Number group, Number mode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -4315,15 +4444,13 @@ public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== ContainerFileSystemItem.java =====
+// ===== aspire/ContainerFileSystemItem.java =====
 // ContainerFileSystemItem.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerFileSystemItem extends HandleWrapperBase {
     ContainerFileSystemItem(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4331,26 +4458,27 @@ public class ContainerFileSystemItem extends HandleWrapperBase {
 
 }
 
-// ===== ContainerFilesOptions.java =====
+// ===== aspire/ContainerFilesOptions.java =====
 // ContainerFilesOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ContainerFilesOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerFilesOptions implements JsonSerializable {
-    private Double defaultOwner;
-    private Double defaultGroup;
-    private Double umask;
+    private Number defaultOwner;
+    private Number defaultGroup;
+    private Number umask;
 
-    public Double getDefaultOwner() { return defaultOwner; }
-    public void setDefaultOwner(Double value) { this.defaultOwner = value; }
-    public Double getDefaultGroup() { return defaultGroup; }
-    public void setDefaultGroup(Double value) { this.defaultGroup = value; }
-    public Double getUmask() { return umask; }
-    public void setUmask(Double value) { this.umask = value; }
+    public Number getDefaultOwner() { return defaultOwner; }
+    public void setDefaultOwner(Number value) { this.defaultOwner = value; }
+    public Number getDefaultGroup() { return defaultGroup; }
+    public void setDefaultGroup(Number value) { this.defaultGroup = value; }
+    public Number getUmask() { return umask; }
+    public void setUmask(Number value) { this.umask = value; }
 
     @SuppressWarnings("unchecked")
     public static ContainerFilesOptions fromMap(Map<String, Object> map) {
@@ -4373,15 +4501,13 @@ public class ContainerFilesOptions implements JsonSerializable {
     }
 }
 
-// ===== ContainerImageDestination.java =====
+// ===== aspire/ContainerImageDestination.java =====
 // ContainerImageDestination.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerImageDestination enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerImageDestination implements WireValueEnum {
     REGISTRY("Registry"),
     ARCHIVE("Archive");
@@ -4402,15 +4528,13 @@ public enum ContainerImageDestination implements WireValueEnum {
     }
 }
 
-// ===== ContainerImageFormat.java =====
+// ===== aspire/ContainerImageFormat.java =====
 // ContainerImageFormat.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerImageFormat enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerImageFormat implements WireValueEnum {
     DOCKER("Docker"),
     OCI("Oci");
@@ -4431,15 +4555,16 @@ public enum ContainerImageFormat implements WireValueEnum {
     }
 }
 
-// ===== ContainerImagePushOptions.java =====
+// ===== aspire/ContainerImagePushOptions.java =====
 // ContainerImagePushOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImagePushOptions extends HandleWrapperBase {
     ContainerImagePushOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4481,15 +4606,16 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
 
 }
 
-// ===== ContainerImagePushOptionsCallbackContext.java =====
+// ===== aspire/ContainerImagePushOptionsCallbackContext.java =====
 // ContainerImagePushOptionsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase {
     ContainerImagePushOptionsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4521,15 +4647,16 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
 
 }
 
-// ===== ContainerImageReference.java =====
+// ===== aspire/ContainerImageReference.java =====
 // ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImageReference extends HandleWrapperBase {
     ContainerImageReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4553,15 +4680,13 @@ public class ContainerImageReference extends HandleWrapperBase {
 
 }
 
-// ===== ContainerLifetime.java =====
+// ===== aspire/ContainerLifetime.java =====
 // ContainerLifetime.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerLifetime enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerLifetime implements WireValueEnum {
     SESSION("Session"),
     PERSISTENT("Persistent");
@@ -4582,15 +4707,16 @@ public enum ContainerLifetime implements WireValueEnum {
     }
 }
 
-// ===== ContainerMountAnnotation.java =====
+// ===== aspire/ContainerMountAnnotation.java =====
 // ContainerMountAnnotation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerMountAnnotation extends HandleWrapperBase {
     ContainerMountAnnotation(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4630,15 +4756,13 @@ public class ContainerMountAnnotation extends HandleWrapperBase {
 
 }
 
-// ===== ContainerMountType.java =====
+// ===== aspire/ContainerMountType.java =====
 // ContainerMountType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerMountType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerMountType implements WireValueEnum {
     BIND_MOUNT("BindMount"),
     VOLUME("Volume");
@@ -4659,15 +4783,16 @@ public enum ContainerMountType implements WireValueEnum {
     }
 }
 
-// ===== ContainerPortReference.java =====
+// ===== aspire/ContainerPortReference.java =====
 // ContainerPortReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerPortReference extends HandleWrapperBase {
     ContainerPortReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4691,15 +4816,16 @@ public class ContainerPortReference extends HandleWrapperBase {
 
 }
 
-// ===== ContainerRegistryResource.java =====
+// ===== aspire/ContainerRegistryResource.java =====
 // ContainerRegistryResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerRegistryResource extends ResourceBuilderBase {
     ContainerRegistryResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -5061,7 +5187,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ContainerRegistryResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ContainerRegistryResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -5474,7 +5600,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -5500,7 +5626,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -5542,15 +5668,17 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
 
 }
 
-// ===== ContainerResource.java =====
+// ===== aspire/ContainerResource.java =====
 // ContainerResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerResource extends ResourceBuilderBase {
     ContainerResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6120,6 +6248,10 @@ public class ContainerResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ContainerResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ContainerResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -6274,7 +6406,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ContainerResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ContainerResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -6329,7 +6461,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ContainerResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ContainerResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -6366,7 +6498,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ContainerResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ContainerResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -6543,7 +6675,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ContainerResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ContainerResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -6554,7 +6686,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ContainerResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ContainerResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -6580,7 +6712,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ContainerResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ContainerResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -6831,7 +6963,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ContainerResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ContainerResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -6888,7 +7020,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ContainerResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ContainerResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -7402,7 +7534,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -7428,7 +7560,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -7470,15 +7602,13 @@ public class ContainerResource extends ResourceBuilderBase {
 
 }
 
-// ===== ContainerTargetPlatform.java =====
+// ===== aspire/ContainerTargetPlatform.java =====
 // ContainerTargetPlatform.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerTargetPlatform enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerTargetPlatform implements WireValueEnum {
     LINUX_AMD64("LinuxAmd64"),
     LINUX_ARM64("LinuxArm64"),
@@ -7504,15 +7634,16 @@ public enum ContainerTargetPlatform implements WireValueEnum {
     }
 }
 
-// ===== CreateBuilderOptions.java =====
+// ===== aspire/CreateBuilderOptions.java =====
 // CreateBuilderOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CreateBuilderOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CreateBuilderOptions implements JsonSerializable {
     private String[] args;
     private String projectDirectory;
@@ -7576,21 +7707,19 @@ public class CreateBuilderOptions implements JsonSerializable {
     }
 }
 
-// ===== CreateCertificateFileOptions.java =====
+// ===== aspire/CreateCertificateFileOptions.java =====
 // CreateCertificateFileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CreateCertificateFile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CreateCertificateFileOptions {
     private String contents;
     private String sourcePath;
-    private Double owner;
-    private Double group;
-    private Double mode;
+    private Number owner;
+    private Number group;
+    private Number mode;
     private Boolean continueOnError;
 
     public String getContents() { return contents; }
@@ -7605,20 +7734,20 @@ public final class CreateCertificateFileOptions {
         return this;
     }
 
-    public Double getOwner() { return owner; }
-    public CreateCertificateFileOptions owner(Double value) {
+    public Number getOwner() { return owner; }
+    public CreateCertificateFileOptions owner(Number value) {
         this.owner = value;
         return this;
     }
 
-    public Double getGroup() { return group; }
-    public CreateCertificateFileOptions group(Double value) {
+    public Number getGroup() { return group; }
+    public CreateCertificateFileOptions group(Number value) {
         this.group = value;
         return this;
     }
 
-    public Double getMode() { return mode; }
-    public CreateCertificateFileOptions mode(Double value) {
+    public Number getMode() { return mode; }
+    public CreateCertificateFileOptions mode(Number value) {
         this.mode = value;
         return this;
     }
@@ -7631,15 +7760,13 @@ public final class CreateCertificateFileOptions {
 
 }
 
-// ===== CreateChoiceInputOptions.java =====
+// ===== aspire/CreateChoiceInputOptions.java =====
 // CreateChoiceInputOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CreateChoiceInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CreateChoiceInputOptions {
     private InteractionChoiceOption[] choices;
     private CreateInteractionInputOptions options;
@@ -7658,55 +7785,51 @@ public final class CreateChoiceInputOptions {
 
 }
 
-// ===== CreateDirectoryOptions.java =====
+// ===== aspire/CreateDirectoryOptions.java =====
 // CreateDirectoryOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CreateDirectory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CreateDirectoryOptions {
-    private Double owner;
-    private Double group;
-    private Double mode;
+    private Number owner;
+    private Number group;
+    private Number mode;
 
-    public Double getOwner() { return owner; }
-    public CreateDirectoryOptions owner(Double value) {
+    public Number getOwner() { return owner; }
+    public CreateDirectoryOptions owner(Number value) {
         this.owner = value;
         return this;
     }
 
-    public Double getGroup() { return group; }
-    public CreateDirectoryOptions group(Double value) {
+    public Number getGroup() { return group; }
+    public CreateDirectoryOptions group(Number value) {
         this.group = value;
         return this;
     }
 
-    public Double getMode() { return mode; }
-    public CreateDirectoryOptions mode(Double value) {
+    public Number getMode() { return mode; }
+    public CreateDirectoryOptions mode(Number value) {
         this.mode = value;
         return this;
     }
 
 }
 
-// ===== CreateFileOptions.java =====
+// ===== aspire/CreateFileOptions.java =====
 // CreateFileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CreateFile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CreateFileOptions {
     private String contents;
     private String sourcePath;
-    private Double owner;
-    private Double group;
-    private Double mode;
+    private Number owner;
+    private Number group;
+    private Number mode;
     private Boolean continueOnError;
 
     public String getContents() { return contents; }
@@ -7721,20 +7844,20 @@ public final class CreateFileOptions {
         return this;
     }
 
-    public Double getOwner() { return owner; }
-    public CreateFileOptions owner(Double value) {
+    public Number getOwner() { return owner; }
+    public CreateFileOptions owner(Number value) {
         this.owner = value;
         return this;
     }
 
-    public Double getGroup() { return group; }
-    public CreateFileOptions group(Double value) {
+    public Number getGroup() { return group; }
+    public CreateFileOptions group(Number value) {
         this.group = value;
         return this;
     }
 
-    public Double getMode() { return mode; }
-    public CreateFileOptions mode(Double value) {
+    public Number getMode() { return mode; }
+    public CreateFileOptions mode(Number value) {
         this.mode = value;
         return this;
     }
@@ -7747,15 +7870,16 @@ public final class CreateFileOptions {
 
 }
 
-// ===== CreateInteractionInputOptions.java =====
+// ===== aspire/CreateInteractionInputOptions.java =====
 // CreateInteractionInputOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CreateInteractionInputOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CreateInteractionInputOptions implements JsonSerializable {
     private String label;
     private String description;
@@ -7765,7 +7889,10 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     private String value;
     private Boolean allowCustomChoice;
     private Boolean disabled;
-    private Double maxLength;
+    private Number maxLength;
+    private Number maxFileSize;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
 
     public String getLabel() { return label; }
     public void setLabel(String value) { this.label = value; }
@@ -7783,8 +7910,14 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public Boolean getDisabled() { return disabled; }
     public void setDisabled(Boolean value) { this.disabled = value; }
-    public Double getMaxLength() { return maxLength; }
-    public void setMaxLength(Double value) { this.maxLength = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
+    public Number getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Number value) { this.maxFileSize = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
 
     @SuppressWarnings("unchecked")
     public static CreateInteractionInputOptions fromMap(Map<String, Object> map) {
@@ -7807,6 +7940,12 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         value.setDisabled(disabledValue == null ? null : (Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
         return value;
     }
 
@@ -7821,19 +7960,23 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
         return map;
     }
 }
 
-// ===== DistributedApplication.java =====
+// ===== aspire/DistributedApplication.java =====
 // DistributedApplication.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplication. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplication extends HandleWrapperBase {
     DistributedApplication(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7874,15 +8017,13 @@ public class DistributedApplication extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationEventSubscription.java =====
+// ===== aspire/DistributedApplicationEventSubscription.java =====
 // DistributedApplicationEventSubscription.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationEventSubscription extends HandleWrapperBase {
     DistributedApplicationEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7890,15 +8031,16 @@ public class DistributedApplicationEventSubscription extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationExecutionContext.java =====
+// ===== aspire/DistributedApplicationExecutionContext.java =====
 // DistributedApplicationExecutionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationExecutionContext extends HandleWrapperBase {
     DistributedApplicationExecutionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7927,6 +8069,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation", reqArgs);
         return DistributedApplicationOperation.fromValue((String) result);
+    }
+
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    public RunConfiguration runConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs);
+        return RunConfiguration.fromMap((Map<String, Object>) result);
     }
 
     /** The `IServiceProvider` for the AppHost. */
@@ -7963,15 +8113,13 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationExecutionContextOptions.java =====
+// ===== aspire/DistributedApplicationExecutionContextOptions.java =====
 // DistributedApplicationExecutionContextOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationExecutionContextOptions extends HandleWrapperBase {
     DistributedApplicationExecutionContextOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7979,15 +8127,16 @@ public class DistributedApplicationExecutionContextOptions extends HandleWrapper
 
 }
 
-// ===== DistributedApplicationModel.java =====
+// ===== aspire/DistributedApplicationModel.java =====
 // DistributedApplicationModel.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationModel extends HandleWrapperBase {
     DistributedApplicationModel(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8012,15 +8161,13 @@ public class DistributedApplicationModel extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationOperation.java =====
+// ===== aspire/DistributedApplicationOperation.java =====
 // DistributedApplicationOperation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** DistributedApplicationOperation enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum DistributedApplicationOperation implements WireValueEnum {
     RUN("Run"),
     PUBLISH("Publish");
@@ -8041,15 +8188,13 @@ public enum DistributedApplicationOperation implements WireValueEnum {
     }
 }
 
-// ===== DistributedApplicationResourceEventSubscription.java =====
+// ===== aspire/DistributedApplicationResourceEventSubscription.java =====
 // DistributedApplicationResourceEventSubscription.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationResourceEventSubscription extends DistributedApplicationEventSubscription {
     DistributedApplicationResourceEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8057,15 +8202,16 @@ public class DistributedApplicationResourceEventSubscription extends Distributed
 
 }
 
-// ===== DockerfileBuilder.java =====
+// ===== aspire/DockerfileBuilder.java =====
 // DockerfileBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileBuilder extends HandleWrapperBase {
     DockerfileBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8137,15 +8283,16 @@ public class DockerfileBuilder extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileBuilderCallbackContext.java =====
+// ===== aspire/DockerfileBuilderCallbackContext.java =====
 // DockerfileBuilderCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
     DockerfileBuilderCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8185,15 +8332,16 @@ public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileFactoryContext.java =====
+// ===== aspire/DockerfileFactoryContext.java =====
 // DockerfileFactoryContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileFactoryContext extends HandleWrapperBase {
     DockerfileFactoryContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8209,15 +8357,16 @@ public class DockerfileFactoryContext extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileStage.java =====
+// ===== aspire/DockerfileStage.java =====
 // DockerfileStage.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileStage extends HandleWrapperBase {
     DockerfileStage(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8400,15 +8549,17 @@ public class DockerfileStage extends HandleWrapperBase {
 
 }
 
-// ===== DotnetToolResource.java =====
+// ===== aspire/DotnetToolResource.java =====
 // DotnetToolResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DotnetToolResource extends ExecutableResource {
     DotnetToolResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -8762,6 +8913,10 @@ public class DotnetToolResource extends ExecutableResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public DotnetToolResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public DotnetToolResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -8916,7 +9071,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a network endpoint */
-    private DotnetToolResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private DotnetToolResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -8971,7 +9126,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP endpoint */
-    private DotnetToolResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private DotnetToolResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -9008,7 +9163,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private DotnetToolResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private DotnetToolResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -9185,7 +9340,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public DotnetToolResource waitForCompletion(IResource dependency, Double exitCode) {
+    public DotnetToolResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -9196,7 +9351,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    public DotnetToolResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public DotnetToolResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -9222,7 +9377,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private DotnetToolResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private DotnetToolResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -9473,7 +9628,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private DotnetToolResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private DotnetToolResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -9530,7 +9685,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private DotnetToolResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private DotnetToolResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -9640,6 +9795,24 @@ public class DotnetToolResource extends ExecutableResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    public DotnetToolResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
         return this;
     }
 
@@ -10018,7 +10191,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging */
-    private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -10044,7 +10217,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging with file path */
-    private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -10086,15 +10259,16 @@ public class DotnetToolResource extends ExecutableResource {
 
 }
 
-// ===== DynamicLoadingOptions.java =====
+// ===== aspire/DynamicLoadingOptions.java =====
 // DynamicLoadingOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** DynamicLoadingOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DynamicLoadingOptions implements JsonSerializable {
     private Boolean alwaysLoadOnStart;
     private String[] dependsOnInputs;
@@ -10122,15 +10296,13 @@ public class DynamicLoadingOptions implements JsonSerializable {
     }
 }
 
-// ===== EndpointProperty.java =====
+// ===== aspire/EndpointProperty.java =====
 // EndpointProperty.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** EndpointProperty enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum EndpointProperty implements WireValueEnum {
     URL("Url"),
     HOST("Host"),
@@ -10157,15 +10329,16 @@ public enum EndpointProperty implements WireValueEnum {
     }
 }
 
-// ===== EndpointReference.java =====
+// ===== aspire/EndpointReference.java =====
 // EndpointReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointReference extends HandleWrapperBase {
     EndpointReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10327,15 +10500,16 @@ public class EndpointReference extends HandleWrapperBase {
 
 }
 
-// ===== EndpointReferenceExpression.java =====
+// ===== aspire/EndpointReferenceExpression.java =====
 // EndpointReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointReferenceExpression extends HandleWrapperBase {
     EndpointReferenceExpression(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10367,15 +10541,16 @@ public class EndpointReferenceExpression extends HandleWrapperBase {
 
 }
 
-// ===== EndpointUpdateContext.java =====
+// ===== aspire/EndpointUpdateContext.java =====
 // EndpointUpdateContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointUpdateContext extends HandleWrapperBase {
     EndpointUpdateContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10561,15 +10736,16 @@ public class EndpointUpdateContext extends HandleWrapperBase {
 
 }
 
-// ===== EnvironmentCallbackContext.java =====
+// ===== aspire/EnvironmentCallbackContext.java =====
 // EnvironmentCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EnvironmentCallbackContext extends HandleWrapperBase {
     EnvironmentCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10609,15 +10785,16 @@ public class EnvironmentCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== EnvironmentEditor.java =====
+// ===== aspire/EnvironmentEditor.java =====
 // EnvironmentEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EnvironmentEditor extends HandleWrapperBase {
     EnvironmentEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10666,15 +10843,16 @@ public class EnvironmentEditor extends HandleWrapperBase {
 
 }
 
-// ===== EventingSubscriberRegistrationContext.java =====
+// ===== aspire/EventingSubscriberRegistrationContext.java =====
 // EventingSubscriberRegistrationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
     EventingSubscriberRegistrationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -10762,15 +10940,17 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
 
 }
 
-// ===== ExecutableResource.java =====
+// ===== aspire/ExecutableResource.java =====
 // ExecutableResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecutableResource extends ResourceBuilderBase {
     ExecutableResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -11073,6 +11253,10 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ExecutableResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ExecutableResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -11227,7 +11411,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ExecutableResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ExecutableResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -11282,7 +11466,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ExecutableResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ExecutableResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -11319,7 +11503,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ExecutableResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ExecutableResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -11496,7 +11680,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ExecutableResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ExecutableResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -11507,7 +11691,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ExecutableResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ExecutableResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -11533,7 +11717,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ExecutableResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ExecutableResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -11784,7 +11968,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ExecutableResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ExecutableResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -11841,7 +12025,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ExecutableResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ExecutableResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -11951,6 +12135,24 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    public ExecutableResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
         return this;
     }
 
@@ -12329,7 +12531,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -12355,7 +12557,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -12397,15 +12599,15 @@ public class ExecutableResource extends ResourceBuilderBase {
 
 }
 
-// ===== ExecuteCommandAsyncOptions.java =====
+// ===== aspire/ExecuteCommandAsyncOptions.java =====
 // ExecuteCommandAsyncOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.Map;
 
 /** Options for ExecuteCommandAsync. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class ExecuteCommandAsyncOptions {
     private Map<String, String> arguments;
     private CancellationToken cancellationToken;
@@ -12424,15 +12626,16 @@ public final class ExecuteCommandAsyncOptions {
 
 }
 
-// ===== ExecuteCommandContext.java =====
+// ===== aspire/ExecuteCommandContext.java =====
 // ExecuteCommandContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecuteCommandContext extends HandleWrapperBase {
     ExecuteCommandContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12480,15 +12683,16 @@ public class ExecuteCommandContext extends HandleWrapperBase {
 
 }
 
-// ===== ExecuteCommandResult.java =====
+// ===== aspire/ExecuteCommandResult.java =====
 // ExecuteCommandResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ExecuteCommandResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecuteCommandResult implements JsonSerializable {
     private boolean success;
     private Boolean canceled;
@@ -12534,15 +12738,16 @@ public class ExecuteCommandResult implements JsonSerializable {
     }
 }
 
-// ===== ExternalServiceResource.java =====
+// ===== aspire/ExternalServiceResource.java =====
 // ExternalServiceResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ExternalServiceResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExternalServiceResource extends ResourceBuilderBase {
     ExternalServiceResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12599,7 +12804,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
-    private ExternalServiceResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ExternalServiceResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -12933,7 +13138,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ExternalServiceResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ExternalServiceResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -13346,7 +13551,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -13372,7 +13577,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -13414,15 +13619,16 @@ public class ExternalServiceResource extends ResourceBuilderBase {
 
 }
 
-// ===== GenerateParameterDefault.java =====
+// ===== aspire/GenerateParameterDefault.java =====
 // GenerateParameterDefault.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** GenerateParameterDefault DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class GenerateParameterDefault implements JsonSerializable {
     private double minLength;
     private boolean lower;
@@ -13492,22 +13698,18 @@ public class GenerateParameterDefault implements JsonSerializable {
     }
 }
 
-// ===== Handle.java =====
+// ===== aspire/Handle.java =====
 // Handle.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Handle represents a remote object reference.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class Handle {
     private final String id;
     private final String typeId;
@@ -13533,16 +13735,15 @@ public class Handle {
     }
 }
 
-// ===== HandleWrapperBase.java =====
+// ===== aspire/HandleWrapperBase.java =====
 // HandleWrapperBase.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * HandleWrapperBase is the base class for all handle wrappers.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HandleWrapperBase {
     private final Handle handle;
     private final AspireClient client;
@@ -13561,15 +13762,16 @@ public class HandleWrapperBase {
     }
 }
 
-// ===== HealthCheckResult.java =====
+// ===== aspire/HealthCheckResult.java =====
 // HealthCheckResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HealthCheckResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HealthCheckResult implements JsonSerializable {
     private HealthStatus status;
     private String description;
@@ -13603,15 +13805,13 @@ public class HealthCheckResult implements JsonSerializable {
     }
 }
 
-// ===== HealthStatus.java =====
+// ===== aspire/HealthStatus.java =====
 // HealthStatus.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** HealthStatus enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum HealthStatus implements WireValueEnum {
     UNHEALTHY("Unhealthy"),
     DEGRADED("Degraded"),
@@ -13633,15 +13833,17 @@ public enum HealthStatus implements WireValueEnum {
     }
 }
 
-// ===== HttpCommandExportOptions.java =====
+// ===== aspire/HttpCommandExportOptions.java =====
 // HttpCommandExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** HttpCommandExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandExportOptions implements JsonSerializable {
     private CommandOptions commandOptions;
     private String description;
@@ -13724,15 +13926,16 @@ public class HttpCommandExportOptions implements JsonSerializable {
     }
 }
 
-// ===== HttpCommandPrepareRequestContext.java =====
+// ===== aspire/HttpCommandPrepareRequestContext.java =====
 // HttpCommandPrepareRequestContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandPrepareRequestContext extends HandleWrapperBase {
     HttpCommandPrepareRequestContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13772,15 +13975,16 @@ public class HttpCommandPrepareRequestContext extends HandleWrapperBase {
 
 }
 
-// ===== HttpCommandRequestExportData.java =====
+// ===== aspire/HttpCommandRequestExportData.java =====
 // HttpCommandRequestExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpCommandRequestExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandRequestExportData implements JsonSerializable {
     private String methodName;
     private Map<String, String> headers;
@@ -13820,15 +14024,13 @@ public class HttpCommandRequestExportData implements JsonSerializable {
     }
 }
 
-// ===== HttpCommandResultMode.java =====
+// ===== aspire/HttpCommandResultMode.java =====
 // HttpCommandResultMode.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** HttpCommandResultMode enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum HttpCommandResultMode implements WireValueEnum {
     NONE("None"),
     AUTO("Auto"),
@@ -13851,15 +14053,16 @@ public enum HttpCommandResultMode implements WireValueEnum {
     }
 }
 
-// ===== HttpsCertificateConfigurationCallbackAnnotationContext.java =====
+// ===== aspire/HttpsCertificateConfigurationCallbackAnnotationContext.java =====
 // HttpsCertificateConfigurationCallbackAnnotationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateConfigurationCallbackAnnotationContext extends HandleWrapperBase {
     HttpsCertificateConfigurationCallbackAnnotationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13939,15 +14142,16 @@ public class HttpsCertificateConfigurationCallbackAnnotationContext extends Hand
 
 }
 
-// ===== HttpsCertificateExecutionConfigurationContext.java =====
+// ===== aspire/HttpsCertificateExecutionConfigurationContext.java =====
 // HttpsCertificateExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateExecutionConfigurationContext DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificatePath;
     private ReferenceExpression keyPath;
@@ -13987,15 +14191,16 @@ public class HttpsCertificateExecutionConfigurationContext implements JsonSerial
     }
 }
 
-// ===== HttpsCertificateExecutionConfigurationExportData.java =====
+// ===== aspire/HttpsCertificateExecutionConfigurationExportData.java =====
 // HttpsCertificateExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateExecutionConfigurationExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateExecutionConfigurationExportData implements JsonSerializable {
     private String subject;
     private String thumbprint;
@@ -14059,15 +14264,16 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
     }
 }
 
-// ===== HttpsCertificateInfo.java =====
+// ===== aspire/HttpsCertificateInfo.java =====
 // HttpsCertificateInfo.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateInfo DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateInfo implements JsonSerializable {
     private String subject;
     private String issuer;
@@ -14101,15 +14307,16 @@ public class HttpsCertificateInfo implements JsonSerializable {
     }
 }
 
-// ===== HttpsEndpointUpdateCallbackContext.java =====
+// ===== aspire/HttpsEndpointUpdateCallbackContext.java =====
 // HttpsEndpointUpdateCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsEndpointUpdateCallbackContext extends HandleWrapperBase {
     HttpsEndpointUpdateCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14149,15 +14356,16 @@ public class HttpsEndpointUpdateCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== IAspireStore.java =====
+// ===== aspire/IAspireStore.java =====
 // IAspireStore.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IAspireStore extends HandleWrapperBase {
     IAspireStore(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14183,15 +14391,13 @@ public class IAspireStore extends HandleWrapperBase {
 
 }
 
-// ===== IComputeEnvironmentResource.java =====
+// ===== aspire/IComputeEnvironmentResource.java =====
 // IComputeEnvironmentResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IComputeEnvironmentResource extends ResourceBuilderBase {
     IComputeEnvironmentResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14199,15 +14405,13 @@ public class IComputeEnvironmentResource extends ResourceBuilderBase {
 
 }
 
-// ===== IComputeResource.java =====
+// ===== aspire/IComputeResource.java =====
 // IComputeResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IComputeResource extends HandleWrapperBase {
     IComputeResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14215,15 +14419,16 @@ public class IComputeResource extends HandleWrapperBase {
 
 }
 
-// ===== IConfiguration.java =====
+// ===== aspire/IConfiguration.java =====
 // IConfiguration.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IConfiguration extends HandleWrapperBase {
     IConfiguration(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14275,15 +14480,16 @@ public class IConfiguration extends HandleWrapperBase {
 
 }
 
-// ===== IConfigurationSection.java =====
+// ===== aspire/IConfigurationSection.java =====
 // IConfigurationSection.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IConfigurationSection extends HandleWrapperBase {
     IConfigurationSection(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14324,15 +14530,13 @@ public class IConfigurationSection extends HandleWrapperBase {
 
 }
 
-// ===== IContainerFilesDestinationResource.java =====
+// ===== aspire/IContainerFilesDestinationResource.java =====
 // IContainerFilesDestinationResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IContainerFilesDestinationResource extends HandleWrapperBase {
     IContainerFilesDestinationResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14340,15 +14544,16 @@ public class IContainerFilesDestinationResource extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationBuilder.java =====
+// ===== aspire/IDistributedApplicationBuilder.java =====
 // IDistributedApplicationBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationBuilder extends HandleWrapperBase {
     IDistributedApplicationBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14838,7 +15043,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a test Redis resource from ATS documentation. */
-    public TestRedisResource addTestRedis(String name, Double port) {
+    public TestRedisResource addTestRedis(String name, Number port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -14850,25 +15055,23 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a test vault resource */
-    public TestVaultResource addTestVault(String name) {
+    public ITestVaultResource addTestVault(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestVault", reqArgs);
-        return (TestVaultResource) result;
+        return (ITestVaultResource) result;
     }
 
 }
 
-// ===== IDistributedApplicationEvent.java =====
+// ===== aspire/IDistributedApplicationEvent.java =====
 // IDistributedApplicationEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationEvent extends HandleWrapperBase {
     IDistributedApplicationEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14876,15 +15079,16 @@ public class IDistributedApplicationEvent extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationEventing.java =====
+// ===== aspire/IDistributedApplicationEventing.java =====
 // IDistributedApplicationEventing.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationEventing extends HandleWrapperBase {
     IDistributedApplicationEventing(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14900,15 +15104,16 @@ public class IDistributedApplicationEventing extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationPipeline.java =====
+// ===== aspire/IDistributedApplicationPipeline.java =====
 // IDistributedApplicationPipeline.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationPipeline extends HandleWrapperBase {
     IDistributedApplicationPipeline(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14972,15 +15177,13 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationResourceEvent.java =====
+// ===== aspire/IDistributedApplicationResourceEvent.java =====
 // IDistributedApplicationResourceEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
     IDistributedApplicationResourceEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14988,15 +15191,16 @@ public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
 
 }
 
-// ===== IExecutionConfigurationBuilder.java =====
+// ===== aspire/IExecutionConfigurationBuilder.java =====
 // IExecutionConfigurationBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExecutionConfigurationBuilder extends HandleWrapperBase {
     IExecutionConfigurationBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15076,15 +15280,16 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
 
 }
 
-// ===== IExecutionConfigurationResult.java =====
+// ===== aspire/IExecutionConfigurationResult.java =====
 // IExecutionConfigurationResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExecutionConfigurationResult extends HandleWrapperBase {
     IExecutionConfigurationResult(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15108,15 +15313,13 @@ public class IExecutionConfigurationResult extends HandleWrapperBase {
 
 }
 
-// ===== IExpressionValue.java =====
+// ===== aspire/IExpressionValue.java =====
 // IExpressionValue.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExpressionValue extends HandleWrapperBase {
     IExpressionValue(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15124,15 +15327,16 @@ public class IExpressionValue extends HandleWrapperBase {
 
 }
 
-// ===== IHostEnvironment.java =====
+// ===== aspire/IHostEnvironment.java =====
 // IHostEnvironment.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IHostEnvironment extends HandleWrapperBase {
     IHostEnvironment(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15224,15 +15428,16 @@ public class IHostEnvironment extends HandleWrapperBase {
 
 }
 
-// ===== IInteractionService.java =====
+// ===== aspire/IInteractionService.java =====
 // IInteractionService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IInteractionService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IInteractionService extends HandleWrapperBase {
     IInteractionService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15329,10 +15534,9 @@ public class IInteractionService extends HandleWrapperBase {
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
     public BoolInteractionResult promptProgress(String message, PromptProgressOptions optionsBag) {
-        var title = optionsBag == null ? null : optionsBag.getTitle();
         var options = optionsBag == null ? null : optionsBag.getOptions();
         var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
-        return promptProgressImpl(message, title, options, cancellationToken);
+        return promptProgressImpl(message, options, cancellationToken);
     }
 
     public BoolInteractionResult promptProgress(String message) {
@@ -15340,13 +15544,10 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
-    private BoolInteractionResult promptProgressImpl(String message, String title, InteractionProgressOptions options, CancellationToken cancellationToken) {
+    private BoolInteractionResult promptProgressImpl(String message, InteractionProgressOptions options, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("message", AspireClient.serializeValue(message));
-        if (title != null) {
-            reqArgs.put("title", AspireClient.serializeValue(title));
-        }
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
@@ -15485,6 +15686,22 @@ public class IInteractionService extends HandleWrapperBase {
         return (InteractionInputBuilder) result;
     }
 
+    public InteractionInputBuilder createFileInput(String name) {
+        return createFileInput(name, null);
+    }
+
+    /** Creates a file input. */
+    public InteractionInputBuilder createFileInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createFileInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
     /** Creates a choice input that selects from a list of options. */
     public InteractionInputBuilder createChoiceInput(String name, CreateChoiceInputOptions optionsBag) {
         var choices = optionsBag == null ? null : optionsBag.getChoices();
@@ -15513,15 +15730,16 @@ public class IInteractionService extends HandleWrapperBase {
 
 }
 
-// ===== ILogger.java =====
+// ===== aspire/ILogger.java =====
 // ILogger.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ILogger extends HandleWrapperBase {
     ILogger(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15570,15 +15788,16 @@ public class ILogger extends HandleWrapperBase {
 
 }
 
-// ===== ILoggerFactory.java =====
+// ===== aspire/ILoggerFactory.java =====
 // ILoggerFactory.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ILoggerFactory extends HandleWrapperBase {
     ILoggerFactory(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15595,15 +15814,16 @@ public class ILoggerFactory extends HandleWrapperBase {
 
 }
 
-// ===== IReportingStep.java =====
+// ===== aspire/IReportingStep.java =====
 // IReportingStep.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IReportingStep extends HandleWrapperBase {
     IReportingStep(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15711,15 +15931,16 @@ public class IReportingStep extends HandleWrapperBase {
 
 }
 
-// ===== IReportingTask.java =====
+// ===== aspire/IReportingTask.java =====
 // IReportingTask.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IReportingTask extends HandleWrapperBase {
     IReportingTask(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15810,15 +16031,13 @@ public class IReportingTask extends HandleWrapperBase {
 
 }
 
-// ===== IResource.java =====
+// ===== aspire/IResource.java =====
 // IResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResource extends ResourceBuilderBase {
     IResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15826,15 +16045,13 @@ public class IResource extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithArgs.java =====
+// ===== aspire/IResourceWithArgs.java =====
 // IResourceWithArgs.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithArgs extends ResourceBuilderBase {
     IResourceWithArgs(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15842,15 +16059,13 @@ public class IResourceWithArgs extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithConnectionString.java =====
+// ===== aspire/IResourceWithConnectionString.java =====
 // IResourceWithConnectionString.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithConnectionString extends ResourceBuilderBase {
     IResourceWithConnectionString(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15858,15 +16073,16 @@ public class IResourceWithConnectionString extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithContainerFiles.java =====
+// ===== aspire/IResourceWithContainerFiles.java =====
 // IResourceWithContainerFiles.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithContainerFiles extends ResourceBuilderBase {
     IResourceWithContainerFiles(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15891,15 +16107,13 @@ public class IResourceWithContainerFiles extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithEndpoints.java =====
+// ===== aspire/IResourceWithEndpoints.java =====
 // IResourceWithEndpoints.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEndpoints extends ResourceBuilderBase {
     IResourceWithEndpoints(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15907,15 +16121,13 @@ public class IResourceWithEndpoints extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithEnvironment.java =====
+// ===== aspire/IResourceWithEnvironment.java =====
 // IResourceWithEnvironment.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEnvironment extends ResourceBuilderBase {
     IResourceWithEnvironment(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15923,15 +16135,13 @@ public class IResourceWithEnvironment extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithParent.java =====
+// ===== aspire/IResourceWithParent.java =====
 // IResourceWithParent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithParent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithParent extends ResourceBuilderBase {
     IResourceWithParent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15939,15 +16149,13 @@ public class IResourceWithParent extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithWaitSupport.java =====
+// ===== aspire/IResourceWithWaitSupport.java =====
 // IResourceWithWaitSupport.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithWaitSupport extends ResourceBuilderBase {
     IResourceWithWaitSupport(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15955,15 +16163,16 @@ public class IResourceWithWaitSupport extends ResourceBuilderBase {
 
 }
 
-// ===== IServiceProvider.java =====
+// ===== aspire/IServiceProvider.java =====
 // IServiceProvider.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for System.ComponentModel/System.IServiceProvider. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IServiceProvider extends HandleWrapperBase {
     IServiceProvider(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16043,15 +16252,89 @@ public class IServiceProvider extends HandleWrapperBase {
 
 }
 
-// ===== ITestVaultResource.java =====
+// ===== aspire/ITestMutablePromiseCollisionResource.java =====
+// ITestMutablePromiseCollisionResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestMutablePromiseCollisionResource extends ResourceBuilderBase {
+    ITestMutablePromiseCollisionResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets or sets the test value. */
+    public String value() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.value", reqArgs);
+        return (String) result;
+    }
+
+    /** Sets the Value property */
+    public ITestMutablePromiseCollisionResource setValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", reqArgs);
+        return (ITestMutablePromiseCollisionResource) result;
+    }
+
+}
+
+// ===== aspire/ITestMutablePromiseCollisionResourcePromise.java =====
+// ITestMutablePromiseCollisionResourcePromise.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestMutablePromiseCollisionResourcePromise extends ResourceBuilderBase {
+    ITestMutablePromiseCollisionResourcePromise(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestPromiseCollisionResource.java =====
+// ITestPromiseCollisionResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResource extends ResourceBuilderBase {
+    ITestPromiseCollisionResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestPromiseCollisionResourcePromise.java =====
+// ITestPromiseCollisionResourcePromise.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResourcePromise extends ResourceBuilderBase {
+    ITestPromiseCollisionResourcePromise(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestVaultResource.java =====
 // ITestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ITestVaultResource extends ResourceBuilderBase {
     ITestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16059,15 +16342,16 @@ public class ITestVaultResource extends ResourceBuilderBase {
 
 }
 
-// ===== IUserSecretsManager.java =====
+// ===== aspire/IUserSecretsManager.java =====
 // IUserSecretsManager.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IUserSecretsManager. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IUserSecretsManager extends HandleWrapperBase {
     IUserSecretsManager(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16139,15 +16423,13 @@ public class IUserSecretsManager extends HandleWrapperBase {
 
 }
 
-// ===== IconVariant.java =====
+// ===== aspire/IconVariant.java =====
 // IconVariant.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** IconVariant enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum IconVariant implements WireValueEnum {
     REGULAR("Regular"),
     FILLED("Filled");
@@ -16168,15 +16450,13 @@ public enum IconVariant implements WireValueEnum {
     }
 }
 
-// ===== ImagePullPolicy.java =====
+// ===== aspire/ImagePullPolicy.java =====
 // ImagePullPolicy.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ImagePullPolicy enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ImagePullPolicy implements WireValueEnum {
     DEFAULT("Default"),
     ALWAYS("Always"),
@@ -16199,15 +16479,16 @@ public enum ImagePullPolicy implements WireValueEnum {
     }
 }
 
-// ===== InitializeResourceEvent.java =====
+// ===== aspire/InitializeResourceEvent.java =====
 // InitializeResourceEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InitializeResourceEvent extends HandleWrapperBase {
     InitializeResourceEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16255,15 +16536,16 @@ public class InitializeResourceEvent extends HandleWrapperBase {
 
 }
 
-// ===== InputInteractionResult.java =====
+// ===== aspire/InputInteractionResult.java =====
 // InputInteractionResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InputInteractionResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InputInteractionResult implements JsonSerializable {
     private boolean canceled;
     private InteractionInput input;
@@ -16291,21 +16573,20 @@ public class InputInteractionResult implements JsonSerializable {
     }
 }
 
-// ===== InputType.java =====
+// ===== aspire/InputType.java =====
 // InputType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** InputType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum InputType implements WireValueEnum {
     TEXT("Text"),
     SECRET_TEXT("SecretText"),
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
-    NUMBER("Number");
+    NUMBER("Number"),
+    FILE("File");
 
     private final String value;
 
@@ -16323,15 +16604,16 @@ public enum InputType implements WireValueEnum {
     }
 }
 
-// ===== InputsDialogValidationContext.java =====
+// ===== aspire/InputsDialogValidationContext.java =====
 // InputsDialogValidationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InputsDialogValidationContext extends HandleWrapperBase {
     InputsDialogValidationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16372,15 +16654,16 @@ public class InputsDialogValidationContext extends HandleWrapperBase {
 
 }
 
-// ===== InputsInteractionResult.java =====
+// ===== aspire/InputsInteractionResult.java =====
 // InputsInteractionResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InputsInteractionResult extends HandleWrapperBase {
     InputsInteractionResult(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16404,15 +16687,16 @@ public class InputsInteractionResult extends HandleWrapperBase {
 
 }
 
-// ===== InteractionChoiceOption.java =====
+// ===== aspire/InteractionChoiceOption.java =====
 // InteractionChoiceOption.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InteractionChoiceOption DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionChoiceOption implements JsonSerializable {
     private String value;
     private String label;
@@ -16440,15 +16724,16 @@ public class InteractionChoiceOption implements JsonSerializable {
     }
 }
 
-// ===== InteractionInput.java =====
+// ===== aspire/InteractionInput.java =====
 // InteractionInput.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InteractionInput DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInput implements JsonSerializable {
     private String name;
     private String label;
@@ -16461,7 +16746,10 @@ public class InteractionInput implements JsonSerializable {
     private String placeholder;
     private Boolean allowCustomChoice;
     private boolean disabled;
-    private Double maxLength;
+    private Number maxLength;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
+    private Number maxFileSize;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -16485,8 +16773,14 @@ public class InteractionInput implements JsonSerializable {
     public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public boolean getDisabled() { return disabled; }
     public void setDisabled(boolean value) { this.disabled = value; }
-    public Double getMaxLength() { return maxLength; }
-    public void setMaxLength(Double value) { this.maxLength = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
+    public Number getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Number value) { this.maxFileSize = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInput fromMap(Map<String, Object> map) {
@@ -16515,6 +16809,12 @@ public class InteractionInput implements JsonSerializable {
         value.setDisabled((Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
         return value;
     }
 
@@ -16532,19 +16832,23 @@ public class InteractionInput implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
         return map;
     }
 }
 
-// ===== InteractionInputBuilder.java =====
+// ===== aspire/InteractionInputBuilder.java =====
 // InteractionInputBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInputBuilder extends HandleWrapperBase {
     InteractionInputBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16566,6 +16870,13 @@ public class InteractionInputBuilder extends HandleWrapperBase {
         reqArgs.put("value", AspireClient.serializeValue(value));
         var result = getClient().invokeCapability("Aspire.Hosting.Ats/withValue", reqArgs);
         return (InteractionInputBuilder) result;
+    }
+
+    /** Releases uploaded files associated with the input. */
+    public void releaseFiles() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Ats/releaseFiles", reqArgs);
     }
 
     public InteractionInputBuilder withDynamicLoading(AspireAction1<InteractionInputLoadContext> callback) {
@@ -16593,15 +16904,16 @@ public class InteractionInputBuilder extends HandleWrapperBase {
 
 }
 
-// ===== InteractionInputCollection.java =====
+// ===== aspire/InteractionInputCollection.java =====
 // InteractionInputCollection.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.InteractionInputCollection. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInputCollection extends HandleWrapperBase {
     InteractionInputCollection(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16647,15 +16959,16 @@ public class InteractionInputCollection extends HandleWrapperBase {
 
 }
 
-// ===== InteractionInputLoadContext.java =====
+// ===== aspire/InteractionInputLoadContext.java =====
 // InteractionInputLoadContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInputLoadContext extends HandleWrapperBase {
     InteractionInputLoadContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16679,15 +16992,17 @@ public class InteractionInputLoadContext extends HandleWrapperBase {
 
 }
 
-// ===== InteractionInputsDialogOptions.java =====
+// ===== aspire/InteractionInputsDialogOptions.java =====
 // InteractionInputsDialogOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** InteractionInputsDialogOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInputsDialogOptions implements JsonSerializable {
     private String primaryButtonText;
     private String secondaryButtonText;
@@ -16741,15 +17056,16 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
     }
 }
 
-// ===== InteractionLoadingInput.java =====
+// ===== aspire/InteractionLoadingInput.java =====
 // InteractionLoadingInput.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionLoadingInput extends HandleWrapperBase {
     InteractionLoadingInput(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16781,15 +17097,16 @@ public class InteractionLoadingInput extends HandleWrapperBase {
 
 }
 
-// ===== InteractionMessageBoxOptions.java =====
+// ===== aspire/InteractionMessageBoxOptions.java =====
 // InteractionMessageBoxOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InteractionMessageBoxOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionMessageBoxOptions implements JsonSerializable {
     private String primaryButtonText;
     private String secondaryButtonText;
@@ -16841,15 +17158,16 @@ public class InteractionMessageBoxOptions implements JsonSerializable {
     }
 }
 
-// ===== InteractionNotificationOptions.java =====
+// ===== aspire/InteractionNotificationOptions.java =====
 // InteractionNotificationOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InteractionNotificationOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionNotificationOptions implements JsonSerializable {
     private String primaryButtonText;
     private String secondaryButtonText;
@@ -16913,20 +17231,25 @@ public class InteractionNotificationOptions implements JsonSerializable {
     }
 }
 
-// ===== InteractionProgressOptions.java =====
+// ===== aspire/InteractionProgressOptions.java =====
 // InteractionProgressOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** InteractionProgressOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionProgressOptions implements JsonSerializable {
+    private String title;
     private String primaryButtonText;
     private Boolean enableMessageMarkdown;
     private AspireAction1<ProgressContext> work;
 
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
     public String getPrimaryButtonText() { return primaryButtonText; }
     public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
     public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
@@ -16937,6 +17260,8 @@ public class InteractionProgressOptions implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static InteractionProgressOptions fromMap(Map<String, Object> map) {
         var value = new InteractionProgressOptions();
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
         var primaryButtonTextValue = map.get("PrimaryButtonText");
         value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
         var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
@@ -16946,6 +17271,7 @@ public class InteractionProgressOptions implements JsonSerializable {
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
+        map.put("Title", AspireClient.serializeValue(title));
         map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
         map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
         map.put("Work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
@@ -16957,32 +17283,28 @@ public class InteractionProgressOptions implements JsonSerializable {
     }
 }
 
-// ===== JsonSerializable.java =====
+// ===== aspire/JsonSerializable.java =====
 // JsonSerializable.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.Map;
 
+@SuppressWarnings({"all", "unchecked", "serial"})
 public interface JsonSerializable {
     Map<String, Object> toMap();
 }
 
-// ===== LogFacade.java =====
+// ===== aspire/LogFacade.java =====
 // LogFacade.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class LogFacade extends HandleWrapperBase {
     LogFacade(Handle handle, AspireClient client) {
         super(handle, client);
@@ -17022,15 +17344,13 @@ public class LogFacade extends HandleWrapperBase {
 
 }
 
-// ===== MessageIntent.java =====
+// ===== aspire/MessageIntent.java =====
 // MessageIntent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** MessageIntent enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum MessageIntent implements WireValueEnum {
     NONE("None"),
     SUCCESS("Success"),
@@ -17055,15 +17375,13 @@ public enum MessageIntent implements WireValueEnum {
     }
 }
 
-// ===== OtlpProtocol.java =====
+// ===== aspire/OtlpProtocol.java =====
 // OtlpProtocol.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** OtlpProtocol enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum OtlpProtocol implements WireValueEnum {
     GRPC("Grpc"),
     HTTP_PROTOBUF("HttpProtobuf"),
@@ -17085,15 +17403,16 @@ public enum OtlpProtocol implements WireValueEnum {
     }
 }
 
-// ===== ParameterCustomInputOptions.java =====
+// ===== aspire/ParameterCustomInputOptions.java =====
 // ParameterCustomInputOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ParameterCustomInputOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ParameterCustomInputOptions implements JsonSerializable {
     private InputType inputType;
     private String label;
@@ -17104,7 +17423,7 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     private String placeholder;
     private Boolean allowCustomChoice;
     private Boolean disabled;
-    private Double maxLength;
+    private Number maxLength;
 
     public InputType getInputType() { return inputType; }
     public void setInputType(InputType value) { this.inputType = value; }
@@ -17124,8 +17443,8 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public Boolean getDisabled() { return disabled; }
     public void setDisabled(Boolean value) { this.disabled = value; }
-    public Double getMaxLength() { return maxLength; }
-    public void setMaxLength(Double value) { this.maxLength = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
 
     @SuppressWarnings("unchecked")
     public static ParameterCustomInputOptions fromMap(Map<String, Object> map) {
@@ -17169,15 +17488,16 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     }
 }
 
-// ===== ParameterResource.java =====
+// ===== aspire/ParameterResource.java =====
 // ParameterResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ParameterResource extends ResourceBuilderBase {
     ParameterResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -17564,7 +17884,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ParameterResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ParameterResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -17977,7 +18297,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -18003,7 +18323,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -18045,15 +18365,16 @@ public class ParameterResource extends ResourceBuilderBase {
 
 }
 
-// ===== PipelineConfigurationContext.java =====
+// ===== aspire/PipelineConfigurationContext.java =====
 // PipelineConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineConfigurationContext extends HandleWrapperBase {
     PipelineConfigurationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18086,15 +18407,16 @@ public class PipelineConfigurationContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineContext.java =====
+// ===== aspire/PipelineContext.java =====
 // PipelineContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineContext extends HandleWrapperBase {
     PipelineContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18161,15 +18483,16 @@ public class PipelineContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineEditor.java =====
+// ===== aspire/PipelineEditor.java =====
 // PipelineEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineEditor extends HandleWrapperBase {
     PipelineEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18194,15 +18517,16 @@ public class PipelineEditor extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStep.java =====
+// ===== aspire/PipelineStep.java =====
 // PipelineStep.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStep extends HandleWrapperBase {
     PipelineStep(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18277,15 +18601,16 @@ public class PipelineStep extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStepContext.java =====
+// ===== aspire/PipelineStepContext.java =====
 // PipelineStepContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStepContext extends HandleWrapperBase {
     PipelineStepContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18357,15 +18682,16 @@ public class PipelineStepContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStepFactoryContext.java =====
+// ===== aspire/PipelineStepFactoryContext.java =====
 // PipelineStepFactoryContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStepFactoryContext extends HandleWrapperBase {
     PipelineStepFactoryContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18389,15 +18715,16 @@ public class PipelineStepFactoryContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineSummary.java =====
+// ===== aspire/PipelineSummary.java =====
 // PipelineSummary.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineSummary extends HandleWrapperBase {
     PipelineSummary(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18423,15 +18750,13 @@ public class PipelineSummary extends HandleWrapperBase {
 
 }
 
-// ===== ProbeType.java =====
+// ===== aspire/ProbeType.java =====
 // ProbeType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ProbeType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ProbeType implements WireValueEnum {
     STARTUP("Startup"),
     READINESS("Readiness"),
@@ -18453,15 +18778,17 @@ public enum ProbeType implements WireValueEnum {
     }
 }
 
-// ===== ProcessCommandExportOptions.java =====
+// ===== aspire/ProcessCommandExportOptions.java =====
 // ProcessCommandExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** ProcessCommandExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandExportOptions implements JsonSerializable {
     private String executablePath;
     private String[] arguments;
@@ -18472,7 +18799,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private Boolean killEntireProcessTree;
     private AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec;
     private CommandOptions commandOptions;
-    private Double maxOutputLineCount;
+    private Number maxOutputLineCount;
     private Boolean displayImmediately;
     private double[] successExitCodes;
 
@@ -18494,8 +18821,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setCreateProcessSpec(AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> value) { this.createProcessSpec = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
-    public Double getMaxOutputLineCount() { return maxOutputLineCount; }
-    public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
+    public Number getMaxOutputLineCount() { return maxOutputLineCount; }
+    public void setMaxOutputLineCount(Number value) { this.maxOutputLineCount = value; }
     public Boolean getDisplayImmediately() { return displayImmediately; }
     public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
     public double[] getSuccessExitCodes() { return successExitCodes; }
@@ -18550,25 +18877,26 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     }
 }
 
-// ===== ProcessCommandResultExportOptions.java =====
+// ===== aspire/ProcessCommandResultExportOptions.java =====
 // ProcessCommandResultExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ProcessCommandResultExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandResultExportOptions implements JsonSerializable {
     private CommandOptions commandOptions;
-    private Double maxOutputLineCount;
+    private Number maxOutputLineCount;
     private Boolean displayImmediately;
     private double[] successExitCodes;
 
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
-    public Double getMaxOutputLineCount() { return maxOutputLineCount; }
-    public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
+    public Number getMaxOutputLineCount() { return maxOutputLineCount; }
+    public void setMaxOutputLineCount(Number value) { this.maxOutputLineCount = value; }
     public Boolean getDisplayImmediately() { return displayImmediately; }
     public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
     public double[] getSuccessExitCodes() { return successExitCodes; }
@@ -18598,15 +18926,16 @@ public class ProcessCommandResultExportOptions implements JsonSerializable {
     }
 }
 
-// ===== ProcessCommandSpecExportData.java =====
+// ===== aspire/ProcessCommandSpecExportData.java =====
 // ProcessCommandSpecExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ProcessCommandSpecExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandSpecExportData implements JsonSerializable {
     private String executablePath;
     private String[] arguments;
@@ -18664,15 +18993,16 @@ public class ProcessCommandSpecExportData implements JsonSerializable {
     }
 }
 
-// ===== ProgressContext.java =====
+// ===== aspire/ProgressContext.java =====
 // ProgressContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ProgressContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProgressContext extends HandleWrapperBase {
     ProgressContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18688,15 +19018,17 @@ public class ProgressContext extends HandleWrapperBase {
 
 }
 
-// ===== ProjectResource.java =====
+// ===== aspire/ProjectResource.java =====
 // ProjectResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProjectResource extends ResourceBuilderBase {
     ProjectResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -19002,6 +19334,10 @@ public class ProjectResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ProjectResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ProjectResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -19156,7 +19492,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ProjectResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ProjectResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -19211,7 +19547,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ProjectResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ProjectResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -19248,7 +19584,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ProjectResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ProjectResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -19439,7 +19775,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ProjectResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ProjectResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -19450,7 +19786,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ProjectResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ProjectResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -19476,7 +19812,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ProjectResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ProjectResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -19727,7 +20063,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ProjectResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ProjectResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -19784,7 +20120,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ProjectResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ProjectResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -19894,6 +20230,24 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    public ProjectResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
         return this;
     }
 
@@ -20281,7 +20635,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -20307,7 +20661,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -20349,15 +20703,16 @@ public class ProjectResource extends ResourceBuilderBase {
 
 }
 
-// ===== ProjectResourceOptions.java =====
+// ===== aspire/ProjectResourceOptions.java =====
 // ProjectResourceOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProjectResourceOptions extends HandleWrapperBase {
     ProjectResourceOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -20416,15 +20771,13 @@ public class ProjectResourceOptions extends HandleWrapperBase {
 
 }
 
-// ===== PromptConfirmationOptions.java =====
+// ===== aspire/PromptConfirmationOptions.java =====
 // PromptConfirmationOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptConfirmation. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptConfirmationOptions {
     private InteractionMessageBoxOptions options;
     private CancellationToken cancellationToken;
@@ -20443,15 +20796,13 @@ public final class PromptConfirmationOptions {
 
 }
 
-// ===== PromptInputOptions.java =====
+// ===== aspire/PromptInputOptions.java =====
 // PromptInputOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptInputOptions {
     private InteractionInputsDialogOptions options;
     private CancellationToken cancellationToken;
@@ -20470,15 +20821,13 @@ public final class PromptInputOptions {
 
 }
 
-// ===== PromptInputsOptions.java =====
+// ===== aspire/PromptInputsOptions.java =====
 // PromptInputsOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptInputs. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptInputsOptions {
     private InteractionInputsDialogOptions options;
     private CancellationToken cancellationToken;
@@ -20497,15 +20846,13 @@ public final class PromptInputsOptions {
 
 }
 
-// ===== PromptMessageBoxOptions.java =====
+// ===== aspire/PromptMessageBoxOptions.java =====
 // PromptMessageBoxOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptMessageBox. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptMessageBoxOptions {
     private InteractionMessageBoxOptions options;
     private CancellationToken cancellationToken;
@@ -20524,15 +20871,13 @@ public final class PromptMessageBoxOptions {
 
 }
 
-// ===== PromptNotificationOptions.java =====
+// ===== aspire/PromptNotificationOptions.java =====
 // PromptNotificationOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptNotification. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptNotificationOptions {
     private InteractionNotificationOptions options;
     private CancellationToken cancellationToken;
@@ -20551,25 +20896,16 @@ public final class PromptNotificationOptions {
 
 }
 
-// ===== PromptProgressOptions.java =====
+// ===== aspire/PromptProgressOptions.java =====
 // PromptProgressOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PromptProgress. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PromptProgressOptions {
-    private String title;
     private InteractionProgressOptions options;
     private CancellationToken cancellationToken;
-
-    public String getTitle() { return title; }
-    public PromptProgressOptions title(String value) {
-        this.title = value;
-        return this;
-    }
 
     public InteractionProgressOptions getOptions() { return options; }
     public PromptProgressOptions options(InteractionProgressOptions value) {
@@ -20585,15 +20921,13 @@ public final class PromptProgressOptions {
 
 }
 
-// ===== ProtocolType.java =====
+// ===== aspire/ProtocolType.java =====
 // ProtocolType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ProtocolType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ProtocolType implements WireValueEnum {
     IP("IP"),
     IPV6_HOP_BY_HOP_OPTIONS("IPv6HopByHopOptions"),
@@ -20637,15 +20971,13 @@ public enum ProtocolType implements WireValueEnum {
     }
 }
 
-// ===== PublishResourceUpdateOptions.java =====
+// ===== aspire/PublishResourceUpdateOptions.java =====
 // PublishResourceUpdateOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PublishResourceUpdate. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PublishResourceUpdateOptions {
     private String state;
     private String stateStyle;
@@ -20664,15 +20996,16 @@ public final class PublishResourceUpdateOptions {
 
 }
 
-// ===== ReferenceEnvironmentInjectionOptions.java =====
+// ===== aspire/ReferenceEnvironmentInjectionOptions.java =====
 // ReferenceEnvironmentInjectionOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ReferenceEnvironmentInjectionOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceEnvironmentInjectionOptions implements JsonSerializable {
     private boolean connectionString;
     private boolean connectionProperties;
@@ -20712,17 +21045,21 @@ public class ReferenceEnvironmentInjectionOptions implements JsonSerializable {
     }
 }
 
-// ===== ReferenceExpression.java =====
+// ===== aspire/ReferenceExpression.java =====
 // ReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * ReferenceExpression represents a reference expression.
  * Supports value mode (format + value providers), conditional mode, and handle mode.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceExpression {
     private final String format;
     private final Object[] valueProviders;
@@ -20840,15 +21177,16 @@ public class ReferenceExpression {
     }
 }
 
-// ===== ReferenceExpressionBuilder.java =====
+// ===== aspire/ReferenceExpressionBuilder.java =====
 // ReferenceExpressionBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceExpressionBuilder extends HandleWrapperBase {
     ReferenceExpressionBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -20910,15 +21248,16 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
 
 }
 
-// ===== RequiredCommandValidationContext.java =====
+// ===== aspire/RequiredCommandValidationContext.java =====
 // RequiredCommandValidationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class RequiredCommandValidationContext extends HandleWrapperBase {
     RequiredCommandValidationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -20967,15 +21306,16 @@ public class RequiredCommandValidationContext extends HandleWrapperBase {
 
 }
 
-// ===== RequiredCommandValidationResult.java =====
+// ===== aspire/RequiredCommandValidationResult.java =====
 // RequiredCommandValidationResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class RequiredCommandValidationResult extends HandleWrapperBase {
     RequiredCommandValidationResult(Handle handle, AspireClient client) {
         super(handle, client);
@@ -20999,31 +21339,31 @@ public class RequiredCommandValidationResult extends HandleWrapperBase {
 
 }
 
-// ===== ResourceBuilderBase.java =====
+// ===== aspire/ResourceBuilderBase.java =====
 // ResourceBuilderBase.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * ResourceBuilderBase extends HandleWrapperBase for resource builders.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceBuilderBase extends HandleWrapperBase {
     ResourceBuilderBase(Handle handle, AspireClient client) {
         super(handle, client);
     }
 }
 
-// ===== ResourceCommandService.java =====
+// ===== aspire/ResourceCommandService.java =====
 // ResourceCommandService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceCommandService extends HandleWrapperBase {
     ResourceCommandService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21047,6 +21387,10 @@ public class ResourceCommandService extends HandleWrapperBase {
 
     public ExecuteCommandResult executeCommandAsync(IResource resource, String commandName) {
         return executeCommandAsync(AspireUnion.of(resource), commandName);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(ResourceBuilderBase resource, String commandName) {
+        return executeCommandAsync(new IResource(resource.getHandle(), resource.getClient()), commandName);
     }
 
     /** Executes a command for the specified resource. */
@@ -21078,15 +21422,13 @@ public class ResourceCommandService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceCommandState.java =====
+// ===== aspire/ResourceCommandState.java =====
 // ResourceCommandState.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ResourceCommandState enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ResourceCommandState implements WireValueEnum {
     ENABLED("Enabled"),
     DISABLED("Disabled"),
@@ -21108,15 +21450,13 @@ public enum ResourceCommandState implements WireValueEnum {
     }
 }
 
-// ===== ResourceCommandVisibility.java =====
+// ===== aspire/ResourceCommandVisibility.java =====
 // ResourceCommandVisibility.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ResourceCommandVisibility enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ResourceCommandVisibility implements WireValueEnum {
     NONE("None"),
     UI("UI"),
@@ -21138,15 +21478,16 @@ public enum ResourceCommandVisibility implements WireValueEnum {
     }
 }
 
-// ===== ResourceEndpointsAllocatedEvent.java =====
+// ===== aspire/ResourceEndpointsAllocatedEvent.java =====
 // ResourceEndpointsAllocatedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceEndpointsAllocatedEvent extends HandleWrapperBase {
     ResourceEndpointsAllocatedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21170,22 +21511,23 @@ public class ResourceEndpointsAllocatedEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceEventDto.java =====
+// ===== aspire/ResourceEventDto.java =====
 // ResourceEventDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ResourceEventDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceEventDto implements JsonSerializable {
     private String resourceName;
     private String resourceId;
     private String state;
     private String stateStyle;
     private String healthStatus;
-    private Double exitCode;
+    private Number exitCode;
 
     public String getResourceName() { return resourceName; }
     public void setResourceName(String value) { this.resourceName = value; }
@@ -21197,8 +21539,8 @@ public class ResourceEventDto implements JsonSerializable {
     public void setStateStyle(String value) { this.stateStyle = value; }
     public String getHealthStatus() { return healthStatus; }
     public void setHealthStatus(String value) { this.healthStatus = value; }
-    public Double getExitCode() { return exitCode; }
-    public void setExitCode(Double value) { this.exitCode = value; }
+    public Number getExitCode() { return exitCode; }
+    public void setExitCode(Number value) { this.exitCode = value; }
 
     @SuppressWarnings("unchecked")
     public static ResourceEventDto fromMap(Map<String, Object> map) {
@@ -21230,15 +21572,16 @@ public class ResourceEventDto implements JsonSerializable {
     }
 }
 
-// ===== ResourceLoggerService.java =====
+// ===== aspire/ResourceLoggerService.java =====
 // ResourceLoggerService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceLoggerService extends HandleWrapperBase {
     ResourceLoggerService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21266,15 +21609,16 @@ public class ResourceLoggerService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceNotificationService.java =====
+// ===== aspire/ResourceNotificationService.java =====
 // ResourceNotificationService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceNotificationService extends HandleWrapperBase {
     ResourceNotificationService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21370,15 +21714,16 @@ public class ResourceNotificationService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceReadyEvent.java =====
+// ===== aspire/ResourceReadyEvent.java =====
 // ResourceReadyEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceReadyEvent extends HandleWrapperBase {
     ResourceReadyEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21402,15 +21747,16 @@ public class ResourceReadyEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceStoppedEvent.java =====
+// ===== aspire/ResourceStoppedEvent.java =====
 // ResourceStoppedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceStoppedEvent extends HandleWrapperBase {
     ResourceStoppedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21434,15 +21780,16 @@ public class ResourceStoppedEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceUrlAnnotation.java =====
+// ===== aspire/ResourceUrlAnnotation.java =====
 // ResourceUrlAnnotation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ResourceUrlAnnotation DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
@@ -21482,15 +21829,16 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     }
 }
 
-// ===== ResourceUrlsCallbackContext.java =====
+// ===== aspire/ResourceUrlsCallbackContext.java =====
 // ResourceUrlsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlsCallbackContext extends HandleWrapperBase {
     ResourceUrlsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21539,15 +21887,16 @@ public class ResourceUrlsCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== ResourceUrlsEditor.java =====
+// ===== aspire/ResourceUrlsEditor.java =====
 // ResourceUrlsEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlsEditor extends HandleWrapperBase {
     ResourceUrlsEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21610,15 +21959,47 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
 
 }
 
-// ===== TestCallbackContext.java =====
+// ===== aspire/RunConfiguration.java =====
+// RunConfiguration.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** RunConfiguration DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class RunConfiguration implements JsonSerializable {
+    private Boolean watchEnabled;
+
+    public Boolean getWatchEnabled() { return watchEnabled; }
+    public void setWatchEnabled(Boolean value) { this.watchEnabled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static RunConfiguration fromMap(Map<String, Object> map) {
+        var value = new RunConfiguration();
+        var watchEnabledValue = map.get("WatchEnabled");
+        value.setWatchEnabled(watchEnabledValue == null ? null : (Boolean) watchEnabledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("WatchEnabled", AspireClient.serializeValue(watchEnabled));
+        return map;
+    }
+}
+
+// ===== aspire/TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestCallbackContext extends HandleWrapperBase {
     TestCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21679,15 +22060,15 @@ public class TestCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== TestCollectionContext.java =====
+// ===== aspire/TestCollectionContext.java =====
 // TestCollectionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.List;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestCollectionContext extends HandleWrapperBase {
     TestCollectionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21713,15 +22094,16 @@ public class TestCollectionContext extends HandleWrapperBase {
 
 }
 
-// ===== TestConfigDto.java =====
+// ===== aspire/TestConfigDto.java =====
 // TestConfigDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** TestConfigDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestConfigDto implements JsonSerializable {
     private String name;
     private double port;
@@ -21761,14 +22143,12 @@ public class TestConfigDto implements JsonSerializable {
     }
 }
 
-// ===== TestConfigs.java =====
+// ===== aspire/TestConfigs.java =====
 // TestConfigs.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class TestConfigs {
     private TestConfigs() { }
 
@@ -21787,15 +22167,17 @@ public final class TestConfigs {
 
 }
 
-// ===== TestDatabaseResource.java =====
+// ===== aspire/TestDatabaseResource.java =====
 // TestDatabaseResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestDatabaseResource extends ContainerResource {
     TestDatabaseResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -22365,6 +22747,10 @@ public class TestDatabaseResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestDatabaseResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestDatabaseResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -22519,7 +22905,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestDatabaseResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestDatabaseResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -22574,7 +22960,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestDatabaseResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestDatabaseResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -22611,7 +22997,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestDatabaseResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestDatabaseResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -22788,7 +23174,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestDatabaseResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestDatabaseResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -22799,7 +23185,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    public TestDatabaseResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestDatabaseResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -22825,7 +23211,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestDatabaseResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestDatabaseResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -23076,7 +23462,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestDatabaseResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestDatabaseResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -23133,7 +23519,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestDatabaseResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestDatabaseResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -23647,7 +24033,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -23673,7 +24059,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -23715,15 +24101,17 @@ public class TestDatabaseResource extends ContainerResource {
 
 }
 
-// ===== TestDeeplyNestedDto.java =====
+// ===== aspire/TestDeeplyNestedDto.java =====
 // TestDeeplyNestedDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /** TestDeeplyNestedDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestDeeplyNestedDto implements JsonSerializable {
     private Map<String, List<TestConfigDto>> nestedData;
     private Map<String, String>[] metadataArray;
@@ -23739,7 +24127,7 @@ public class TestDeeplyNestedDto implements JsonSerializable {
         var nestedDataValue = map.get("NestedData");
         value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
         var metadataArrayValue = map.get("MetadataArray");
-        value.setMetadataArray((AspireDict<String, String>[]) metadataArrayValue);
+        value.setMetadataArray((Map<String, String>[]) metadataArrayValue);
         return value;
     }
 
@@ -23751,15 +24139,16 @@ public class TestDeeplyNestedDto implements JsonSerializable {
     }
 }
 
-// ===== TestEnvironmentContext.java =====
+// ===== aspire/TestEnvironmentContext.java =====
 // TestEnvironmentContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestEnvironmentContext extends HandleWrapperBase {
     TestEnvironmentContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -23818,15 +24207,16 @@ public class TestEnvironmentContext extends HandleWrapperBase {
 
 }
 
-// ===== TestMutableCollectionContext.java =====
+// ===== aspire/TestMutableCollectionContext.java =====
 // TestMutableCollectionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestMutableCollectionContext extends HandleWrapperBase {
     TestMutableCollectionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -23851,8 +24241,8 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
     }
 
     /** Gets the Counts property */
-    private AspireDict<String, Double> countsField;
-    public AspireDict<String, Double> counts() {
+    private AspireDict<String, Number> countsField;
+    public AspireDict<String, Number> counts() {
         if (countsField == null) {
             countsField = new AspireDict<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts");
         }
@@ -23860,7 +24250,7 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
     }
 
     /** Sets the Counts property */
-    public TestMutableCollectionContext setCounts(AspireDict<String, Double> value) {
+    public TestMutableCollectionContext setCounts(AspireDict<String, Number> value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
@@ -23870,20 +24260,22 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
 
 }
 
-// ===== TestNestedDto.java =====
+// ===== aspire/TestNestedDto.java =====
 // TestNestedDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /** TestNestedDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
     private List<String> tags;
-    private Map<String, Double> counts;
+    private Map<String, Number> counts;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
@@ -23891,8 +24283,8 @@ public class TestNestedDto implements JsonSerializable {
     public void setConfig(TestConfigDto value) { this.config = value; }
     public List<String> getTags() { return tags; }
     public void setTags(List<String> value) { this.tags = value; }
-    public Map<String, Double> getCounts() { return counts; }
-    public void setCounts(Map<String, Double> value) { this.counts = value; }
+    public Map<String, Number> getCounts() { return counts; }
+    public void setCounts(Map<String, Number> value) { this.counts = value; }
 
     @SuppressWarnings("unchecked")
     public static TestNestedDto fromMap(Map<String, Object> map) {
@@ -23904,7 +24296,7 @@ public class TestNestedDto implements JsonSerializable {
         var tagsValue = map.get("Tags");
         value.setTags(((List<Object>) tagsValue).stream().map(item0 -> (String) item0).toList());
         var countsValue = map.get("Counts");
-        value.setCounts((Map<String, Double>) countsValue);
+        value.setCounts((Map<String, Number>) countsValue);
         return value;
     }
 
@@ -23918,15 +24310,13 @@ public class TestNestedDto implements JsonSerializable {
     }
 }
 
-// ===== TestPersistenceMode.java =====
+// ===== aspire/TestPersistenceMode.java =====
 // TestPersistenceMode.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** TestPersistenceMode enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum TestPersistenceMode implements WireValueEnum {
     NONE("None"),
     VOLUME("Volume"),
@@ -23948,15 +24338,17 @@ public enum TestPersistenceMode implements WireValueEnum {
     }
 }
 
-// ===== TestRedisResource.java =====
+// ===== aspire/TestRedisResource.java =====
 // TestRedisResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestRedisResource extends ContainerResource {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -24544,6 +24936,10 @@ public class TestRedisResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestRedisResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestRedisResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -24707,7 +25103,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestRedisResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestRedisResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -24762,7 +25158,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestRedisResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestRedisResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -24799,7 +25195,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestRedisResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestRedisResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -24976,7 +25372,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestRedisResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestRedisResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -24987,7 +25383,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    public TestRedisResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestRedisResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -25013,7 +25409,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestRedisResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestRedisResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -25264,7 +25660,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestRedisResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestRedisResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -25321,7 +25717,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestRedisResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestRedisResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -25586,6 +25982,50 @@ public class TestRedisResource extends ContainerResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
         return this;
+    }
+
+    /** Configures a Redis resource with parameter-only resources whose generated names collide. */
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("resourcePromise", AspireClient.serializeValue(resourcePromise));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withPromiseCollisionResources", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), resourcePromise);
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(resource, new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    /** Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide. */
+    public TestRedisResource withMutablePromiseCollisionResources(ITestMutablePromiseCollisionResource resource, ITestMutablePromiseCollisionResourcePromise resourcePromise) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("resourcePromise", AspireClient.serializeValue(resourcePromise));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMutablePromiseCollisionResources", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ResourceBuilderBase resource, ITestMutablePromiseCollisionResourcePromise resourcePromise) {
+        return withMutablePromiseCollisionResources(new ITestMutablePromiseCollisionResource(resource.getHandle(), resource.getClient()), resourcePromise);
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ITestMutablePromiseCollisionResource resource, ResourceBuilderBase resourcePromise) {
+        return withMutablePromiseCollisionResources(resource, new ITestMutablePromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ResourceBuilderBase resource, ResourceBuilderBase resourcePromise) {
+        return withMutablePromiseCollisionResources(new ITestMutablePromiseCollisionResource(resource.getHandle(), resource.getClient()), new ITestMutablePromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
     }
 
     public TestDatabaseResource addTestChildDatabase(String name) {
@@ -25956,6 +26396,15 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a Redis resource with the concrete vault resource as a parameter. */
+    public TestRedisResource withConcreteVaultResource(TestVaultResource resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withConcreteVaultResource", reqArgs);
+        return this;
+    }
+
     /** Adds a label to the resource */
     public TestRedisResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -26008,7 +26457,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -26034,7 +26483,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -26076,15 +26525,16 @@ public class TestRedisResource extends ContainerResource {
 
 }
 
-// ===== TestResourceContext.java =====
+// ===== aspire/TestResourceContext.java =====
 // TestResourceContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestResourceContext extends HandleWrapperBase {
     TestResourceContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -26150,15 +26600,13 @@ public class TestResourceContext extends HandleWrapperBase {
 
 }
 
-// ===== TestResourceStatus.java =====
+// ===== aspire/TestResourceStatus.java =====
 // TestResourceStatus.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** TestResourceStatus enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum TestResourceStatus implements WireValueEnum {
     PENDING("Pending"),
     RUNNING("Running"),
@@ -26181,15 +26629,17 @@ public enum TestResourceStatus implements WireValueEnum {
     }
 }
 
-// ===== TestVaultResource.java =====
+// ===== aspire/TestVaultResource.java =====
 // TestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestVaultResource extends ContainerResource {
     TestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -26759,6 +27209,10 @@ public class TestVaultResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestVaultResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestVaultResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -26913,7 +27367,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestVaultResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestVaultResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -26968,7 +27422,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestVaultResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestVaultResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -27005,7 +27459,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestVaultResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestVaultResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -27182,7 +27636,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestVaultResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestVaultResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -27193,7 +27647,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    public TestVaultResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestVaultResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -27219,7 +27673,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestVaultResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestVaultResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -27470,7 +27924,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestVaultResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestVaultResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -27527,7 +27981,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestVaultResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestVaultResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -28050,7 +28504,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -28076,7 +28530,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -28118,15 +28572,16 @@ public class TestVaultResource extends ContainerResource {
 
 }
 
-// ===== UpdateCommandStateContext.java =====
+// ===== aspire/UpdateCommandStateContext.java =====
 // UpdateCommandStateContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class UpdateCommandStateContext extends HandleWrapperBase {
     UpdateCommandStateContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -28150,21 +28605,22 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
 
 }
 
-// ===== UpdateCommandStateResourceSnapshot.java =====
+// ===== aspire/UpdateCommandStateResourceSnapshot.java =====
 // UpdateCommandStateResourceSnapshot.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** UpdateCommandStateResourceSnapshot DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     private String resourceType;
     private String state;
     private String stateStyle;
     private HealthStatus healthStatus;
-    private Double exitCode;
+    private Number exitCode;
 
     public String getResourceType() { return resourceType; }
     public void setResourceType(String value) { this.resourceType = value; }
@@ -28174,8 +28630,8 @@ public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     public void setStateStyle(String value) { this.stateStyle = value; }
     public HealthStatus getHealthStatus() { return healthStatus; }
     public void setHealthStatus(HealthStatus value) { this.healthStatus = value; }
-    public Double getExitCode() { return exitCode; }
-    public void setExitCode(Double value) { this.exitCode = value; }
+    public Number getExitCode() { return exitCode; }
+    public void setExitCode(Number value) { this.exitCode = value; }
 
     @SuppressWarnings("unchecked")
     public static UpdateCommandStateResourceSnapshot fromMap(Map<String, Object> map) {
@@ -28204,15 +28660,13 @@ public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     }
 }
 
-// ===== UrlDisplayLocation.java =====
+// ===== aspire/UrlDisplayLocation.java =====
 // UrlDisplayLocation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** UrlDisplayLocation enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum UrlDisplayLocation implements WireValueEnum {
     SUMMARY_AND_DETAILS("SummaryAndDetails"),
     DETAILS_ONLY("DetailsOnly");
@@ -28233,15 +28687,13 @@ public enum UrlDisplayLocation implements WireValueEnum {
     }
 }
 
-// ===== WaitBehavior.java =====
+// ===== aspire/WaitBehavior.java =====
 // WaitBehavior.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** WaitBehavior enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum WaitBehavior implements WireValueEnum {
     WAIT_ON_RESOURCE_UNAVAILABLE("WaitOnResourceUnavailable"),
     STOP_ON_RESOURCE_UNAVAILABLE("StopOnResourceUnavailable");
@@ -28262,14 +28714,12 @@ public enum WaitBehavior implements WireValueEnum {
     }
 }
 
-// ===== WellKnownPipelineSteps.java =====
+// ===== aspire/WellKnownPipelineSteps.java =====
 // WellKnownPipelineSteps.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WellKnownPipelineSteps {
     private WellKnownPipelineSteps() { }
 
@@ -28320,14 +28770,12 @@ public final class WellKnownPipelineSteps {
 
 }
 
-// ===== WellKnownPipelineTags.java =====
+// ===== aspire/WellKnownPipelineTags.java =====
 // WellKnownPipelineTags.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WellKnownPipelineTags {
     private WellKnownPipelineTags() { }
 
@@ -28345,29 +28793,26 @@ public final class WellKnownPipelineTags {
 
 }
 
-// ===== WireValueEnum.java =====
+// ===== aspire/WireValueEnum.java =====
 // WireValueEnum.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Marker interface for generated enums that need a transport value distinct from Enum.name().
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public interface WireValueEnum {
     String getValue();
 }
 
-// ===== WithContainerCertificatePathsOptions.java =====
+// ===== aspire/WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithContainerCertificatePaths. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithContainerCertificatePathsOptions {
     private String customCertificatesDestination;
     private String[] defaultCertificateBundlePaths;
@@ -28393,15 +28838,13 @@ public final class WithContainerCertificatePathsOptions {
 
 }
 
-// ===== WithDataVolumeOptions.java =====
+// ===== aspire/WithDataVolumeOptions.java =====
 // WithDataVolumeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDataVolume. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDataVolumeOptions {
     private String name;
     private Boolean isReadOnly;
@@ -28420,15 +28863,13 @@ public final class WithDataVolumeOptions {
 
 }
 
-// ===== WithDockerfileBaseImageOptions.java =====
+// ===== aspire/WithDockerfileBaseImageOptions.java =====
 // WithDockerfileBaseImageOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDockerfileBaseImage. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDockerfileBaseImageOptions {
     private String buildImage;
     private String runtimeImage;
@@ -28447,15 +28888,13 @@ public final class WithDockerfileBaseImageOptions {
 
 }
 
-// ===== WithDockerfileOptions.java =====
+// ===== aspire/WithDockerfileOptions.java =====
 // WithDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDockerfile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDockerfileOptions {
     private String dockerfilePath;
     private String stage;
@@ -28474,18 +28913,16 @@ public final class WithDockerfileOptions {
 
 }
 
-// ===== WithEndpointOptions.java =====
+// ===== aspire/WithEndpointOptions.java =====
 // WithEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String scheme;
     private String name;
     private String env;
@@ -28493,14 +28930,14 @@ public final class WithEndpointOptions {
     private Boolean isExternal;
     private ProtocolType protocol;
 
-    public Double getPort() { return port; }
-    public WithEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -28543,21 +28980,19 @@ public final class WithEndpointOptions {
 
 }
 
-// ===== WithHiddenOnCompletionOptions.java =====
+// ===== aspire/WithHiddenOnCompletionOptions.java =====
 // WithHiddenOnCompletionOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHiddenOnCompletion. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHiddenOnCompletionOptions {
-    private Double exitCode;
+    private Number exitCode;
     private double[] exitCodes;
 
-    public Double getExitCode() { return exitCode; }
-    public WithHiddenOnCompletionOptions exitCode(Double value) {
+    public Number getExitCode() { return exitCode; }
+    public WithHiddenOnCompletionOptions exitCode(Number value) {
         this.exitCode = value;
         return this;
     }
@@ -28570,15 +29005,13 @@ public final class WithHiddenOnCompletionOptions {
 
 }
 
-// ===== WithHttpEndpointCallbackOptions.java =====
+// ===== aspire/WithHttpEndpointCallbackOptions.java =====
 // WithHttpEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpEndpointCallback. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpEndpointCallbackOptions {
     private String name;
     private Boolean createIfNotExists;
@@ -28597,30 +29030,28 @@ public final class WithHttpEndpointCallbackOptions {
 
 }
 
-// ===== WithHttpEndpointOptions.java =====
+// ===== aspire/WithHttpEndpointOptions.java =====
 // WithHttpEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String name;
     private String env;
     private Boolean isProxied;
 
-    public Double getPort() { return port; }
-    public WithHttpEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithHttpEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithHttpEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithHttpEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -28645,18 +29076,16 @@ public final class WithHttpEndpointOptions {
 
 }
 
-// ===== WithHttpHealthCheckOptions.java =====
+// ===== aspire/WithHttpHealthCheckOptions.java =====
 // WithHttpHealthCheckOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpHealthCheck. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpHealthCheckOptions {
     private String path;
-    private Double statusCode;
+    private Number statusCode;
     private String endpointName;
 
     public String getPath() { return path; }
@@ -28665,8 +29094,8 @@ public final class WithHttpHealthCheckOptions {
         return this;
     }
 
-    public Double getStatusCode() { return statusCode; }
-    public WithHttpHealthCheckOptions statusCode(Double value) {
+    public Number getStatusCode() { return statusCode; }
+    public WithHttpHealthCheckOptions statusCode(Number value) {
         this.statusCode = value;
         return this;
     }
@@ -28679,22 +29108,20 @@ public final class WithHttpHealthCheckOptions {
 
 }
 
-// ===== WithHttpProbeOptions.java =====
+// ===== aspire/WithHttpProbeOptions.java =====
 // WithHttpProbeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpProbe. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpProbeOptions {
     private String path;
-    private Double initialDelaySeconds;
-    private Double periodSeconds;
-    private Double timeoutSeconds;
-    private Double failureThreshold;
-    private Double successThreshold;
+    private Number initialDelaySeconds;
+    private Number periodSeconds;
+    private Number timeoutSeconds;
+    private Number failureThreshold;
+    private Number successThreshold;
     private String endpointName;
 
     public String getPath() { return path; }
@@ -28703,32 +29130,32 @@ public final class WithHttpProbeOptions {
         return this;
     }
 
-    public Double getInitialDelaySeconds() { return initialDelaySeconds; }
-    public WithHttpProbeOptions initialDelaySeconds(Double value) {
+    public Number getInitialDelaySeconds() { return initialDelaySeconds; }
+    public WithHttpProbeOptions initialDelaySeconds(Number value) {
         this.initialDelaySeconds = value;
         return this;
     }
 
-    public Double getPeriodSeconds() { return periodSeconds; }
-    public WithHttpProbeOptions periodSeconds(Double value) {
+    public Number getPeriodSeconds() { return periodSeconds; }
+    public WithHttpProbeOptions periodSeconds(Number value) {
         this.periodSeconds = value;
         return this;
     }
 
-    public Double getTimeoutSeconds() { return timeoutSeconds; }
-    public WithHttpProbeOptions timeoutSeconds(Double value) {
+    public Number getTimeoutSeconds() { return timeoutSeconds; }
+    public WithHttpProbeOptions timeoutSeconds(Number value) {
         this.timeoutSeconds = value;
         return this;
     }
 
-    public Double getFailureThreshold() { return failureThreshold; }
-    public WithHttpProbeOptions failureThreshold(Double value) {
+    public Number getFailureThreshold() { return failureThreshold; }
+    public WithHttpProbeOptions failureThreshold(Number value) {
         this.failureThreshold = value;
         return this;
     }
 
-    public Double getSuccessThreshold() { return successThreshold; }
-    public WithHttpProbeOptions successThreshold(Double value) {
+    public Number getSuccessThreshold() { return successThreshold; }
+    public WithHttpProbeOptions successThreshold(Number value) {
         this.successThreshold = value;
         return this;
     }
@@ -28741,15 +29168,13 @@ public final class WithHttpProbeOptions {
 
 }
 
-// ===== WithHttpsEndpointCallbackOptions.java =====
+// ===== aspire/WithHttpsEndpointCallbackOptions.java =====
 // WithHttpsEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpsEndpointCallback. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpsEndpointCallbackOptions {
     private String name;
     private Boolean createIfNotExists;
@@ -28768,30 +29193,28 @@ public final class WithHttpsEndpointCallbackOptions {
 
 }
 
-// ===== WithHttpsEndpointOptions.java =====
+// ===== aspire/WithHttpsEndpointOptions.java =====
 // WithHttpsEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpsEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpsEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String name;
     private String env;
     private Boolean isProxied;
 
-    public Double getPort() { return port; }
-    public WithHttpsEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithHttpsEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithHttpsEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithHttpsEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -28816,15 +29239,13 @@ public final class WithHttpsEndpointOptions {
 
 }
 
-// ===== WithMcpServerOptions.java =====
+// ===== aspire/WithMcpServerOptions.java =====
 // WithMcpServerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMcpServer. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMcpServerOptions {
     private String path;
     private String endpointName;
@@ -28843,18 +29264,16 @@ public final class WithMcpServerOptions {
 
 }
 
-// ===== WithMergeLoggingOptions.java =====
+// ===== aspire/WithMergeLoggingOptions.java =====
 // WithMergeLoggingOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMergeLogging. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMergeLoggingOptions {
     private Boolean enableConsole;
-    private Double maxFiles;
+    private Number maxFiles;
 
     public Boolean getEnableConsole() { return enableConsole; }
     public WithMergeLoggingOptions enableConsole(Boolean value) {
@@ -28862,26 +29281,24 @@ public final class WithMergeLoggingOptions {
         return this;
     }
 
-    public Double getMaxFiles() { return maxFiles; }
-    public WithMergeLoggingOptions maxFiles(Double value) {
+    public Number getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingOptions maxFiles(Number value) {
         this.maxFiles = value;
         return this;
     }
 
 }
 
-// ===== WithMergeLoggingPathOptions.java =====
+// ===== aspire/WithMergeLoggingPathOptions.java =====
 // WithMergeLoggingPathOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMergeLoggingPath. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMergeLoggingPathOptions {
     private Boolean enableConsole;
-    private Double maxFiles;
+    private Number maxFiles;
 
     public Boolean getEnableConsole() { return enableConsole; }
     public WithMergeLoggingPathOptions enableConsole(Boolean value) {
@@ -28889,23 +29306,21 @@ public final class WithMergeLoggingPathOptions {
         return this;
     }
 
-    public Double getMaxFiles() { return maxFiles; }
-    public WithMergeLoggingPathOptions maxFiles(Double value) {
+    public Number getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingPathOptions maxFiles(Number value) {
         this.maxFiles = value;
         return this;
     }
 
 }
 
-// ===== WithOptionalStringOptions.java =====
+// ===== aspire/WithOptionalStringOptions.java =====
 // WithOptionalStringOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithOptionalString. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithOptionalStringOptions {
     private String value;
     private Boolean enabled;
@@ -28924,15 +29339,13 @@ public final class WithOptionalStringOptions {
 
 }
 
-// ===== WithPipelineStepFactoryOptions.java =====
+// ===== aspire/WithPipelineStepFactoryOptions.java =====
 // WithPipelineStepFactoryOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithPipelineStepFactory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithPipelineStepFactoryOptions {
     private String[] dependsOn;
     private String[] requiredBy;
@@ -28965,15 +29378,13 @@ public final class WithPipelineStepFactoryOptions {
 
 }
 
-// ===== WithReferenceOptions.java =====
+// ===== aspire/WithReferenceOptions.java =====
 // WithReferenceOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithReferenceOptions {
     private String connectionName;
     private Boolean optional;
@@ -28999,15 +29410,13 @@ public final class WithReferenceOptions {
 
 }
 
-// ===== WithVolumeOptions.java =====
+// ===== aspire/WithVolumeOptions.java =====
 // WithVolumeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithVolume. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithVolumeOptions {
     private String name;
     private Boolean isReadOnly;
@@ -29027,244 +29436,249 @@ public final class WithVolumeOptions {
 }
 
 // ===== sources.txt =====
-.aspire/modules/AddContainerOptions.java
-.aspire/modules/AddDockerfileOptions.java
-.aspire/modules/AddParameterOptions.java
-.aspire/modules/AddParameterWithGeneratedValueOptions.java
-.aspire/modules/AddStepOptions.java
-.aspire/modules/AfterPublishEvent.java
-.aspire/modules/AfterResourcesCreatedEvent.java
-.aspire/modules/Aspire.java
-.aspire/modules/AspireAction0.java
-.aspire/modules/AspireAction1.java
-.aspire/modules/AspireAction2.java
-.aspire/modules/AspireAction3.java
-.aspire/modules/AspireAction4.java
-.aspire/modules/AspireClient.java
-.aspire/modules/AspireDict.java
-.aspire/modules/AspireFunc0.java
-.aspire/modules/AspireFunc1.java
-.aspire/modules/AspireFunc2.java
-.aspire/modules/AspireFunc3.java
-.aspire/modules/AspireFunc4.java
-.aspire/modules/AspireList.java
-.aspire/modules/AspireRegistrations.java
-.aspire/modules/AspireUnion.java
-.aspire/modules/BaseRegistrations.java
-.aspire/modules/BeforePublishEvent.java
-.aspire/modules/BeforeResourceStartedEvent.java
-.aspire/modules/BeforeStartEvent.java
-.aspire/modules/BoolInteractionResult.java
-.aspire/modules/BuildOptions.java
-.aspire/modules/CSharpAppResource.java
-.aspire/modules/CancellationToken.java
-.aspire/modules/CapabilityError.java
-.aspire/modules/CertificateTrustExecutionConfigurationContext.java
-.aspire/modules/CertificateTrustExecutionConfigurationExportData.java
-.aspire/modules/CertificateTrustScope.java
-.aspire/modules/CommandLineArgsCallbackContext.java
-.aspire/modules/CommandLineArgsEditor.java
-.aspire/modules/CommandOptions.java
-.aspire/modules/CommandProgressOptions.java
-.aspire/modules/CommandResultData.java
-.aspire/modules/CommandResultFormat.java
-.aspire/modules/CompleteStepMarkdownOptions.java
-.aspire/modules/CompleteStepOptions.java
-.aspire/modules/CompleteTaskMarkdownOptions.java
-.aspire/modules/CompleteTaskOptions.java
-.aspire/modules/ConnectionStringAvailableEvent.java
-.aspire/modules/ContainerBuildOptionsCallbackContext.java
-.aspire/modules/ContainerFileSystemCallbackContext.java
-.aspire/modules/ContainerFileSystemItem.java
-.aspire/modules/ContainerFilesOptions.java
-.aspire/modules/ContainerImageDestination.java
-.aspire/modules/ContainerImageFormat.java
-.aspire/modules/ContainerImagePushOptions.java
-.aspire/modules/ContainerImagePushOptionsCallbackContext.java
-.aspire/modules/ContainerImageReference.java
-.aspire/modules/ContainerLifetime.java
-.aspire/modules/ContainerMountAnnotation.java
-.aspire/modules/ContainerMountType.java
-.aspire/modules/ContainerPortReference.java
-.aspire/modules/ContainerRegistryResource.java
-.aspire/modules/ContainerResource.java
-.aspire/modules/ContainerTargetPlatform.java
-.aspire/modules/CreateBuilderOptions.java
-.aspire/modules/CreateCertificateFileOptions.java
-.aspire/modules/CreateChoiceInputOptions.java
-.aspire/modules/CreateDirectoryOptions.java
-.aspire/modules/CreateFileOptions.java
-.aspire/modules/CreateInteractionInputOptions.java
-.aspire/modules/DistributedApplication.java
-.aspire/modules/DistributedApplicationEventSubscription.java
-.aspire/modules/DistributedApplicationExecutionContext.java
-.aspire/modules/DistributedApplicationExecutionContextOptions.java
-.aspire/modules/DistributedApplicationModel.java
-.aspire/modules/DistributedApplicationOperation.java
-.aspire/modules/DistributedApplicationResourceEventSubscription.java
-.aspire/modules/DockerfileBuilder.java
-.aspire/modules/DockerfileBuilderCallbackContext.java
-.aspire/modules/DockerfileFactoryContext.java
-.aspire/modules/DockerfileStage.java
-.aspire/modules/DotnetToolResource.java
-.aspire/modules/DynamicLoadingOptions.java
-.aspire/modules/EndpointProperty.java
-.aspire/modules/EndpointReference.java
-.aspire/modules/EndpointReferenceExpression.java
-.aspire/modules/EndpointUpdateContext.java
-.aspire/modules/EnvironmentCallbackContext.java
-.aspire/modules/EnvironmentEditor.java
-.aspire/modules/EventingSubscriberRegistrationContext.java
-.aspire/modules/ExecutableResource.java
-.aspire/modules/ExecuteCommandAsyncOptions.java
-.aspire/modules/ExecuteCommandContext.java
-.aspire/modules/ExecuteCommandResult.java
-.aspire/modules/ExternalServiceResource.java
-.aspire/modules/GenerateParameterDefault.java
-.aspire/modules/Handle.java
-.aspire/modules/HandleWrapperBase.java
-.aspire/modules/HealthCheckResult.java
-.aspire/modules/HealthStatus.java
-.aspire/modules/HttpCommandExportOptions.java
-.aspire/modules/HttpCommandPrepareRequestContext.java
-.aspire/modules/HttpCommandRequestExportData.java
-.aspire/modules/HttpCommandResultMode.java
-.aspire/modules/HttpsCertificateConfigurationCallbackAnnotationContext.java
-.aspire/modules/HttpsCertificateExecutionConfigurationContext.java
-.aspire/modules/HttpsCertificateExecutionConfigurationExportData.java
-.aspire/modules/HttpsCertificateInfo.java
-.aspire/modules/HttpsEndpointUpdateCallbackContext.java
-.aspire/modules/IAspireStore.java
-.aspire/modules/IComputeEnvironmentResource.java
-.aspire/modules/IComputeResource.java
-.aspire/modules/IConfiguration.java
-.aspire/modules/IConfigurationSection.java
-.aspire/modules/IContainerFilesDestinationResource.java
-.aspire/modules/IDistributedApplicationBuilder.java
-.aspire/modules/IDistributedApplicationEvent.java
-.aspire/modules/IDistributedApplicationEventing.java
-.aspire/modules/IDistributedApplicationPipeline.java
-.aspire/modules/IDistributedApplicationResourceEvent.java
-.aspire/modules/IExecutionConfigurationBuilder.java
-.aspire/modules/IExecutionConfigurationResult.java
-.aspire/modules/IExpressionValue.java
-.aspire/modules/IHostEnvironment.java
-.aspire/modules/IInteractionService.java
-.aspire/modules/ILogger.java
-.aspire/modules/ILoggerFactory.java
-.aspire/modules/IReportingStep.java
-.aspire/modules/IReportingTask.java
-.aspire/modules/IResource.java
-.aspire/modules/IResourceWithArgs.java
-.aspire/modules/IResourceWithConnectionString.java
-.aspire/modules/IResourceWithContainerFiles.java
-.aspire/modules/IResourceWithEndpoints.java
-.aspire/modules/IResourceWithEnvironment.java
-.aspire/modules/IResourceWithParent.java
-.aspire/modules/IResourceWithWaitSupport.java
-.aspire/modules/IServiceProvider.java
-.aspire/modules/ITestVaultResource.java
-.aspire/modules/IUserSecretsManager.java
-.aspire/modules/IconVariant.java
-.aspire/modules/ImagePullPolicy.java
-.aspire/modules/InitializeResourceEvent.java
-.aspire/modules/InputInteractionResult.java
-.aspire/modules/InputType.java
-.aspire/modules/InputsDialogValidationContext.java
-.aspire/modules/InputsInteractionResult.java
-.aspire/modules/InteractionChoiceOption.java
-.aspire/modules/InteractionInput.java
-.aspire/modules/InteractionInputBuilder.java
-.aspire/modules/InteractionInputCollection.java
-.aspire/modules/InteractionInputLoadContext.java
-.aspire/modules/InteractionInputsDialogOptions.java
-.aspire/modules/InteractionLoadingInput.java
-.aspire/modules/InteractionMessageBoxOptions.java
-.aspire/modules/InteractionNotificationOptions.java
-.aspire/modules/InteractionProgressOptions.java
-.aspire/modules/JsonSerializable.java
-.aspire/modules/LogFacade.java
-.aspire/modules/MessageIntent.java
-.aspire/modules/OtlpProtocol.java
-.aspire/modules/ParameterCustomInputOptions.java
-.aspire/modules/ParameterResource.java
-.aspire/modules/PipelineConfigurationContext.java
-.aspire/modules/PipelineContext.java
-.aspire/modules/PipelineEditor.java
-.aspire/modules/PipelineStep.java
-.aspire/modules/PipelineStepContext.java
-.aspire/modules/PipelineStepFactoryContext.java
-.aspire/modules/PipelineSummary.java
-.aspire/modules/ProbeType.java
-.aspire/modules/ProcessCommandExportOptions.java
-.aspire/modules/ProcessCommandResultExportOptions.java
-.aspire/modules/ProcessCommandSpecExportData.java
-.aspire/modules/ProgressContext.java
-.aspire/modules/ProjectResource.java
-.aspire/modules/ProjectResourceOptions.java
-.aspire/modules/PromptConfirmationOptions.java
-.aspire/modules/PromptInputOptions.java
-.aspire/modules/PromptInputsOptions.java
-.aspire/modules/PromptMessageBoxOptions.java
-.aspire/modules/PromptNotificationOptions.java
-.aspire/modules/PromptProgressOptions.java
-.aspire/modules/ProtocolType.java
-.aspire/modules/PublishResourceUpdateOptions.java
-.aspire/modules/ReferenceEnvironmentInjectionOptions.java
-.aspire/modules/ReferenceExpression.java
-.aspire/modules/ReferenceExpressionBuilder.java
-.aspire/modules/RequiredCommandValidationContext.java
-.aspire/modules/RequiredCommandValidationResult.java
-.aspire/modules/ResourceBuilderBase.java
-.aspire/modules/ResourceCommandService.java
-.aspire/modules/ResourceCommandState.java
-.aspire/modules/ResourceCommandVisibility.java
-.aspire/modules/ResourceEndpointsAllocatedEvent.java
-.aspire/modules/ResourceEventDto.java
-.aspire/modules/ResourceLoggerService.java
-.aspire/modules/ResourceNotificationService.java
-.aspire/modules/ResourceReadyEvent.java
-.aspire/modules/ResourceStoppedEvent.java
-.aspire/modules/ResourceUrlAnnotation.java
-.aspire/modules/ResourceUrlsCallbackContext.java
-.aspire/modules/ResourceUrlsEditor.java
-.aspire/modules/TestCallbackContext.java
-.aspire/modules/TestCollectionContext.java
-.aspire/modules/TestConfigDto.java
-.aspire/modules/TestConfigs.java
-.aspire/modules/TestDatabaseResource.java
-.aspire/modules/TestDeeplyNestedDto.java
-.aspire/modules/TestEnvironmentContext.java
-.aspire/modules/TestMutableCollectionContext.java
-.aspire/modules/TestNestedDto.java
-.aspire/modules/TestPersistenceMode.java
-.aspire/modules/TestRedisResource.java
-.aspire/modules/TestResourceContext.java
-.aspire/modules/TestResourceStatus.java
-.aspire/modules/TestVaultResource.java
-.aspire/modules/UpdateCommandStateContext.java
-.aspire/modules/UpdateCommandStateResourceSnapshot.java
-.aspire/modules/UrlDisplayLocation.java
-.aspire/modules/WaitBehavior.java
-.aspire/modules/WellKnownPipelineSteps.java
-.aspire/modules/WellKnownPipelineTags.java
-.aspire/modules/WireValueEnum.java
-.aspire/modules/WithContainerCertificatePathsOptions.java
-.aspire/modules/WithDataVolumeOptions.java
-.aspire/modules/WithDockerfileBaseImageOptions.java
-.aspire/modules/WithDockerfileOptions.java
-.aspire/modules/WithEndpointOptions.java
-.aspire/modules/WithHiddenOnCompletionOptions.java
-.aspire/modules/WithHttpEndpointCallbackOptions.java
-.aspire/modules/WithHttpEndpointOptions.java
-.aspire/modules/WithHttpHealthCheckOptions.java
-.aspire/modules/WithHttpProbeOptions.java
-.aspire/modules/WithHttpsEndpointCallbackOptions.java
-.aspire/modules/WithHttpsEndpointOptions.java
-.aspire/modules/WithMcpServerOptions.java
-.aspire/modules/WithMergeLoggingOptions.java
-.aspire/modules/WithMergeLoggingPathOptions.java
-.aspire/modules/WithOptionalStringOptions.java
-.aspire/modules/WithPipelineStepFactoryOptions.java
-.aspire/modules/WithReferenceOptions.java
-.aspire/modules/WithVolumeOptions.java
+.aspire/modules/aspire/AddContainerOptions.java
+.aspire/modules/aspire/AddDockerfileOptions.java
+.aspire/modules/aspire/AddParameterOptions.java
+.aspire/modules/aspire/AddParameterWithGeneratedValueOptions.java
+.aspire/modules/aspire/AddStepOptions.java
+.aspire/modules/aspire/AfterPublishEvent.java
+.aspire/modules/aspire/AfterResourcesCreatedEvent.java
+.aspire/modules/aspire/Aspire.java
+.aspire/modules/aspire/AspireAction0.java
+.aspire/modules/aspire/AspireAction1.java
+.aspire/modules/aspire/AspireAction2.java
+.aspire/modules/aspire/AspireAction3.java
+.aspire/modules/aspire/AspireAction4.java
+.aspire/modules/aspire/AspireClient.java
+.aspire/modules/aspire/AspireDict.java
+.aspire/modules/aspire/AspireFunc0.java
+.aspire/modules/aspire/AspireFunc1.java
+.aspire/modules/aspire/AspireFunc2.java
+.aspire/modules/aspire/AspireFunc3.java
+.aspire/modules/aspire/AspireFunc4.java
+.aspire/modules/aspire/AspireList.java
+.aspire/modules/aspire/AspireRegistrations.java
+.aspire/modules/aspire/AspireUnion.java
+.aspire/modules/aspire/BaseRegistrations.java
+.aspire/modules/aspire/BeforePublishEvent.java
+.aspire/modules/aspire/BeforeResourceStartedEvent.java
+.aspire/modules/aspire/BeforeStartEvent.java
+.aspire/modules/aspire/BoolInteractionResult.java
+.aspire/modules/aspire/BuildOptions.java
+.aspire/modules/aspire/CSharpAppResource.java
+.aspire/modules/aspire/CancellationToken.java
+.aspire/modules/aspire/CapabilityError.java
+.aspire/modules/aspire/CertificateTrustExecutionConfigurationContext.java
+.aspire/modules/aspire/CertificateTrustExecutionConfigurationExportData.java
+.aspire/modules/aspire/CertificateTrustScope.java
+.aspire/modules/aspire/CommandLineArgsCallbackContext.java
+.aspire/modules/aspire/CommandLineArgsEditor.java
+.aspire/modules/aspire/CommandOptions.java
+.aspire/modules/aspire/CommandProgressOptions.java
+.aspire/modules/aspire/CommandResultData.java
+.aspire/modules/aspire/CommandResultFormat.java
+.aspire/modules/aspire/CompleteStepMarkdownOptions.java
+.aspire/modules/aspire/CompleteStepOptions.java
+.aspire/modules/aspire/CompleteTaskMarkdownOptions.java
+.aspire/modules/aspire/CompleteTaskOptions.java
+.aspire/modules/aspire/ConnectionStringAvailableEvent.java
+.aspire/modules/aspire/ContainerBuildOptionsCallbackContext.java
+.aspire/modules/aspire/ContainerFileSystemCallbackContext.java
+.aspire/modules/aspire/ContainerFileSystemItem.java
+.aspire/modules/aspire/ContainerFilesOptions.java
+.aspire/modules/aspire/ContainerImageDestination.java
+.aspire/modules/aspire/ContainerImageFormat.java
+.aspire/modules/aspire/ContainerImagePushOptions.java
+.aspire/modules/aspire/ContainerImagePushOptionsCallbackContext.java
+.aspire/modules/aspire/ContainerImageReference.java
+.aspire/modules/aspire/ContainerLifetime.java
+.aspire/modules/aspire/ContainerMountAnnotation.java
+.aspire/modules/aspire/ContainerMountType.java
+.aspire/modules/aspire/ContainerPortReference.java
+.aspire/modules/aspire/ContainerRegistryResource.java
+.aspire/modules/aspire/ContainerResource.java
+.aspire/modules/aspire/ContainerTargetPlatform.java
+.aspire/modules/aspire/CreateBuilderOptions.java
+.aspire/modules/aspire/CreateCertificateFileOptions.java
+.aspire/modules/aspire/CreateChoiceInputOptions.java
+.aspire/modules/aspire/CreateDirectoryOptions.java
+.aspire/modules/aspire/CreateFileOptions.java
+.aspire/modules/aspire/CreateInteractionInputOptions.java
+.aspire/modules/aspire/DistributedApplication.java
+.aspire/modules/aspire/DistributedApplicationEventSubscription.java
+.aspire/modules/aspire/DistributedApplicationExecutionContext.java
+.aspire/modules/aspire/DistributedApplicationExecutionContextOptions.java
+.aspire/modules/aspire/DistributedApplicationModel.java
+.aspire/modules/aspire/DistributedApplicationOperation.java
+.aspire/modules/aspire/DistributedApplicationResourceEventSubscription.java
+.aspire/modules/aspire/DockerfileBuilder.java
+.aspire/modules/aspire/DockerfileBuilderCallbackContext.java
+.aspire/modules/aspire/DockerfileFactoryContext.java
+.aspire/modules/aspire/DockerfileStage.java
+.aspire/modules/aspire/DotnetToolResource.java
+.aspire/modules/aspire/DynamicLoadingOptions.java
+.aspire/modules/aspire/EndpointProperty.java
+.aspire/modules/aspire/EndpointReference.java
+.aspire/modules/aspire/EndpointReferenceExpression.java
+.aspire/modules/aspire/EndpointUpdateContext.java
+.aspire/modules/aspire/EnvironmentCallbackContext.java
+.aspire/modules/aspire/EnvironmentEditor.java
+.aspire/modules/aspire/EventingSubscriberRegistrationContext.java
+.aspire/modules/aspire/ExecutableResource.java
+.aspire/modules/aspire/ExecuteCommandAsyncOptions.java
+.aspire/modules/aspire/ExecuteCommandContext.java
+.aspire/modules/aspire/ExecuteCommandResult.java
+.aspire/modules/aspire/ExternalServiceResource.java
+.aspire/modules/aspire/GenerateParameterDefault.java
+.aspire/modules/aspire/Handle.java
+.aspire/modules/aspire/HandleWrapperBase.java
+.aspire/modules/aspire/HealthCheckResult.java
+.aspire/modules/aspire/HealthStatus.java
+.aspire/modules/aspire/HttpCommandExportOptions.java
+.aspire/modules/aspire/HttpCommandPrepareRequestContext.java
+.aspire/modules/aspire/HttpCommandRequestExportData.java
+.aspire/modules/aspire/HttpCommandResultMode.java
+.aspire/modules/aspire/HttpsCertificateConfigurationCallbackAnnotationContext.java
+.aspire/modules/aspire/HttpsCertificateExecutionConfigurationContext.java
+.aspire/modules/aspire/HttpsCertificateExecutionConfigurationExportData.java
+.aspire/modules/aspire/HttpsCertificateInfo.java
+.aspire/modules/aspire/HttpsEndpointUpdateCallbackContext.java
+.aspire/modules/aspire/IAspireStore.java
+.aspire/modules/aspire/IComputeEnvironmentResource.java
+.aspire/modules/aspire/IComputeResource.java
+.aspire/modules/aspire/IConfiguration.java
+.aspire/modules/aspire/IConfigurationSection.java
+.aspire/modules/aspire/IContainerFilesDestinationResource.java
+.aspire/modules/aspire/IDistributedApplicationBuilder.java
+.aspire/modules/aspire/IDistributedApplicationEvent.java
+.aspire/modules/aspire/IDistributedApplicationEventing.java
+.aspire/modules/aspire/IDistributedApplicationPipeline.java
+.aspire/modules/aspire/IDistributedApplicationResourceEvent.java
+.aspire/modules/aspire/IExecutionConfigurationBuilder.java
+.aspire/modules/aspire/IExecutionConfigurationResult.java
+.aspire/modules/aspire/IExpressionValue.java
+.aspire/modules/aspire/IHostEnvironment.java
+.aspire/modules/aspire/IInteractionService.java
+.aspire/modules/aspire/ILogger.java
+.aspire/modules/aspire/ILoggerFactory.java
+.aspire/modules/aspire/IReportingStep.java
+.aspire/modules/aspire/IReportingTask.java
+.aspire/modules/aspire/IResource.java
+.aspire/modules/aspire/IResourceWithArgs.java
+.aspire/modules/aspire/IResourceWithConnectionString.java
+.aspire/modules/aspire/IResourceWithContainerFiles.java
+.aspire/modules/aspire/IResourceWithEndpoints.java
+.aspire/modules/aspire/IResourceWithEnvironment.java
+.aspire/modules/aspire/IResourceWithParent.java
+.aspire/modules/aspire/IResourceWithWaitSupport.java
+.aspire/modules/aspire/IServiceProvider.java
+.aspire/modules/aspire/ITestMutablePromiseCollisionResource.java
+.aspire/modules/aspire/ITestMutablePromiseCollisionResourcePromise.java
+.aspire/modules/aspire/ITestPromiseCollisionResource.java
+.aspire/modules/aspire/ITestPromiseCollisionResourcePromise.java
+.aspire/modules/aspire/ITestVaultResource.java
+.aspire/modules/aspire/IUserSecretsManager.java
+.aspire/modules/aspire/IconVariant.java
+.aspire/modules/aspire/ImagePullPolicy.java
+.aspire/modules/aspire/InitializeResourceEvent.java
+.aspire/modules/aspire/InputInteractionResult.java
+.aspire/modules/aspire/InputType.java
+.aspire/modules/aspire/InputsDialogValidationContext.java
+.aspire/modules/aspire/InputsInteractionResult.java
+.aspire/modules/aspire/InteractionChoiceOption.java
+.aspire/modules/aspire/InteractionInput.java
+.aspire/modules/aspire/InteractionInputBuilder.java
+.aspire/modules/aspire/InteractionInputCollection.java
+.aspire/modules/aspire/InteractionInputLoadContext.java
+.aspire/modules/aspire/InteractionInputsDialogOptions.java
+.aspire/modules/aspire/InteractionLoadingInput.java
+.aspire/modules/aspire/InteractionMessageBoxOptions.java
+.aspire/modules/aspire/InteractionNotificationOptions.java
+.aspire/modules/aspire/InteractionProgressOptions.java
+.aspire/modules/aspire/JsonSerializable.java
+.aspire/modules/aspire/LogFacade.java
+.aspire/modules/aspire/MessageIntent.java
+.aspire/modules/aspire/OtlpProtocol.java
+.aspire/modules/aspire/ParameterCustomInputOptions.java
+.aspire/modules/aspire/ParameterResource.java
+.aspire/modules/aspire/PipelineConfigurationContext.java
+.aspire/modules/aspire/PipelineContext.java
+.aspire/modules/aspire/PipelineEditor.java
+.aspire/modules/aspire/PipelineStep.java
+.aspire/modules/aspire/PipelineStepContext.java
+.aspire/modules/aspire/PipelineStepFactoryContext.java
+.aspire/modules/aspire/PipelineSummary.java
+.aspire/modules/aspire/ProbeType.java
+.aspire/modules/aspire/ProcessCommandExportOptions.java
+.aspire/modules/aspire/ProcessCommandResultExportOptions.java
+.aspire/modules/aspire/ProcessCommandSpecExportData.java
+.aspire/modules/aspire/ProgressContext.java
+.aspire/modules/aspire/ProjectResource.java
+.aspire/modules/aspire/ProjectResourceOptions.java
+.aspire/modules/aspire/PromptConfirmationOptions.java
+.aspire/modules/aspire/PromptInputOptions.java
+.aspire/modules/aspire/PromptInputsOptions.java
+.aspire/modules/aspire/PromptMessageBoxOptions.java
+.aspire/modules/aspire/PromptNotificationOptions.java
+.aspire/modules/aspire/PromptProgressOptions.java
+.aspire/modules/aspire/ProtocolType.java
+.aspire/modules/aspire/PublishResourceUpdateOptions.java
+.aspire/modules/aspire/ReferenceEnvironmentInjectionOptions.java
+.aspire/modules/aspire/ReferenceExpression.java
+.aspire/modules/aspire/ReferenceExpressionBuilder.java
+.aspire/modules/aspire/RequiredCommandValidationContext.java
+.aspire/modules/aspire/RequiredCommandValidationResult.java
+.aspire/modules/aspire/ResourceBuilderBase.java
+.aspire/modules/aspire/ResourceCommandService.java
+.aspire/modules/aspire/ResourceCommandState.java
+.aspire/modules/aspire/ResourceCommandVisibility.java
+.aspire/modules/aspire/ResourceEndpointsAllocatedEvent.java
+.aspire/modules/aspire/ResourceEventDto.java
+.aspire/modules/aspire/ResourceLoggerService.java
+.aspire/modules/aspire/ResourceNotificationService.java
+.aspire/modules/aspire/ResourceReadyEvent.java
+.aspire/modules/aspire/ResourceStoppedEvent.java
+.aspire/modules/aspire/ResourceUrlAnnotation.java
+.aspire/modules/aspire/ResourceUrlsCallbackContext.java
+.aspire/modules/aspire/ResourceUrlsEditor.java
+.aspire/modules/aspire/RunConfiguration.java
+.aspire/modules/aspire/TestCallbackContext.java
+.aspire/modules/aspire/TestCollectionContext.java
+.aspire/modules/aspire/TestConfigDto.java
+.aspire/modules/aspire/TestConfigs.java
+.aspire/modules/aspire/TestDatabaseResource.java
+.aspire/modules/aspire/TestDeeplyNestedDto.java
+.aspire/modules/aspire/TestEnvironmentContext.java
+.aspire/modules/aspire/TestMutableCollectionContext.java
+.aspire/modules/aspire/TestNestedDto.java
+.aspire/modules/aspire/TestPersistenceMode.java
+.aspire/modules/aspire/TestRedisResource.java
+.aspire/modules/aspire/TestResourceContext.java
+.aspire/modules/aspire/TestResourceStatus.java
+.aspire/modules/aspire/TestVaultResource.java
+.aspire/modules/aspire/UpdateCommandStateContext.java
+.aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java
+.aspire/modules/aspire/UrlDisplayLocation.java
+.aspire/modules/aspire/WaitBehavior.java
+.aspire/modules/aspire/WellKnownPipelineSteps.java
+.aspire/modules/aspire/WellKnownPipelineTags.java
+.aspire/modules/aspire/WireValueEnum.java
+.aspire/modules/aspire/WithContainerCertificatePathsOptions.java
+.aspire/modules/aspire/WithDataVolumeOptions.java
+.aspire/modules/aspire/WithDockerfileBaseImageOptions.java
+.aspire/modules/aspire/WithDockerfileOptions.java
+.aspire/modules/aspire/WithEndpointOptions.java
+.aspire/modules/aspire/WithHiddenOnCompletionOptions.java
+.aspire/modules/aspire/WithHttpEndpointCallbackOptions.java
+.aspire/modules/aspire/WithHttpEndpointOptions.java
+.aspire/modules/aspire/WithHttpHealthCheckOptions.java
+.aspire/modules/aspire/WithHttpProbeOptions.java
+.aspire/modules/aspire/WithHttpsEndpointCallbackOptions.java
+.aspire/modules/aspire/WithHttpsEndpointOptions.java
+.aspire/modules/aspire/WithMcpServerOptions.java
+.aspire/modules/aspire/WithMergeLoggingOptions.java
+.aspire/modules/aspire/WithMergeLoggingPathOptions.java
+.aspire/modules/aspire/WithOptionalStringOptions.java
+.aspire/modules/aspire/WithPipelineStepFactoryOptions.java
+.aspire/modules/aspire/WithReferenceOptions.java
+.aspire/modules/aspire/WithVolumeOptions.java

@@ -8,7 +8,7 @@ namespace Aspire.Templates.Tests;
 public sealed class StarterTemplateWithRedisCacheFixture_PreviousTFM : TemplateAppFixture
 {
     public StarterTemplateWithRedisCacheFixture_PreviousTFM(IMessageSink diagnosticMessageSink)
-        : base(diagnosticMessageSink, "aspire-starter", "--use-redis-cache", tfm: TestTargetFramework.Previous)
+        : base(diagnosticMessageSink, "aspire-starter", "--use-redis-cache", tfm: TestTargetFramework.Net8)
     {
     }
 }

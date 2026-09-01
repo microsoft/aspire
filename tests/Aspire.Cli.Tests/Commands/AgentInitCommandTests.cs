@@ -22,7 +22,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_SummarizesNormalizedDisplayPath_WhenInstallingUserLevelSkill()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -63,7 +63,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_SummarizesDefaultSkillsOnce()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -98,12 +98,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_IncludesSpecificSkillDirectory_WhenInstallFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var invalidRootFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "not-a-directory.txt");
-        await File.WriteAllTextAsync(invalidRootFilePath, "blocked").DefaultTimeout();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var blockedSkillParentPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents");
+        await File.WriteAllTextAsync(blockedSkillParentPath, "blocked").DefaultTimeout();
 
         var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(invalidRootFilePath);
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
@@ -124,8 +124,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Empty(interactionService.ValidationFailures);
 
-        var expectedSkillDirectoryPath = Path.Combine(invalidRootFilePath, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        var expectedSkillDirectoryPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
         Assert.Contains(
             interactionService.DisplayedErrors,
             message => message.Contains(expectedSkillDirectoryPath, StringComparison.Ordinal));
@@ -134,7 +135,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithAllLocationsAndSkills_InstallsSkillFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -176,7 +177,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_InteractiveSkillPrompt_IncludesAllBundleSkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptedSkillNames = new List<string>();
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -215,7 +216,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_InteractiveSkillPrompt_EscapesBundleDescriptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
             (FakeAspireSkillsInstaller.AspireMonitoringSkillName, "Observe [danger] apps"));
@@ -278,7 +279,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_InteractiveSkillPrompt_StripsVerboseBundleDescription()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
             (FakeAspireSkillsInstaller.AspireMonitoringSkillName,
@@ -324,7 +325,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_InteractiveSkillPrompt_OrdersSkillsAlphabetically()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Intentionally pass bundle skills in non-alphabetical order to confirm the prompt sorts deterministically.
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
@@ -369,7 +370,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithSpecificBundleSkill_InstallsSkillFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -389,7 +390,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithCliDefinedSkillDifferentCasing_DoesNotResolveBundle()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
         var interactionService = new TestInteractionService();
 
@@ -416,7 +417,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_InteractiveSkillPrompt_CliDefinedSkillsWinBundleNameCollisions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
             (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
@@ -458,7 +459,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithNoneLocations_SucceedsWithNoSkillsInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -478,7 +479,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithoutSkillLocations_UsesDefaultLocations()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -494,7 +495,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithoutSkills_UsesDefaultSkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -529,7 +530,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // The assertion is data-driven against the bundle's own manifest so this test stays
         // accurate as the fixture (or, one day, the real bundle) evolves — adding or removing
         // a skill in FakeAspireSkillsInstaller doesn't require updating the test body.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -564,7 +565,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Regression guard: bundle-only skill names (e.g. aspire-orchestration) must be selectable
         // via --skills by name now that the catalog comes from the manifest rather than the
         // hardcoded CLI list.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -584,7 +585,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithInvalidSkillLocations_FailsWithMissingArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -600,7 +601,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithoutWorkspaceRoot_UsesWorkingDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -624,7 +625,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
         var interactionService = new TestInteractionService();
 
@@ -653,7 +654,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
         var interactionService = new TestInteractionService();
 
@@ -689,7 +690,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptAndChainAsync_WithoutPredicateOverride_PreSelectsBundleDefaultsIncludingAspireify()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -720,7 +721,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptAndChainAsync_WithExcludeAspireifyPredicate_DoesNotPreSelectAspireify()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -753,7 +754,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithNoneSkills_SucceedsWithNoSkillsInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -773,7 +774,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_ConfigureMcpDefaultsToFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -790,7 +791,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithSkillLocationsNone_DoesNotInstallAnySkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -810,7 +811,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -864,7 +865,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                     new SkillBundleFile
                     {
                         RelativePath = "SKILL.md",
-                        Sha256 = ComputeSha256(skillPath)
+                        Sha512 = ComputeSha512(skillPath)
                     }
                 ]
             });
@@ -882,20 +883,23 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
+        await File.WriteAllTextAsync(manifestPath, manifestJson);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            bundleDirectory,
+            CancellationToken.None);
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
     [Fact]
     public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -920,7 +924,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Hook installation is best-effort transparency tooling. A non-IO failure such as a missing
         // embedded hook script (InvalidOperationException from the installer) must not abort `agent init`.
         const string failureMessage = "simulated hook configuration failure";
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
         var subtleMessages = new List<string>();

@@ -18,6 +18,7 @@ using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Semver;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
@@ -35,7 +36,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <para>
 /// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
-/// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
+/// <see cref="IResourceRepository.SubscribeResourcesAsync"/> and <see cref="IResourceRepository.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
 /// check this property first, before calling these methods.
 /// </para>
@@ -44,8 +45,14 @@ internal sealed class DashboardClient : IDashboardClient
 {
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
+    internal const string LiveAppHostServiceKey = "LiveAppHost";
+
+    // The dashboard's own version, extracted from its assembly at startup. Used to compare against
+    // the minimum version required by the AppHost.
+    private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    private readonly ActivitySource _activitySource;
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -61,10 +68,12 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly DashboardOptions _dashboardOptions;
     private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
+    private readonly IResourceRepositoryWriter _resourceRepositoryWriter;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+    private string? _minRequiredVersion;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -84,17 +93,21 @@ internal sealed class DashboardClient : IDashboardClient
     private Task? _connection;
 
     public DashboardClient(
+        DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
         IStringLocalizer<DashboardResources> loc,
+        IResourceRepositoryWriter resourceRepositoryWriter,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
+        _activitySource = activitySource.ActivitySource;
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
         _loc = loc;
+        _resourceRepositoryWriter = resourceRepositoryWriter;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -282,7 +295,7 @@ internal sealed class DashboardClient : IDashboardClient
                 // This handles both initial connection and reconnection after a disconnect.
                 _whenConnectedTcs.TrySetResult();
             }
-            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting or DashboardConnectionState.Unsupported)
             {
                 // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
                 if (_whenConnectedTcs.Task.IsCompleted)
@@ -318,14 +331,22 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         SetConnectionState(DashboardConnectionState.Connecting);
-        _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        // The connection watches resources for the lifetime of the dashboard. Don't let the request or
+        // component that first accesses the client become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        }
     }
 
     async Task ConnectAndWatchAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
+            if (!await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
 
             await Task.WhenAll(
                 Task.Run(async () =>
@@ -355,7 +376,7 @@ internal sealed class DashboardClient : IDashboardClient
     /// On failure, transitions to Disconnected and waits before retrying. The delay can be
     /// cancelled by <see cref="ReconnectAsync"/> for immediate retry.
     /// </summary>
-    private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
+    private async Task<bool> ConnectWithRetryAsync(CancellationToken cancellationToken)
     {
         var errorCount = 0;
 
@@ -403,12 +424,22 @@ internal sealed class DashboardClient : IDashboardClient
 
             try
             {
-                var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
+                var request = new ApplicationInformationRequest();
+                var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
+                _minRequiredVersion = string.IsNullOrEmpty(response.MinDashboardVersion) ? null : response.MinDashboardVersion;
+
+                // MinDashboardVersion is empty when the server predates this field or hasn't set it,
+                // which means the dashboard is always considered supported.
+                if (!IsDashboardVersionSufficient(s_dashboardVersion, _minRequiredVersion))
+                {
+                    SetConnectionState(DashboardConnectionState.Unsupported);
+                    return false;
+                }
 
                 SetConnectionState(DashboardConnectionState.Connected);
-                return;
+                return true;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -532,7 +563,11 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
+            using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
+            activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
+
             List<ResourceViewModelChange>? changes = null;
+            ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
 
             lock (_lock)
@@ -546,6 +581,11 @@ internal sealed class DashboardClient : IDashboardClient
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
+                    var resourcesWithLoadedConsoleLogs = _resourceByName.Values
+                        .Where(resource => resource.ConsoleLogsLoaded)
+                        .Select(resource => resource.Name)
+                        .ToHashSet(StringComparers.ResourceName);
+
                     // Populate our map using the initial data.
                     _resourceByName.Clear();
 
@@ -555,6 +595,7 @@ internal sealed class DashboardClient : IDashboardClient
                     {
                         // Add to map.
                         var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
+                        viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
                         _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
@@ -575,6 +616,10 @@ internal sealed class DashboardClient : IDashboardClient
                         {
                             // Upsert (i.e. add or replace)
                             var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
+                            if (_resourceByName.TryGetValue(change.Upsert.Name, out var existingResource))
+                            {
+                                viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
+                            }
                             _resourceByName[change.Upsert.Name] = viewModel;
                             changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
@@ -608,7 +653,20 @@ internal sealed class DashboardClient : IDashboardClient
                     var resolvedNames = _resourceByName.Values
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
+
+                    // Capture subscribers atomically with the model transition. A subscriber added after this
+                    // point receives the updated model in its initial snapshot and must not also receive this change.
+                    resourceChannels = _outgoingResourceChannels;
                 }
+            }
+
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            {
+                await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
+            }
+            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            {
+                await _resourceRepositoryWriter.ApplyChangesAsync(response.Changes.Value).ConfigureAwait(false);
             }
 
             // Update connection state outside the lock to avoid potential deadlocks
@@ -620,7 +678,7 @@ internal sealed class DashboardClient : IDashboardClient
 
             if (changes is not null)
             {
-                foreach (var channel in _outgoingResourceChannels)
+                foreach (var channel in resourceChannels)
                 {
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(changes);
@@ -758,6 +816,8 @@ internal sealed class DashboardClient : IDashboardClient
             ?? "Aspire";
     }
 
+    public string? MinRequiredVersion => _minRequiredVersion;
+
     public ResourceViewModel? GetResource(string resourceName)
     {
         EnsureInitialized();
@@ -873,6 +933,12 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        // Console-log persistence is demand-driven rather than always-on. This known limitation means
+        // historical runs can omit logs for resources that were never viewed or exported. The historical
+        // Console Logs page checks this capture state and displays a notice when logs aren't available.
+        // See https://github.com/microsoft/aspire/issues/18823.
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         // It's ok to dispose CTS with using because this method exits after it is finished being used.
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
@@ -892,6 +958,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
+                    await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -914,6 +981,8 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
         var call = _client!.WatchResourceConsoleLogs(
@@ -923,8 +992,26 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
+            await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
             yield return CreateLogLines(response.LogLines);
         }
+    }
+
+    /// <inheritdoc/>
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) =>
+        _resourceRepositoryWriter.ClearConsoleLogsAsync(resourceNames, clearDate);
+
+    private async Task MarkConsoleLogsLoadedAsync(string resourceName)
+    {
+        lock (_lock)
+        {
+            if (_resourceByName.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
+        }
+
+        await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)
@@ -1014,6 +1101,55 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
+
+        const int chunkSize = 64 * 1024; // 64 KB chunks
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+        long totalBytesRead = 0;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
+        {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > expectedSize)
+            {
+                throw new InvalidOperationException($"File '{fileName}' exceeded the expected size of {expectedSize} bytes.");
+            }
+
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+                chunk.InteractionId = interactionId;
+                chunk.InputName = inputName;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // Handle case where the file was empty — still send filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName, InteractionId = interactionId, InputName = inputName }, combinedTokens.Token).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _state, StateDisposed) is not StateDisposed)
@@ -1060,5 +1196,51 @@ internal sealed class DashboardClient : IDashboardClient
     {
         Retry,
         DoNotRetry
+    }
+
+    private static SemVersion? GetDashboardVersion()
+    {
+        // The informational version contains the full semver string stamped at build time
+        // (e.g. "13.5.0-preview.1.26307.2+commitHash").
+        var informationalVersion = Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardClient).Assembly);
+        if (informationalVersion is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        return SemVersion.TryParse(informationalVersion, SemVersionStyles.Any, out var version) ? version : null;
+    }
+
+    /// <summary>
+    /// Compares the dashboard version against the required version, ignoring pre-release labels.
+    /// A dashboard version of "13.5.0-dev" is considered sufficient for a requirement of "13.5.0".
+    /// Returns <see langword="true"/> when no version requirement is specified or the dashboard meets it.
+    /// </summary>
+    internal static bool IsDashboardVersionSufficient(SemVersion? dashboardVersion, string? requiredVersionText)
+    {
+        // No requirement specified — always sufficient.
+        if (string.IsNullOrEmpty(requiredVersionText))
+        {
+            return true;
+        }
+
+        // Can't parse the requirement — treat as sufficient to avoid blocking users.
+        if (!SemVersion.TryParse(requiredVersionText, SemVersionStyles.Any, out var requiredVersion))
+        {
+            return true;
+        }
+
+        // Dashboard version unknown — can't verify, treat as insufficient.
+        if (dashboardVersion is null)
+        {
+            return false;
+        }
+
+        // Strip pre-release from both versions so that dev/preview builds
+        // are treated as equivalent to their release counterpart.
+        var dashboardRelease = new SemVersion(dashboardVersion.Major, dashboardVersion.Minor, dashboardVersion.Patch);
+        var requiredRelease = new SemVersion(requiredVersion.Major, requiredVersion.Minor, requiredVersion.Patch);
+
+        return SemVersion.ComparePrecedence(dashboardRelease, requiredRelease) >= 0;
     }
 }

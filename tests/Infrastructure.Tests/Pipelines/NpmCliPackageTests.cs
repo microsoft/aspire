@@ -24,7 +24,7 @@ public sealed class NpmCliPackageTests : IDisposable
         new("osx-arm64", "aspire", ["darwin"], ["arm64"], null)
     ];
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
     private readonly string _repoRoot = RepoRoot.Path;
     private readonly string _packScriptPath;
@@ -32,10 +32,11 @@ public sealed class NpmCliPackageTests : IDisposable
     public NpmCliPackageTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _packScriptPath = Path.Combine(_repoRoot, "eng", "scripts", "pack-cli-npm-package.ps1");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task LauncherDetectsMuslArm64AndThrowsUnsupported()
@@ -176,7 +177,7 @@ public sealed class NpmCliPackageTests : IDisposable
     public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependenciesOnSupportedPlatform()
     {
         var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
-        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
         await File.WriteAllTextAsync(
             testScriptPath,
             """
@@ -216,7 +217,7 @@ public sealed class NpmCliPackageTests : IDisposable
     public async Task LauncherPostinstallCheckSkipsUnsupportedPlatform()
     {
         var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
-        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
         await File.WriteAllTextAsync(
             testScriptPath,
             """
@@ -259,6 +260,7 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Equal(
             s_supportedRids.ToDictionary(rid => $"{PackageName}-{rid.Rid}", _ => PackageVersion, StringComparer.Ordinal),
             GetStringMap(GetObject(packageJson, "optionalDependencies")));
+        Assert.Equal(["bin", "README.md"], GetStringArray(packageJson["files"]));
 
         var packageMap = ReadJsonObject(Path.Combine(package.PointerPackageRoot, "bin", "aspire-package-map.json"));
         Assert.Equal(
@@ -266,7 +268,12 @@ public sealed class NpmCliPackageTests : IDisposable
             GetStringMap(packageMap));
 
         var readme = await File.ReadAllTextAsync(Path.Combine(package.PointerPackageRoot, "README.md"));
-        Assert.Equal(await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName)), readme);
+        Assert.Equal(
+            await RenderTemplateAsync(
+                "eng/scripts/pack-cli-npm-package.pointer.README.md",
+                ("PACKAGE_NAME", PackageName),
+                ("VERSION", PackageVersion)),
+            readme);
         Assert.Contains("Use it to create, run, publish, and deploy Aspire AppHosts from a terminal.", readme);
         Assert.Contains("This package requires Node.js 20 or later.", readme);
         Assert.Contains("Supported platforms:", readme);
@@ -292,9 +299,14 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains("import { createBuilder } from './.aspire/modules/aspire.mjs';", readme);
         Assert.Contains("aspire dashboard run", readme);
         Assert.Contains("Browse Aspire samples", readme);
+        Assert.Contains("## Release notes", readme);
+        Assert.Contains($"This package contains Aspire CLI version `{PackageVersion}`.", readme);
+        Assert.Contains("[Aspire releases](https://github.com/microsoft/aspire/releases)", readme);
+        Assert.DoesNotContain("https://github.com/microsoft/aspire/releases/tag/v", readme);
         Assert.DoesNotContain("apphost.ts", readme);
         Assert.DoesNotContain("./.aspire/modules/aspire.js", readme);
         Assert.DoesNotContain("__PACKAGE_NAME__", readme);
+        Assert.DoesNotContain("__VERSION__", readme);
         // The C# AppHost example was intentionally removed; the npm README is TypeScript-only.
         Assert.DoesNotContain("apphost.cs", readme);
         Assert.DoesNotContain("```csharp", readme);
@@ -303,7 +315,10 @@ public sealed class NpmCliPackageTests : IDisposable
     [Fact]
     public async Task PointerPackageReadmeSupportedPlatformTextMatchesSupportedRidMatrix()
     {
-        var readme = await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName));
+        var readme = await RenderTemplateAsync(
+            "eng/scripts/pack-cli-npm-package.pointer.README.md",
+            ("PACKAGE_NAME", PackageName),
+            ("VERSION", PackageVersion));
         var supportedPlatformText = GetExpectedSupportedPlatformText();
 
         Assert.Contains($"Supported platforms: {supportedPlatformText}.", readme);
@@ -391,20 +406,114 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task PolyglotTypeScriptToolchainUsesInternalNpmRegistry()
+    {
+        var dockerfile = await ReadRepoFileAsync(".github/workflows/polyglot-validation/Dockerfile.typescript");
+
+        Assert.Contains("ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", dockerfile);
+        Assert.Contains("npm install --global --force --registry \"${NPM_REGISTRY}\"", dockerfile);
+        Assert.Contains("pnpm@10.0.0", dockerfile);
+        Assert.Contains("@yarnpkg/cli-dist@4.14.1", dockerfile);
+        Assert.DoesNotContain("corepack prepare", dockerfile);
+    }
+
+    [Fact]
+    public async Task RunTestsInstallsAzureFunctionsCoreToolsFromPinnedGitHubRelease()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/run-tests.yml");
+
+        Assert.DoesNotContain("npm i -g azure-functions-core-tools@4", workflow);
+        Assert.Contains("core_tools_version='4.12.1'", workflow);
+        Assert.Contains("https://github.com/Azure/azure-functions-core-tools/releases/download/${core_tools_version}/Azure.Functions.Cli.linux-x64.${core_tools_version}.zip", workflow);
+        Assert.Contains("sha256sum --check -", workflow);
+        Assert.Contains("func --version", workflow);
+    }
+
+    [Fact]
+    public async Task AspireCliUsesMicrosoftCertificate()
+    {
+        var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
+
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".msi",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))");
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: null);
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire.exe",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire-managed.exe",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire-managed",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "get-aspire-cli.ps1",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "manifest.cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire.js",
+            "Microsoft400",
+            collisionPriorityId: "AspireCliNpmPackage",
+            condition: null);
+    }
+
+    [Fact]
     public async Task NpmSigningScopeCoversNestedTarballPayloads()
     {
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
 
-        AssertScopedSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP");
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.js", "MicrosoftDotNet500");
+        AssertSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP", "AspireCliNpmPackage", condition: null);
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire.js", "Microsoft400", "AspireCliNpmPackage", condition: null);
 
         // The native npm packages are built from already-signed native archives.
         // The main Windows build should only produce the detached npm tarball
         // signature; it must still provide scoped rules for nested native
         // executables because Arcade resolves nested file certificates inside
         // the ItemsToSign collision scope.
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.exe", "None");
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire", "None");
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire.exe", "None", "AspireCliNpmPackage", condition: null);
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire", "None", "AspireCliNpmPackage", condition: null);
     }
 
     [Fact]
@@ -464,7 +573,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private async Task<string> CreateFakeNpmInstallAsync(bool includeRidPackages)
     {
-        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
         var nodeModulesRoot = Path.Combine(testRoot, "node_modules");
         var pointerPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", "aspire-cli");
         var pointerBinRoot = Path.Combine(pointerPackageRoot, "bin");
@@ -529,7 +638,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private async Task<PackedNpmPackage> PackCliNpmPackageAsync(string rid)
     {
-        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
         var stagingRoot = Path.Combine(testRoot, "staging");
         var outputPath = Path.Combine(testRoot, "output");
         var nativeBinaryPath = Path.Combine(testRoot, "native-aspire-stub");
@@ -699,19 +808,26 @@ public sealed class NpmCliPackageTests : IDisposable
         return count;
     }
 
-    private static void AssertScopedSigningRule(XDocument document, string elementName, string include, string certificateName)
+    private static void AssertSigningRule(
+        XDocument document,
+        string elementName,
+        string include,
+        string certificateName,
+        string? collisionPriorityId,
+        string? condition)
     {
         var matchingRules = document
             .Descendants(elementName)
             .Where(element =>
-                (string?)element.Attribute("CollisionPriorityId") == "AspireCliNpmPackage" &&
+                (string?)element.Attribute("CollisionPriorityId") == collisionPriorityId &&
                 ((string?)element.Attribute("Include") == include || (string?)element.Attribute("Update") == include) &&
-                (string?)element.Attribute("CertificateName") == certificateName)
+                (string?)element.Attribute("CertificateName") == certificateName &&
+                (string?)element.Attribute("Condition") == condition)
             .ToArray();
 
         Assert.True(
             matchingRules.Length == 1,
-            $"Expected exactly one {elementName} for '{include}' using '{certificateName}' in the AspireCliNpmPackage signing scope, but found {matchingRules.Length}.");
+            $"Expected exactly one {elementName} for '{include}' using '{certificateName}', collision scope '{collisionPriorityId}', and condition '{condition}', but found {matchingRules.Length}.");
     }
 
     public sealed record RidPackageExpectation(string Rid, string BinaryName, string[] Os, string[] Cpu, string[]? Libc);

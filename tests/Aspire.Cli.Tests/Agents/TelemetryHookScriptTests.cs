@@ -377,7 +377,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     private async Task<HookRun> RunBashHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scripts = await MaterializeScriptsAsync(workspace).DefaultTimeout();
         var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "capture.txt");
         var recorderPath = CreateBashRecorder(workspace.WorkspaceRoot.FullName);
@@ -389,7 +389,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     private async Task<HookRun> RunPwshHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scripts = await MaterializeScriptsAsync(workspace).DefaultTimeout();
         var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "capture.txt");
         var recorderPath = CreatePwshRecorder(workspace.WorkspaceRoot.FullName);

@@ -7,6 +7,32 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal static class ProcessTestHelpers
 {
+    public static async Task<int> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            if (File.Exists(pidFile))
+            {
+                try
+                {
+                    using var stream = new FileStream(pidFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var reader = new StreamReader(stream);
+                    var text = await reader.ReadToEndAsync(cancellationToken);
+                    if (int.TryParse(text.Trim(), out var pid))
+                    {
+                        return pid;
+                    }
+                }
+                catch (IOException)
+                {
+                    // The process may still be writing the file. Retry until the caller's timeout expires.
+                }
+            }
+
+            await Task.Delay(20, cancellationToken);
+        }
+    }
+
     public static bool WaitForProcessExit(int pid, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;

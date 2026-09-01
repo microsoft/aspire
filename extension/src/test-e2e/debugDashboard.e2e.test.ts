@@ -1,10 +1,11 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForBrowserDebugSession, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoBrowserDebugSessions, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { VSBrowser } from './helpers/extester';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -20,6 +21,7 @@ suite('Aspire debug dashboard E2E', function () {
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
+            () => waitForNoBrowserDebugSessions(15000).catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'Debug dashboard E2E teardown failed.');
     });
@@ -89,8 +91,46 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('workspace debug stop removes running apphost', async () => {
+    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
+        writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome');
+
         await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
+
+        await waitForDebugSessionStartup();
+
+        // The debug browser is only launched once the dashboard URL is known, so wait for that
+        // milestone separately. Folding both waits into one budget makes a slow dashboard start
+        // look like a missing browser session.
+        await waitForDebugDashboardUrl();
+
+        const browserSession = await waitForBrowserDebugSession();
+        assert.deepStrictEqual(
+            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+            [{ id: browserSession.id, type: 'pwa-chrome' }]);
+
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions();
+
+        // The Aspire session ending is not enough on its own. VS Code leaves the child browser
+        // session running unless the extension stops it explicitly, which is what left orphaned
+        // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
+        // on the extension's own debugSessions cannot catch that regression: it was already empty
+        // while the browser kept running.
+        await waitForNoBrowserDebugSessions();
+    });
+
+    test('workspace debug stop removes running apphost', async () => {
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
@@ -166,7 +206,9 @@ suite('Aspire debug dashboard E2E', function () {
         const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            const beforePublish = getCommandInvocationCount('aspire-vscode.publishAppHost');
+            await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublish);
             await waitForDebugLaunch(
                 event => event.command === 'publish' && event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath),
                 `publish launch for AppHost '${appHostPath}'`,
@@ -216,10 +258,24 @@ suite('Aspire debug dashboard E2E', function () {
             await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
+            const logFileMatch = /See logs at (.+?\.log)(?:\r?\n|$)/.exec(logOutput.output);
+            assert.ok(logFileMatch, `Expected the Debug Console to contain a CLI log path: ${JSON.stringify(logOutput.output)}`);
+            const logFilePath = logFileMatch[1].trim();
+
+            const notification = await waitForNotificationMessage('The project could not be built.', 60000);
+            const buildFailureNotifications = (await getNotificationMessages()).filter(message =>
+                message.includes('The project could not be built') || message.includes('See logs at'));
+            assert.deepStrictEqual(buildFailureNotifications, ['The project could not be built.']);
+            await VSBrowser.instance.takeScreenshot('apphost-build-failure-notification').catch(() => undefined);
+
+            await notification.takeAction('Open CLI Log');
+            await waitForEditorTitle(path.basename(logFilePath), 60000);
+            await VSBrowser.instance.takeScreenshot('apphost-build-failure-open-log').catch(() => undefined);
         }
         finally {
             await runE2eTeardown([
                 () => setShowStatusDelayForE2E(undefined),
+                () => executeE2eControlCommand({ name: 'closeAllEditors' }),
                 () => writeFileWithRetry(appHostSourcePath, originalSource),
                 () => executeE2eControlCommand({ name: 'stopDebugging' }),
                 () => waitForNoDebugSessions().catch(() => undefined),

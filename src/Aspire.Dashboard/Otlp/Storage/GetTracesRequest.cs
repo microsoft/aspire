@@ -14,6 +14,11 @@ public sealed class GetTracesRequest
     public string? TraceNameFilterText { get; init; }
     public string[]? TextFragments { get; init; }
 
+    /// <summary>
+    /// Gets the maximum number of the latest matching traces available for paging.
+    /// </summary>
+    internal int? LatestItemCount { get; init; }
+
     public static GetTracesRequest ForResourceKey(ResourceKey resourceKey) => new()
     {
         ResourceKeys = [resourceKey],

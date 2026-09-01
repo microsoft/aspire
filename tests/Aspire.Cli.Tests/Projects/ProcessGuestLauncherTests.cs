@@ -6,6 +6,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
@@ -18,13 +19,34 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
 
     public void Dispose() => _loggerFactory.Dispose();
 
-    private ProcessGuestLauncher CreateLauncher()
+    private ProcessGuestLauncher CreateLauncher(IProcessExecutionFactory? processExecutionFactory = null)
         => new(
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
             commandResolver: PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+            processExecutionFactory: processExecutionFactory ?? new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+
+    [Fact]
+    public async Task LaunchAsync_WithIsolatedConsoleForGracefulShutdown_RequestsKillOnParentExit()
+    {
+        var executionFactory = new TestProcessExecutionFactory();
+        var launcher = CreateLauncher(executionFactory);
+        var options = new GuestLaunchOptions(IsolateConsoleForGracefulShutdown: true);
+
+        var (exitCode, _) = await launcher.LaunchAsync(
+            "dotnet",
+            ["--version"],
+            new DirectoryInfo(Directory.GetCurrentDirectory()),
+            new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: options,
+            CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(executionFactory.LastProcessInvocationOptions?.IsolateConsole);
+        Assert.True(executionFactory.LastProcessInvocationOptions?.KillOnParentExit);
+    }
 
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
@@ -117,6 +139,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18880")]
     public async Task LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget()
     {
         // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can
@@ -179,7 +202,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // it (the canonical tsx-swallows-Ctrl+Break scenario on Windows). Expiring the central token
         // must break the ladder out of WaitForExitAsync and escalate to Kill(entireProcessTree: true)
         // so the tree dies even when the cooperative path fails.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var launcher = CreateLauncher();
         var descendantPidFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "descendant.pid"));
         var (command, args) = await GetProcessTreeCommandAsync(workspace.WorkspaceRoot, descendantPidFile);

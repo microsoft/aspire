@@ -12,11 +12,13 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.DashboardUnsecuredAllowAnonymous);
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
-    public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
     public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
     public static readonly ConfigName DashboardAspireApiDisabledName = new(KnownConfigNames.DashboardApiDisabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
     public static readonly ConfigName ForwardedHeaders = new(KnownConfigNames.DashboardForwardedHeadersEnabled);
+    public static readonly ConfigName DashboardApplicationName = new("Dashboard:ApplicationName", "ASPIRE_DASHBOARD_APPLICATION_NAME");
+    public static readonly ConfigName DashboardDataDirectoryName = new("Dashboard:Data:Directory", "ASPIRE_DASHBOARD_DATA_DIRECTORY");
+    public static readonly ConfigName DashboardPersistenceModeName = new("Dashboard:Data:PersistenceMode", "ASPIRE_DASHBOARD_PERSISTENCE_MODE");
 
     public static readonly ConfigName DashboardOtlpAuthModeName = new("Dashboard:Otlp:AuthMode", "DASHBOARD__OTLP__AUTHMODE");
     public static readonly ConfigName DashboardOtlpPrimaryApiKeyName = new("Dashboard:Otlp:PrimaryApiKey", "DASHBOARD__OTLP__PRIMARYAPIKEY");

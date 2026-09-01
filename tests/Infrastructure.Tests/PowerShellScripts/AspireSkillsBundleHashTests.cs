@@ -22,25 +22,26 @@ namespace Infrastructure.Tests;
 /// </remarks>
 public sealed class AspireSkillsBundleHashTests : IDisposable
 {
-    // SHA-256 of the LF, UTF-8 (no BOM) bytes of CanonicalText, computed independently of the script
+    // SHA-512 of the LF, UTF-8 (no BOM) bytes of CanonicalText, computed independently of the script
     // under test (so this is a real oracle, not a tautology). Every line-ending variant of the same
     // logical content must normalize to this one hash.
-    private const string ExpectedSha256 = "83fd2d53ae2f0c5f2326321934026cf6f0c3397f17aa1ba0887178155c220931";
+    private const string ExpectedSha512 = "00957ac0d67fb6cb43c6dc38038de8dc96f75375d278c907484686d38faf812eeaec1153a0e523507b4afb49cf8f39f9075afb20ab13e71e753a455d3abb78b0";
 
     // Canonical hook-like content using LF placeholders; each test rewrites the newlines per style.
     private const string CanonicalText = "#!/usr/bin/env bash\necho 'aspire'\n";
 
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _commonScriptPath;
     private readonly ITestOutputHelper _output;
 
     public AspireSkillsBundleHashTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundle.common.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Theory]
     [RequiresTools(["pwsh"])]
@@ -50,12 +51,12 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     [InlineData(LineEndings.BomCrlf)]
     public async Task NormalizesEveryLineEndingVariantToTheSameHash(LineEndings lineEndings)
     {
-        var inputPath = Path.Combine(_tempDir.Path, $"input-{lineEndings}.bin");
+        var inputPath = Path.Combine(_workspace.Path, $"input-{lineEndings}.bin");
         File.WriteAllBytes(inputPath, BuildInput(lineEndings));
 
         var hash = await RunHashDriverAsync(inputPath);
 
-        Assert.Equal(ExpectedSha256, hash);
+        Assert.Equal(ExpectedSha512, hash);
     }
 
     [Fact]
@@ -96,7 +97,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
             $bytes = [System.IO.File]::ReadAllBytes($InputFile)
             $normalized = ConvertTo-LfUtf8Bytes -Bytes $bytes
-            Write-Output (Get-AspireSkillsSha256Hex -Bytes $normalized)
+            Write-Output (Get-AspireSkillsSha512Hex -Bytes $normalized)
             """);
 
         var result = await RunDriverAsync(
@@ -105,9 +106,9 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
             "-InputFile", $"\"{inputPath}\"");
 
         var hash = ReadLines(result.Output)
-            .FirstOrDefault(static l => l.Length == 64 && l.All(static c => char.IsAsciiHexDigitLower(c)));
+            .FirstOrDefault(static l => l.Length == 128 && l.All(static c => char.IsAsciiHexDigitLower(c)));
 
-        Assert.True(hash is not null, $"Expected a SHA-256 line in driver output:{Environment.NewLine}{result.Output}");
+        Assert.True(hash is not null, $"Expected a SHA-512 line in driver output:{Environment.NewLine}{result.Output}");
         return hash!;
     }
 
@@ -146,7 +147,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
     private string WriteDriver(string fileName, string content)
     {
-        var path = Path.Combine(_tempDir.Path, fileName);
+        var path = Path.Combine(_workspace.Path, fileName);
         File.WriteAllText(path, content);
         return path;
     }

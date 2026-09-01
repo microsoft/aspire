@@ -31,7 +31,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         var toolchain = Enum.Parse<TypeScriptAppHostToolchain>(toolchainName);
         var requiredCommands = TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateTypeScriptAppHost(workspace, $"{{ \"packageManager\": \"{packageManagerSpec}\" }}");
 
         var check = CreateCheck(
@@ -65,7 +65,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         var toolchain = Enum.Parse<TypeScriptAppHostToolchain>(toolchainName);
         var requiredCommands = TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateTypeScriptAppHost(workspace, $"{{ \"packageManager\": \"{packageManagerSpec}\" }}");
 
         var check = CreateCheck(workspace, appHostFile, commandResolver: _ => null);
@@ -98,7 +98,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [InlineData("npx")]
     public async Task CheckAsync_ReturnsFailOnlyForMissingNpmCommand_WhenTheOtherIsPresent(string missingCommand)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"packageManager\": \"npm@10.5.0\" }");
 
         var check = CreateCheck(
@@ -120,7 +120,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [Fact]
     public async Task CheckAsync_Skips_WhenNoTypeScriptAppHostExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateCheck(workspace, appHostFile: null, commandResolver: _ => null);
 
         var results = await check.CheckAsync().DefaultTimeout();
@@ -131,7 +131,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [Fact]
     public async Task CheckAsync_ReturnsFail_WhenPackageManagerIsYarnClassic()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"packageManager\": \"yarn@1.22.22\" }");
 
         var check = CreateCheck(workspace, appHostFile, commandResolver: command => $"/usr/bin/{command}");
@@ -152,7 +152,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [Fact]
     public async Task CheckAsync_ReturnsFail_WhenYarnClassicLockFileIsPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"name\": \"apphost\" }");
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"),

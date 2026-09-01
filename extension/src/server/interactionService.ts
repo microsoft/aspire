@@ -1,6 +1,7 @@
 import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
 import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
@@ -8,14 +9,17 @@ import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AnsiColors } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
+import { appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { isDirectory } from '../utils/io';
-import { sendTelemetryEvent } from '../utils/telemetry';
+import { isCommandCancellation, sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
+import { AppHostLogEntry } from '../debugger/appHostLogOutput';
+import { AnsiColors } from '../utils/AspireTerminalProvider';
 
-export interface IInteractionService {
+export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
     clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
@@ -25,8 +29,8 @@ export interface IInteractionService {
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
     promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
     displayIncompatibleVersionError: (requiredCapability: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) => Promise<void>;
-    displayError: (errorMessage: string) => void;
-    displayMessage: (emoji: string, message: string) => void;
+    displayError: (errorMessage: string, actions?: InteractionMessageAction[]) => Promise<void>;
+    displayMessage: (emoji: string, message: string, actions?: InteractionMessageAction[]) => Promise<void>;
     displaySuccess: (message: string) => void;
     displaySubtleMessage: (message: string) => void;
     displayEmptyLine: () => void;
@@ -37,11 +41,12 @@ export interface IInteractionService {
     openEditor: (path: string) => Promise<void>;
     logMessage: (logLevel: CSLogLevel, message: string) => void;
     launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void>;
-    stopDebugging: () => void;
+    stopDebugging: () => Promise<void>;
     closeDashboard: () => void;
     notifyAppHostStartupCompleted: () => void;
     startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
     writeDebugSessionMessage: (message: string, stdout: boolean, textStyle?: string) => void;
+    writeAppHostLogEntry: (entry: AppHostLogEntry) => void;
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
@@ -160,21 +165,41 @@ function getConsoleLineText(line: ConsoleLine): string {
 type DebugSessionOptions = {
     command?: string;
     args?: string[];
+    env?: { [key: string]: string };
+    appHostSelectionOrigin?: AppHostSelectionOrigin;
 };
+
+type InteractionMessageAction = {
+    displayName?: unknown;
+    command?: unknown;
+    filePath?: unknown;
+};
+
+interface ResolvedInteractionMessageAction extends vscode.MessageItem {
+    execute(): Promise<void>;
+}
 
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
+    private _isDisposed = false;
 
     constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
         this._rpcClient = rpcClient;
-        this._progressNotifier = new ProgressNotifier(this._rpcClient);
+        this._progressNotifier = new ProgressNotifier();
     }
 
     showStatus(statusText: string | null) {
+        if (this._isDisposed) {
+            // The RPC connection owning this service is gone. A status message that was still in
+            // flight when the transport closed must not paint progress that nothing is left alive
+            // to clear, which would strand the indicator for the rest of the window's lifetime.
+            return;
+        }
+
         delayStatusForE2E();
         this._progressNotifier.show(statusText);
     }
@@ -330,18 +355,21 @@ export class InteractionService implements IInteractionService {
         });
     }
 
-    displayError(errorMessage: string) {
+    async displayError(errorMessage: string, actions?: InteractionMessageAction[]): Promise<void> {
         if (errorMessage.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty error message.');
             return;
         }
 
         extensionLogOutputChannel.error(`Displaying error: ${errorMessage}`);
-        vscode.window.showErrorMessage(formatText(errorMessage));
         this.clearProgressNotification();
+
+        const resolvedActions = await this._resolveMessageActions(actions);
+        this._handleMessageActionSelection(
+            vscode.window.showErrorMessage(formatText(errorMessage), ...resolvedActions));
     }
 
-    displayMessage(emoji: string, message: string) {
+    async displayMessage(emoji: string, message: string, actions?: InteractionMessageAction[]): Promise<void> {
         if (message.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty message.');
             return;
@@ -349,7 +377,10 @@ export class InteractionService implements IInteractionService {
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
         this.clearProgressNotification();
-        vscode.window.showInformationMessage(formatText(message));
+
+        const resolvedActions = await this._resolveMessageActions(actions);
+        this._handleMessageActionSelection(
+            vscode.window.showInformationMessage(formatText(message), ...resolvedActions));
     }
 
     // There is no need for a different success message handler, as a general informative message ~= success
@@ -402,12 +433,16 @@ export class InteractionService implements IInteractionService {
             this.writeDebugSessionMessage(codespacesUrl, true, AnsiColors.Blue);
         }
 
-        // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
-        vscode.commands.executeCommand('aspire-vscode.refreshAppHosts');
+        // Refresh live AppHost state without re-running full workspace discovery. Startup already
+        // resolved the AppHost path, and re-discovering here can add another `aspire ls` after the
+        // dashboard is ready.
+        void Promise.resolve(vscode.commands.executeCommand('aspire-vscode.refreshAppHostRuntimeState')).then(undefined, error => {
+            extensionLogOutputChannel.warn(`Failed to refresh AppHost runtime state after dashboard URL display: ${error}`);
+        });
 
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
         const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
-        sendTelemetryEvent('dashboard/launch/resolved', {
+        sendTelemetryEvent('aspire/vscode/dashboard/launch/resolved', {
             behavior: dashboardLaunchBehavior.behavior,
             source: dashboardLaunchBehavior.source,
         });
@@ -515,18 +550,18 @@ export class InteractionService implements IInteractionService {
         }
 
         await this._globalState.update(dashboardDefaultChangedNotificationKey, true);
-        sendTelemetryEvent('dashboard/launch/migration', { action: 'shown' });
+        sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'shown' });
         vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
             if (selected === settingsLabel) {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'settings' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'settings' });
                 this.openDashboardLaunchBehaviorSettings(source);
             }
             else if (selected === changelogLabel) {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'changelog' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'changelog' });
                 vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/aspire/blob/main/extension/CHANGELOG.md'));
             }
             else {
-                sendTelemetryEvent('dashboard/launch/migration', { action: 'dismissed' });
+                sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'dismissed' });
             }
         });
     }
@@ -623,7 +658,20 @@ export class InteractionService implements IInteractionService {
             return;
         }
 
+        // CLIs without `apphost-log-output.v1` deliver AppHost logs here without record
+        // identity or provenance. Preserve that output as-is rather than guessing by
+        // message text and potentially dropping a distinct record.
         debugSession.sendMessage(applyTextStyle(message, textStyle), addNewLine, stdout ? 'stdout' : 'stderr');
+    }
+
+    writeAppHostLogEntry(entry: AppHostLogEntry) {
+        const debugSession = this._getAspireDebugSession();
+        if (!debugSession) {
+            extensionLogOutputChannel.warn('Attempted to write an AppHost log entry, but no active debug session exists.');
+            return;
+        }
+
+        debugSession.sendAppHostLogEntry(entry);
     }
 
     async launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void> {
@@ -643,9 +691,12 @@ export class InteractionService implements IInteractionService {
         return debugSession.startAppHost(projectFile, args, environment, debug, { forceBuild });
     }
 
-    stopDebugging() {
+    async stopDebugging(): Promise<void> {
         this.clearProgressNotification();
-        this._getAspireDebugSession()?.dispose();
+        // Await the ordered shutdown so the CLI (and the user, via the endpoint middleware) learns
+        // if a resource, AppHost, or parent debug session did not stop. Disposable.dispose() starts
+        // the same bounded work in the background but cannot return its failures.
+        await this._getAspireDebugSession()?.stopDebugging();
     }
 
     notifyAppHostStartupCompleted() {
@@ -661,6 +712,8 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const command = options?.command ?? 'run';
+        const appHostSelectionOrigin = options?.appHostSelectionOrigin
+            ?? (projectFile ? 'user-selection' : 'default-discovery');
 
         const debugConfiguration: AspireExtendedDebugConfiguration = {
             type: 'aspire',
@@ -669,7 +722,9 @@ export class InteractionService implements IInteractionService {
             program: projectFile ?? workingDirectory,
             command: command as AspireExtendedDebugConfiguration['command'],
             args: options?.args,
+            env: options?.env,
             noDebug: !debug,
+            [appHostSelectionOriginConfigKey]: appHostSelectionOrigin,
         };
 
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workingDirectory));
@@ -681,6 +736,92 @@ export class InteractionService implements IInteractionService {
 
     clearProgressNotification() {
         this._progressNotifier.clear();
+    }
+
+    dispose() {
+        // The RPC connection owning this service is going away, so tear down any progress it
+        // still has on screen. Otherwise a CLI that dies with the extension leaves a permanent
+        // "Building..." indicator that nothing is left alive to clear.
+        this._isDisposed = true;
+        this._progressNotifier.clear();
+    }
+
+    private async _resolveMessageActions(actions: InteractionMessageAction[] | undefined): Promise<ResolvedInteractionMessageAction[]> {
+        if (!Array.isArray(actions) || actions.length === 0) {
+            return [];
+        }
+
+        let registeredCommands = new Set<string>();
+        if (actions.some(action => typeof action?.command === 'string')) {
+            try {
+                registeredCommands = new Set(await vscode.commands.getCommands(true));
+            }
+            catch (error) {
+                extensionLogOutputChannel.error(`Failed to enumerate commands for interaction message actions: ${error}`);
+            }
+        }
+
+        const resolvedActions: ResolvedInteractionMessageAction[] = [];
+        for (const action of actions) {
+            const displayName = typeof action?.displayName === 'string' ? action.displayName.trim() : '';
+            const command = typeof action?.command === 'string' ? action.command.trim() : '';
+            const filePath = typeof action?.filePath === 'string' ? action.filePath : '';
+            if (!displayName || Boolean(command) === Boolean(filePath)) {
+                extensionLogOutputChannel.warn('Ignoring an invalid interaction message action.');
+                continue;
+            }
+
+            if (command) {
+                if (!registeredCommands.has(command)) {
+                    extensionLogOutputChannel.warn(`Ignoring interaction message action for unavailable command '${command}'.`);
+                    continue;
+                }
+
+                resolvedActions.push({
+                    title: displayName,
+                    execute: async () => {
+                        await vscode.commands.executeCommand(command);
+                    },
+                });
+                continue;
+            }
+
+            if (!path.isAbsolute(filePath) || !await isFile(filePath)) {
+                extensionLogOutputChannel.warn('Ignoring interaction message action for an unavailable file.');
+                continue;
+            }
+
+            resolvedActions.push({
+                title: displayName,
+                execute: async () => {
+                    await this.openEditor(filePath);
+                },
+            });
+        }
+
+        return resolvedActions;
+
+        async function isFile(filePath: string): Promise<boolean> {
+            try {
+                return (await fs.stat(filePath)).isFile();
+            }
+            catch {
+                return false;
+            }
+        }
+    }
+
+    private _handleMessageActionSelection(selection: Thenable<ResolvedInteractionMessageAction | undefined>): void {
+        void Promise.resolve(selection).then(async selected => {
+            await selected?.execute();
+        }).catch((error: unknown) => {
+            if (isCommandCancellation(error)) {
+                return;
+            }
+
+            extensionLogOutputChannel.error(`Failed to execute an interaction message action: ${error}`);
+            void vscode.window.showErrorMessage(errorMessage(error));
+        });
     }
 
     /**
@@ -734,6 +875,7 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
     connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
+    connection.onRequest("writeAppHostLogEntry", middleware('writeAppHostLogEntry', interactionService.writeAppHostLogEntry.bind(interactionService)));
 }
 
 function delayStatusForE2E(): void {

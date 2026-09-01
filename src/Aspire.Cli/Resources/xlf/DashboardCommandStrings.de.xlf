@@ -7,6 +7,11 @@
         <target state="new">Allow anonymous access to the dashboard</target>
         <note />
       </trans-unit>
+      <trans-unit id="ApplicationNameOptionDescription">
+        <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
+        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
+        <note />
+      </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
         <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
         <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
@@ -67,6 +72,11 @@
         <target state="new">Manage the Aspire dashboard (Preview)</target>
         <note />
       </trans-unit>
+      <trans-unit id="EnsuringDashboardBundle">
+        <source>Preparing dashboard bits...</source>
+        <target state="new">Preparing dashboard bits...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
         <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
@@ -102,6 +112,11 @@
         <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistenceModeOptionDescription">
+        <source>The dashboard data persistence mode: None, Run, or Resume</source>
+        <target state="new">The dashboard data persistence mode: None, Run, or Resume</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RunDescription">
         <source>Start the Aspire dashboard (Preview)</source>
         <target state="new">Start the Aspire dashboard (Preview)</target>
@@ -113,8 +128,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
-        <source>Stopping dashboard</source>
-        <target state="new">Stopping dashboard</target>
+        <source>Stopping dashboard.</source>
+        <target state="new">Stopping dashboard.</target>
         <note />
       </trans-unit>
     </body>

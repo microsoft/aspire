@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
 
@@ -81,27 +80,17 @@ public sealed class SpanHasAttributeTelemetryFilter : TelemetryFilter
 {
     private readonly string[] _attributeNames;
 
+    internal IReadOnlyList<string> AttributeNames => _attributeNames;
+
     public SpanHasAttributeTelemetryFilter(string[] attributeNames)
     {
-        _attributeNames = attributeNames;
-    }
-
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var attributeName in _attributeNames)
+        ArgumentNullException.ThrowIfNull(attributeNames);
+        if (attributeNames.Length == 0)
         {
-            if (!string.IsNullOrEmpty(span.Attributes.GetValue(attributeName)))
-            {
-                return true;
-            }
+            throw new ArgumentException("At least one attribute name is required.", nameof(attributeNames));
         }
 
-        return false;
+        _attributeNames = attributeNames;
     }
 
     public override bool Equals(TelemetryFilter? other)
@@ -114,27 +103,17 @@ public sealed class SpanNoMatchTelemetryFilter : TelemetryFilter
 {
     private readonly TelemetryFilter[] _filters;
 
+    internal IReadOnlyList<TelemetryFilter> Filters => _filters;
+
     public SpanNoMatchTelemetryFilter(TelemetryFilter[] filters)
     {
-        _filters = filters;
-    }
-
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var filter in _filters)
+        ArgumentNullException.ThrowIfNull(filters);
+        if (filters.Length == 0)
         {
-            if (filter.Apply(span))
-            {
-                return false;
-            }
+            throw new ArgumentException("At least one filter is required.", nameof(filters));
         }
 
-        return true;
+        _filters = filters;
     }
 
     public override bool Equals(TelemetryFilter? other)
@@ -147,38 +126,17 @@ public sealed class SpanScopePrefixTelemetryFilter : TelemetryFilter
 {
     private readonly string[] _scopePrefixes;
 
+    internal IReadOnlyList<string> ScopePrefixes => _scopePrefixes;
+
     public SpanScopePrefixTelemetryFilter(string[] scopePrefixes)
     {
-        _scopePrefixes = scopePrefixes;
-    }
-
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        throw new NotSupportedException();
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        foreach (var scopePrefix in _scopePrefixes)
+        ArgumentNullException.ThrowIfNull(scopePrefixes);
+        if (scopePrefixes.Length == 0)
         {
-            if (span.Scope.Name.StartsWith(scopePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                // Exact match.
-                if (span.Scope.Name.Length == scopePrefix.Length)
-                {
-                    return true;
-                }
-                // Starts with prefix followed by delimiter.
-                if (span.Scope.Name[scopePrefix.Length] == '.')
-                {
-                    return true;
-                }
-
-                return false;
-            }
+            throw new ArgumentException("At least one scope prefix is required.", nameof(scopePrefixes));
         }
 
-        return false;
+        _scopePrefixes = scopePrefixes;
     }
 
     public override bool Equals(TelemetryFilter? other)

@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -19,6 +18,13 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _runSelectionChanged;
+    private bool _isSwitchingRuns;
+
+    // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
+    // labels still available via each item's tooltip); true = expanded so each item shows its
+    // icon on the left and text label on the right. Persisted per-browser in local storage.
+    private bool _isNavMenuExpanded;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -28,16 +34,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private IDialogReference? _openPageDialog;
     private string? _pendingReturnFocusElementId;
-    private string? _assistantReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
-    private bool _assistantSidebarWasVisible;
-    private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
-    internal const string AssistantButtonId = "dashboard-assistant-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
 
@@ -55,9 +57,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
 
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
@@ -81,16 +80,45 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required ILocalStorage LocalStorage { get; init; }
 
     [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
+    public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
+    public required IDashboardRunStore RunStore { get; init; }
+
+    [Inject]
+    public required IDashboardRunSelection RunSelection { get; init; }
+
+    [Inject]
+    public required ILogger<MainLayout> Logger { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
+            }
+        }
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -130,30 +158,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
         }
 
-        await DisplayUnsecuredEndpointsMessageAsync();
-
-        _aiDisplayChangedSubscription = AIContextProvider.OnDisplayChanged(() => InvokeAsync(() =>
+        // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+        var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
+        if (navExpandedResult.Success)
         {
-            var assistantDisplayContext = ServiceProvider.GetRequiredService<IAssistantDisplayContext>();
+            _isNavMenuExpanded = navExpandedResult.Value;
+        }
 
-            if (!AIContextProvider.ShowAssistantSidebarDialog)
-            {
-                if (_assistantSidebarWasVisible && assistantDisplayContext.RestoreFocusOnAssistantSidebarHidden)
-                {
-                    _pendingReturnFocusElementId = _assistantReturnFocusElementId;
-                }
-
-                _assistantReturnFocusElementId = null;
-                _assistantSidebarWasVisible = false;
-            }
-            else
-            {
-                _assistantReturnFocusElementId = assistantDisplayContext.AssistantReturnFocusElementId;
-                _assistantSidebarWasVisible = true;
-            }
-
-            StateHasChanged();
-        }));
+        await DisplayUnsecuredEndpointsMessageAsync();
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -249,6 +261,41 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+
+    private async Task SwitchDashboardRunAsync(string? runId)
+    {
+        _runSelectionChanged = true;
+        var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
+        if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
+        {
+            await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
+            return;
+        }
+
+        _isSwitchingRuns = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            RunSelection.SelectRun(runId);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(
+                exception,
+                "Failed to switch to dashboard run '{RunId}'. Keeping dashboard run '{SelectedRunId}' selected.",
+                runId,
+                RunSelection.SelectedRun.RunId);
+        }
+        finally
+        {
+            _isSwitchingRuns = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        var persistedRunId = RunSelection.SelectedRun is { IsCurrent: false } actualSelectedRun ? actualSelectedRun.RunId : string.Empty;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, persistedRunId);
+    }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {
@@ -411,38 +458,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    public Task LaunchAssistantAsync() => LaunchAssistantAsync(GetDefaultReturnFocusElementId(AssistantButtonId));
-
-    private async Task LaunchAssistantAsync(string? returnFocusElementId)
-    {
-        var assistantDisplayContext = ServiceProvider.GetRequiredService<IAssistantDisplayContext>();
-
-        if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            await assistantDisplayContext.HideAssistantSidebarAsync();
-        }
-        else
-        {
-            var viewModel = ServiceProvider.GetRequiredService<AssistantChatViewModel>();
-            var initializeTask = AIContextProvider.ChatState is { } state
-                ? viewModel.InitializeWithPreviousStateAsync(state)
-                : viewModel.InitializeAsync();
-
-            if (ViewportInformation.IsDesktop)
-            {
-                _assistantReturnFocusElementId = returnFocusElementId;
-                await assistantDisplayContext.LaunchAssistantSidebarAsync(viewModel, returnFocusElementId);
-            }
-            else
-            {
-                _assistantReturnFocusElementId = null;
-                await assistantDisplayContext.LaunchAssistantModelDialogAsync(viewModel, returnFocusElementId: returnFocusElementId);
-            }
-
-            await initializeTask;
-        }
-    }
-
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
         AspireKeyboardShortcut.Help,
@@ -488,6 +503,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
+    private async Task ToggleNavMenuExpandedAsync()
+    {
+        _isNavMenuExpanded = !_isNavMenuExpanded;
+        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.NavMenuExpanded, _isNavMenuExpanded);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _shortcutManagerReference?.Dispose();
@@ -495,7 +516,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _themeChangedSubscription?.Dispose();
         _locationChangingRegistration?.Dispose();
         ShortcutManager.RemoveGlobalKeydownListener(this);
-        _aiDisplayChangedSubscription?.Dispose();
 
         try
         {

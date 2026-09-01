@@ -428,6 +428,36 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
 
     #endregion
 
+    #region setup_cli_bundle
+
+    [Fact]
+    public async Task SetupCliBundle_InvokesSetupAndPropagatesFailure()
+    {
+        using var env = new TestEnvironment();
+        var cliPath = Path.Combine(env.TempDirectory, "aspire");
+        var capturePath = Path.Combine(env.TempDirectory, "setup-args.txt");
+        await File.WriteAllTextAsync(cliPath, ($$"""
+            #!/bin/sh
+            printf '%s\n' "$@" > "{{capturePath}}"
+            exit 23
+            """).ReplaceLineEndings("\n"));
+        FileHelper.MakeExecutable(cliPath);
+
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"INSTALLED_CLI_PATH='{cliPath}'; INSTALLED_CLI_OS=\"$(detect_os)\"; INSTALLED_CLI_ARCH=\"$(get_cli_architecture_from_architecture '<auto>')\"; DRY_RUN=false; setup_cli_bundle",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal("setup", (await File.ReadAllTextAsync(capturePath)).Trim());
+        Assert.Contains("bundle setup failed", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
     #region construct_aspire_extension_url
 
     [Theory]

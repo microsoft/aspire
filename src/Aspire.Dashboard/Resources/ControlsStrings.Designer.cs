@@ -11,7 +11,7 @@
 namespace Aspire.Dashboard.Resources {
     using System;
     
-    
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -31,7 +31,7 @@ namespace Aspire.Dashboard.Resources {
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal ControlsStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -961,6 +961,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Scroll to bottom.
+        /// </summary>
+        public static string ScrollToBottom {
+            get {
+                return ResourceManager.GetString("ScrollToBottom", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Select a resource.
         /// </summary>
         public static string SelectAResource {
@@ -1230,6 +1239,15 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Text content.
+        /// </summary>
+        public static string TextVisualizerContentLabel {
+            get {
+                return ResourceManager.GetString("TextVisualizerContentLabel", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Time offset.
         /// </summary>

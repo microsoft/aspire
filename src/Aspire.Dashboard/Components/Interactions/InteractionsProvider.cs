@@ -65,7 +65,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         }
     }
 
-    [Inject]
+    [Inject(Key = ServiceClient.DashboardClient.LiveAppHostServiceKey)]
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
@@ -232,6 +232,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     {
                         Interaction = item,
                         Message = GetMessageHtml(item),
+                        DashboardClient = DashboardClient,
                         OnSubmitCallback = async (savedInteraction, update) =>
                         {
                             var request = new WatchInteractionsRequestUpdate
@@ -377,6 +378,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     private async Task WatchInteractionsAsync()
     {
+        await DashboardClient.WhenConnected.WaitAsync(_cts.Token).ConfigureAwait(false);
+
         var interactions = DashboardClient.SubscribeInteractionsAsync(_cts.Token);
         await foreach (var item in interactions)
         {

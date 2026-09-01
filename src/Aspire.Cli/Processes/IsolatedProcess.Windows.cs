@@ -15,26 +15,28 @@ internal sealed partial class IsolatedProcess
 {
     /// <summary>
     /// Windows implementation. Opens NUL for stdin and anonymous pipes for stdout/stderr,
-    /// then delegates to <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/> for
-    /// the actual <c>CreateProcessW</c> ceremony. When <see cref="IsolatedProcessStartInfo.JobHandle"/>
-    /// is supplied, the spawn primitive does the suspended-create / assign / resume dance so
-    /// the child cannot escape the CLI's kill-on-close job between spawn and assignment.
+    /// then delegates to <see cref="WindowsProcessInterop.SpawnProcess"/> for the actual
+    /// <c>CreateProcessW</c> ceremony. Console isolation and parent-exit protection are
+    /// independent: when <see cref="IsolatedProcessStartInfo.KillOnParentExit"/> is set, the spawn
+    /// primitive assigns the child to the kill-on-close job atomically at creation
+    /// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>) even if the child does not need a new console group.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="DetachedProcessLauncher"/>, this launcher consumes the child's
-    /// stdout/stderr line-by-line via anonymous pipes. stdin is wired to NUL because we
-    /// don't supply input to the interactive child, but Windows still requires a valid
-    /// handle when STARTF_USESTDHANDLES is set and the other two stdio handles are real
-    /// pipes — passing IntPtr.Zero in that combination leaves child stdin referencing
-    /// whatever default the loader picks, which has tripped up some test runners in the
-    /// past.
+    /// When the child is not detached, this launcher consumes stdout/stderr line-by-line via
+    /// anonymous pipes. stdin is wired to NUL because we don't supply input to the interactive
+    /// child, but Windows still requires a valid handle when STARTF_USESTDHANDLES is set and
+    /// the other two stdio handles are real pipes — passing IntPtr.Zero in that combination
+    /// leaves child stdin referencing whatever default the loader picks, which has tripped up
+    /// some test runners in the past.
     /// </remarks>
     [SupportedOSPlatform("windows")]
-    private static IsolatedProcess StartWindows(
-        IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+    private static StartedProcess StartWindows(IsolatedProcessStartInfo startInfo)
     {
+        if (startInfo.Detached)
+        {
+            return StartWindowsSuppressed(startInfo);
+        }
+
         var nulStdinHandle = WindowsProcessInterop.CreateFileW(
             "NUL",
             WindowsProcessInterop.GenericRead,
@@ -75,13 +77,18 @@ internal sealed partial class IsolatedProcess
             // null = inherit parent env block.
             var environment = startInfo.GetEnvironmentForSpawn();
 
-            var pi = WindowsProcessInterop.SpawnConsoleIsolatedProcess(
+            // Parent-exit protection is independent from console isolation. A child can need a fresh
+            // console group for targeted CTRL+C without also needing the kill-on-close job, and detached
+            // children intentionally omit the job so they survive the launching CLI.
+            var jobHandle = startInfo.KillOnParentExit ? WindowsConsoleProcessJob.Shared.Handle : null;
+            var pi = WindowsProcessInterop.SpawnProcess(
                 startInfo.FileName,
                 startInfo.ArgumentList,
                 startInfo.WorkingDirectory,
                 stdio,
                 environment,
-                startInfo.JobHandle);
+                createNewConsole: startInfo.IsolateConsole,
+                jobHandle);
 
             // CreateProcess succeeded; from here, any failure must terminate the just-created
             // child instead of letting it run orphaned. Drop the parent-side copy of the
@@ -90,7 +97,7 @@ internal sealed partial class IsolatedProcess
             // would always have to wait for the drain timeout.
 
             // Take ownership of pi.hProcess in a SafeProcessHandle FIRST so that any failure
-            // below (including OOM in the inner try) cannot leak the raw handle — the
+            // below (including OOM in the inner try) cannot leak the raw handle; the
             // SafeProcessHandle finalizer will close it. We keep this handle for the lifetime
             // of the IsolatedProcess so that ExitCode / HasExited can query the child via
             // GetExitCodeProcess / WaitForSingleObject directly. Process objects obtained via
@@ -99,7 +106,7 @@ internal sealed partial class IsolatedProcess
             // CreateProcess handle also pins the OS process object so a recycled PID cannot
             // redirect GetProcessById to a different process during the brief window between
             // CreateProcess returning and GetProcessById running.
-            SafeProcessHandle? processHandle = new SafeProcessHandle(pi.hProcess, ownsHandle: true);
+            SafeProcessHandle? processHandle = new(pi.hProcess, ownsHandle: true);
             try
             {
                 stdoutPipe.DisposeLocalCopyOfClientHandle();
@@ -113,6 +120,7 @@ internal sealed partial class IsolatedProcess
 
                 // pi.hThread is no longer needed; the SafeProcessHandle owns pi.hProcess.
                 WindowsProcessInterop.CloseHandle(pi.hThread);
+                pi.hThread = nint.Zero;
 
                 // UTF-8 with non-throwing fallback — a stray OEM-encoded byte from a tsx
                 // warning shouldn't kill the pump. Mojibake is the documented tradeoff.
@@ -120,15 +128,13 @@ internal sealed partial class IsolatedProcess
                 var stdoutReader = new StreamReader(stdoutPipe, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
                 var stderrReader = new StreamReader(stderrPipe, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 
-                // Capture these for the extraDispose closure below — the shared
-                // WrapStartedProcess helper owns the Process and the drain orchestration,
-                // but the pipe/reader resources are launcher-local and must be torn down
-                // after the pumps finish.
+                // The Process wrapper owns drain orchestration, but these pipe/reader resources
+                // are launcher-local and must be torn down after the pumps finish.
                 var capturedStdoutReader = stdoutReader;
                 var capturedStderrReader = stderrReader;
                 var capturedStdoutPipe = stdoutPipe;
                 var capturedStderrPipe = stderrPipe;
-                var capturedProcessHandle = processHandle;
+                var capturedProcessHandle = processHandle ?? throw new InvalidOperationException("Windows process handle was not initialized.");
 
                 ValueTask ExtraDispose()
                 {
@@ -136,66 +142,10 @@ internal sealed partial class IsolatedProcess
                     try { capturedStderrReader.Dispose(); } catch { }
                     try { capturedStdoutPipe.Dispose(); } catch { }
                     try { capturedStderrPipe.Dispose(); } catch { }
-                    // Closes the kept CreateProcess handle. Disposed after the wrapped
-                    // Process so any final ExitCode read from inside Process.Dispose
-                    // semantics can still consult our override; not that we expect it to,
-                    // but the ordering keeps the override path live for the whole disposal
-                    // window.
+                    // Closes the kept CreateProcess handle. Disposed after the wrapped Process so the
+                    // override path stays live for the whole disposal window.
                     try { capturedProcessHandle.Dispose(); } catch { }
                     return ValueTask.CompletedTask;
-                }
-
-                // ExitCode/HasExited overrides for IsolatedProcess.cs. The handle reference
-                // is the captured local — by the time these closures run, ExtraDispose may
-                // also be queued, but the closures and ExtraDispose share a single
-                // SafeProcessHandle whose Dispose state both can observe. After the wrapper
-                // is disposed, calls to ExitCode/HasExited will throw via the
-                // SafeHandle-closed path, which matches the contract that the wrapper is
-                // unusable after disposal.
-                int GetExitCode()
-                {
-                    if (capturedProcessHandle.IsClosed || capturedProcessHandle.IsInvalid)
-                    {
-                        throw new InvalidOperationException("Cannot read ExitCode after the IsolatedProcess has been disposed.");
-                    }
-
-                    // Disambiguate STILL_ACTIVE (259) from a real 259 exit code via a
-                    // zero-timeout wait. The handle was opened by CreateProcess with full
-                    // access including SYNCHRONIZE, so WaitForSingleObject succeeds.
-                    var waitResult = WindowsProcessInterop.WaitForSingleObject(capturedProcessHandle, 0);
-                    if (waitResult == WindowsProcessInterop.WaitTimeout)
-                    {
-                        throw new InvalidOperationException("Process has not exited; cannot read ExitCode.");
-                    }
-                    if (waitResult == WindowsProcessInterop.WaitFailed)
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.ExitCode");
-                    }
-
-                    if (!WindowsProcessInterop.GetExitCodeProcess(capturedProcessHandle, out var exitCode))
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "GetExitCodeProcess failed while reading IsolatedProcess.ExitCode");
-                    }
-                    return unchecked((int)exitCode);
-                }
-
-                bool GetHasExited()
-                {
-                    if (capturedProcessHandle.IsClosed || capturedProcessHandle.IsInvalid)
-                    {
-                        // After dispose, mirror Process.HasExited's behavior of throwing —
-                        // callers shouldn't be querying a disposed wrapper.
-                        throw new InvalidOperationException("Cannot read HasExited after the IsolatedProcess has been disposed.");
-                    }
-
-                    var waitResult = WindowsProcessInterop.WaitForSingleObject(capturedProcessHandle, 0);
-                    return waitResult switch
-                    {
-                        WindowsProcessInterop.WaitObject0 => true,
-                        WindowsProcessInterop.WaitTimeout => false,
-                        WindowsProcessInterop.WaitFailed => throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.HasExited"),
-                        _ => throw new InvalidOperationException($"Unexpected WaitForSingleObject result: 0x{waitResult:X8}"),
-                    };
                 }
 
                 // From here, pipe/reader/handle ownership has transferred to ExtraDispose;
@@ -204,17 +154,14 @@ internal sealed partial class IsolatedProcess
                 stderrPipe = null;
                 processHandle = null;
 
-                return WrapStartedProcess(
-                    startInfo,
+                return new StartedProcess(
                     process,
                     stdoutReader,
                     stderrReader,
-                    standardOutputHandler,
-                    standardErrorHandler,
-                    ExtraDispose,
-                    exitCodeProvider: GetExitCode,
-                    hasExitedProvider: GetHasExited,
-                    waitForExitProvider: ct => WindowsProcessInterop.WaitForExitAsync(capturedProcessHandle, ct));
+                    ExtraDispose: ExtraDispose,
+                    ExitCodeProvider: () => GetExitCode(capturedProcessHandle),
+                    HasExitedProvider: () => GetHasExited(capturedProcessHandle),
+                    WaitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
             }
             catch
             {
@@ -239,6 +186,133 @@ internal sealed partial class IsolatedProcess
             // disposed state so a second Dispose call is a no-op.)
             nulStdinHandle.Dispose();
             throw;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static StartedProcess StartWindowsSuppressed(IsolatedProcessStartInfo startInfo)
+    {
+        using var nulHandle = WindowsProcessInterop.CreateFileW(
+            "NUL",
+            WindowsProcessInterop.GenericWrite,
+            WindowsProcessInterop.FileShareWrite,
+            nint.Zero,
+            WindowsProcessInterop.OpenExisting,
+            0,
+            nint.Zero);
+
+        if (nulHandle.IsInvalid)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to open NUL device");
+        }
+
+        if (!WindowsProcessInterop.SetHandleInformation(nulHandle, WindowsProcessInterop.HandleFlagInherit, WindowsProcessInterop.HandleFlagInherit))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to set NUL handle inheritance");
+        }
+
+        var nulRawHandle = nulHandle.DangerousGetHandle();
+        var stdio = new WindowsProcessInterop.StdioHandles(
+            Stdin: nint.Zero,
+            Stdout: nulRawHandle,
+            Stderr: nulRawHandle);
+
+        var pi = WindowsProcessInterop.SpawnProcess(
+            startInfo.FileName,
+            startInfo.ArgumentList,
+            startInfo.WorkingDirectory,
+            stdio,
+            startInfo.GetEnvironmentForSpawn(),
+            createNewConsole: startInfo.IsolateConsole,
+            jobHandle: startInfo.KillOnParentExit ? WindowsConsoleProcessJob.Shared.Handle : null);
+
+        SafeProcessHandle? processHandle = new(pi.hProcess, ownsHandle: true);
+        try
+        {
+            var process = Process.GetProcessById(pi.dwProcessId);
+            WindowsProcessInterop.CloseHandle(pi.hThread);
+            pi.hThread = nint.Zero;
+
+            var capturedProcessHandle = processHandle ?? throw new InvalidOperationException("Windows process handle was not initialized.");
+
+            ValueTask ExtraDispose()
+            {
+                try { capturedProcessHandle.Dispose(); } catch { }
+                return ValueTask.CompletedTask;
+            }
+
+            return new StartedProcess(
+                process,
+                TextReader.Null,
+                TextReader.Null,
+                ExtraDispose: ExtraDispose,
+                ExitCodeProvider: () => GetExitCode(capturedProcessHandle),
+                HasExitedProvider: () => GetHasExited(capturedProcessHandle),
+                WaitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
+        }
+        catch
+        {
+            try { WindowsProcessInterop.TerminateProcess(pi.hProcess, 1); } catch { }
+            if (pi.hThread != nint.Zero)
+            {
+                try { WindowsProcessInterop.CloseHandle(pi.hThread); } catch { }
+            }
+            processHandle?.Dispose();
+            throw;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool GetHasExited(SafeProcessHandle processHandle)
+    {
+        ThrowIfDisposed(processHandle, nameof(HasExited));
+
+        var waitResult = WindowsProcessInterop.WaitForSingleObject(processHandle, 0);
+        return waitResult switch
+        {
+            WindowsProcessInterop.WaitObject0 => true,
+            WindowsProcessInterop.WaitTimeout => false,
+            WindowsProcessInterop.WaitFailed => throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.HasExited"),
+            _ => throw new InvalidOperationException($"Unexpected WaitForSingleObject result: 0x{waitResult:X8}"),
+        };
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static int GetExitCode(SafeProcessHandle processHandle)
+    {
+        ThrowIfDisposed(processHandle, nameof(ExitCode));
+
+        // Disambiguate STILL_ACTIVE (259) from a real 259 exit code via a zero-timeout wait.
+        var waitResult = WindowsProcessInterop.WaitForSingleObject(processHandle, 0);
+        if (waitResult == WindowsProcessInterop.WaitTimeout)
+        {
+            throw new InvalidOperationException("Process has not exited; cannot read ExitCode.");
+        }
+        if (waitResult == WindowsProcessInterop.WaitFailed)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.ExitCode");
+        }
+
+        if (!WindowsProcessInterop.GetExitCodeProcess(processHandle, out var exitCode))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "GetExitCodeProcess failed while reading IsolatedProcess.ExitCode");
+        }
+
+        return unchecked((int)exitCode);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static Task WaitForProcessHandleExitAsync(SafeProcessHandle processHandle, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed(processHandle, nameof(WaitForExitAsync));
+        return WindowsProcessInterop.WaitForExitAsync(processHandle, cancellationToken);
+    }
+
+    private static void ThrowIfDisposed(SafeProcessHandle processHandle, string memberName)
+    {
+        if (processHandle.IsClosed || processHandle.IsInvalid)
+        {
+            throw new InvalidOperationException($"Cannot read {memberName} after the IsolatedProcess has been disposed.");
         }
     }
 }

@@ -1,12 +1,12 @@
 // Renderer assets for the Aspire Team App canvas iframe.
 //
 // Served from the per-instance loopback server. Styling leans on the documented
-// Copilot canvas theme tokens (with fallbacks that match the app's dark surface)
+// Copilot canvas theme tokens (with light fallbacks for standalone rendering)
 // so the dashboard reads as a first-party Copilot surface.
 //
 // UX model: this is a small surface, so there are no modals, overlays, or
 // drawers. The shell is an in-canvas view router that transitions between full
-// pages (queue / settings / accounts / notifications) with restrained motion.
+// pages (queue / health / settings / accounts / notifications) with restrained motion.
 
 export const HTML = `<!doctype html>
 <html lang="en">
@@ -17,6 +17,7 @@ export const HTML = `<!doctype html>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="loadbar" class="loadbar" aria-hidden="true"></div>
     <div id="app" class="app" aria-busy="true">
       <div class="topbar">
         <span class="brand"><span class="mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3.5 30C1.57 30 0 28.43 0 26.5C0 25.871 0.166 25.259 0.48 24.729L8.818 10.287L8.852 10.236L12.968 3.099C13.593 2.019 14.754 1.349 16 1.349C17.246 1.349 18.407 2.019 19.031 3.098L31.531 24.749C31.833 25.258 31.999 25.87 31.999 26.499C31.999 28.429 30.429 29.999 28.499 29.999L3.5 30Z" fill="#512BD4"/><path d="M25.33 18H16.99L16 16.28L13.13 11.31C13 11.09 12.82 10.9 12.58 10.77C11.87 10.35 10.95 10.6 10.53 11.32L14.7 4.10001C14.96 3.65001 15.44 3.35001 16 3.35001C16.56 3.35001 17.04 3.65001 17.3 4.10001L21.45 11.29L21.46 11.31L21.48 11.34L25.33 18Z" fill="#7455DD"/><path d="M30 26.5C30 27.33 29.33 28 28.5 28H20.17C21 28 21.67 27.33 21.67 26.5C21.67 26.23 21.59 25.97 21.47 25.75L17.3 18.53L16.99 18H25.33L29.8 25.75C29.93 25.97 30 26.23 30 26.5Z" fill="#9780E5"/><path d="M21.67 26.5C21.67 27.33 21 28 20.17 28H11.83C12.66 28 13.33 27.33 13.33 26.5C13.33 26.23 13.26 25.97 13.13 25.75C13.13 25.74 13.12 25.73 13.11 25.72L11.79 23.57L8.82004 18.72C8.55004 18.28 8.07004 18 7.54004 18H16.99L17.3 18.53L17.427 18.75L21.47 25.75C21.59 25.97 21.67 26.23 21.67 26.5Z" fill="#B9AAEE"/><path d="M13.33 26.5C13.33 27.33 12.66 28 11.83 28H3.5C2.67 28 2 27.33 2 26.5C2 26.23 2.07 25.97 2.2 25.75L6.24 18.75C6.51 18.29 7.01 18 7.54 18C8.07 18 8.55 18.28 8.82 18.72L11.79 23.57L13.11 25.72C13.12 25.73 13.13 25.74 13.13 25.75C13.26 25.97 13.33 26.23 13.33 26.5Z" fill="#DCD5F6"/><path d="M16.99 18H7.53999C7.00999 18 6.50999 18.29 6.23999 18.75L6.66999 18L10.49 11.39L10.53 11.33V11.32C10.95 10.6 11.87 10.35 12.58 10.77C12.82 10.9 13 11.09 13.13 11.31L16 16.28L16.99 18Z" fill="#9780E5"/></svg></span>Aspire Team App</span>
@@ -49,44 +50,90 @@ export const HTML = `<!doctype html>
 
 export const STYLES = `
 :root {
-  --bg: var(--background-color-default, #0d1117);
-  --surface: var(--n-1, #161b22);
-  --surface-2: var(--n-2, #1c2128);
-  --surface-3: var(--n-3, #262c36);
-  --card: var(--n-2, #1e2530);
-  --card-hover: var(--n-3, #252d39);
-  --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--text-color-default, #e6edf3);
-  --muted: var(--text-color-muted, #8b949e);
-  --border: var(--border-color-default, #30363d);
-  --border-soft: var(--n-2, #21262d);
-  --border-strong: var(--border-color-muted, #484f58);
-  --focus: var(--color-focus-outline, #4493f8);
-  --white: var(--color-white, #fff);
+  color-scheme: light dark;
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
 
-  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent */
-  --accent: #a371f7;
-  --accent-strong: #8957e5;
-  --accent-2: #6e5cf0;
-  --purple: #a371f7;
+  /* Prefer Primer primitives, then the canvas host's semantic tokens. The explicit
+     fallbacks cover standalone rendering and hosts that omit the theme payload.
+     https://primer.style/foundations/primitives/color */
+  --bg: var(--bgColor-default, var(--background-color-default, var(--fallback-bg)));
+  --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
+  --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
+  --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
+  --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
+  --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
+  --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
+  --fg: var(--fgColor-default, var(--text-color-default, var(--fallback-fg)));
+  --muted: var(--fgColor-muted, var(--text-color-muted, var(--fallback-muted)));
+  --border: var(--borderColor-default, var(--border-color-default, var(--fallback-border)));
+  --border-soft: color-mix(in srgb, var(--border), transparent 35%);
+  --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
+  --focus: var(--focus-outlineColor, var(--color-focus-outline, var(--fallback-focus)));
+  --white: var(--fgColor-onEmphasis, var(--color-white, #ffffff));
+
+  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
+     Maps to Primer's "done" (purple) role. */
+  --accent: var(--fgColor-done, var(--true-color-purple, light-dark(#8250df, #a371f7)));
+  --accent-strong: color-mix(in srgb, var(--accent), var(--fg) 18%);
+  --accent-2: color-mix(in srgb, var(--accent), var(--blue) 22%);
+  --purple: var(--accent);
 
   /* Primary action green - matches the app's confirm button (sampled #347d39) */
-  --green: #347d39;
-  --green-emphasis: #3f9147;
+  --green: light-dark(#347d39, #238636);
+  --green-emphasis: light-dark(#3f9147, #2ea043);
   --green-border: transparent;
   --green-fg: #ffffff;
 
   /* Informational blue - links, identifiers, toggles, focus */
-  --blue: var(--true-color-blue, #4493f8);
+  --blue: var(--fgColor-accent, var(--true-color-blue, light-dark(#0969da, #58a6ff)));
 
-  --success: var(--true-color-green, #3fb950);
-  --warning: var(--true-color-yellow, #d29922);
-  --danger: var(--true-color-red, #f85149);
+  --success: var(--fgColor-success, var(--true-color-green, light-dark(#1a7f37, #3fb950)));
+  --warning: var(--fgColor-attention, var(--true-color-yellow, light-dark(#9a6700, #d29922)));
+  --danger: var(--fgColor-danger, var(--true-color-red, light-dark(#cf222e, #f85149)));
+
+  /* Primer floating-overlay shadow for popovers/menus; neutral (not a colored glow).
+     https://primer.style/foundations/primitives/box-shadow */
+  --shadow-floating: var(--shadow-floating-small,
+    0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent),
+    0 8px 24px color-mix(in srgb, var(--fg) 16%, transparent));
 
   --font: var(--font-sans, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif);
   --mono: var(--font-mono, "Cascadia Code", "SFMono-Regular", Consolas, monospace);
   --radius: 6px;
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fallback-bg: #0d1117;
+    --fallback-fg: #f0f6fc;
+    --fallback-muted: #8c959f;
+    --fallback-border: #30363d;
+    --fallback-focus: #58a6ff;
+  }
+}
+
+:root[data-color-mode="light"] {
+  color-scheme: light;
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+}
+body[data-color-mode="light"] { color-scheme: light; }
+:root[data-color-mode="dark"] {
+  color-scheme: dark;
+  --fallback-bg: #0d1117;
+  --fallback-fg: #f0f6fc;
+  --fallback-muted: #8c959f;
+  --fallback-border: #30363d;
+  --fallback-focus: #58a6ff;
+}
+body[data-color-mode="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -104,21 +151,17 @@ button { font-family: inherit; cursor: pointer; }
 
 .app { display: flex; flex-direction: column; min-height: 100%; position: relative; }
 
-/* Top loading bar shown during refreshes (skeleton handles first load).
-   A deliberate left-to-right paint-stroke fill, not a rushed shimmer. */
-.app.loading::after {
-  content: ""; position: fixed; left: 0; top: 0; height: 2px; width: 100%; z-index: 50;
-  transform-origin: left center; transform: scaleX(0);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 65%, transparent), var(--accent) 72%, var(--accent-2));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
-  animation: paintfill 2.6s cubic-bezier(.62, .03, .2, 1) infinite;
+/* Deterministic top load bar: its width tracks fetch progress (done/total) driven by the
+   SSE 'progress' events, so it advances and completes instead of looping forever. It lives
+   OUTSIDE #app so it survives full re-renders; the skeleton still covers the very first
+   load. https://primer.style/foundations/primitives/color for the accent tokens. */
+.loadbar {
+  position: fixed; left: 0; top: 0; height: 2px; width: 0; z-index: 60;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  opacity: 0; pointer-events: none;
+  transition: width .18s ease, opacity .25s ease;
 }
-@keyframes paintfill {
-  0%   { transform: scaleX(0);   opacity: .9; }
-  70%  { transform: scaleX(.92); opacity: 1; }
-  88%  { transform: scaleX(1);   opacity: 1; }
-  100% { transform: scaleX(1);   opacity: 0; }
-}
+.loadbar.active { opacity: 1; }
 
 /* Header */
 .topbar {
@@ -147,6 +190,29 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .tab.active { color: var(--fg); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); }
 .spacer { flex: 1; }
 .tb-actions { display: inline-flex; align-items: center; gap: 6px; }
+.refresh-pref {
+  height: 30px; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--muted); padding: 0 10px; font-size: 11.5px; font-weight: 600;
+  transition: color .15s, border-color .15s, background .15s, opacity .15s;
+}
+.refresh-pref:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
+.refresh-pref[disabled] { cursor: default; opacity: .65; }
+.refresh-pref .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .15s, box-shadow .15s; }
+.refresh-pref.active { color: var(--fg); background: var(--surface-3); border-color: var(--border-strong); }
+.refresh-pref.active .status-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent); }
+.update-ready {
+  height: 30px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px; padding: 0 11px; background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-strong); font-size: 11.5px; font-weight: 650;
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.update-ready:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.update-ready[hidden] { display: none; }
+.update-ready[disabled] { cursor: wait; opacity: .7; }
+.update-ready .update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.update-ready.busy .update-dot { background: transparent; border: 1.5px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; }
 
 .backbtn {
   display: inline-flex; align-items: center; gap: 6px; margin-left: 4px;
@@ -165,6 +231,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .iconbtn:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
 .iconbtn.active { color: var(--fg); border-color: var(--border-strong); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-soft); }
 .iconbtn.spin svg { animation: spin 1s linear infinite; }
+.live-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 80;
+  width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-3);
+  color: var(--fg); box-shadow: var(--shadow-floating); font-size: 11.5px; font-weight: 500;
+  line-height: 1.35; white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease;
+}
+.live-tooltip:hover::after, .live-tooltip:focus-visible::after { opacity: 1; transform: none; }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px; background: var(--danger); color: var(--white); font-size: 10px; font-weight: 700;
@@ -176,6 +252,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .viewport { flex: 1; }
 .view { animation: viewEnter .22s ease both; }
 .view.back { animation: viewEnterBack .22s ease both; }
+.view.no-motion { animation: none; }
 @keyframes viewEnter { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 @keyframes viewEnterBack { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 
@@ -325,27 +402,303 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 12px;
 }
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-main { display: flex; flex-direction: column; gap: 8px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.card-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  color: var(--fg); background: var(--surface-3); border: 1px solid var(--border);
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.card-btn:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-btn:disabled, .card-btn.busy { opacity: .6; cursor: default; }
+.card-btn.spin .cb-ico svg { animation: spin 1s linear infinite; }
+.card-btn.done { color: var(--success); border-color: color-mix(in srgb, var(--success) 48%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.card-btn.failed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 48%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.card-btn .cb-ico { display: inline-flex; }
+.card-btn .cb-ico svg { width: 13px; height: 13px; }
+/* Split button: main action + caret that opens a "where to run" menu. */
+.cb-split { position: relative; display: inline-flex; align-items: stretch; }
+.cb-split .cb-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* A GHES/EMU card has a single target (no caret), so its lone main button keeps full radius. */
+.cb-split .cb-main:only-child { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
+.cb-split .cb-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 5px 5px; }
+.cb-split .cb-caret svg { width: 12px; height: 12px; transition: transform .18s ease; }
+.cb-split .cb-caret[aria-expanded="true"] { background: var(--card-hover); border-color: var(--border-strong); }
+.cb-split .cb-caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+.cb-menu {
+  position: fixed; top: 0; left: 0; z-index: 1000; min-width: 214px;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 9px;
+  box-shadow: var(--shadow-floating);
+}
+.cb-menu[hidden] { display: none; }
+.cb-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  font: inherit; padding: 7px 9px; border-radius: 6px; border: none; cursor: pointer;
+  color: var(--fg); background: transparent;
+}
+.cb-menu-item:hover { background: var(--card-hover); }
+.cb-menu-item .cb-mi-ico { display: inline-flex; color: var(--muted); flex: none; }
+.cb-menu-item .cb-mi-ico svg { width: 14px; height: 14px; }
+.cb-mi-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cb-mi-label { font-size: 12px; font-weight: 600; line-height: 1.2; }
+.cb-mi-sub { font-size: 10.5px; font-weight: 400; color: var(--muted); line-height: 1.25; }
 .card-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.35; color: var(--fg); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
-.card-title:hover { color: var(--white); }
+.card-title:hover { color: var(--blue); }
 .card-sub { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
 .card-sub .repo { font-family: var(--mono); }
 .avatar { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); }
 .reason { color: var(--muted); font-size: 12px; }
 .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pills:empty { display: none; }
+.linked-pr {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 7px; min-width: 0; padding: 2px 0;
+  border-radius: 5px; color: var(--fg); font-size: 11.5px; font-weight: 600; line-height: 1.35;
+}
+.linked-pr:hover .linked-pr-title { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.linked-pr-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--muted); }
+.linked-pr-icon.open { color: var(--success); }
+.linked-pr-icon.merged { color: var(--purple); }
+.linked-pr-icon svg { width: 14px; height: 14px; }
+.linked-pr-title { min-width: 0; overflow-wrap: anywhere; }
 .pill {
+  --pill-tone: var(--muted);
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
   padding: 0 8px; min-height: 20px; border-radius: 999px; border: 1px solid transparent;
+  /* The 25% foreground mix keeps small pill text above 4.5:1 with the standalone
+     light fallback without losing the signal hue used across host themes. */
+  color: color-mix(in srgb, var(--pill-tone), var(--fg) 25%);
 }
 /* Label-badge tones mirror pr-dashboard's signal pills (translucent wash + crisp ~50% colored border
    + saturated text), sourced from our semantic theme tokens. accent = sky blue (pr-dashboard maps
    Docs/Bots/Draft/Review-started to blue; purple stays reserved for brand). muted stays theme-neutral. */
-.pill.success { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 48%, transparent); }
-.pill.warning { color: #f3d46b; background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
-.pill.danger  { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent);  border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
-.pill.accent  { color: #7ab9ff; background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
-.pill.info    { color: #7ab9ff; background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
-.pill.muted   { color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
+.pill.success { --pill-tone: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 48%, transparent); }
+.pill.warning { --pill-tone: var(--warning); background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
+.pill.danger  { --pill-tone: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent);  border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
+.pill.accent  { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.info    { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.muted   { background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
+
+/* Repository and delivery health */
+.health-shell {
+  min-height: calc(100dvh - 106px); padding: 18px 20px 32px;
+  background: var(--surface);
+}
+.health-grid {
+  max-width: 1320px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 12px; align-items: stretch;
+}
+.health-unit {
+  position: relative; display: flex; min-width: 0; isolation: isolate;
+  transform-origin: center;
+  transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .16s ease;
+}
+.health-unit-single > .health-card { width: 100%; }
+.health-source-group {
+  grid-column: span 2; display: block; padding: 10px;
+  background: color-mix(in srgb, var(--bg), var(--fg) 3%);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition:
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    box-shadow .22s cubic-bezier(.2, .8, .2, 1),
+    border-color .16s ease,
+    opacity .16s ease;
+}
+.health-source-group:hover { border-color: var(--border-strong); }
+.health-group-head {
+  display: flex; align-items: center; gap: 9px; min-width: 0; padding: 1px 2px 10px;
+}
+.health-group-icon {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  color: var(--muted); background: var(--surface-3); border-radius: 7px;
+}
+.health-group-title { min-width: 0; flex: 1; }
+.health-group-title a, .health-group-title > span:first-child {
+  display: block; overflow: hidden; color: var(--fg); font-size: 13.5px;
+  font-weight: 650; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-group-title a:hover { color: var(--blue); }
+.health-group-title small { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; line-height: 1.3; }
+.health-group-match {
+  flex: none; padding: 3px 7px; color: var(--muted); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px; font-size: 10px; font-weight: 600;
+}
+.health-group-cards {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; align-items: stretch;
+}
+.health-source-group .health-card { min-height: 252px; box-shadow: none; }
+.health-source-group .health-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 7%, transparent);
+  transform: none;
+}
+.health-card {
+  --health-tone: var(--muted);
+  position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 258px;
+  color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition:
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    box-shadow .22s cubic-bezier(.2, .8, .2, 1),
+    border-color .16s ease,
+    opacity .16s ease;
+}
+.health-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--fg) 10%, transparent);
+  transform: translateY(-1px);
+}
+.health-card:focus-within { border-color: color-mix(in srgb, var(--focus), var(--border) 25%); }
+.health-card.healthy { --health-tone: var(--success); }
+.health-card.failing { --health-tone: var(--danger); }
+.health-card.degraded, .health-card.running { --health-tone: var(--warning); }
+.health-grid.drag-active { cursor: grabbing; }
+.health-grid.drag-active .health-unit { user-select: none; }
+.health-unit.dragging {
+  z-index: 3; opacity: .58; box-shadow: var(--shadow-floating);
+  transform: scale(1.018) rotate(.35deg);
+}
+.health-unit.dragging > .health-card,
+.health-unit.dragging.health-source-group { border-color: var(--focus); }
+.health-unit.drag-before::after,
+.health-unit.drag-after::after {
+  content: ""; position: absolute; z-index: 4; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 999px; background: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 12%, transparent);
+}
+.health-unit.drag-before::after { left: -8px; }
+.health-unit.drag-after::after { right: -8px; }
+.health-source-group.drag-before::after,
+.health-source-group.drag-after::after {
+  left: 10px; right: 10px; width: auto; height: 3px; top: auto; bottom: auto;
+}
+.health-source-group.drag-before::after { top: -8px; }
+.health-source-group.drag-after::after { bottom: -8px; }
+.health-drag-ghost {
+  position: fixed; top: -10000px; left: -10000px; z-index: 10000;
+  opacity: .98; pointer-events: none; border-color: var(--focus);
+  box-shadow: var(--shadow-floating); transform: rotate(.65deg) scale(1.015);
+}
+.health-grid.ordering .health-drag { opacity: .55; pointer-events: none; }
+.health-card-top {
+  display: flex; align-items: center; gap: 9px; min-width: 0; padding: 14px 14px 10px;
+}
+.health-drag {
+  width: 26px; height: 32px; margin-left: -5px; flex: none; display: grid; place-items: center; padding: 0;
+  color: var(--muted); opacity: .68; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; cursor: grab;
+  transition: color .15s ease, opacity .15s ease, background .15s ease, transform .15s ease;
+}
+.health-unit:hover .health-drag, .health-drag:hover { opacity: 1; color: var(--fg); }
+.health-drag:hover { background: var(--surface-3); }
+.health-drag:active { cursor: grabbing; transform: scale(.94); }
+.health-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.health-drag::before {
+  content: ""; width: 12px; height: 18px;
+  background: radial-gradient(circle, currentColor 1.25px, transparent 1.5px) 0 0 / 6px 6px;
+}
+.health-provider {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 7px;
+  color: var(--muted); background: var(--surface-3);
+}
+.health-provider svg { width: 15px; height: 15px; }
+.health-title { min-width: 0; flex: 1; }
+.health-title a, .health-title > span:first-child {
+  display: block; font-size: 13.5px; font-weight: 650; line-height: 1.3; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-title a:hover { color: var(--blue); }
+.health-title .provider-name { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.3; margin-top: 1px; }
+.health-state {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 9px;
+  color: color-mix(in srgb, var(--health-tone), var(--fg) 24%);
+  background: color-mix(in srgb, var(--health-tone) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--health-tone) 34%, var(--border));
+  border-radius: 999px; font-size: 10.5px; font-weight: 650;
+}
+.health-state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--health-tone); }
+.health-card-body { display: flex; flex: 1; flex-direction: column; gap: 12px; padding: 0 14px 13px; }
+.health-latest { min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.health-latest-line { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.health-latest b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 650; }
+.health-latest time { margin-left: auto; flex: none; color: var(--muted); }
+.health-latest .commit-message { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+.health-metrics {
+  display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 12px;
+  padding-top: 10px; border-top: 1px solid var(--border-soft);
+}
+.health-metric { min-width: 0; }
+.health-metric .k { display: block; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.health-metric .v {
+  display: block; margin-top: 3px; color: var(--fg); font-family: var(--mono); font-size: 11.5px;
+  font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-reasons { display: flex; flex-direction: column; gap: 5px; }
+.health-reason-banner {
+  display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px;
+  color: var(--fg); background: color-mix(in srgb, var(--health-tone) 7%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--health-tone) 24%, var(--border));
+  border-radius: 8px;
+}
+.health-reason-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--health-tone); }
+.health-reason-icon svg { width: 14px; height: 14px; }
+.health-reason-content { min-width: 0; }
+.health-primary-reason {
+  margin: 0; color: var(--fg); font-size: 11.5px; font-weight: 550; line-height: 1.45;
+}
+.health-primary-reason a { color: inherit; }
+.health-primary-reason a:hover { color: var(--blue); }
+.health-secondary-reasons { margin: 6px 0 0; padding: 0 0 0 15px; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+.health-secondary-reasons li + li { margin-top: 3px; }
+.health-details { margin-top: auto; color: var(--muted); font-size: 10.5px; }
+.health-details summary {
+  width: fit-content; min-height: 24px; display: inline-flex; align-items: center; gap: 3px;
+  color: var(--muted); font-weight: 600; cursor: pointer; user-select: none;
+  list-style: none;
+}
+.health-details summary::-webkit-details-marker { display: none; }
+.health-details summary:hover { color: var(--fg); }
+.health-details[open] summary { margin-bottom: 7px; color: var(--fg); }
+.health-details-chevron { display: inline-flex; transition: transform .18s ease; }
+.health-details-chevron svg { width: 12px; height: 12px; }
+.health-details[open] .health-details-chevron { transform: rotate(180deg); }
+.health-evidence { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; background: var(--surface); border-radius: 8px; }
+.health-evidence a { display: flex; gap: 7px; align-items: baseline; min-width: 0; color: var(--muted); font-size: 10px; }
+.health-evidence a:hover { color: var(--blue); }
+.health-evidence .ev-label { color: var(--fg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-evidence .ev-detail { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-actions {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 12px;
+  border-top: 1px solid var(--border-soft);
+}
+.health-actions .card-btn { min-height: 28px; background: var(--bg); box-shadow: 0 1px 0 color-mix(in srgb, var(--fg) 7%, transparent); }
+.health-actions .card-btn:hover { background: var(--surface-3); }
+.health-order-status {
+  position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.pipeline-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .34fr) 32px; gap: 8px; }
+.pipeline-add input {
+  min-width: 0; height: 32px; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0 10px; font-size: 12px;
+}
+.pipeline-add input:first-child { font-family: var(--mono); }
+.pipeline-add input:focus { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+.pipeline-add button:disabled { opacity: .6; cursor: default; }
+.pipeline-err { min-height: 18px; margin-top: 5px; color: var(--danger); font-size: 11.5px; }
+.pipeline-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.pipeline-row { display: flex; align-items: center; gap: 9px; padding: 8px 6px; border-top: 1px solid var(--border); }
+.pipeline-row:first-child { border-top: 0; }
+.pipeline-main { min-width: 0; flex: 1; }
+.pipeline-name { display: block; font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-meta { display: block; color: var(--muted); font-family: var(--mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Sub-page scaffold */
 .page { padding: 16px; max-width: 760px; margin: 0 auto; }
@@ -356,7 +709,9 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 /* Settings form */
 .section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 14px 12px; margin-bottom: 12px; }
-.section h3 { margin: 0 0 3px; font-size: 13px; }
+.section.current { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: inset 3px 0 0 var(--accent); }
+.section h3 { margin: 0 0 3px; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.section h3 svg { color: var(--accent); }
 .section .hint { margin: 0 0 10px; color: var(--muted); font-size: 11.5px; }
 .section .hint b { color: var(--fg); }
 .policy { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
@@ -575,7 +930,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 /* Enterprise badge - makes a non-github.com account obvious */
 .ent-badge {
   display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
-  color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);
+  color: color-mix(in srgb, var(--blue), var(--fg) 25%); background: color-mix(in srgb, var(--blue) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--blue) 34%, transparent); border-radius: 999px; padding: 1px 8px 1px 6px; white-space: nowrap;
 }
 .ent-badge svg { width: 11px; height: 11px; }
@@ -626,11 +981,20 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 @media (prefers-reduced-motion: reduce) {
   .view, .view.back { animation: none; }
-  .app.loading::after { animation: none; transform: scaleX(1); opacity: .55; }
+  .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
-  .iconbtn.spin svg, .rescan-btn.spin svg { animation: none; }
-  .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico { transition: none; }
+  .iconbtn.spin svg, .rescan-btn.spin svg, .card-btn.spin .cb-ico svg { animation: none; }
+  .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico, .health-details-chevron { transition: none; }
   .repo-row.added, .repo-row.removing, .repo-add input.shake, .repo-edit-input.shake { animation: none; }
+  .health-card, .health-card:hover, .health-unit, .health-unit:hover, .health-unit.dragging,
+  .health-unit.drag-before, .health-unit.drag-after {
+    transition: none; transform: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .health-source-group { grid-column: span 1; }
+  .health-group-cards { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
@@ -638,15 +1002,31 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   .brand-text { display: none; }
   .tabs { margin-left: 0; }
   .tab { padding: 5px 11px; }
+  .refresh-pref { width: 30px; padding: 0; justify-content: center; }
+  .refresh-pref .refresh-label { display: none; }
+  .update-ready .update-detail { display: none; }
   .acct-chip { max-width: 150px; }
   .acct-chip .name { max-width: 70px; }
   .page { padding: 14px; }
+  .health-shell { padding: 14px 12px 28px; }
+  .health-grid { grid-template-columns: 1fr; }
+  .health-unit.drag-before::after, .health-unit.drag-after::after {
+    left: 10px; right: 10px; width: auto; height: 3px; top: auto; bottom: auto;
+  }
+  .health-unit.drag-before::after { top: -8px; }
+  .health-unit.drag-after::after { bottom: -8px; }
+  .pipeline-add { grid-template-columns: 1fr 32px; }
+  .pipeline-add .pipeline-branch { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 470px) {
-  .topbar { gap: 6px; padding: 10px 10px; }
-  .tab { padding: 5px 9px; font-size: 12px; }
-  .acct-chip { padding: 0 7px; gap: 6px; }
+  .topbar { gap: 4px; padding: 10px 7px; }
+  button.brand { display: none; }
+  .tabs { gap: 1px; padding: 2px; }
+  .tab { padding: 5px; font-size: 11.5px; }
+  .acct-chip { padding: 0 5px; gap: 4px; }
   .acct-chip .name { display: none; }
+  .tb-actions { gap: 4px; }
+  #filters-btn { display: none; }
   .iconbtn { width: 28px; height: 28px; }
   .backbtn { height: 28px; }
 }
@@ -654,21 +1034,93 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 export const APP_JS = String.raw`
 const app = document.getElementById("app");
+// Deterministic top progress bar element (lives outside #app so re-renders don't drop it).
+const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
-let view = "queue";       // queue | settings | accounts | notifications
+let view = "queue";       // queue | settings | accounts | notifications | filters
 let keysBound = false;
+let cbMenuBound = false;
 let prevRank = 0;
 let refreshing = false;
+// Count of overlapping withRefresh() calls in flight. The refresh button stays clickable and
+// mode/account mutations also route through withRefresh, so several can run at once over one
+// shared refreshing flag and one progress bar. We wind the shared UI down only when the LAST
+// one settles (count returns to 0), never when whichever finishes first does.
+let refreshInFlight = 0;
+// Monotonic id assigned to each withRefresh() call in start order. Overlapping refreshes can
+// reject out of order, and unlike the success path (gated by the server-assigned seq) a rejection
+// carries no seq to order it. The catch gates on this so only the latest-started refresh may
+// publish its failure: an older refresh that rejects after a newer one started must not paint a
+// failure banner over the newer valid state (or over the newer refresh still settling).
+let refreshGen = 0;
 let rescanning = false;
 let loadError = null;
+// A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
+// settings, etc.) is stashed here and applied when they return to the queue, so a
+// background refresh never clobbers an in-progress edit.
+let pendingState = null;
+// Completed background snapshots wait here when automatic application is disabled. The SSE event
+// carries metadata only; clicking Apply reads the already-computed complete snapshot from the server.
+let updateAvailable = null;
+let applyingUpdate = false;
+let savingAutoApply = false;
+let nextPollAt = null;
+let pollCountdownTimer = null;
+// Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
+// timestamp and is unsafe as a stream key because overlapping requests can settle out of order.
+// The server stamps a strictly increasing seq whenever semantic content changes; we apply only
+// strictly-newer snapshots. -1 lets the first real snapshot (0+) always apply.
+let lastAppliedSeq = -1;
+// Record the revision of whatever snapshot was just assigned to state. Call at every point
+// that adopts a server snapshot so later SSE pushes are ordered against it.
+function adoptAppliedRev() {
+  if (state && typeof state.seq === "number") lastAppliedSeq = state.seq;
+}
+function adoptState(payload) {
+  state = payload.dashboard;
+  prefs = payload.prefs;
+  loadError = null;
+  adoptAppliedRev();
+  const appliedSeq = state && state.seq;
+  if (!updateAvailable || typeof appliedSeq !== "number" || appliedSeq >= updateAvailable.seq) {
+    updateAvailable = null;
+  }
+}
+function autoApplyEnabled() {
+  return !prefs || prefs.autoApplyUpdates !== false;
+}
+function refreshTooltip() {
+  if (typeof nextPollAt !== "number") return "Refresh now";
+  const seconds = Math.max(0, Math.ceil((nextPollAt - Date.now()) / 1000));
+  return "Refresh now (data will auto-update in " + seconds + "s)";
+}
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
 const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
+let pipelineUrlDraft = "";
+let pipelineBranchDraft = "";
+let pipelineError = "";
+let pipelineSaving = false;
+let draggedHealthId = null;
+let healthOrderSaving = false;
+let healthOrderAnnouncement = "";
 
-const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1 };
+// Agent actions still in flight, keyed by action kind and canonical PR/source identity,
+// so a split can be tracked independently of its owning card's DOM node. The in-DOM busy state
+// on the button is not enough on its own: a streamed 'state' event re-renders the card and hands
+// back a fresh, enabled button mid-request, which a second click would use to re-queue the same
+// agent action. cardActionBtn consults this set so the replacement split re-renders already
+// disabled, and onCardAction clears the key once the request settles (matching the existing
+// design where a later SSE refresh restores the default label).
+const inflightActions = new Set();
+function actionKey(kind, prUrl, prRepo, prNumber) {
+  return String(kind) + "@" + (prUrl || (String(prRepo) + "#" + String(prNumber)));
+}
+
+const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1, filters: 1 };
 
 const ICONS = {
   refresh: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
@@ -686,6 +1138,7 @@ const ICONS = {
   alert: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
   merge: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>',
+  pulse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   xcircle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>',
   chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   pr: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>',
@@ -698,6 +1151,7 @@ const ICONS = {
   globe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   usersSm: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   layers: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+  funnel: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
 };
 
 const LOGO = '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3.5 30C1.57 30 0 28.43 0 26.5C0 25.871 0.166 25.259 0.48 24.729L8.818 10.287L8.852 10.236L12.968 3.099C13.593 2.019 14.754 1.349 16 1.349C17.246 1.349 18.407 2.019 19.031 3.098L31.531 24.749C31.833 25.258 31.999 25.87 31.999 26.499C31.999 28.429 30.429 29.999 28.499 29.999L3.5 30Z" fill="#512BD4"/><path d="M25.33 18H16.99L16 16.28L13.13 11.31C13 11.09 12.82 10.9 12.58 10.77C11.87 10.35 10.95 10.6 10.53 11.32L14.7 4.10001C14.96 3.65001 15.44 3.35001 16 3.35001C16.56 3.35001 17.04 3.65001 17.3 4.10001L21.45 11.29L21.46 11.31L21.48 11.34L25.33 18Z" fill="#7455DD"/><path d="M30 26.5C30 27.33 29.33 28 28.5 28H20.17C21 28 21.67 27.33 21.67 26.5C21.67 26.23 21.59 25.97 21.47 25.75L17.3 18.53L16.99 18H25.33L29.8 25.75C29.93 25.97 30 26.23 30 26.5Z" fill="#9780E5"/><path d="M21.67 26.5C21.67 27.33 21 28 20.17 28H11.83C12.66 28 13.33 27.33 13.33 26.5C13.33 26.23 13.26 25.97 13.13 25.75C13.13 25.74 13.12 25.73 13.11 25.72L11.79 23.57L8.82004 18.72C8.55004 18.28 8.07004 18 7.54004 18H16.99L17.3 18.53L17.427 18.75L21.47 25.75C21.59 25.97 21.67 26.23 21.67 26.5Z" fill="#B9AAEE"/><path d="M13.33 26.5C13.33 27.33 12.66 28 11.83 28H3.5C2.67 28 2 27.33 2 26.5C2 26.23 2.07 25.97 2.2 25.75L6.24 18.75C6.51 18.29 7.01 18 7.54 18C8.07 18 8.55 18.28 8.82 18.72L11.79 23.57L13.11 25.72C13.12 25.73 13.13 25.74 13.13 25.75C13.26 25.97 13.33 26.23 13.33 26.5Z" fill="#DCD5F6"/><path d="M16.99 18H7.53999C7.00999 18 6.50999 18.29 6.23999 18.75L6.66999 18L10.49 11.39L10.53 11.33V11.32C10.95 10.6 11.87 10.35 12.58 10.77C12.82 10.9 13 11.09 13.13 11.31L16 16.28L16.99 18Z" fill="#9780E5"/></svg>';
@@ -714,6 +1168,14 @@ function srcLabel(s) { return SRC_LABEL[s] || s; }
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function safeHref(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" || url.protocol === "http:" ? esc(url.href) : "#";
+  } catch {
+    return "#";
+  }
 }
 function timeAgo(iso) {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000);
@@ -757,32 +1219,187 @@ async function readJson(res) {
 }
 
 async function load() {
+  // Capture the applied revision at request start. GET /api/state may be served stale-while-
+  // revalidate and can still be in flight when an SSE 'state' event (applyPushedState) applies a
+  // newer snapshot. If the GET then fails, publishing its error would paint a failure banner over
+  // that newer valid state. Suppress the failure when a newer revision was applied after this
+  // request started (the withRefresh catch gates the same class of race with its refreshGen id).
+  const startSeq = lastAppliedSeq;
+  let changed = false;
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
+    // GET /api/state may be served stale-while-revalidate, so a cached seq N can settle after the
+    // background stream already delivered seq N+1. Apply this response only when it is legacy (no seq)
+    // or strictly newer than what we've already applied, so a late stale load can't roll
+    // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
+    const seq = data.dashboard && data.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      adoptState(data);
+      changed = true;
+    }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Only publish this failure if no newer revision was applied while the GET was pending. A late
+    // failure from a superseded request must not clobber the newer valid state (or its banner).
+    if (lastAppliedSeq === startSeq) {
+      loadError = String((e && e.message) || e);
+      changed = true;
+    }
   }
-  render();
+  if (changed) render(); else updateRefreshControls();
 }
 
 async function withRefresh(fn) {
-  refreshing = true; setLoading(true);
+  const myGen = ++refreshGen;
+  let changed = false;
+  refreshInFlight++;
+  refreshing = true; setLoading(true); beginProgress();
   try {
     const data = await fn();
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; loadError = null; }
+    if (data && data.dashboard) {
+      // Overlapping refreshes can resolve out of order: an older forced load may finish client-side
+      // after a newer one. Apply this response only when it is legacy (no seq) or strictly newer than
+      // what we've already applied, so a late older response can't roll state/lastAppliedSeq backward
+      // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        adoptState(data);
+        changed = true;
+      }
+    }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Publish this failure only if no newer refresh has started since. A late rejection from an
+    // older overlapping refresh must not clobber the newer operation's state/banner — the success
+    // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
+    if (myGen === refreshGen) {
+      loadError = String((e && e.message) || e);
+      changed = true;
+    }
   } finally {
-    refreshing = false; render();
+    refreshInFlight--;
+    // Only the last overlapping refresh winds down the shared UI. If an earlier one finished
+    // this while a later forced load is still running, we must NOT clear refreshing or fade
+    // the bar out from under it — just re-render to show whatever data this call applied.
+    // The SSE 'progress' stream is the normal bar driver (setProgress -> endProgress at
+    // done>=total); ending here is the backstop for when it never delivers a terminal event
+    // (SSE disconnected, or this refresh joined a background compute started with
+    // progress:false, which emits no progress events).
+    if (refreshInFlight === 0) { refreshing = false; endProgress(); }
+    if (changed) render(); else updateRefreshControls();
   }
 }
 
 function setLoading(on) {
-  app.classList.toggle("loading", on);
   const rb = document.getElementById("refresh-btn");
   if (rb) rb.classList.toggle("spin", on);
+}
+
+function updateRefreshControls() {
+  const rb = document.getElementById("refresh-btn");
+  if (rb) {
+    rb.classList.toggle("spin", refreshing);
+    const tooltip = refreshTooltip();
+    rb.dataset.tooltip = tooltip;
+    rb.setAttribute("aria-label", tooltip);
+  }
+
+  const auto = document.getElementById("auto-apply-btn");
+  const enabled = autoApplyEnabled();
+  if (auto) {
+    auto.classList.toggle("active", enabled);
+    auto.setAttribute("aria-checked", enabled ? "true" : "false");
+    auto.title = enabled
+      ? "Background updates apply automatically"
+      : "Background updates wait until you apply them";
+    auto.disabled = savingAutoApply;
+  }
+
+  const apply = document.getElementById("apply-update-btn");
+  if (apply) {
+    apply.hidden = !updateAvailable || enabled;
+    apply.disabled = applyingUpdate;
+    apply.classList.toggle("busy", applyingUpdate);
+  }
+}
+
+/* ---- deterministic progress bar ----
+   Driven by SSE 'progress' events ({ done, total }). beginProgress shows a small sliver
+   for instant feedback; setProgress advances the fill; endProgress completes to 100% then
+   fades. All are no-ops when #loadbar is absent (e.g. the render test harness). */
+let progFadeTimer = null;
+let progResetTimer = null;
+function beginProgress() {
+  if (!loadbar) return;
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
+  loadbar.classList.add("active");
+  const w = parseFloat(loadbar.style.width) || 0;
+  // Start (or restart from a faded-out state) with a visible sliver.
+  if (w <= 0 || w >= 100) loadbar.style.width = "8%";
+}
+function setProgress(done, total) {
+  if (!loadbar) return;
+  beginProgress();
+  const pct = total > 0 ? Math.max(8, Math.min(100, Math.round((done / total) * 100))) : 8;
+  loadbar.style.width = pct + "%";
+  // Only fade on a terminal tick when this is the last in-flight refresh. Forced computes are
+  // serialized server-side, so when two withRefresh() calls overlap the FIRST compute emits its
+  // done>=total tick while the second is still fetching; fading here would bypass the counter's
+  // "last operation settles" invariant and flicker the bar back on at the second compute's first
+  // tick. withRefresh's finally (endProgress at refreshInFlight === 0) remains the backstop.
+  if (total > 0 && done >= total && refreshInFlight <= 1) { endProgress(); }
+}
+function endProgress() {
+  if (!loadbar) return;
+  // Clear any in-flight fade/reset timers so a second call (SSE completion followed by the
+  // withRefresh finally backstop, or vice versa) can't leave a dangling timer that fires a
+  // duplicate fade after the bar has already reset.
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
+  loadbar.style.width = "100%";
+  // Fill to 100%, hold briefly, fade out, then reset width so the next cycle grows from
+  // the left again rather than snapping back visibly.
+  progFadeTimer = setTimeout(() => {
+    loadbar.classList.remove("active");
+    progResetTimer = setTimeout(() => { loadbar.style.width = "0"; }, 260);
+  }, 220);
+}
+
+// Apply a dashboard pushed over SSE. Guarded so background updates never disrupt an active
+// edit: while off the queue we stash it (applied on return); duplicate final snapshots are
+// dropped; and scroll position is preserved across the re-render.
+function applyPushedState(payload) {
+  if (!payload || !payload.dashboard) return;
+  if (view !== "queue") { pendingState = payload; return; }
+  const seq = payload.dashboard.seq;
+  if (typeof seq === "number" && seq <= lastAppliedSeq) {
+    // Stale or duplicate: the request response may have already applied this snapshot, or an older
+    // overlapping request settled late. Never overwrite the newer state already on screen.
+    return;
+  }
+  // The order endpoint broadcasts the same card snapshot that the optimistic render already
+  // shows. Adopt its revision and preferences without rebuilding the grid, which would cancel
+  // the in-progress FLIP animation and appear as a flash.
+  if (healthOrderSaving && sameRenderedHealthDashboard(state, payload.dashboard)) {
+    state = payload.dashboard; prefs = payload.prefs; loadError = null;
+    adoptAppliedRev();
+    return;
+  }
+  applyState(payload);
+}
+
+function sameRenderedHealthDashboard(left, right) {
+  if (left?.mode !== "health" || right?.mode !== "health") return false;
+  return left.loading === right.loading
+    && JSON.stringify(left.health ?? null) === JSON.stringify(right.health ?? null)
+    && JSON.stringify(left.errors ?? []) === JSON.stringify(right.errors ?? []);
+}
+function applyState(payload) {
+  const scroller = document.scrollingElement;
+  const top = scroller ? scroller.scrollTop : 0;
+  adoptState(payload);
+  render();
+  if (top && scroller) scroller.scrollTop = top;
 }
 
 async function postJSON(path, body) {
@@ -790,9 +1407,593 @@ async function postJSON(path, body) {
   return readJson(res);
 }
 
+function onUpdateAvailable(payload) {
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (!updateAvailable || payload.seq > updateAvailable.seq) updateAvailable = payload;
+  updateRefreshControls();
+}
+
+function onPreferences(nextPrefs) {
+  if (!nextPrefs || typeof nextPrefs !== "object") return;
+  const wasEnabled = autoApplyEnabled();
+  prefs = nextPrefs;
+  updateRefreshControls();
+  if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
+    applyAvailableUpdate();
+  }
+}
+
+function onSnapshot(payload) {
+  onPollSchedule(payload);
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
+  // Initial load already reads the complete cache. On reconnect, replay either applies the missed
+  // state automatically or restores the pending-update affordance without touching the board.
+  if (!state) return;
+  if (autoApplyEnabled()) load(); else onUpdateAvailable(payload);
+}
+
+function onPollSchedule(payload) {
+  const value = Number(payload && payload.nextPollAt);
+  if (!Number.isFinite(value) || value <= 0) return;
+  nextPollAt = value;
+  if (!pollCountdownTimer) {
+    pollCountdownTimer = setInterval(updateRefreshControls, 1000);
+  }
+  updateRefreshControls();
+}
+
+async function applyAvailableUpdate() {
+  if (!updateAvailable || applyingUpdate) return;
+  applyingUpdate = true;
+  updateRefreshControls();
+  try {
+    const res = await fetch("api/state");
+    const data = await readJson(res);
+    const seq = data.dashboard && data.dashboard.seq;
+    if (view !== "queue") {
+      pendingState = data;
+      prefs = data.prefs;
+      updateAvailable = null;
+    } else if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      applyState(data);
+    } else {
+      prefs = data.prefs;
+      updateAvailable = null;
+    }
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    if (view === "queue") render();
+  } finally {
+    applyingUpdate = false;
+    updateRefreshControls();
+  }
+}
+
+async function toggleAutoApply() {
+  if (savingAutoApply) return;
+  const previous = autoApplyEnabled();
+  const enabled = !previous;
+  prefs = { ...(prefs || {}), autoApplyUpdates: enabled };
+  savingAutoApply = true;
+  updateRefreshControls();
+  try {
+    const data = await postJSON("api/auto-apply", { enabled });
+    if (data && data.prefs) prefs = data.prefs;
+    if (enabled && updateAvailable) await applyAvailableUpdate();
+  } catch (e) {
+    prefs = { ...(prefs || {}), autoApplyUpdates: previous };
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    savingAutoApply = false;
+    updateRefreshControls();
+  }
+}
+
+async function openLinkedPr(link) {
+  if (!link || link.classList.contains("busy")) return;
+  link.classList.add("busy");
+  try {
+    await postJSON("api/open-pr", { url: link.href });
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    link.classList.remove("busy");
+  }
+}
+
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
+
+function captureSettingsDraft() {
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (!release || !showDrafts || !reviewRequested || !readyToMerge || !changesRequested || !ciFailing) return null;
+  return {
+    release: release.value,
+    showDrafts: showDrafts.checked,
+    notifications: {
+      reviewRequested: reviewRequested.checked,
+      readyToMerge: readyToMerge.checked,
+      changesRequested: changesRequested.checked,
+      ciFailing: ciFailing.checked,
+    },
+  };
+}
+
+function restoreSettingsDraft(draft) {
+  if (!draft) return;
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (release) release.value = draft.release;
+  if (showDrafts) showDrafts.checked = draft.showDrafts;
+  if (reviewRequested) reviewRequested.checked = draft.notifications.reviewRequested;
+  if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
+  if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
+  if (ciFailing) ciFailing.checked = draft.notifications.ciFailing;
+}
+
+async function mutateAzurePipeline(path, body, clearDraft) {
+  if (pipelineSaving) return;
+  // Pipeline state requires a full render, which otherwise rebuilds the rest of Settings
+  // from persisted preferences and discards edits that have not been saved yet.
+  let settingsDraft = captureSettingsDraft();
+  pipelineSaving = true;
+  pipelineError = "";
+  render();
+  restoreSettingsDraft(settingsDraft);
+  try {
+    const data = await postJSON(path, body);
+    if (data && data.prefs) prefs = data.prefs;
+    if (data && data.dashboard) {
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard;
+        adoptAppliedRev();
+      }
+    }
+    if (clearDraft) {
+      pipelineUrlDraft = "";
+      pipelineBranchDraft = "";
+    }
+    loadError = null;
+  } catch (error) {
+    pipelineError = String((error && error.message) || error || "Pipeline update failed");
+  } finally {
+    settingsDraft = captureSettingsDraft() || settingsDraft;
+    pipelineSaving = false;
+    render();
+    restoreSettingsDraft(settingsDraft);
+  }
+}
+
+function addAzurePipeline() {
+  const url = pipelineUrlDraft.trim();
+  const branch = pipelineBranchDraft.trim();
+  if (!url) {
+    const settingsDraft = captureSettingsDraft();
+    pipelineError = "Enter an Azure DevOps pipeline or build URL.";
+    render();
+    restoreSettingsDraft(settingsDraft);
+    return;
+  }
+  return mutateAzurePipeline("api/health/pipeline/add", { url, branch: branch || undefined }, true);
+}
+
+function removeAzurePipeline(id) {
+  if (!id) return;
+  return mutateAzurePipeline("api/health/pipeline/remove", { id }, false);
+}
+
+function currentHealthItems() {
+  return Array.isArray(state?.health?.items) ? state.health.items : [];
+}
+
+function healthRepositoryGroups(items = currentHealthItems()) {
+  const groups = new Map();
+  for (const item of items) {
+    const id = item?.groupId || item?.id;
+    if (!id) continue;
+    let group = groups.get(id);
+    if (!group) {
+      group = {
+        id,
+        name: item.groupName || item.repository?.name || item.repository || item.name || "Health source",
+        items: [],
+        url: null,
+        match: null,
+      };
+      groups.set(id, group);
+    }
+    group.items.push(item);
+    if (item.provider === "github" && item.url) group.url = item.url;
+    else if (!group.url && item.url) group.url = item.url;
+    if (item.groupMatch === "name") group.match = "name";
+    else if (!group.match && item.groupMatch === "provider") group.match = "provider";
+  }
+  return [...groups.values()];
+}
+
+function flattenHealthGroups(groups) {
+  return groups.flatMap((group) => group.items);
+}
+
+function healthSourceName(item) {
+  return item?.name || item?.repository || "Health source";
+}
+
+function focusHealthHandle(id) {
+  requestAnimationFrame(() => {
+    const handle = Array.from(document.querySelectorAll("[data-health-drag]"))
+      .find((candidate) => candidate.dataset.healthDrag === id);
+    if (handle) handle.focus();
+  });
+}
+
+function clearHealthDragMarkers() {
+  document.querySelectorAll(".health-unit").forEach((unit) => {
+    unit.classList.remove("dragging", "drag-before", "drag-after");
+  });
+}
+
+function clearHealthDropMarkers() {
+  document.querySelectorAll(".health-unit").forEach((unit) => {
+    unit.classList.remove("drag-before", "drag-after");
+    delete unit.dataset.dropAfter;
+  });
+}
+
+function setHealthDropMarker(card, after) {
+  const marker = after ? "drag-after" : "drag-before";
+  if (card.classList.contains(marker) && card.dataset.dropAfter === String(after)) return false;
+  clearHealthDropMarkers();
+  card.classList.add(marker);
+  card.dataset.dropAfter = String(after);
+  return true;
+}
+
+function captureHealthLayout() {
+  const positions = new Map();
+  document.querySelectorAll(".health-unit[data-health-group-id]").forEach((unit) => {
+    positions.set(unit.dataset.healthGroupId, unit.getBoundingClientRect());
+  });
+  return positions;
+}
+
+function animateHealthLayout(previous) {
+  if (!previous.size) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.querySelectorAll(".health-unit[data-health-group-id]").forEach((unit) => {
+    const before = previous.get(unit.dataset.healthGroupId);
+    if (!before || typeof unit.animate !== "function") return;
+    const after = unit.getBoundingClientRect();
+    const x = before.left - after.left;
+    const y = before.top - after.top;
+    if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
+    unit.animate(
+      [
+        { transform: "translate(" + x + "px, " + y + "px)", opacity: .82 },
+        { transform: "translate(0, 0)", opacity: 1 },
+      ],
+      { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" },
+    );
+  });
+}
+
+function renderHealthOrderTransition(previous) {
+  render();
+  animateHealthLayout(previous);
+}
+
+function setHealthDragImage(event, card) {
+  if (!event.dataTransfer || !card || !document.body) return;
+  const rect = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.classList.remove("dragging", "drag-before", "drag-after");
+  ghost.classList.add("health-drag-ghost");
+  ghost.style.width = rect.width + "px";
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, Math.min(36, rect.width / 2), 24);
+  setTimeout(() => ghost.remove(), 0);
+}
+
+async function commitHealthOrder(nextItems, previousItems, focusId) {
+  if (healthOrderSaving) return;
+  const previousLayout = captureHealthLayout();
+  healthOrderSaving = true;
+  state.health.items = nextItems;
+  const nextGroups = healthRepositoryGroups(nextItems);
+  const moved = nextGroups.find((group) => group.id === focusId);
+  const position = nextGroups.findIndex((group) => group.id === focusId) + 1;
+  healthOrderAnnouncement = "Moved " + healthSourceName(moved) + " to position " + position + " of " + nextGroups.length + ".";
+  renderHealthOrderTransition(previousLayout);
+  focusHealthHandle(focusId);
+
+  try {
+    const data = await postJSON("api/health/order", { order: nextItems.map((item) => item.id) });
+    if (data?.prefs) prefs = data.prefs;
+    if (data?.dashboard) {
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard;
+        adoptAppliedRev();
+      }
+    }
+    loadError = null;
+  } catch (error) {
+    const failedLayout = captureHealthLayout();
+    state.health.items = previousItems;
+    healthOrderAnnouncement = "Card order was not saved.";
+    loadError = String((error && error.message) || error || "Card order was not saved.");
+    renderHealthOrderTransition(failedLayout);
+  } finally {
+    healthOrderSaving = false;
+    document.getElementById("health-grid")?.classList.remove("ordering");
+    document.querySelector(".view")?.classList.remove("no-motion");
+    focusHealthHandle(focusId);
+  }
+}
+
+function moveHealthSource(id, delta) {
+  if (healthOrderSaving) return;
+  const previous = currentHealthItems().slice();
+  const previousGroups = healthRepositoryGroups(previous);
+  const from = previousGroups.findIndex((group) => group.id === id);
+  const to = Math.max(0, Math.min(previousGroups.length - 1, from + delta));
+  if (from < 0 || from === to) return;
+  const nextGroups = previousGroups.slice();
+  const [group] = nextGroups.splice(from, 1);
+  nextGroups.splice(to, 0, group);
+  return commitHealthOrder(flattenHealthGroups(nextGroups), previous, id);
+}
+
+function dropHealthSource(sourceId, targetId, after) {
+  if (healthOrderSaving || !sourceId || sourceId === targetId) return;
+  const previous = currentHealthItems().slice();
+  const previousGroups = healthRepositoryGroups(previous);
+  const source = previousGroups.find((group) => group.id === sourceId);
+  const nextGroups = previousGroups.filter((group) => group.id !== sourceId);
+  let targetIndex = nextGroups.findIndex((group) => group.id === targetId);
+  if (!source || targetIndex < 0) return;
+  if (after) targetIndex++;
+  nextGroups.splice(targetIndex, 0, source);
+  return commitHealthOrder(flattenHealthGroups(nextGroups), previous, sourceId);
+}
+
+function wireHealthOrdering() {
+  const units = Array.from(document.querySelectorAll(".health-unit[data-health-group-id]"));
+  const clear = () => {
+    draggedHealthId = null;
+    document.getElementById("health-grid")?.classList.remove("drag-active");
+    clearHealthDragMarkers();
+    units.forEach((unit) => { delete unit.dataset.dropAfter; });
+  };
+
+  document.querySelectorAll("[data-health-drag]").forEach((handle) => {
+    handle.addEventListener("dragstart", (event) => {
+      if (healthOrderSaving) {
+        event.preventDefault();
+        return;
+      }
+      draggedHealthId = handle.dataset.healthDrag;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedHealthId);
+      }
+      handle.setAttribute("aria-grabbed", "true");
+      const unit = handle.closest(".health-unit");
+      unit?.classList.add("dragging");
+      document.getElementById("health-grid")?.classList.add("drag-active");
+      setHealthDragImage(event, unit);
+    });
+    handle.addEventListener("dragend", () => {
+      handle.removeAttribute("aria-grabbed");
+      clear();
+    });
+    handle.addEventListener("keydown", (event) => {
+      const horizontal = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+      const vertical = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+      const delta = horizontal || vertical;
+      if (!delta) return;
+      event.preventDefault();
+      moveHealthSource(handle.dataset.healthDrag, delta);
+    });
+  });
+
+  units.forEach((unit) => {
+    unit.addEventListener("dragover", (event) => {
+      if (!draggedHealthId || draggedHealthId === unit.dataset.healthGroupId) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const rect = unit.getBoundingClientRect();
+      const xDistance = Math.abs(event.clientX - (rect.left + rect.width / 2)) / rect.width;
+      const yDistance = Math.abs(event.clientY - (rect.top + rect.height / 2)) / rect.height;
+      const after = unit.classList.contains("health-source-group")
+        ? event.clientY > rect.top + rect.height / 2
+        : xDistance > yDistance
+          ? event.clientX > rect.left + rect.width / 2
+          : event.clientY > rect.top + rect.height / 2;
+      setHealthDropMarker(unit, after);
+    });
+    unit.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const sourceId = draggedHealthId || event.dataTransfer?.getData("text/plain");
+      const after = unit.dataset.dropAfter === "true";
+      const targetId = unit.dataset.healthGroupId;
+      clear();
+      dropHealthSource(sourceId, targetId, after);
+    });
+  });
+}
+
+// PR and health action buttons post only enough identity to let the loopback server resolve
+// the canonical item from its trusted snapshot. 'split' carries the data-* attributes and
+// 'target' selects the current session or a mapped repository session. We give inline feedback
+// and deliberately do not re-render because the action changes the conversation, not the data.
+async function onCardAction(split, target) {
+  const mainBtn = split.querySelector(".cb-main") || split;
+  const caret = split.querySelector(".cb-caret");
+  if (mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
+  const d = split.dataset;
+  const t = target || "new-session";
+  // Guard across re-renders too: if a streamed 'state' event replaced this card while an
+  // earlier click's POST was still pending, the fresh button carries no .busy class, but the
+  // pending key still does — so refuse to double-queue the same action (see inflightActions).
+  const healthAction = !!d.sourceId;
+  const key = healthAction
+    ? actionKey(d.kind, d.sourceId)
+    : actionKey(d.kind, d.prUrl, d.prRepo, d.prNumber);
+  if (inflightActions.has(key)) return;
+  const body = healthAction
+    ? { kind: d.kind, target: t, source: { id: d.sourceId } }
+    : {
+        kind: d.kind,
+        target: t,
+        pr: {
+          url: d.prUrl,
+          number: Number(d.prNumber),
+          repository: d.prRepo,
+          title: d.prTitle,
+          author: d.prAuthor,
+        },
+      };
+  // If a prior attempt failed, the button was re-enabled immediately but still shows the failure
+  // label under a pending ~3.2s restore timer (see the catch below). A retry that lands inside that
+  // window would otherwise (a) inherit the .failed styling, (b) capture the failure HTML as its
+  // "original" so a later restore reverts to the wrong text, and (c) have its own outcome label
+  // clobbered when the stale timer fires mid-flight. Cancel that timer and restore the default label
+  // now so this attempt starts from a clean slate.
+  if (mainBtn._cbRestore) {
+    clearTimeout(mainBtn._cbRestore.timer);
+    mainBtn.classList.remove("failed");
+    mainBtn.innerHTML = mainBtn._cbRestore.original;
+    mainBtn._cbRestore = null;
+  }
+  const original = mainBtn.innerHTML;
+  mainBtn.classList.add("busy");
+  mainBtn.disabled = true;
+  if (caret) caret.disabled = true;
+  inflightActions.add(key);
+  try {
+    const res = await postJSON(healthAction ? "api/health/action" : "api/agent/action", body);
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("done");
+    if (caret) caret.classList.add("done");
+    // Label truthfully: if the agent was mid-task the prompt is queued behind it, so
+    // don't claim it already started. Otherwise reflect where it's headed — a new
+    // session in the PR's repo, or this very session. Use the server's EFFECTIVE target
+    // (res.target), not the requested one: a GHES card degrades new-session to
+    // current-session server-side, so the requested 't' can overstate what actually ran.
+    const effTarget = (res && res.target) || t;
+    const label = res && res.queued
+      ? "Queued \u2014 starts after current task"
+      : (effTarget === "current-session" ? "Running in this session" : (d.doneLabel || "Requested"));
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
+  } catch (e) {
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("failed");
+    mainBtn.disabled = false;
+    if (caret) caret.disabled = false;
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
+    // Restore the original label after a beat so the user can retry. Track the timer + original on
+    // the element so a retry landing inside this window can cancel it (see the top of this function)
+    // instead of letting a stale timer overwrite the retry's outcome label.
+    mainBtn._cbRestore = {
+      original,
+      timer: setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; mainBtn._cbRestore = null; }, 3200),
+    };
+  } finally {
+    // Clear the pending key once the request settles. The button keeps its own done/failed
+    // state; a subsequent SSE re-render restores the default (now re-enabled) button.
+    inflightActions.delete(key);
+    // If an SSE 'state' event re-rendered this card mid-request, our done/failed feedback landed on
+    // the now-detached old nodes, and the visible replacement was rendered disabled while the key was
+    // still pending. Re-render so it reflects the just-cleared inflight state instead of staying stuck
+    // disabled until the next SSE refresh. When the split is still connected we keep the deliberate
+    // no-re-render behavior above so the inline confirmation survives.
+    //
+    // Only recover while the queue is showing. A split also goes disconnected when the user opens
+    // Accounts/Settings/Filters mid-request; those views have no replacement action button to unlock,
+    // and an unconditional render() there would rebuild the open form and discard text the user has
+    // not committed yet. goView() re-renders the queue when they navigate back, so nothing stays stuck.
+    if (!split.isConnected && view === "queue") { render(); }
+  }
+}
+
+// Close any open card-action dropdown and reset its caret. Called on outside click, Esc,
+// scroll, resize, and whenever an action fires.
+function closeCbMenus() {
+  document.querySelectorAll(".cb-menu").forEach((m) => {
+    // Menus are portaled to <body> while open (see openCbMenu). Return the menu to its
+    // owning split so it is torn down with the card on the next re-render instead of
+    // leaking as a detached <body> orphan; drop it outright if the split is already gone.
+    if (m.parentElement === document.body) {
+      const owner = m.__ownerSplit;
+      if (owner && owner.isConnected) owner.appendChild(m);
+      else m.remove();
+    }
+    m.hidden = true;
+  });
+  document.querySelectorAll('.cb-caret[aria-expanded="true"]').forEach((c) => c.setAttribute("aria-expanded", "false"));
+}
+
+// Open a split-button dropdown as a viewport-fixed overlay. The menu is portaled to <body>
+// before positioning: the .view element runs a forward-filling keyframe animation
+// (animation-fill-mode: both) whose frames include a transform, and a filling transform
+// animation establishes a containing block for position:fixed descendants in Blink/WebKit.
+// Left inside .view, the menu's fixed coordinates resolve against .view (which starts below
+// the sticky topbar) rather than the viewport, dropping the menu ~1 topbar-height below the
+// button. Anchoring it to <body> (which has no transformed ancestor) restores viewport-
+// relative fixed positioning. We measure the caret and menu, left-align the menu under the
+// split, then flip up/right when it would spill past the viewport.
+function openCbMenu(split, caret, menu) {
+  const splitRect = split.getBoundingClientRect();
+  const caretRect = caret.getBoundingClientRect();
+  // Portal to <body> so no transformed/filtered ancestor governs the fixed menu. Remember
+  // the owning split so closeCbMenus can restore it.
+  menu.__ownerSplit = split;
+  document.body.appendChild(menu);
+  // Reveal off-paint so offsetWidth/Height are measurable before we place it.
+  menu.hidden = false;
+  menu.style.visibility = "hidden";
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  const pad = 8;
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+
+  let left = splitRect.left;
+  if (left + mw > vw - pad) left = vw - mw - pad;
+  if (left < pad) left = pad;
+
+  // Prefer below the caret; flip above when it would overflow the bottom and there is
+  // more room up top.
+  let top = caretRect.bottom + 5;
+  if (top + mh > vh - pad && caretRect.top - mh - 5 > pad) top = caretRect.top - mh - 5;
+
+  menu.style.left = Math.round(left) + "px";
+  menu.style.top = Math.round(top) + "px";
+  menu.style.visibility = "";
+  caret.setAttribute("aria-expanded", "true");
+  // Move focus into the menu so keyboard users land on the choices (the menu was portaled to
+  // the end of <body>, so a bare Tab would otherwise skip past it in document order). Remember
+  // the caret so Escape/Tab can restore focus to it when the menu closes (see the keydown
+  // handler wired in render()).
+  menu.__ownerCaret = caret;
+  const firstItem = menu.querySelector(".cb-menu-item");
+  if (firstItem && typeof firstItem.focus === "function") firstItem.focus();
+}
 
 // Persist one account's repos without a full refresh/broadcast (the editor owns
 // the DOM and a re-render would interrupt typing). The editor is optimistic, so a
@@ -803,7 +2004,14 @@ function persistAccountRepos(id, previousRepos) {
   repoSaveSeqByAcct[id] = seq;
   return postJSON("api/account/repos", { id, repos }).then((data) => {
     if (repoSaveSeqByAcct[id] !== seq) return data;
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; }
+    // Gate the adoption on seq like every other response path (load/withRefresh/SSE/goView): a save
+    // that resolves after a newer refresh or pushed snapshot already applied must not roll state
+    // (and lastAppliedSeq via adoptAppliedRev) backward. The repoSaveSeqByAcct guard above only
+    // orders saves for this account against each other, not against those lastAppliedSeq-keyed paths.
+    if (data && data.dashboard) {
+      const dseq = data.dashboard.seq;
+      if (typeof dseq !== "number" || dseq > lastAppliedSeq) adoptState(data);
+    }
     repoErr(id, "");
     return data;
   }).catch((e) => {
@@ -838,7 +2046,14 @@ async function rescanAccounts() {
   try {
     const res = await fetch("api/accounts");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
+    // Gate on seq like every other response path: if a newer refresh/SSE snapshot applied while this
+    // rescan was in flight, adopting it would roll state (and lastAppliedSeq) backward. When it is the
+    // newest, adoptState() also advances the revision so a delayed lower-seq response cannot roll
+    // the queue back.
+    const dseq = data.dashboard && data.dashboard.seq;
+    if (typeof dseq !== "number" || dseq > lastAppliedSeq) {
+      adoptState(data);
+    }
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally { rescanning = false; render(); }
@@ -858,6 +2073,18 @@ function goView(next, forward) {
   if (view === "accounts" && next !== "accounts") { for (const k in editingByAcct) editingByAcct[k] = -1; }
   prevRank = RANK[view] || 0;
   view = next;
+  // Returning to the queue is the moment to fold in any dashboard that streamed in while
+  // the user was editing a form on another view.
+  if (next === "queue" && pendingState) {
+    const payload = pendingState; pendingState = null;
+    // The stash can be older than a POST response (repo save, prefs) that advanced lastAppliedSeq
+    // while the user was on the form: fold it in only when it is strictly newer than what we
+    // already show, mirroring applyPushedState's gate. (No seq → legacy payload, apply as before.)
+    const seq = payload.dashboard && payload.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      adoptState(payload);
+    }
+  }
   render(forward === undefined ? undefined : forward);
 }
 
@@ -865,9 +2092,231 @@ function goView(next, forward) {
 
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
-function prCard(item) {
+// Encode the PR descriptor onto the split container as data-* attributes so the click
+// handler can post it back to /api/agent/action without another lookup. The whole card
+// body is a link, so buttons live in a sibling row (not nested in the <a>, which is
+// invalid). The main button opens a new session in the PR's repo; the caret opens a menu
+// to run the same action in the current session instead.
+function cardActionBtn(pr, a) {
+  const data =
+    ' data-kind="' + esc(a.kind) + '"' +
+    ' data-done-label="' + esc(a.done || "Requested") + '"' +
+    ' data-pr-url="' + esc(pr.url || "") + '"' +
+    ' data-pr-number="' + esc(pr.number) + '"' +
+    ' data-pr-repo="' + esc(pr.repository || "") + '"' +
+    ' data-pr-title="' + esc(pr.title || "") + '"' +
+    ' data-pr-author="' + esc(pr.author || "") + '"';
+  const icon = a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "";
+  // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
+  // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
+  const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
+  // While a forced refresh is finalizing, keep actions disabled so a click cannot race a user-driven
+  // mode/account change whose replacement snapshot has not committed yet.
+  const finalizing = refreshing && !inflight;
+  const busyCls = (inflight || finalizing) ? " busy" : "";
+  const spinCls = finalizing ? " spin" : "";
+  const disabledAttr = (inflight || refreshing) ? " disabled" : "";
+  const mainIcon = finalizing ? '<span class="cb-ico">' + ICONS.refresh + "</span>" : icon;
+  const mainLabel = finalizing ? "Finalizing\u2026" : a.label;
+  // open_pr_session can only target github.com, so the server degrades a new-session action on a
+  // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
+  // url and don't advertise "Open in new session" for those cards: render a single current-session
+  // button so enterprise users see the honest behavior up front instead of discovering it on click.
+  const isDotcom = /^https:\/\/github\.com\//i.test(pr.url || "");
+  const mainTarget = isDotcom ? "new-session" : "current-session";
+  // aria-live="polite" turns the main button into a live region: onCardAction rewrites its label
+  // in place to "Queued\u2026", "Running\u2026", or an error, but the button is disabled while the
+  // request runs so focus may move away. Announcing politely surfaces that async result to screen
+  // readers even after the button loses focus. A full re-render swaps in a fresh element with its
+  // initial label, which does not announce, so only the in-place status updates are spoken.
+  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + spinCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
+    mainIcon + '<span class="cb-label">' + esc(mainLabel) + "</span></button>";
+  // A GHES/EMU card has only the current-session target, so render the lone main button with no
+  // caret or menu — there is nothing to choose and no unsupported option to mislead with.
+  if (!isDotcom) {
+    return '<div class="cb-split"' + data + '>' + mainBtn + "</div>";
+  }
+  return '<div class="cb-split"' + data + '>' +
+    mainBtn +
+    '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
+      ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +
+      ICONS.chev + "</button>" +
+    '<div class="cb-menu" role="menu" hidden>' +
+      cbMenuItem("new-session", ICONS.layers, "Open in new session", "In the PR\u2019s repo") +
+      cbMenuItem("current-session", ICONS.chat, "Run in current session", "Here, in this conversation") +
+    "</div>" +
+  "</div>";
+}
+
+function cbMenuItem(target, icon, label, sub) {
+  return '<button type="button" class="cb-menu-item" role="menuitem" tabindex="-1" data-target="' + esc(target) + '">' +
+    '<span class="cb-mi-ico">' + icon + "</span>" +
+    '<span class="cb-mi-text"><span class="cb-mi-label">' + esc(label) + "</span>" +
+    '<span class="cb-mi-sub">' + esc(sub) + "</span></span></button>";
+}
+
+// Shared action-button descriptors, so a given agent action's label, confirmation text, and
+// icon stay identical wherever it is offered. "Resolve" and "Address feedback" are the same
+// underlying agent action (address-feedback): both work the unresolved review threads and
+// resolve them; they differ only in the surface wording (a signal pill vs. a lane).
+var CARD_ACTIONS = {
+  test: { kind: "test", label: "Test", done: "Testing requested", icon: ICONS.check },
+  review: { kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye },
+  resolveConflicts: { kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge },
+  reviewDebt: { kind: "review-debt", label: "Address review", done: "Sent to agent", icon: ICONS.eye },
+  fixCi: { kind: "fix-ci", label: "Evaluate CI failures", done: "Sent to agent", icon: ICONS.pulse },
+  discussReview: { kind: "discuss-review", label: "Discuss review", done: "Sent to agent", icon: ICONS.chat },
+  addressFeedback: { kind: "address-feedback", label: "Address feedback", done: "Sent to agent", icon: ICONS.check },
+  resolveFeedback: { kind: "address-feedback", label: "Resolve", done: "Sent to agent", icon: ICONS.check },
+};
+
+// Combine several action lists into one, first-wins by kind, so a card that qualifies for the
+// same underlying action twice (e.g. an "Unresolved feedback" lane card that also carries the
+// "N unresolved" signal) shows a single button. Returns null when nothing applies, matching the
+// "no actions" contract the card renderers expect.
+function mergeActions() {
+  var out = [], seen = {};
+  for (var i = 0; i < arguments.length; i++) {
+    var list = arguments[i];
+    if (!list) continue;
+    for (var j = 0; j < list.length; j++) {
+      var a = list[j];
+      if (!a || seen[a.kind]) continue;
+      seen[a.kind] = true;
+      out.push(a);
+    }
+  }
+  return out.length ? out : null;
+}
+
+// Signal-driven actions available on ANY card, keyed off the danger pills the model attaches.
+// Wherever a card shows one of these signals it also offers the matching action, so e.g. every
+// card with a "merge conflicts" pill gets a Resolve conflicts button and every card with a
+// "review debt" pill gets Address review. This is layered onto every surface by mergeActions, so a
+// labelled card never renders without its button. Signal labels come from model.mjs and vary by
+// surface:
+//   * conflicts            -> "merge conflicts"
+//   * CI failing           -> "CI failing[ \u00b7 N checks]"
+//   * unresolved feedback  -> "{n} unresolved" (createAttentionSignals), "Unresolved feedback"
+//                             (the bucket / focus-exclusion reason label), "{n} unresolved thread"
+//                             (reviewSignal), or the "resolve feedback" action pill
+//   * review debt          -> the serialized reviewDebt flag (isReviewDebtItem), with the
+//                             "review debt" pill (constants.mjs reviewDebtSignalLabel) as fallback
+//   * re-review            -> "re-review" (actionSignal)
+// The review-oriented pills ("review debt" / "re-review") are surfaced on every card regardless of
+// ownership: the user asked that a labelled card always carry its action, and a self-review of your
+// own aged PR before others weigh in is still useful.
+function signalActions(item) {
+  // Only app-computed semantic signals authorize actions. Skip raw GitHub label pills (kind
+  // "repo-label", set in model.mjs): a repo can define a label literally named "merge conflicts",
+  // "re-review", or "3 unresolved", and matching that presentation text would expose a destructive
+  // action the PR's structured state does not actually warrant.
+  var sigs = ((item && item.signals) || []).filter(function (s) { return s && s.kind !== "repo-label"; });
+  function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
+  var out = [];
+  if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
+  if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
+  if (hasSig(/unresolved|resolve feedback/i)) out.push(CARD_ACTIONS.resolveFeedback);
+  // Detect review debt via isReviewDebtItem (the serialized reviewDebt flag OR the pill), not the
+  // pill alone: signalsFor caps a card at four pills and oldFirstSignal() emits "review debt" last,
+  // so a stacked card (release + regression + CI + ...) can lose the visible pill yet still be debt.
+  // Keying off the flag keeps Address review + Discuss review on every review-debt card.
+  if (isReviewDebtItem(item)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
+  if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
+  return out;
+}
+
+// Which action buttons a "Needs attention" or "Your PRs outside" card gets. A review-debt card
+// (aged without an approving review) offers Address review (a fresh review) plus Discuss review
+// (talk through existing feedback) — on every card carrying the debt, including your own, so a
+// review-debt card is never actionless. Focus cards carry a reviewDebt flag (isReviewDebtItem)
+// because signalsFor truncates the displayed pills, so the debt is detected even when the "review
+// debt" pill is not among the visible signals. For your own PR, changes requested takes precedence:
+// the ball is in your court, so those cards offer Address feedback + Discuss review (mirroring the
+// "Respond here" For You pick). Someone else's non-debt PR offers Test + Review. Signal-driven
+// actions (conflicts, CI, unresolved) are layered on for every card, since fixing those is the
+// author's job.
+function focusCardActions(item) {
+  var pr = (item && item.pr) || {};
+  var ctx = [];
+  var sig = signalActions(item);
+  if (pr.isMine) {
+    if (isAuthorResponseItem(item)) {
+      ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+      // Changes requested takes precedence over review debt on your own PR: you respond, you don't
+      // start a review of your own aged PR. signalActions now layers review-debt off the serialized
+      // flag (an aged, non-approved PR is debt even with changes requested), so drop just that action
+      // here to keep the precedence. Conflict / CI / unresolved signals still layer normally.
+      sig = sig.filter(function (a) { return a.kind !== CARD_ACTIONS.reviewDebt.kind; });
+    } else if (isReviewDebtItem(item)) {
+      ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+    }
+  } else if (isReviewDebtItem(item)) {
+    ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+  } else {
+    ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  }
+  return mergeActions(ctx, sig);
+}
+
+// "For you" picks that carry an actionable label get an interactive split button. The pick's
+// action label maps to the matching agent action; "Respond here" (your PR has feedback waiting)
+// offers Address feedback + Discuss review. Signal-driven actions are layered on, so a pick that
+// also carries a problem signal (conflicts/CI/unresolved) still surfaces it, deduped by kind.
+function forYouCardActions(item) {
+  var action = item && item.action;
+  var ctx = [];
+  if (action === "Resolve conflicts") ctx = [CARD_ACTIONS.resolveConflicts];
+  else if (action === "Fix CI") ctx = [CARD_ACTIONS.fixCi];
+  else if (action === "Review this") ctx = [CARD_ACTIONS.review];
+  else if (action === "Respond here") ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  return mergeActions(ctx, signalActions(item));
+}
+
+// Which action buttons a breakdown-lane card gets, keyed on the lane's signal bucket. Review/Test
+// only make sense for a PR the viewer would review, so they are withheld on the viewer's own PRs.
+// The "Merge conflicts" lane is covered by signalActions alone: createAttentionSignals hoists that
+// pill right after the action signal so it always survives signalsFor's top-4 cap. The "CI failing"
+// pill is NOT hoisted, so on a stacked PR (release + regression + base) it can be pushed past the
+// top 4 and dropped, leaving signalActions with no CI pill to key off. So the CI lane is mapped
+// explicitly here (like "Unresolved feedback"); fixing CI is the author's job, so it is offered on
+// your own PRs too rather than gated on !isMine.
+function laneCardActions(lane, item) {
+  var pr = (item && item.pr) || {};
+  var label = lane && lane.label;
+  var ctx = [];
+  if (label === "Needs review") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  } else if (label === "Re-review needed" || label === "Review started" || label === "Quick wins") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.review];
+  } else if (label === "Unresolved feedback") {
+    ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  } else if (label === "CI failing") {
+    ctx = [CARD_ACTIONS.fixCi];
+  }
+  return mergeActions(ctx, signalActions(item));
+}
+
+function isReviewDebtItem(item) {
+  if (!item) return false;
+  if (item.reviewDebt) return true;
+  // Fall back to the pill only for an app-computed signal, never a raw GitHub label named "review
+  // debt" (kind "repo-label"), so a label can't spoof the Address review / Discuss review actions.
+  return (item.signals || []).some((s) => s && s.kind !== "repo-label" && s.label === "review debt");
+}
+
+// Your own PR is "author response" when a reviewer requested changes (pr.review.state), or when the
+// "Your PRs outside Needs attention" lane tagged the card with the "Author response" exclusion pill.
+// Either way the ball is in your court, so focusCardActions offers Address feedback + Discuss review.
+function isAuthorResponseItem(item) {
+  var pr = (item && item.pr) || {};
+  if (pr.review && pr.review.state === "changes_requested") return true;
+  return ((item && item.signals) || []).some((s) => s && /^Author response$/i.test(s.label || ""));
+}
+
+function prCard(item, actions) {
   const pr = item.pr;
-  return '<a class="card" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(pr.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(pr.authorAvatarUrl, pr.author, "avatar", 36) +
@@ -875,21 +2324,39 @@ function prCard(item) {
       "<span>by " + esc(pr.author) + "</span>" +
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
-    '<div class="pills">' + (item.signals || []).map(pill).join("") + "</div>" +
+    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const acts = (actions && actions.length)
+    ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
+    : "";
+  return '<div class="card">' + main + acts + "</div>";
 }
 
 function issueCard(item) {
   const is = item.issue;
-  return '<a class="card" href="' + esc(is.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(is.url) + '" target="_blank" rel="noopener noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(is.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(is.authorAvatarUrl, is.author, "avatar", 36) +
       '<span class="repo">' + esc(shortRepo(is.repository)) + " #" + is.number + "</span>" +
       "<span>by " + esc(is.author) + "</span>" +
     "</div>" +
-    '<div class="pills">' + (item.signals || []).map(pill).join("") + "</div>" +
+    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const linkedPullRequests = (is.linkedPullRequests || []).filter((pr) => pr.state !== "CLOSED");
+  const linked = linkedPullRequests.length
+    ? linkedPullRequests.map((pr) => {
+        const state = pr.state === "MERGED" ? "merged" : (pr.state === "OPEN" ? "open" : "unknown");
+        const stateLabel = state === "merged" ? "Merged" : (state === "open" ? "Open" : "Linked");
+        const stateIcon = state === "merged" ? ICONS.merge : ICONS.pr;
+        return (
+        '<a class="card-main linked-pr" href="' + esc(pr.url) + '" target="_blank" rel="noopener noreferrer" title="' + stateLabel + " pull request " +
+          esc(shortRepo(pr.repository)) + " #" + pr.number + '" aria-label="' + stateLabel + " pull request: " + esc(pr.title) + '">' +
+          '<span class="linked-pr-icon ' + state + '">' + stateIcon + '</span><span class="linked-pr-title">' + esc(pr.title) + "</span></a>"
+        );
+      }).join("")
+    : "";
+  return '<div class="card">' + main + linked + "</div>";
 }
 
 function laneIcon(lane) {
@@ -906,7 +2373,7 @@ function laneIcon(lane) {
 }
 
 function laneHtml(lane) {
-  const items = (lane.items || []).map((it) => (it.pr ? prCard(it) : issueCard(it))).join("");
+  const items = (lane.items || []).map((it) => (it.pr ? prCard(it, laneCardActions(lane, it)) : issueCard(it))).join("");
   const tone = lane.tone || "muted";
   const repos = new Set((lane.items || []).map((it) => (it.pr || it.issue || {}).repository).filter(Boolean));
   const repoLabel = repos.size + (repos.size === 1 ? " repo" : " repos");
@@ -997,10 +2464,15 @@ function collapsibleSect(opts) {
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
-  const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
+  // exactCount: the shown items are not a prefix of the source list (e.g. the focus lane keeps
+  // review-debt cards that spill past the cap), so "top N of total" would be false — higher-ranked
+  // cards were skipped. Report the honest shown count instead; the uncapped total still shows in
+  // the header summary badge.
+  const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
+  const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
   const body = n
-    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>"
+    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it))).join("") + "</div>"
     : '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
   const collapsed = collapsedLanes.has(opts.id);
   return '<section class="qpanel collapsible' + (collapsed ? " collapsed" : "") + '" data-q="' + esc(opts.id) + '">' +
@@ -1028,6 +2500,7 @@ function reviewBoardHtml() {
       id: "for-you", title: "For you", tone: "accent", icon: ICONS.sparkle,
       subtitle: "Your highest-leverage actions across every repo, pulled to the top of the queue.",
       items: att.forMe.slice(0, 6), cappedTotal: att.forMe.length,
+      cardActions: forYouCardActions,
     });
   }
 
@@ -1035,7 +2508,8 @@ function reviewBoardHtml() {
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
     subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
-    items: att.focus || [], cappedTotal: att.focusTotal,
+    items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
+    cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
 
@@ -1045,6 +2519,7 @@ function reviewBoardHtml() {
     id: "outside-focus", title: "Your PRs outside Needs attention", tone: "info", icon: ICONS.pr,
     subtitle: "Open non-draft PRs you authored that do not currently qualify for the focused queue.",
     items: (att.focusExclusions || []).slice(0, 10), cappedTotal: (att.focusExclusions || []).length,
+    cardActions: focusCardActions,
     emptyText: "None right now \u00b7 every open PR you authored is already in the queue or still in draft.",
   });
 
@@ -1059,7 +2534,7 @@ function reviewBoardHtml() {
       count: att.community.length,
       note: "external contributors \u00b7 " + repos.size + (repos.size === 1 ? " repo" : " repos"),
       subtitle: "Recently active external-contributor PRs, tracked apart from the core-team queue.",
-      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>",
+      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it, signalActions(it)) : issueCard(it))).join("") + "</div>",
     });
   }
 
@@ -1089,7 +2564,7 @@ function reviewBoardHtml() {
 
 function tabs() {
   const mode = state ? state.mode : "review";
-  const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"]];
+  const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"], ["health", "Health"]];
   return '<div class="tabs">' + defs.map(([id, label]) =>
     '<button class="tab ' + (mode === id ? "active" : "") + '" data-mode="' + id + '">' + label + "</button>"
   ).join("") + "</div>";
@@ -1126,13 +2601,24 @@ function accountChip() {
 
 function topbarHtml() {
   const notifCount = (state && state.notifications || []).length;
+  const autoApply = autoApplyEnabled();
+  const showUpdate = !!updateAvailable && !autoApply;
   const left = view === "queue"
     ? tabs()
     : '<button class="backbtn" id="back-btn">' + ICONS.back + "Back</button>";
   const right =
     (state ? accountChip() : "") +
     '<div class="tb-actions">' +
-    '<button class="iconbtn ' + (refreshing ? "spin" : "") + '" id="refresh-btn" title="Refresh">' + ICONS.refresh + "</button>" +
+    '<button class="iconbtn live-tooltip ' + (refreshing ? "spin" : "") + '" id="refresh-btn" aria-label="' + refreshTooltip() +
+      '" data-tooltip="' + refreshTooltip() + '">' + ICONS.refresh + "</button>" +
+    '<button class="update-ready ' + (applyingUpdate ? "busy" : "") + '" id="apply-update-btn" type="button" ' +
+      (showUpdate ? "" : "hidden ") + (applyingUpdate ? "disabled " : "") +
+      'title="Apply the latest completed background update"><span class="update-dot"></span>Apply<span class="update-detail"> update</span></button>' +
+    '<button class="refresh-pref ' + (autoApply ? "active" : "") + '" id="auto-apply-btn" type="button" role="switch" aria-checked="' +
+      (autoApply ? "true" : "false") + '" title="' +
+      (autoApply ? "Background updates apply automatically" : "Background updates wait until you apply them") +
+      '"><span class="status-dot"></span><span class="refresh-label">Auto</span></button>' +
+    '<button class="iconbtn ' + (view === "filters" ? "active" : "") + '" id="filters-btn" title="What\u2019s filtered">' + ICONS.funnel + "</button>" +
     '<button class="iconbtn ' + (view === "notifications" ? "active" : "") + '" id="bell-btn" title="Notifications">' + ICONS.bell +
       (notifCount ? '<span class="badge">' + notifCount + "</span>" : "") + "</button>" +
     '<button class="iconbtn ' + (view === "settings" ? "active" : "") + '" id="gear-btn" title="Settings">' + ICONS.gear + "</button>" +
@@ -1144,7 +2630,224 @@ function topbarHtml() {
 
 /* ---- views ---- */
 
+const HEALTH_STATUS = {
+  healthy: { label: "Healthy", tone: "success" },
+  running: { label: "Running", tone: "warning" },
+  degraded: { label: "Degraded", tone: "warning" },
+  failing: { label: "Failing", tone: "danger" },
+  unavailable: { label: "Unavailable", tone: "muted" },
+  unknown: { label: "Unknown", tone: "muted" },
+};
+
+function healthMeta(item) {
+  return HEALTH_STATUS[item && item.state] || HEALTH_STATUS.unknown;
+}
+
+function healthRelativeTime(value) {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return "";
+  return timeAgo(value);
+}
+
+function healthLastSuccess(item) {
+  if (typeof item.daysSinceSuccess === "number") {
+    return item.daysSinceSuccess === 0 ? "Today" : item.daysSinceSuccess + "d ago";
+  }
+  return "Not found";
+}
+
+function healthActionBtn(item, kind, label, target) {
+  const key = actionKey(kind, item.id);
+  const busy = inflightActions.has(key);
+  const icon = kind === "diagnose-health" ? ICONS.pulse : ICONS.sparkle;
+  const doneLabel = target === "new-session" ? "Repo session requested" : "Requested";
+  return '<span class="cb-split" data-kind="' + esc(kind) + '" data-source-id="' + esc(item.id) +
+    '" data-done-label="' + esc(doneLabel) + '"><button class="card-btn cb-main' + (busy ? ' busy spin' : '') +
+    '" type="button" data-target="' + esc(target) + '"' + (busy ? ' disabled aria-busy="true"' : '') +
+    '><span class="cb-ico">' + (busy ? ICONS.refresh : icon) + '</span><span class="cb-label">' +
+    esc(label) + "</span></button></span>";
+}
+
+function healthLatest(item) {
+  if (!item.latest) return '<div class="health-latest">No recent validation signal is available.</div>';
+  const latest = item.latest;
+  const ago = healthRelativeTime(latest.at);
+  let primary;
+  if (item.provider === "github") {
+    const sha = String(latest.id || "").slice(0, 7);
+    primary = (sha ? "Commit " + sha : "Default-branch head") + (latest.actor ? " by " + latest.actor : "");
+  } else {
+    const result = latest.result || latest.status;
+    primary = "Build " + (latest.number || latest.id || "") + (result ? " (" + result + ")" : "");
+  }
+  return '<div class="health-latest"><div class="health-latest-line"><b>' + esc(primary) + '</b>' +
+    (ago ? '<time datetime="' + esc(latest.at || "") + '">' + esc(ago) + "</time>" : "") + "</div>" +
+    (latest.message ? '<span class="commit-message" title="' + esc(latest.message) + '">' +
+      esc(latest.message) + "</span>" : "") + "</div>";
+}
+
+function healthReasons(item) {
+  const reasons = Array.isArray(item.reasons) ? item.reasons : [];
+  const content = (reason) => {
+    const summary = esc(reason.summary || "Health evidence is unavailable.");
+    return reason.url
+      ? '<a href="' + safeHref(reason.url) + '" target="_blank" rel="noreferrer">' + summary + "</a>"
+      : "<span>" + summary + "</span>";
+  };
+  const primary = reasons[0] || {
+    summary: item.state === "healthy" ? "Latest validation succeeded." : "No additional diagnostic evidence is available.",
+  };
+  const secondary = reasons.slice(1, 3);
+  const icon = item.state === "healthy"
+    ? ICONS.check
+    : item.state === "failing"
+      ? ICONS.alertSm
+      : item.state === "running" || item.state === "degraded"
+        ? ICONS.clock
+        : ICONS.pulse;
+  return '<div class="health-reasons"><div class="health-reason-banner"><span class="health-reason-icon">' +
+    icon + '</span><div class="health-reason-content"><p class="health-primary-reason">' + content(primary) + "</p>" +
+    (secondary.length
+      ? '<ul class="health-secondary-reasons">' + secondary.map((reason) => "<li>" + content(reason) + "</li>").join("") + "</ul>"
+      : "") + "</div></div></div>";
+}
+
+function healthEvidence(item) {
+  const evidence = Array.isArray(item.evidence) ? item.evidence : [];
+  if (!evidence.length) return "";
+  const count = Math.min(evidence.length, 5);
+  return '<details class="health-details"><summary><span>Evidence (' + count +
+    ')</span><span class="health-details-chevron" aria-hidden="true">' + ICONS.chev + '</span></summary><div class="health-evidence">' +
+    evidence.slice(0, 5).map((entry) =>
+    '<a href="' + safeHref(entry.url || item.url) + '" target="_blank" rel="noreferrer"><span class="ev-label">' +
+    esc(entry.label || "Evidence") + '</span><span class="ev-detail">' + esc(entry.detail || "") + "</span></a>"
+  ).join("") + "</div></details>";
+}
+
+function healthCard(item, index, total, options = {}) {
+  const meta = healthMeta(item);
+  const provider = item.provider === "azure-devops" ? "Azure DevOps" : "GitHub";
+  const providerIcon = item.provider === "azure-devops" ? ICONS.building : ICONS.pulse;
+  const branch = String(item.branch || "Unknown").replace(/^refs\/heads\//, "");
+  const grouped = !!options.grouped;
+  const showHandle = options.showHandle !== false;
+  const groupId = options.groupId || item.groupId || item.id;
+  const orderName = options.groupName || item.groupName || item.name || item.repository || "health source";
+  const titleText = grouped && item.provider === "github"
+    ? "Default branch"
+    : item.name || item.repository || "Health source";
+  const title = item.url
+    ? '<a href="' + safeHref(item.url) + '" target="_blank" rel="noreferrer">' +
+      esc(titleText) + "</a>"
+    : "<span>" + esc(titleText) + "</span>";
+  let providerContext = item.provider === "azure-devops" && item.organizationName && item.project
+    ? provider + " \u00b7 " + item.organizationName + "/" + item.project
+    : item.provider === "github" && item.host
+      ? provider + " \u00b7 " + item.host
+      : provider;
+  if (item.provider === "azure-devops" && item.discovered) {
+    const discoveryKind = item.discovery?.kind;
+    const discoveryLabel = discoveryKind === "official-default"
+      ? "Official default"
+      : discoveryKind === "azure-cli-default" || !discoveryKind
+        ? "Auto\u2011discovered"
+        : null;
+    if (discoveryLabel) providerContext += " \u00b7 " + discoveryLabel;
+  }
+  const streak = item.failureStreak > 0
+    ? String(item.failureStreak) + (item.failureStreakLowerBound ? "+" : "")
+    : "0";
+  const actionTarget = item.canOpenRepoSession ? "new-session" : "current-session";
+  const fixLabel = item.canOpenRepoSession ? "Fix in repo" : "Work fix here";
+  const handle = showHandle
+    ? '<button class="health-drag" type="button" draggable="true" data-health-drag="' +
+      esc(groupId) + '" aria-label="Reorder ' + esc(orderName) +
+      ". Position " + (index + 1) + " of " + total +
+      '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>'
+    : "";
+  const orderStatus = showHandle
+    ? '<span class="health-order-status" aria-hidden="true">' + (index + 1) + " of " + total + "</span>"
+    : "";
+
+  return '<article class="health-card ' + esc(item.state || "unknown") + (grouped ? " grouped-source" : "") +
+    '" data-health-id="' + esc(item.id) + '">' +
+    '<div class="health-card-top">' + handle +
+    '<span class="health-provider">' + providerIcon + '</span><div class="health-title">' +
+    title + '<span class="provider-name">' + esc(providerContext) + '</span></div><span class="health-state"><span class="health-state-dot"></span>' +
+    esc(meta.label) + "</span></div><div class=\"health-card-body\">" +
+    healthLatest(item) +
+    healthReasons(item) +
+    '<div class="health-metrics"><div class="health-metric"><span class="k">Last success</span><span class="v">' +
+    esc(healthLastSuccess(item)) + '</span></div><div class="health-metric"><span class="k">Failure streak</span><span class="v">' +
+    esc(streak) + '</span></div><div class="health-metric"><span class="k">Branch</span><span class="v" title="' +
+    esc(branch) + '">' + esc(branch) + "</span></div></div>" +
+    healthEvidence(item) + "</div>" +
+    '<div class="health-actions">' + healthActionBtn(item, "diagnose-health", "Diagnose here", "current-session") +
+    healthActionBtn(item, "fix-health", fixLabel, actionTarget) +
+    orderStatus + "</div></article>";
+}
+
+function healthGroup(group, index, total) {
+  if (group.items.length === 1) {
+    return '<div class="health-unit health-unit-single" data-health-group-id="' + esc(group.id) + '">' +
+      healthCard(group.items[0], index, total, { groupId: group.id, groupName: group.name }) + "</div>";
+  }
+
+  const title = group.url
+    ? '<a href="' + safeHref(group.url) + '" target="_blank" rel="noreferrer">' + esc(group.name) + "</a>"
+    : "<span>" + esc(group.name) + "</span>";
+  const match = group.match === "name"
+    ? '<span class="health-group-match" title="Grouped because the Azure DevOps repository name uniquely matches this watched GitHub repository.">Repository name match</span>'
+    : group.match === "provider"
+      ? '<span class="health-group-match" title="Grouped using repository metadata reported by the provider.">Provider linked</span>'
+      : "";
+  return '<section class="health-unit health-source-group" data-health-group-id="' + esc(group.id) + '">' +
+    '<header class="health-group-head"><button class="health-drag" type="button" draggable="true" data-health-drag="' +
+    esc(group.id) + '" aria-label="Reorder ' + esc(group.name) + ". Position " + (index + 1) + " of " + total +
+    '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>' +
+    '<span class="health-group-icon">' + ICONS.layers + '</span><div class="health-group-title">' + title +
+    "<small>" + group.items.length + " delivery sources</small></div>" + match + "</header>" +
+    '<div class="health-group-cards">' +
+    group.items.map((item) => healthCard(item, index, total, {
+      groupId: group.id,
+      groupName: group.name,
+      grouped: true,
+      showHandle: false,
+    })).join("") + "</div></section>";
+}
+
+function healthView() {
+  const health = state.health || {};
+  const items = Array.isArray(health.items) ? health.items : [];
+  const groups = healthRepositoryGroups(items);
+  const counts = health.counts || {};
+  const loadingNote = state.loading ? " \u00b7 checking sources\u2026" : "";
+  const errors = state.errors && state.errors.length
+    ? '<div class="errbar">' + esc(state.errors.join(" \u00b7 ")) + "</div>"
+    : "";
+  const body = items.length
+    ? '<div class="health-grid' + (healthOrderSaving ? " ordering" : "") + '" id="health-grid">' +
+      groups.map((group, index) => healthGroup(group, index, groups.length)).join("") + "</div>"
+    : '<div class="state"><div class="ico">' + ICONS.pulse + "</div><h2>" +
+      (state.loading ? "Checking repository health\u2026" : "No health sources configured") + "</h2><p>" +
+      (state.loading ? "Results appear as each source completes." : "Watch a GitHub repository or add an Azure DevOps pipeline in Settings.") +
+      "</p></div>";
+
+  return '<div class="subbar"><span class="who">' + ICONS.pulse + " Repository &amp; delivery health</span>" +
+    '<span class="meta" id="health-order-help">' + groups.length + " repository group" + (groups.length === 1 ? "" : "s") +
+    " across " + items.length + " source" + (items.length === 1 ? "" : "s") + ". Drag groups to prioritize." + loadingNote +
+    '</span><div class="stats"><span class="stat"><span class="dot bg-success"></span><b>' + (counts.healthy || 0) +
+    '</b> Healthy</span><span class="stat"><span class="dot bg-warning"></span><b>' +
+    ((counts.running || 0) + (counts.degraded || 0)) +
+    '</b> Active / degraded</span><span class="stat"><span class="dot bg-danger"></span><b>' + (counts.failing || 0) +
+    '</b> Failing</span><span class="stat"><span class="dot bg-muted"></span><b>' +
+    ((counts.unavailable || 0) + (counts.unknown || 0)) +
+    '</b> Unknown</span></div></div>' + errors + '<div class="health-shell">' + body +
+    '<p class="health-order-status" id="health-order-announcement" aria-live="polite">' +
+    esc(healthOrderAnnouncement) + "</p></div>";
+}
+
 function queueView() {
+  if (state.mode === "health") return healthView();
   const active = state.activeAccounts || [];
   const anyEnt = active.some((a) => a.enterprise);
   const whoLabel = active.length > 1
@@ -1201,22 +2904,94 @@ function toggle(id, title, desc, checked) {
     '<label class="switch"><input type="checkbox" id="' + id + '" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
 }
 
+function filtersView() {
+  const mode = state.mode;
+  const modeName = { review: "Review", issues: "Issues", ship: "Ship", health: "Health" }[mode] || "Review";
+  const cur = (m) => (mode === m ? " current" : "");
+  const drafts = state.counts && state.counts.drafts;
+  const draftLine = state.showDrafts
+    ? "Draft PRs are <b>shown</b> right now."
+    : "Draft PRs are <b>hidden</b> right now" + (drafts ? " (" + drafts + " hidden)" : "") + ".";
+  return '<div class="page">' +
+    '<div class="page-head"><h2>What\u2019s filtered</h2><p>This queue is curated, not a raw list. Here is exactly what each mode surfaces, holds back, or routes elsewhere, so a missing PR or issue is never a mystery. You are viewing <b>' + esc(modeName) + '</b> mode.</p></div>' +
+
+    '<div class="section' + cur("review") + '"><h3>' + ICONS.eye + " Review</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.merge + "<span>A PR reaches the <b>shared review queue</b> only once <b>checks are green</b> and <b>all feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>" +
+        '<div class="policy-row">' + ICONS.pr + "<span><b>Drafts, merge conflicts, and needs-author-action</b> PRs are routed out of the shared lists, so reviewers only see PRs that are genuinely ready.</span></div>" +
+        '<div class="policy-row">' + ICONS.xcircle + "<span><b>CI-failing</b> PRs are held out of Needs attention. A failure driven only by informational <b>aspire-1p checks</b> (proof of presence) is not counted as red.</span></div>" +
+        '<div class="policy-row">' + ICONS.usersSm + "<span>PRs you authored <b>as yourself or via Copilot</b> both count as yours, so delegated work still lands in your lanes and developer totals.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section' + cur("issues") + '"><h3>' + ICONS.tag + " Issues</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.alertSm + "<span><b>Focus buckets</b> surface the issues that matter first: regressions, CTI team items ([aspiree2e]), afscrome finds, and your own issues.</span></div>" +
+        '<div class="policy-row">' + ICONS.dot2 + "<span>Everything else lands in <b>Needs triage</b> (unlabeled and unassigned) or <b>Recently active</b>, so no open issue silently drops off.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section' + cur("ship") + '"><h3>' + ICONS.merge + " Ship</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.clock + "<span>Groups open work for the active milestone (<b>" + esc(prefs.release || state.release || "\u2014") + "</b>) so the release view stays focused on what is landing now.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section' + cur("health") + '"><h3>' + ICONS.pulse + " Health</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.pulse + "<span>Checks the <b>default branch</b> of each watched GitHub repository and every Azure DevOps pipeline explicitly configured in Settings.</span></div>" +
+        '<div class="policy-row">' + ICONS.alertSm + "<span>Likely causes appear only when provider evidence supports them. Repository inactivity by itself does <b>not</b> make a source unhealthy.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section"><h3>Drafts</h3>' +
+      '<p class="hint">' + draftLine + " Drafts are prototypes and experiments, not review work. Change this in Settings.</p>" +
+      '<div class="row-actions"><button class="btn ghost" id="filters-to-settings">Open settings</button></div>' +
+    "</div>" +
+  "</div>";
+}
+
+function pipelineEditorHtml() {
+  const pipelines = Array.isArray(prefs.azurePipelines) ? prefs.azurePipelines : [];
+  const rows = pipelines.length
+    ? pipelines.map((pipeline) => {
+        const name = pipeline.name || (pipeline.definitionId ? "Pipeline " + pipeline.definitionId : "Azure DevOps pipeline");
+        const branch = String(pipeline.branch || "refs/heads/main").replace(/^refs\/heads\//, "");
+        return '<li class="pipeline-row"><div class="pipeline-main"><span class="pipeline-name">' + esc(name) +
+          '</span><span class="pipeline-meta">' + esc(branch + " \u00b7 " + pipeline.url) +
+          '</span></div><button class="repo-ico danger pipeline-remove" type="button" data-pipeline-id="' +
+          esc(pipeline.id) + '" title="Remove pipeline" aria-label="Remove ' + esc(name) + '">' + ICONS.trash + "</button></li>";
+      }).join("")
+    : '<li class="repo-empty">No additional Azure DevOps pipelines configured.</li>';
+  return '<div class="section" id="pipeline-settings"><h3>' + ICONS.pulse + " Azure DevOps pipelines</h3>" +
+    '<p class="hint">A matching Azure Repo delivery pipeline is auto-discovered from your <b>az</b> CLI default project. Paste a pipeline or build URL to monitor additional definitions. Existing <b>az</b> or <b>AZURE_DEVOPS_EXT_PAT</b> authentication is reused; credentials are never stored.</p>' +
+    '<div class="pipeline-add"><input id="pipeline-url-input" type="text" value="' + esc(pipelineUrlDraft) +
+    '" placeholder="https://dev.azure.com/org/project/_build?definitionId=123" aria-label="Azure DevOps pipeline URL" />' +
+    '<input id="pipeline-branch-input" class="pipeline-branch" type="text" value="' + esc(pipelineBranchDraft) +
+    '" placeholder="Branch (default: main)" aria-label="Pipeline branch override" />' +
+    '<button class="repo-add-btn" id="pipeline-add-btn" type="button" title="Add pipeline" aria-label="Add pipeline"' +
+    (pipelineSaving ? ' disabled aria-busy="true"' : "") + ">" + (pipelineSaving ? ICONS.refresh : ICONS.plus) +
+    '</button></div><div class="pipeline-err" role="alert">' + esc(pipelineError) +
+    '</div><ul class="pipeline-list">' + rows + "</ul></div>";
+}
+
 function settingsView() {
   const n = prefs.notifications;
   const limit = (state.reviewLimit || 10);
   return '<div class="page">' +
-    '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
+    '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
       '<p class="hint">The shared queue is team-managed, not individually sorted. It shows at most <b>' + limit + '</b> PRs, ranked so the oldest waits surface first.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
       "</div>" +
-      toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!state.showDrafts) +
+      toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!prefs.showDrafts) +
     "</div>" +
     '<div class="section"><h3>Ship milestone</h3>' +
       '<p class="hint">Used by Ship mode to group work for the active release.</p>' +
-      '<div class="field"><input type="text" id="release-input" value="' + esc(prefs.release || "") + '" placeholder="13.4" /></div></div>' +
+      '<div class="field"><input type="text" id="release-input" value="' + esc(prefs.release || "") + '" placeholder="13.5" /></div></div>' +
+    pipelineEditorHtml() +
     '<div class="section" id="notif-settings"><h3>Notifications</h3>' +
       '<p class="hint">Live in-session alerts surface in the bell. Choose what counts.</p>' +
       toggle("n-review", "Review requested", "Someone asked you to review a PR", n.reviewRequested) +
@@ -1369,7 +3144,9 @@ function authPicker() {
 
 function render(forward) {
   app.removeAttribute("aria-busy");
-
+  // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
+  // open menu never survives a re-render as a detached orphan carrying stale click handlers.
+  document.querySelectorAll("body > .cb-menu").forEach((m) => m.remove());
   if (loadError && !state) {
     app.innerHTML = topbarShell() +
       '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(loadError) +
@@ -1380,8 +3157,9 @@ function render(forward) {
   if (!state) return; // skeleton (initial HTML) stays until first load resolves
 
   let inner;
-  if (!state.authenticated) { view = "queue"; inner = authPicker(); }
+  if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
   else if (view === "settings") inner = settingsView();
+  else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();
   else if (view === "notifications") inner = notificationsView();
   else inner = queueView();
@@ -1395,13 +3173,14 @@ function render(forward) {
     ? '<div class="errbar loaderr" role="alert">' + esc(loadError) +
       '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
     : "";
-  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
-  app.classList.toggle("loading", refreshing);
+  const motionClass = healthOrderSaving ? " no-motion" : "";
+  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + motionClass + '">' + inner + "</div></div>";
   if (banner) {
     const bx = document.getElementById("load-errbar-dismiss");
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
   }
   wire();
+  updateRefreshControls();
   layoutGrids();
 }
 
@@ -1637,33 +3416,72 @@ function wireRepoEditor(id) {
   wireRepoRows(id);
 }
 
+function isSettingsSaveShortcut(event) {
+  if (event.key !== "Enter" || event.isComposing) return false;
+  const target = event.target || {};
+  const tagName = String(target.tagName || "").toUpperCase();
+  if (tagName === "TEXTAREA" || tagName === "BUTTON" || tagName === "A" || tagName === "SELECT" || target.isContentEditable) return false;
+  if (typeof target.closest === "function" && target.closest('[role="button"]')) return false;
+  return target.id !== "pipeline-url-input" && target.id !== "pipeline-branch-input";
+}
+
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   const rb = document.getElementById("refresh-btn"); if (rb) rb.addEventListener("click", refresh);
+  const applyUpdate = document.getElementById("apply-update-btn"); if (applyUpdate) applyUpdate.addEventListener("click", applyAvailableUpdate);
+  const autoApply = document.getElementById("auto-apply-btn"); if (autoApply) autoApply.addEventListener("click", toggleAutoApply);
+  document.querySelectorAll(".linked-pr").forEach((link) =>
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openLinkedPr(link);
+    }));
   const back = document.getElementById("back-btn"); if (back) back.addEventListener("click", () => goView("queue", false));
   const bell = document.getElementById("bell-btn"); if (bell) bell.addEventListener("click", () => goView(view === "notifications" ? "queue" : "notifications"));
   const gear = document.getElementById("gear-btn"); if (gear) gear.addEventListener("click", () => goView(view === "settings" ? "queue" : "settings"));
+  const filt = document.getElementById("filters-btn"); if (filt) filt.addEventListener("click", () => goView(view === "filters" ? "queue" : "filters"));
   const acct = document.getElementById("acct-btn"); if (acct) acct.addEventListener("click", () => goView(view === "accounts" ? "queue" : "accounts"));
 
   const save = document.getElementById("save-settings"); if (save) save.addEventListener("click", saveSettings);
   const cancel = document.getElementById("cancel-settings"); if (cancel) cancel.addEventListener("click", () => goView("queue", false));
+  const fToSettings = document.getElementById("filters-to-settings"); if (fToSettings) fToSettings.addEventListener("click", () => goView("settings"));
+  const pipelineUrl = document.getElementById("pipeline-url-input");
+  const pipelineBranch = document.getElementById("pipeline-branch-input");
+  const pipelineAdd = document.getElementById("pipeline-add-btn");
+  if (pipelineUrl) {
+    pipelineUrl.addEventListener("input", (e) => { pipelineUrlDraft = e.target.value; pipelineError = ""; });
+    pipelineUrl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); addAzurePipeline(); }
+    });
+  }
+  if (pipelineBranch) {
+    pipelineBranch.addEventListener("input", (e) => { pipelineBranchDraft = e.target.value; pipelineError = ""; });
+    pipelineBranch.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); addAzurePipeline(); }
+    });
+  }
+  if (pipelineAdd) pipelineAdd.addEventListener("click", addAzurePipeline);
+  document.querySelectorAll(".pipeline-remove").forEach((button) => {
+    button.addEventListener("click", () => removeAzurePipeline(button.dataset.pipelineId));
+  });
 
   // The Esc/Enter hints on the settings buttons are real shortcuts, like the app's
-  // Cancel/Continue. Bound once so re-renders don't stack handlers.
+  // Cancel/Continue. Bound once so re-renders don't stack handlers. Esc also backs
+  // out of the filters info page, which has no Enter action of its own.
   if (!keysBound) {
     keysBound = true;
     document.addEventListener("keydown", function (e) {
+      if (view === "filters" && e.key === "Escape") { e.preventDefault(); goView("queue", false); return; }
       if (view !== "settings") return;
       if (e.key === "Escape") { e.preventDefault(); goView("queue", false); }
-      else if (e.key === "Enter" && !e.isComposing && (e.target.tagName || "") !== "TEXTAREA") {
-        e.preventDefault(); saveSettings();
-      }
+      else if (isSettingsSaveShortcut(e)) { e.preventDefault(); saveSettings(); }
     });
   }
 
   const rescan = document.getElementById("rescan-btn"); if (rescan) rescan.addEventListener("click", rescanAccounts);
 
   wireAccounts();
+  wireHealthOrdering();
 
   document.querySelectorAll(".lane-head").forEach((b) =>
     b.addEventListener("click", () => {
@@ -1690,6 +3508,66 @@ function wire() {
 
   document.querySelectorAll(".dismiss").forEach((b) =>
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismissNotif(b.dataset.dismiss, b.closest(".notif-card")); }));
+
+  // Card action split buttons live in a sibling row of the card link, so stop the click
+  // from bubbling to any surrounding handler and never navigate. The main button runs the
+  // action at its own data-target: "new-session" for a github.com PR, or "current-session"
+  // for a GHES/EMU PR that can't open a sub-session (see cardActionBtn). The caret, present
+  // only on github.com cards, toggles a menu to pick new vs current session.
+  document.querySelectorAll(".cb-split").forEach((split) => {
+    const main = split.querySelector(".cb-main");
+    const caret = split.querySelector(".cb-caret");
+    const menu = split.querySelector(".cb-menu");
+    if (main) main.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      closeCbMenus();
+      onCardAction(split, main.dataset.target || "new-session");
+    });
+    if (caret && menu) caret.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const wasOpen = !menu.hidden;
+      closeCbMenus();
+      if (!wasOpen) openCbMenu(split, caret, menu);
+    });
+    // Menu keyboard model (ARIA menu-button pattern): the items use roving tabindex (-1) and are
+    // driven from here. Arrow keys move between choices, Home/End jump to the ends. Escape closes
+    // the menu and returns focus to the caret. Tab must NOT be trapped: it closes the menu and
+    // re-anchors focus on the in-flow caret (so focus never lands in the portaled-away <body>),
+    // but does not preventDefault, so the browser's native Tab then advances focus to the next
+    // element per the pattern. Enter/Space activate natively (buttons).
+    if (caret && menu) menu.addEventListener("keydown", (e) => {
+      const items = Array.prototype.slice.call(menu.querySelectorAll(".cb-menu-item"));
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1 + items.length) % items.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+      else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeCbMenus(); caret.focus(); }
+      else if (e.key === "Tab") { closeCbMenus(); caret.focus(); }
+    });
+    split.querySelectorAll(".cb-menu-item").forEach((mi) =>
+      mi.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        closeCbMenus();
+        onCardAction(split, mi.dataset.target);
+      }));
+  });
+  // Dismiss any open action menu on an outside click or Escape. Bound once so re-renders
+  // don't stack handlers; the caret/main/menu handlers stopPropagation, so this only
+  // fires for clicks elsewhere.
+  if (!cbMenuBound) {
+    cbMenuBound = true;
+    document.addEventListener("click", () => closeCbMenus());
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCbMenus(); });
+    // A fixed menu doesn't track the caret once the page scrolls or the window resizes,
+    // so dismiss rather than let it drift away from its button. Capture-phase scroll on
+    // the document catches scrolling inside any nested container, not just the window.
+    document.addEventListener("scroll", () => closeCbMenus(), true);
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", () => closeCbMenus());
+    }
+  }
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);
   const r2 = document.getElementById("restore-notifs2"); if (r2) r2.addEventListener("click", restoreNotifs);
@@ -1728,9 +3606,29 @@ function wireAccounts() {
   });
 }
 
+// Live updates over Server-Sent Events. Progress drives the deterministic top bar. State events
+// contain complete dashboards and apply atomically; when auto-apply is disabled, update-available
+// changes only the toolbar until the user chooses to swap to the completed snapshot.
 try {
   const es = new EventSource("events");
-  es.addEventListener("refresh", () => load());
+  es.addEventListener("progress", (e) => {
+    try { const p = JSON.parse(e.data); setProgress(p.done, p.total); } catch {}
+  });
+  es.addEventListener("state", (e) => {
+    try { applyPushedState(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("update-available", (e) => {
+    try { onUpdateAvailable(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("preferences", (e) => {
+    try { onPreferences(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("snapshot", (e) => {
+    try { onSnapshot(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("poll-schedule", (e) => {
+    try { onPollSchedule(JSON.parse(e.data)); } catch {}
+  });
 } catch {}
 
 load();

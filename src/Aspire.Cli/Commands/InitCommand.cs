@@ -35,6 +35,8 @@ internal sealed class InitCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    internal override bool PrefetchesTemplatePackageMetadata => true;
+
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
     private readonly ISolutionLocator _solutionLocator;
@@ -150,14 +152,7 @@ internal sealed class InitCommand : BaseCommand
         // ignore failures since `aspire doctor` / `aspire certs trust` provide a fallback.
         if (isCSharp)
         {
-            try
-            {
-                _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-            }
-            catch (CertificateServiceException)
-            {
-                // Non-fatal: surface via aspire doctor / aspire certs trust.
-            }
+            _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.
@@ -287,6 +282,7 @@ internal sealed class InitCommand : BaseCommand
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+            #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -436,6 +432,7 @@ internal sealed class InitCommand : BaseCommand
         // (or after a CLI update) the template will be missing. Install first.
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
+            sourceOverride: null,
             _runner,
             InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,

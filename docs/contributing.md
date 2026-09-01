@@ -29,6 +29,7 @@ These instructions will get you ready to contribute to this project. If you just
   - [Native build](#native-build)
   - [Building the VS Code extension](#building-the-vs-code-extension)
 - [Trying your changes locally](#trying-your-changes-locally)
+  - [Running the Aspire CLI from source](#running-the-aspire-cli-from-source)
   - [Generating local NuGet packages](#generating-local-nuget-packages)
   - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
 - [Tips and known issues](#tips-and-known-issues)
@@ -196,6 +197,18 @@ yarn compile
 Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
 
 ## Trying your changes locally
+
+### Running the Aspire CLI from source
+
+For a fast in-repo development loop, use `run-aspire.sh` (macOS and Linux) or `run-aspire.cmd` (Windows). The wrapper runs the CLI from the current worktree without installing it, preserves your current directory, and forwards any Aspire command:
+
+```bash
+cd playground/rust
+../../run-aspire.sh restore
+../../run-aspire.sh run
+```
+
+On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
 
 ### Generating local NuGet packages
 

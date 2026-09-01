@@ -6,13 +6,20 @@
 // from davidfowl/pr-dashboard (frontend/src/utils/{models,signals,pullRequests}.ts).
 
 import {
+  actorIdentityKey,
   createAttentionBuckets,
   createForMeItems,
   createDeveloperPullRequestCounts,
   createAttentionSignals,
+  createFocusIssueBuckets,
+  createIssueSignals,
   computeFocusItems,
   computeFocusExclusionItems,
   computeCommunityItems,
+  isChecksFailing,
+  isReviewDebt,
+  shouldHideFromSharedPullRequestLists,
+  visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
 
@@ -29,6 +36,14 @@ export const DEFAULT_REPOS = [
   "microsoft/aspire-skills",
   "microsoft/dcp",
   "CommunityToolkit/Aspire",
+];
+
+// Enterprise Managed User (EMU) accounts (e.g. "dapine_microsoft") work against
+// the private first-party mirror rather than the public Aspire repos, so they get
+// a different default watch set. See accounts.isEmuAccountId for how an account is
+// classified and state.defaultReposForId for how this default is applied.
+export const DEFAULT_EMU_REPOS = [
+  "devdiv-microsoft/aspire-1p",
 ];
 
 const GRAPHQL = "https://api.github.com/graphql";
@@ -109,10 +124,13 @@ query($owner:String!, $name:String!, $after:String) {
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
-        author { login avatarUrl }
+        author { __typename login avatarUrl }
         milestone { title }
         labels(first:15) { nodes { name } }
         assignees(first:10) { nodes { login } }
+        closedByPullRequestsReferences(first:5, includeClosedPrs:true) {
+          nodes { number title url state repository { nameWithOwner } }
+        }
       }
     }
   }
@@ -135,6 +153,25 @@ function mapCheckState(rollup) {
   if (state === "FAILURE" || state === "ERROR") return "failure";
   if (state === "PENDING" || state === "EXPECTED") return "pending";
   return "none";
+}
+
+// Build the engine-shaped ChecksStatus from the list-level rollup. The PR-list GraphQL query
+// deliberately carries only `statusCheckRollup { state }` (mirroring pr-dashboard's lean list
+// query, which enriches per-check detail lazily server-side). We therefore report zero per-check
+// detail: the non-blocking-check helpers in model.mjs treat this indeterminate shape correctly
+// (an aggregate failure on a rule-covered repo reads as "unknown" rather than red).
+function mapChecks(rollup) {
+  return {
+    state: mapCheckState(rollup),
+    totalCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    pendingCount: 0,
+    neutralCount: 0,
+    skippedCount: 0,
+    completedAt: null,
+    failingChecks: [],
+  };
 }
 
 function mapMergeable(m) {
@@ -235,7 +272,11 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
   const labels = (node.labels?.nodes ?? []).map((l) => l.name);
   const assignees = (node.assignees?.nodes ?? []).map((a) => a.login);
   const rawUnresolved = (node.reviewThreads?.nodes ?? []).filter((t) => !t.isResolved).length;
-  const checksState = mapCheckState(node.commits?.nodes?.[0]?.commit?.statusCheckRollup);
+  const checks = mapChecks(node.commits?.nodes?.[0]?.commit?.statusCheckRollup);
+  // Visible state honors non-blocking check rules: an aggregate failure driven only by
+  // informational checks (e.g. aspire-1p proof-of-presence) reads as unknown/pending here,
+  // so the simplified lane/ship/count paths don't treat it as red CI.
+  const checksState = visibleCheckState({ repository: repo, checks }) ?? "none";
   const review = deriveReview(node.reviews?.nodes ?? [], requestedReviewers, viewers, repo, rawUnresolved);
   const mergeable = node.mergeable; // MERGEABLE | CONFLICTING | UNKNOWN
   const mergeableState = mapMergeable(mergeable);
@@ -284,7 +325,7 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     lastCommitAt,
     linkedIssues,
     // Engine-shaped fields (read by model.mjs).
-    checks: { state: checksState, failureCount: 0, completedAt: null },
+    checks,
     mergeableState,
     // Back-compat fields read by the simplified Fowler lanes/signals path.
     unresolvedThreadCount: rawUnresolved,
@@ -294,7 +335,9 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     // REVIEW_REQUIRED | null (null when the repo has no required reviews).
     reviewDecision: node.reviewDecision ?? null,
     review,
-    isMine: viewers.has(author.toLowerCase()),
+    // Key off the human identity so a Copilot PR attributed to me ("me/copilot") still
+    // counts as mine. actorIdentityKey strips the "/copilot" suffix and punctuation.
+    isMine: [...viewers].some((viewer) => actorIdentityKey(viewer) === actorIdentityKey(author)),
     // Private repos cannot have external community contributors, so PRs on them are
     // never "Community" — they flow through the normal team attention engine instead.
     repoPrivate: !!repoPrivate,
@@ -304,6 +347,15 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
 function normalizeIssue(repo, node, viewers) {
   const labels = (node.labels?.nodes ?? []).map((l) => l.name);
   const assignees = (node.assignees?.nodes ?? []).map((a) => a.login);
+  const linkedPullRequests = (node.closedByPullRequestsReferences?.nodes ?? [])
+    .filter((pr) => pr.state !== "CLOSED")
+    .map((pr) => ({
+      repository: pr.repository?.nameWithOwner ?? repo,
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      state: pr.state,
+    }));
   const author = node.author?.login ?? "ghost";
   return {
     repository: repo,
@@ -312,11 +364,16 @@ function normalizeIssue(repo, node, viewers) {
     url: node.url,
     author,
     authorAvatarUrl: node.author?.avatarUrl ?? null,
+    // __typename is the precise bot signal used by isBotAuthor's fast path. Issues
+    // fetch it just like PRs (normalizePr) so a Bot-typed author whose login lacks
+    // "bot" still earns the bot pill; the login string heuristics remain the fallback.
+    authorType: node.author?.__typename ?? null,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
     milestone: node.milestone?.title ?? null,
     labels,
     assignees,
+    linkedPullRequests,
     isMine: viewers.has(author.toLowerCase()),
     assignedToMe: assignees.some((a) => viewers.has(a.toLowerCase())),
   };
@@ -417,8 +474,15 @@ function reviewReady(pr) {
 }
 
 // Review-ready PRs that still need a review (not the viewer's own, not yet approved).
+// Also honor the shared-list hide rule so PRs flagged for author action (draft, conflicts,
+// or a needs-author-action label) never surface in the team's shared review queue.
 function awaitingReview(pr) {
-  return reviewReady(pr) && !pr.isMine && pr.review.state !== "approved";
+  return (
+    reviewReady(pr) &&
+    !pr.isMine &&
+    pr.review.state !== "approved" &&
+    !shouldHideFromSharedPullRequestLists(pr)
+  );
 }
 
 // Oldest waits float to the top so nothing starves, with nudges for explicitly
@@ -484,30 +548,37 @@ function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
   return lanes.filter((l) => l.items.length > 0);
 }
 
-function bucketIssues(issues) {
-  const lanes = [
-    { id: "assigned", label: "Assigned to you", tone: "danger", items: [] },
-    { id: "yours", label: "Your issues", tone: "accent", items: [] },
-    { id: "triage", label: "Needs triage", tone: "warning", items: [] },
-    { id: "active", label: "Recently active", tone: "muted", items: [] },
-  ];
-  for (const issue of issues) {
-    let laneId;
-    if (issue.assignedToMe) laneId = "assigned";
-    else if (issue.isMine) laneId = "yours";
-    else if (issue.labels.length === 0 && issue.assignees.length === 0) laneId = "triage";
-    else laneId = "active";
-    lanes.find((l) => l.id === laneId).items.push({ issue, signals: issueSignals(issue) });
-  }
-  return lanes.filter((l) => l.items.length > 0);
-}
+// Issues view: pr-dashboard focus buckets (Regression / CTI team / afscrome finds, plus a
+// per-viewer "My issues" lane) using the ported `createFocusIssueBuckets` + `createIssueSignals`.
+// Focus buckets only cover a curated subset, so residual lanes catch everything else and keep
+// no open issue from silently dropping out of the view.
+function bucketIssues(issues, login) {
+  const covered = new Set();
+  const toItem = (issue) => {
+    covered.add(issue.url);
+    return { issue, signals: createIssueSignals(issue) };
+  };
 
-function issueSignals(issue) {
-  const out = [];
-  if (issue.milestone) out.push({ label: issue.milestone, tone: "accent" });
-  if (issue.labels.length === 0) out.push({ label: "Unlabeled", tone: "warning" });
-  for (const l of issue.labels.slice(0, 3)) out.push({ label: l, tone: "muted" });
-  return out;
+  const lanes = createFocusIssueBuckets(issues, login).map((bucket) => ({
+    id: `focus-${bucket.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`,
+    label: bucket.label,
+    tone: bucket.tone,
+    items: bucket.issues.map(toItem),
+  }));
+
+  const residual = issues.filter((issue) => !covered.has(issue.url));
+  const isUntriaged = (issue) => issue.labels.length === 0 && issue.assignees.length === 0;
+  const triage = residual.filter(isUntriaged);
+  const active = residual.filter((issue) => !isUntriaged(issue));
+
+  if (triage.length) {
+    lanes.push({ id: "triage", label: "Needs triage", tone: "warning", items: triage.map(toItem) });
+  }
+  if (active.length) {
+    lanes.push({ id: "active", label: "Recently active", tone: "muted", items: active.map(toItem) });
+  }
+
+  return lanes.filter((lane) => lane.items.length > 0);
 }
 
 function bucketShip(prs, release, { showDrafts = false } = {}) {
@@ -569,11 +640,23 @@ export function buildNotifications(prs, prefs, dismissed = []) {
   return items;
 }
 
+// The focused queue headline is capped to `limit` actionable cards, but review-debt cards sort
+// last (they carry the oldest activity timestamp) and would be sliced away whenever `limit`
+// fresher PRs exist — leaving their "Address review" button unreachable even though focusTotal
+// still counts them. Keep the freshest `limit` cards plus any review-debt cards that spill past
+// the cap, so the debt action stays reachable. The two slices are disjoint, so no card is
+// duplicated, and focusTotal continues to report the true (uncapped) count.
+export function capFocusKeepingDebt(cards, limit) {
+  const head = cards.slice(0, limit);
+  const spilloverDebt = cards.slice(limit).filter((c) => c && c.reviewDebt);
+  return head.concat(spilloverDebt);
+}
+
 // ---------------------------------------------------------------------------
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -587,8 +670,26 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
 
   const prById = new Map();   // url -> normalized PR (dedup across accounts)
   const issueById = new Map();
-  const okRepos = new Set();  // repos that succeeded under at least one account
-  const errorsRaw = [];       // { repo, message }
+  // Success/error are tracked per (host, repo), NOT per repo alone. The same owner/repo slug can
+  // exist on github.com and on a GHES/EMU host simultaneously, so a success on one host must not
+  // suppress the other host's failure — that would silently drop the failing host's PRs with no
+  // surfaced error. The GraphQL origin (acct.graphql) identifies the host (undefined for the
+  // github.com default). Accounts that share a host still collapse to one key, so duplicate
+  // credentials for the same slug keep de-duping as before.
+  const hostRepoKey = (graphql, repo) => `${graphql ?? ""}\n${repo}`;
+  const okRepos = new Set();  // hostRepoKey(host, repo) that succeeded under at least one account
+  const errorsRaw = [];       // { repo, host, message }
+
+  // Each (account, repo) fetch reports when it settles so the caller can drive a deterministic
+  // progress bar. Dashboard state is intentionally produced only after every job completes:
+  // replacing an already-populated board with partial snapshots makes cards disappear and
+  // reappear as slower repositories finish.
+  let total = 0;
+  let done = 0;
+  const reportDone = () => {
+    done++;
+    if (typeof onProgress === "function") onProgress({ done, total, phase: "fetch" });
+  };
 
   // Fetch each (account, repo) pair with that account's own token.
   const jobs = [];
@@ -598,7 +699,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         (async () => {
           const { owner, name } = splitRepo(repo);
           if (!owner || !name) {
-            errorsRaw.push({ repo, message: `Invalid repo "${repo}"` });
+            errorsRaw.push({ repo, host: acct.graphql, message: `Invalid repo "${repo}"` });
             return;
           }
           try {
@@ -628,104 +729,135 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                 after = conn.pageInfo.endCursor;
               }
             }
-            okRepos.add(repo);
+            okRepos.add(hostRepoKey(acct.graphql, repo));
           } catch (e) {
-            errorsRaw.push({ repo, message: `${repo}: ${e.message}` });
+            errorsRaw.push({ repo, host: acct.graphql, message: `${repo}: ${e.message}` });
           }
-        })(),
+        })().then(reportDone),
       );
     }
   }
-  await Promise.all(jobs);
+  total = jobs.length;
 
-  const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  // Reshape the accumulated PRs/issues into the dashboard shape the renderer consumes.
+  function snapshot() {
+    const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
-  // Drafts are filtered out of the shared view by default (prototypes, not review work).
-  const visiblePrs = showDrafts ? allPrs : allPrs.filter((p) => !p.draft);
-  const draftCount = allPrs.filter((p) => p.draft).length;
+    // Drafts are filtered out of the shared view by default (prototypes, not review work).
+    const visiblePrs = showDrafts ? allPrs : allPrs.filter((p) => !p.draft);
+    const draftCount = allPrs.filter((p) => p.draft).length;
 
-  // Drop per-account errors for repos another active account could read.
-  const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(e.repo)).map((e) => e.message))];
+    // Drop per-account errors for (host, repo) pairs another active account could read on that same
+    // host — a success on a different host must not mask this host's failure.
+    const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
 
-  let lanes;
-  if (mode === "issues") lanes = bucketIssues(allIssues);
-  else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
-  else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
+    let lanes;
+    if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
+    else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
+    else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
 
-  // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
-  // queue is the capped headline; attention buckets, the community list, the personal
-  // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
-  // the card shape the renderer consumes ({ pr, reason, signals }).
-  let attention = null;
-  if (mode === "review") {
-    const login = usable[0].login;
-    const viewerLogins = usable.map((a) => a.login);
-    const buckets = createAttentionBuckets(allPrs, login);
-    const focusAll = computeFocusItems(buckets);
-    const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
-    const card = (pr, reason, extra) =>
-      Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
-    attention = {
-      forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
-        // Personal pick leads with its own call-to-action; the engine's action pill is
-        // dropped (includeAction:false) so we don't double up, then state signals follow.
-        const c = card(f.pullRequest, f.reason);
-        c.signals = dedupeSignals([
-          { label: f.action, tone: f.tone || "accent" },
-          ...signalsFor(f.pullRequest, f.reason, { includeAction: false, limit: 3 }),
-        ]);
-        return c;
-      }),
-      focus: focusAll.slice(0, reviewLimit).map((f) =>
-        card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone })),
-      focusTotal: focusAll.length,
-      focusLimit: reviewLimit,
-      focusExclusions: focusExclusions.map((e) => ({
-        pr: e.pullRequest,
-        reason: e.reason.detail,
-        signals: dedupeSignals([
-          { label: e.reason.label, tone: e.reason.tone },
-          ...signalsFor(e.pullRequest, e.reason.label, { includeAction: false, limit: 4 }),
-        ]),
-      })),
-      buckets: buckets.map((b) => ({
-        label: b.label,
-        tone: b.tone,
-        items: b.items.map((i) => card(i.pullRequest, i.reason)),
-      })),
-      community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
-      developerCounts: createDeveloperPullRequestCounts(allPrs),
+    // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
+    // queue is the capped headline; attention buckets, the community list, the personal
+    // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
+    // the card shape the renderer consumes ({ pr, reason, signals }).
+    let attention = null;
+    if (mode === "review") {
+      const login = usable[0].login;
+      const viewerLogins = usable.map((a) => a.login);
+      const buckets = createAttentionBuckets(allPrs, login);
+      const focusAll = computeFocusItems(buckets);
+      const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
+      // Every review-mode card carries a reviewDebt flag (aged past the focus limit without an
+      // approving review) so the canvas can offer Address review / Discuss review even when the
+      // "review debt" pill is truncated off the displayed signals. Derive it from the shared
+      // isReviewDebt predicate, NOT from c.signals: signalsFor caps the display pills, so a debt PR
+      // that also carries release/regression pills would lose its "review debt" pill and be wrongly
+      // treated as non-debt. The predicate is the same one createAttentionSignals, the focus-retention
+      // filter and capFocusKeepingDebt use, so they cannot drift.
+      const card = (pr, reason, extra) =>
+        Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
+      const focusCards = focusAll.map((f) => {
+        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+      });
+      const focus = capFocusKeepingDebt(focusCards, reviewLimit);
+      attention = {
+        forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
+          // Personal pick leads with its own call-to-action; the engine's action pill is
+          // dropped (includeAction:false) so we don't double up, then state signals follow.
+          const c = card(f.pullRequest, f.reason);
+          c.signals = dedupeSignals([
+            { label: f.action, tone: f.tone || "accent" },
+            ...signalsFor(f.pullRequest, f.reason, { includeAction: false, limit: 3 }),
+          ]);
+          // Preserve the raw action label (e.g. "Resolve conflicts") as a field so the
+          // canvas can offer a matching action button; the label is otherwise only
+          // reachable folded into signals[0].
+          c.action = f.action;
+          return c;
+        }),
+        focus,
+        focusTotal: focusAll.length,
+        focusLimit: reviewLimit,
+        // True when capFocusKeepingDebt appended review-debt cards from past the cap, so `focus`
+        // is no longer a prefix of the sorted list: non-debt cards between retained debt cards are
+        // skipped. A "top N of total" label would then be false, so the canvas shows an honest
+        // "N shown" metric for this mixed selection instead.
+        focusMixed: focus.length > reviewLimit,
+        focusExclusions: focusExclusions.map((e) => ({
+          pr: e.pullRequest,
+          reason: e.reason.detail,
+          // Serialize the debt flag here too (this shape is built inline, not via card()) so a stacked
+          // "Your PRs outside" card keeps Address review / Discuss review when its pill is truncated.
+          reviewDebt: isReviewDebt(e.pullRequest),
+          signals: dedupeSignals([
+            { label: e.reason.label, tone: e.reason.tone },
+            ...signalsFor(e.pullRequest, e.reason.label, { includeAction: false, limit: 4 }),
+          ]),
+        })),
+        buckets: buckets.map((b) => ({
+          label: b.label,
+          tone: b.tone,
+          items: b.items.map((i) => card(i.pullRequest, i.reason)),
+        })),
+        community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
+        developerCounts: createDeveloperPullRequestCounts(allPrs),
+      };
+    }
+
+    const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
+
+    const counts = {
+      prs: visiblePrs.length,
+      total: allPrs.length,
+      drafts: draftCount,
+      issues: allIssues.length,
+      mine: allPrs.filter((p) => p.isMine).length,
+      needsReview: allPrs.filter(awaitingReview).length,
+      readyToMerge: allPrs.filter(isReadyToMerge).length,
+      ciFailing: visiblePrs.filter((p) => p.checksState === "failure").length,
+    };
+
+    return {
+      authenticated: true,
+      viewer: usable[0].login,
+      viewers: usable.map((a) => a.login),
+      mode,
+      release: release ?? CURRENT_RELEASE,
+      repos,
+      lanes,
+      attention,
+      notifications,
+      counts,
+      showDrafts,
+      reviewLimit,
+      errors,
+      fetchedAt: new Date().toISOString(),
     };
   }
 
-  const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
-
-  const counts = {
-    prs: visiblePrs.length,
-    total: allPrs.length,
-    drafts: draftCount,
-    issues: allIssues.length,
-    mine: allPrs.filter((p) => p.isMine).length,
-    needsReview: allPrs.filter(awaitingReview).length,
-    readyToMerge: allPrs.filter(isReadyToMerge).length,
-    ciFailing: visiblePrs.filter((p) => p.checksState === "failure").length,
-  };
-
-  return {
-    authenticated: true,
-    viewer: usable[0].login,
-    viewers: usable.map((a) => a.login),
-    mode,
-    release: release ?? CURRENT_RELEASE,
-    repos,
-    lanes,
-    attention,
-    notifications,
-    counts,
-    showDrafts,
-    reviewLimit,
-    errors,
-    fetchedAt: new Date().toISOString(),
-  };
+  await Promise.all(jobs);
+  // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
+  if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
+  return snapshot();
 }

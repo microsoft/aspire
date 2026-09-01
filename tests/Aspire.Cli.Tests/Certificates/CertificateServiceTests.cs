@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Certificates;
 
@@ -21,7 +22,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithFullyTrustedCert_StillRunsTrustToUpdateAspireCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -48,7 +49,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithNoCertificates_RunsTrustOperation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -75,7 +76,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsFailureForInteractiveLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -102,7 +103,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsSuccessForNonInteractiveLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -129,7 +130,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_TrustOperationFails_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
         {
@@ -150,7 +151,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_TrustOperationCancelled_ReturnsWasCancelled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
         {
@@ -171,7 +172,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ChecksButDoesNotTrustOnNonLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
         var checkCalled = false;
 
@@ -216,9 +217,121 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenUntrustedOnNonLinux()
+    public async Task CertificatePemExport_IsExplicitAndUsesAspireHomeDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHomeDirectory = workspace.CreateDirectory("custom-aspire-home");
+        var exportCalled = false;
+        string? exportDirectory = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                aspireHomeDirectory: aspireHomeDirectory);
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    ExportDevCertificatePublicPemCallback = directory =>
+                    {
+                        exportCalled = true;
+                        exportDirectory = directory;
+                        return Path.Combine(directory, "aspire-dev-cert-test.pem");
+                    }
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(exportCalled);
+
+        var result = cs.ExportDevCertificatePem(TestContext.Current.CancellationToken);
+
+        Assert.True(exportCalled);
+        Assert.Equal(Path.Combine(aspireHomeDirectory.FullName, "dev-certs"), exportDirectory);
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void ExportDevCertificatePem_Failure_DoesNotThrow()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.Full,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    ExportDevCertificatePublicPemCallback = (_) => throw new IOException("Disk full")
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = cs.ExportDevCertificatePem(TestContext.Current.CancellationToken);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ExportDevCertificatePem_Cancellation_Throws()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Full),
+                    ExportDevCertificatePublicPemCallback = _ =>
+                    {
+                        cancellationTokenSource.Cancel();
+                        throw new OperationCanceledException(cancellationTokenSource.Token);
+                    }
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var certificateService = sp.GetRequiredService<ICertificateService>();
+
+        Assert.ThrowsAny<OperationCanceledException>(
+            () => certificateService.ExportDevCertificatePem(cancellationTokenSource.Token));
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenUntrustedOnNonLinux()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -259,7 +372,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenPartiallyTrustedOnNonLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -300,7 +413,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ProceedsOnLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -326,7 +439,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, TestEnvironment.CreateLinux());
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                var logger = sp.GetRequiredService<ILogger<CertificateService>>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, TestEnvironment.CreateLinux(), executionContext, logger);
             };
         });
 
@@ -342,7 +457,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_GeneratesCertWhenNoneExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
         var checkCallCount = 0;
 
@@ -387,7 +502,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_SkipsCertGenerationWhenCertsExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -425,7 +540,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_EnvVarOptOutSuppressesCertGeneration()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -471,7 +586,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsOnCertGenerationFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var toolRunner = new TestCertificateToolRunner
         {
@@ -519,7 +634,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, environment ?? sp.GetRequiredService<IEnvironment>());
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                var logger = sp.GetRequiredService<ILogger<CertificateService>>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, environment ?? sp.GetRequiredService<IEnvironment>(), executionContext, logger);
             };
         });
 

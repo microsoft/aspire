@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Orleans;
 /// Specifies the Orleans provider type for a resource.
 /// </summary>
 /// <param name="providerType">The Orleans provider type to use for the resource.</param>
-public sealed class OrleansProviderTypeAnnotation(string providerType) : IResourceAnnotation
+internal sealed class OrleansProviderTypeAnnotation(string providerType) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the Orleans provider type to use for the resource.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountId } from "./accounts.mjs";
+import { accountId, isEmuAccountId, isEmuLogin } from "./accounts.mjs";
 import { accountConfig } from "./state.mjs";
 
 const originalEnv = { ...process.env };
@@ -15,6 +15,27 @@ test.afterEach(() => {
 test("accountId includes normalized host and login", () => {
   assert.equal(accountId("Octo", "HTTPS://API.GITHUB.COM/foo"), "acct:github.com/octo");
   assert.equal(accountId("Octo", "GHE.EXAMPLE.COM"), "acct:ghe.example.com/octo");
+});
+
+test("isEmuLogin matches org alias suffixes but not the bare suffix or plain logins", () => {
+  assert.equal(isEmuLogin("dapine_microsoft"), true);
+  assert.equal(isEmuLogin("DAPINE_MICROSOFT"), true);
+  assert.equal(isEmuLogin("octocat"), false);
+  assert.equal(isEmuLogin("_microsoft"), false);
+  assert.equal(isEmuLogin(""), false);
+  assert.equal(isEmuLogin(null), false);
+});
+
+test("isEmuAccountId classifies host-scoped and legacy ids by their login", () => {
+  assert.equal(isEmuAccountId("acct:github.com/dapine_microsoft"), true);
+  assert.equal(isEmuAccountId("acct:dapine_microsoft"), true);
+  assert.equal(isEmuAccountId("acct:github.com/octo"), false);
+  assert.equal(isEmuAccountId("acct:octo"), false);
+  // A GHES account whose login happens to end in an org-alias suffix must NOT be treated as
+  // an EMU (github.com) account — otherwise it defaults to the dotcom-only aspire-1p repo it
+  // cannot read. EMU aliases only exist on github.com.
+  assert.equal(isEmuAccountId("acct:ghe.example.com/alice_microsoft"), false);
+  assert.equal(isEmuAccountId("acct:ghe.example.com/octo"), false);
 });
 
 test("resolveAccounts keys accounts by normalized host and login", async () => {

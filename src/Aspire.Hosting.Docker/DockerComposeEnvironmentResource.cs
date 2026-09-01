@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Docker;
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
 [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
+public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     private const string DockerComposeUpTag = "docker-compose-up";
 
@@ -306,7 +306,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
         var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(this, logger);
 
-        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard)
+        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard && !IsAlreadyTargeted(dashboard))
         {
             // Ensure the dashboard resource is created (even though it's not part of the main application model)
             var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
@@ -323,6 +323,17 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             // Skip resources that are explicitly targeted to a different compute environment
             var resourceComputeEnvironment = r.GetComputeEnvironment();
             if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            // This step is reachable from two pipeline executions: it is RequiredBy
+            // "before-start" (so it runs during AppHost startup) and it is also part of the
+            // publish/deploy DAG. Adding a second DeploymentTargetAnnotation on the second
+            // pass makes ResourceExtensions.GetDeploymentTargetAnnotation throw, so the step
+            // has to be idempotent. Skipping early also avoids re-running ConfigureOtlp,
+            // which would append duplicate environment variables.
+            if (IsAlreadyTargeted(r))
             {
                 continue;
             }
@@ -344,6 +355,13 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             });
         }
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the resource already carries a
+    /// <see cref="DeploymentTargetAnnotation"/> produced by this environment.
+    /// </summary>
+    private bool IsAlreadyTargeted(IResource resource) =>
+        resource.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == this);
 
     private static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
     {

@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate APIs are experimental
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
@@ -43,43 +42,56 @@ public static class AzureCosmosExtensions
 
         var resource = new AzureCosmosDBResource(name, ConfigureCosmosDBInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("DatabaseMultiple")
             .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
     }
-
-    /// <summary>
-    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
-    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator#authentication"></a>.
-    /// </summary>
-    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local emulator</ats-summary>
-    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
-    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// When using the Azure Cosmos DB emulator, the container requires a TLS/SSL certificate.
-    /// For more information, see <a href="https://learn.microsoft.com/azure/cosmos-db/how-to-develop-emulator?tabs=docker-linux#export-the-emulators-tlsssl-certificate"></a>.
-    /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
-    /// </remarks>
-    [AspireExport(RunSyncOnBackgroundThread = true)]
-    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
-        => RunAsEmulator(builder, configureContainer, useVNext: false);
 
     /// <summary>
     /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
     /// </summary>
-    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the Linux-based (vNext) emulator</ats-summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local Linux-based (vNext) emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.TagVNextLatest"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
+    /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
     [AspireExport(RunSyncOnBackgroundThread = true)]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
         => RunAsEmulator(builder, configureContainer, useVNext: true);
+
+    /// <summary>
+    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API.
+    /// </summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local Linux-based (vNext) emulator. Use runAsEmulator instead.</ats-summary>
+    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    [Obsolete($"Use {nameof(RunAsEmulator)} instead.")]
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
+        => RunAsEmulator(builder, configureContainer);
+
+    /// <summary>
+    /// Configures an Azure Cosmos DB resource to be emulated using the classic Azure Cosmos DB emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
+    /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator#authentication"></a>.
+    /// </summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the classic emulator</ats-summary>
+    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// When using the classic Azure Cosmos DB emulator, the container requires a TLS/SSL certificate.
+    /// For more information, see <a href="https://learn.microsoft.com/azure/cosmos-db/how-to-develop-emulator?tabs=docker-linux#export-the-emulators-tlsssl-certificate"></a>.
+    /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.ClassicTag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
+    /// </remarks>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsClassicEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
+        => RunAsEmulator(builder, configureContainer, useVNext: false);
 
     private static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer, bool useVNext)
     {
@@ -101,7 +113,7 @@ public static class AzureCosmosExtensions
                {
                    Registry = CosmosDBEmulatorContainerImageTags.Registry,
                    Image = CosmosDBEmulatorContainerImageTags.Image,
-                   Tag = useVNext ? CosmosDBEmulatorContainerImageTags.TagVNextLatest : CosmosDBEmulatorContainerImageTags.Tag
+                   Tag = useVNext ? CosmosDBEmulatorContainerImageTags.Tag : CosmosDBEmulatorContainerImageTags.ClassicTag
                });
 
         CosmosClient? cosmosClient = null;
@@ -151,6 +163,12 @@ public static class AzureCosmosExtensions
             // delegate to the inner resource, so the annotation ends up on the correct resource.
             var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
             var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
+
+            // Wire the Aspire dashboard's OTLP endpoint into the emulator and tell the emulator to use it.
+            // WithOtlpExporter injects the OTLP endpoint address; ENABLE_OTLP_EXPORTER activates the
+            // emulator's built-in exporter so it forwards its own traces and metrics to that endpoint.
+            emulatorSurrogateBuilder.WithOtlpExporter()
+                .WithEnvironment("ENABLE_OTLP_EXPORTER", "true");
 
             // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
             // otherwise-unused Node process and, because the emulator's readiness probe is
@@ -354,7 +372,8 @@ public static class AzureCosmosExtensions
         var database = new AzureCosmosDBDatabaseResource(name, databaseName, builder.Resource);
         builder.Resource.Databases.Add(database);
 
-        return builder.ApplicationBuilder.AddResource(database);
+        return builder.ApplicationBuilder.AddResource(database)
+            .WithIconName("Database");
     }
 
     /// <summary>
@@ -365,7 +384,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPath">Partition key path for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, string partitionKeyPath, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -378,7 +397,8 @@ public static class AzureCosmosExtensions
         var container = new AzureCosmosDBContainerResource(name, containerName, partitionKeyPath, builder.Resource);
         builder.Resource.Containers.Add(container);
 
-        return builder.ApplicationBuilder.AddResource(container);
+        return builder.ApplicationBuilder.AddResource(container)
+            .WithIconName("Box");
     }
 
     /// <summary>
@@ -411,7 +431,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPaths">Hierarchical partition key paths for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, IEnumerable<string> partitionKeyPaths, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -435,7 +455,8 @@ public static class AzureCosmosExtensions
 
         builder.Resource.Containers.Add(container);
 
-        return builder.ApplicationBuilder.AddResource(container);
+        return builder.ApplicationBuilder.AddResource(container)
+            .WithIconName("Box");
     }
 
     /// <summary>
@@ -458,17 +479,16 @@ public static class AzureCosmosExtensions
     /// <param name="port">Optional host port to bind the Data Explorer to.</param>
     /// <returns>Cosmos emulator resource builder.</returns>
     /// <remarks>
-    /// The Data Explorer is only available with <see cref="RunAsPreviewEmulator"/>.
+    /// The separate Data Explorer endpoint configured by this method is only available with <see cref="RunAsEmulator(IResourceBuilder{AzureCosmosDBResource}, Action{IResourceBuilder{AzureCosmosDBEmulatorResource}})"/>.
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataExplorer(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         if (!builder.Resource.InnerResource.IsVNextEmulator)
         {
-            throw new NotSupportedException($"The Data Explorer endpoint is only available when using the Linux-based (vNext) Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
+            throw new NotSupportedException($"The Data Explorer endpoint is only available when using the Linux-based (vNext) Azure Cosmos DB emulator. Call '{nameof(RunAsEmulator)}' instead.");
         }
 
         // The vNext image enables the Data Explorer by default, but set ENABLE_EXPLORER explicitly so that
@@ -527,7 +547,7 @@ public static class AzureCosmosExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -573,7 +593,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="keyVaultBuilder">The Azure Key Vault resource builder where the connection string used to connect to this AzureCosmosDBResource will be stored.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder, IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);

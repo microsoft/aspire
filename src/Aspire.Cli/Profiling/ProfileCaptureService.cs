@@ -105,11 +105,14 @@ internal sealed class ProfileCaptureService(
             // Launch aspire-managed directly instead of calling `aspire dashboard run`. Calling
             // back through the CLI being profiled would recursively apply --capture-profile and
             // make the collector part of the measurement.
+            // Bind the collector dashboard to the Windows kill-on-close job so it cannot outlive a
+            // hard-killed CLI (OS-level backstop on top of the cross-platform watchdog). No-op off Windows.
             dashboardProcess = await layoutProcessRunner.StartAsync(
                 managedPath,
                 dashboardArgs,
                 environmentVariables: environmentVariables,
-                options: processOptions).ConfigureAwait(false);
+                options: processOptions,
+                killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

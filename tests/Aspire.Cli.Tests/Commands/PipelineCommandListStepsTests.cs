@@ -139,7 +139,7 @@ public partial class PipelineCommandListStepsTests(ITestOutputHelper outputHelpe
 
     private (PipelineCommandBase Command, StringWriter Writer) CreateCommandWithCapturedOutput()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var writer = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -148,7 +148,7 @@ public partial class PipelineCommandListStepsTests(ITestOutputHelper outputHelpe
             Interactive = InteractionSupport.No
         });
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         services.AddSingleton<IAnsiConsole>(console);
         using var provider = services.BuildServiceProvider();
         return (provider.GetRequiredService<DoCommand>(), writer);

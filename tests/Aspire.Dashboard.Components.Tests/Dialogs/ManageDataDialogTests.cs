@@ -8,14 +8,20 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
 
@@ -146,6 +152,126 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal(0, clickCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(bool dashboardClientIsReadOnly)
+    {
+        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: [], isReadOnly: dashboardClientIsReadOnly);
+        SetupManageDataDialogServices(dashboardClient);
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var resourceKey = new ResourceKey("orphan", "instance");
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: resourceKey.Name, instanceId: resourceKey.InstanceId),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("test-scope"),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+        var timestamp = DateTime.UnixEpoch;
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceKey.Name, instanceId: resourceKey.InstanceId),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope("test-scope"),
+                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+
+        var cut = RenderComponent<ManageDataDialog>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(repository.GetResources());
+            AssertSelectionCheckboxCount(cut, 2);
+            AssertSelectionCheckbox(cut, "orphan", "true");
+        });
+
+        await ExpandResourceRowsAsync(cut, expectedCount: 1);
+        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
+        await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
+
+        await repository.ClearTracesAsync(resourceKey);
+
+        cut.WaitForAssertion(() =>
+        {
+            AssertNoButtonHasAccessibleName(cut, "Traces");
+            AssertSelectionCheckbox(cut, "orphan", "false");
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
+        });
+
+        await repository.ClearStructuredLogsAsync(resourceKey);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(repository.GetResources());
+            AssertSelectionCheckboxCount(cut, 2);
+            AssertSelectionCheckbox(cut, "orphan", "false");
+            AssertNoButtonHasAccessibleName(cut, "Structured logs");
+            Assert.Single(cut.FindAll(".empty-data"));
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
+        });
+
+        await cut.InvokeAsync(() => cut.Find(".empty-data").Click());
+        cut.WaitForAssertion(() =>
+        {
+            AssertSelectionCheckbox(cut, "orphan", "true");
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false);
+        });
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(repository.GetResources()));
+    }
+
+    [Fact]
+    public void RemoveSelected_ConsoleLogs_ClearsPersistenceAndUpdatesFilter()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "api",
+            displayName: "API service",
+            state: KnownResourceState.Running);
+        var resourcesChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: () => resourcesChannel);
+        SetupManageDataDialogServices(dashboardClient);
+
+        var cut = RenderComponent<ManageDataDialog>();
+        cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+            Assert.Collection(
+                clearedConsoleLogs.ResourceNames,
+                resourceName => Assert.Equal("api", resourceName));
+            Assert.Equal(clearedConsoleLogs.ClearDate, Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate("api"));
+        });
+    }
+
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
@@ -154,8 +280,9 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
-        Services.AddSingleton<ConsoleLogsFetcher>();
-        Services.AddSingleton<TelemetryExportService>();
+        Services.AddScoped<ConsoleLogsFetcher>();
+        Services.AddScoped<TelemetryExportService>();
+        Services.AddSingleton<DashboardActivitySource>();
         Services.AddSingleton<TelemetryImportService>();
 
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -240,6 +367,13 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             element =>
                 string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) ||
                 string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal));
+
+    private static void AssertButtonDisabled(IRenderedComponent<ManageDataDialog> cut, string accessibleName, bool expectedDisabled)
+    {
+        var button = cut.Find($"fluent-button[aria-label='{accessibleName}']");
+
+        Assert.Equal(expectedDisabled, button.HasAttribute("disabled"));
+    }
 
     private static bool ElementHasAccessibleName(IElement element, string accessibleName) =>
         string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) &&

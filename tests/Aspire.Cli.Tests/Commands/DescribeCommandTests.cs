@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Dashboard.Model;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -19,7 +21,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -33,7 +35,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -52,7 +54,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("JSON")]
     public async Task DescribeCommand_FormatOption_IsCaseInsensitive(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -70,7 +72,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("TABLE")]
     public async Task DescribeCommand_FormatOption_AcceptsTable(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -85,7 +87,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FormatOption_RejectsInvalidValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -100,7 +102,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FollowOption_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -115,7 +117,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_LegacyWatchOption_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -130,7 +132,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_LegacyResourcesAlias_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -145,7 +147,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FollowAndFormat_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -160,7 +162,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_ResourceNameArgument_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -175,7 +177,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_AllOptions_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -258,17 +260,35 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Duplicate - identical to the first snapshot
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Changed state - should be emitted
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-            // Duplicate of the changed state - should be suppressed
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-        ]);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var initialSnapshotDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.Contains("\"state\":\"Running\"", StringComparison.Ordinal))
+            {
+                initialSnapshotDisplayed.TrySetResult();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => YieldResourceSnapshotsAfter(
+                    initialSnapshotDisplayed.Task,
+                    [
+                        // Duplicate of the initial snapshot - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                        // Changed state - should be emitted
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                        // Duplicate of the changed state - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                    ],
+                    cancellationToken);
+            });
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow --format json");
@@ -300,19 +320,276 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_ResyncEmitsOnlyChangedSnapshots()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var resourceCount = ResourceSnapshotWatcher.UpdateBufferCapacity + 1;
+        var initialSnapshots = Enumerable.Range(0, resourceCount)
+            .Select(index => new ResourceSnapshot
+            {
+                Name = $"resource-{index}",
+                DisplayName = $"resource-{index}",
+                ResourceType = "Container",
+                State = "Starting"
+            })
+            .ToList();
+        var changedSnapshots = new[]
+        {
+            new ResourceSnapshot
+            {
+                Name = initialSnapshots[0].Name,
+                DisplayName = initialSnapshots[0].DisplayName,
+                ResourceType = "Container",
+                State = "Running"
+            },
+            new ResourceSnapshot
+            {
+                Name = initialSnapshots[^1].Name,
+                DisplayName = initialSnapshots[^1].DisplayName,
+                ResourceType = "Container",
+                State = "Running"
+            }
+        };
+        var initialSnapshotsDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var displayedSnapshotCount = 0;
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.TrimStart().StartsWith("{", StringComparison.Ordinal) &&
+                Interlocked.Increment(ref displayedSnapshotCount) == resourceCount)
+            {
+                initialSnapshotsDisplayed.TrySetResult();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            initialSnapshots,
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                    YieldResourceSnapshotsImmediatelyAfter(
+                        initialSnapshotsDisplayed.Task,
+                        initialSnapshots.Concat(changedSnapshots),
+                        cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var resourcesByName = outputWriter.Logs
+            .Where(line => line.TrimStart().StartsWith("{", StringComparison.Ordinal))
+            .Select(line => JsonSerializer.Deserialize(line, ResourcesCommandJsonContext.Ndjson.ResourceJson))
+            .OfType<ResourceJson>()
+            .GroupBy(resource => resource.Name!, StringComparers.ResourceName)
+            .ToDictionary(group => group.Key, group => group.Select(resource => resource.State).ToList(), StringComparers.ResourceName);
+
+        Assert.Equal(resourceCount, resourcesByName.Count);
+        foreach (var snapshot in initialSnapshots)
+        {
+            var expectedStates = changedSnapshots.Any(changed => StringComparers.ResourceName.Equals(changed.Name, snapshot.Name))
+                ? new[] { "Starting", "Running" }
+                : ["Starting"];
+            Assert.Equal(expectedStates, resourcesByName[snapshot.Name]);
+        }
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_EmitsInitialSnapshotWithoutResourceChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal("redis", resource.Name);
+        Assert.Equal("Running", resource.State);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_StopsInitialEmissionWhenCanceled()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.TrimStart().StartsWith("{", StringComparison.Ordinal))
+            {
+                cts.Cancel();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "postgres", DisplayName = "postgres", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running" },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_IncludesDisabledCommandsWhenRequested()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running",
+                    Commands =
+                    [
+                        new ResourceSnapshotCommand
+                        {
+                            Name = "restart",
+                            DisplayName = "Restart",
+                            State = KnownCommandState.Enabled,
+                            Visibility = KnownCommandVisibility.UI,
+                        },
+                        new ResourceSnapshotCommand
+                        {
+                            Name = "repair",
+                            DisplayName = "Repair",
+                            State = KnownCommandState.Disabled,
+                            Visibility = KnownCommandVisibility.UI,
+                        },
+                    ],
+                },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json --include-disabled-commands");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal(["repair", "restart"], resource.Commands!.Keys);
+        Assert.Equal(KnownCommandState.Disabled, resource.Commands["repair"].State);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_DoesNotMissResourceCreatedDuringInitialLoad()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchUpdateConsumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchCallCount = 0;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: connection =>
+            {
+                connection.SupportsResourceSnapshotVersionsV1 = true;
+                connection.GetResourceSnapshotsHandler = async cancellationToken =>
+                {
+                    await watchStarted.Task.WaitAsync(cancellationToken);
+                    await watchUpdateConsumed.Task.WaitAsync(cancellationToken);
+                    // The watch has already published Running by the time this stale
+                    // initial snapshot completes. The live change must win.
+                    return
+                    [
+                        new ResourceSnapshot { Name = "redis", Version = 1, DisplayName = "redis", ResourceType = "Container", State = "Starting" },
+                    ];
+                };
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                    Interlocked.Increment(ref watchCallCount) == 1
+                        ? YieldResourceAfterSignaling(watchStarted, watchUpdateConsumed, cancellationToken)
+                        : EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, watchCallCount);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal("redis", resource.Name);
+        Assert.Equal("Running", resource.State);
+    }
+
+    [Fact]
     public async Task DescribeCommand_Follow_TableFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Duplicate - identical to the first snapshot
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Changed state - should be emitted
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-            // Duplicate of the changed state - should be suppressed
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-        ], disableAnsi: true);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var initialSnapshotDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.Equals("[redis] Running", StringComparison.Ordinal))
+            {
+                initialSnapshotDisplayed.TrySetResult();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => YieldResourceSnapshotsAfter(
+                    initialSnapshotDisplayed.Task,
+                    [
+                        // Duplicate of the initial snapshot - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                        // Changed state - should be emitted
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                        // Duplicate of the changed state - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                    ],
+                    cancellationToken);
+            });
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow");
@@ -336,7 +613,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -366,7 +643,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -390,7 +667,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -419,7 +696,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -445,9 +722,51 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_JsonFormat_PreservesObjectProperties()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "postgres",
+                DisplayName = "postgres",
+                ResourceType = "Container",
+                State = "Running",
+                Properties = new Dictionary<string, JsonNode?>
+                {
+                    [KnownProperties.Resource.ConnectionProperties] = new JsonObject
+                    {
+                        ["Host"] = "localhost",
+                        ["DatabaseName"] = "catalogdb"
+                    }
+                }
+            },
+        ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        using var document = JsonDocument.Parse(jsonOutput);
+        var connectionProperties = document.RootElement
+            .GetProperty("resources")[0]
+            .GetProperty("properties")
+            .GetProperty(KnownProperties.Resource.ConnectionProperties);
+
+        Assert.Equal(JsonValueKind.Object, connectionProperties.ValueKind);
+        Assert.Equal("localhost", connectionProperties.GetProperty("Host").GetString());
+        Assert.Equal("catalogdb", connectionProperties.GetProperty("DatabaseName").GetString());
+    }
+
+    [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -478,7 +797,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -504,7 +823,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -532,7 +851,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_SpecificResource_IncludesHiddenWithoutFlag()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -557,7 +876,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -585,7 +904,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -666,6 +985,69 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         cancellationToken.ThrowIfCancellationRequested();
 
         throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> EmptyResourceSnapshots([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceSnapshots(
+        IEnumerable<ResourceSnapshot> snapshots,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var snapshot in snapshots)
+        {
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return snapshot;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceSnapshotsAfter(
+        Task prerequisite,
+        IEnumerable<ResourceSnapshot> snapshots,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await prerequisite.WaitAsync(cancellationToken);
+        await foreach (var snapshot in YieldResourceSnapshots(snapshots, cancellationToken))
+        {
+            yield return snapshot;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceSnapshotsImmediatelyAfter(
+        Task prerequisite,
+        IEnumerable<ResourceSnapshot> snapshots,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await prerequisite.WaitAsync(cancellationToken);
+        foreach (var snapshot in snapshots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return snapshot;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceAfterSignaling(
+        TaskCompletionSource watchStarted,
+        TaskCompletionSource watchUpdateConsumed,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        watchStarted.TrySetResult();
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield return new ResourceSnapshot
+        {
+            Name = "redis",
+            DisplayName = "redis",
+            ResourceType = "Container",
+            State = "Running",
+            Version = 2,
+        };
+        watchUpdateConsumed.TrySetResult();
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

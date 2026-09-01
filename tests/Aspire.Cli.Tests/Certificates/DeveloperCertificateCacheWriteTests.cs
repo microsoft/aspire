@@ -10,17 +10,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Certificates;
 
-public class DeveloperCertificateCacheWriteTests
+public class DeveloperCertificateCacheWriteTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void WriteAspireCacheFromDiskPfx_WritesCacheFiles()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
-        using var homeDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = new RemoteInvokeOptions();
-        options.StartInfo.Environment["HOME"] = homeDirectory.Path;
-        options.StartInfo.Environment["USERPROFILE"] = homeDirectory.Path;
+        options.StartInfo.Environment["HOME"] = workspace.Path;
+        options.StartInfo.Environment["USERPROFILE"] = workspace.Path;
 
         RemoteExecutor.Invoke(static homePath =>
         {
@@ -47,7 +47,7 @@ public class DeveloperCertificateCacheWriteTests
             using var cachedPfxCertificate = X509CertificateLoader.LoadPkcs12FromFile(cachedPfxPath, password: null);
             Assert.Equal(certificate.Thumbprint, cachedPfxCertificate.Thumbprint);
             Assert.StartsWith("-----BEGIN PRIVATE KEY-----", File.ReadAllText(cachedKeyPath), StringComparison.Ordinal);
-        }, homeDirectory.Path, options).Dispose();
+        }, workspace.Path, options).Dispose();
     }
 
     private static void InvokeWriteAspireCacheFromDiskPfx(

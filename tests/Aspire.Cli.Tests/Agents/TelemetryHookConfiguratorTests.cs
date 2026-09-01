@@ -15,7 +15,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_WritesCopilotUserHook_WithExpectedShape()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
@@ -44,7 +44,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_HonorsCopilotHomeEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var copilotHome = workspace.CreateDirectory("custom-copilot");
         var configurator = CreateConfigurator(workspace, home, new Dictionary<string, string?>
@@ -61,7 +61,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_WritesClaudeUserHook_WithTimeout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
@@ -98,7 +98,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_IsIdempotent_ForClaude()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 
@@ -112,7 +112,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_PreservesExistingClaudeConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
@@ -151,7 +151,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
@@ -170,7 +170,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_SkipsClaude_WhenHooksShapeIsUnexpected()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
@@ -187,7 +187,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_SkipsClaude_WhenSettingsRootIsNotAnObject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
@@ -207,7 +207,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureAsync_IsNoOp_ForUnsupportedClients()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var configurator = CreateConfigurator(workspace, home);
 

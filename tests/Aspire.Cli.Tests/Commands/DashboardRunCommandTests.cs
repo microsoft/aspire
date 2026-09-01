@@ -25,7 +25,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_BundleNotAvailable_DisplaysError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -48,7 +48,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_Help_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -65,10 +65,13 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:4317")]
     [InlineData("--otlp-http-url http://localhost:4318")]
     [InlineData("--allow-anonymous")]
+    [InlineData("--application-name TestApp")]
+    [InlineData("--persistence Run")]
+    [InlineData("--persistence Resume")]
     [InlineData("--config-file-path /path/to/config.json")]
     public void DashboardRunCommand_ParsesOptionsWithoutErrors(string args)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -81,7 +84,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DashboardRunCommand_ForwardsUnmatchedTokens()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -130,7 +133,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_DefaultOptions_DoesNotEmitAllowAnonymous()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -148,9 +151,65 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_BundleAvailableWithinDelay_DoesNotDisplayBundleStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        var (services, _, _) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal([DashboardCommandStrings.StartingDashboard], testInteractionService.ShownStatuses);
+    }
+
+    [Fact]
+    public async Task DashboardRunCommand_BundleUnavailableAfterDelay_DisplaysBundleStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var releaseBundle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bundleStatusDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var testInteractionService = new TestInteractionService
+        {
+            ShowStatusCallback = status =>
+            {
+                if (status == DashboardCommandStrings.EnsuringDashboardBundle)
+                {
+                    bundleStatusDisplayed.TrySetResult();
+                }
+            }
+        };
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            EnsureExtractedAndAcquireLayoutAsyncCallback = cancellationToken => releaseBundle.Task.WaitAsync(cancellationToken)
+        };
+        var (services, _, _) = CreateServicesWithLayout(workspace, testInteractionService, bundleService);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var pendingRun = result.InvokeAsync();
+        await bundleStatusDisplayed.Task.DefaultTimeout();
+        releaseBundle.TrySetResult();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [DashboardCommandStrings.EnsuringDashboardBundle, DashboardCommandStrings.StartingDashboard],
+            testInteractionService.ShownStatuses);
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_DefaultOptions_PassesDefaultArgsToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -177,10 +236,13 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:9317", "--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317")]
     [InlineData("--otlp-http-url http://localhost:9318", "--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318")]
     [InlineData("--allow-anonymous", "--ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true")]
+    [InlineData("--application-name TestApp", "--ASPIRE_DASHBOARD_APPLICATION_NAME=TestApp")]
+    [InlineData("--persistence Run", "--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Run")]
+    [InlineData("--persistence Resume", "--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Resume")]
     [InlineData("--config-file-path /path/to/config.json", "--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/path/to/config.json")]
     public async Task DashboardRunCommand_IndividualOption_PassesCorrectArgToProcess(string cliArgs, string expectedArg)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -200,7 +262,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_WithoutAllowAnonymous_SetsBrowserTokenEnvVar()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         IDictionary<string, string>? capturedEnv = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -222,9 +284,29 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_ConfiguresDashboardDebugLogging()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        IDictionary<string, string>? capturedEnv = null;
+        var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
+        executionFactory.AssertionCallback = (_, env, _, _) => { capturedEnv = env; };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedEnv);
+        Assert.Equal("Debug", capturedEnv["Logging__LogLevel__Default"]);
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_UnmatchedTokens_ForwardedToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -250,7 +332,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_CombinedOptions_PassesAllArgsToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -258,7 +340,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --config-file-path /my/config.json");
+        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --application-name TestApp --persistence Run --config-file-path /my/config.json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -270,6 +352,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_APPLICATION_NAME=TestApp", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Run", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_API_ENABLED=true", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/my/config.json", arg));
     }
@@ -277,7 +361,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_ProcessExitsWithError_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
@@ -295,12 +379,12 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_ProcessFailsToStart_DisplaysErrorAndReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var (services, managedPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
 
-        // Make CreateExecution return an execution whose Start() returns false,
+        // Make CreateExecution return an execution whose StartAsync() returns false,
         // which causes LayoutProcessRunner.StartAsync to throw InvalidOperationException.
         executionFactory.CreateExecutionCallback = (_, _, _, _) =>
             new TestProcessExecution(
@@ -326,13 +410,25 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedMessage, errorMessage);
     }
 
-    [Fact]
-    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess(bool slowShutdown)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var expectedMessage = DashboardCommandStrings.StoppingDashboard;
+        testInteractionService.DisplayCancellationMessageCallback = (message, _) =>
+        {
+            if (message == expectedMessage)
+            {
+                stoppingMessageDisplayedTcs.TrySetResult();
+            }
+        };
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
         executionFactory.CreateExecutionCallback = (_, _, _, options) =>
             new TestProcessExecution("fake", [], null, options, (_, _, _) => Task.FromResult((0, (string?)null)), () => 0)
@@ -341,7 +437,20 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
                 {
                     processOptions.StandardOutputCallback?.Invoke("Now listening on: http://localhost:18888");
                     readyTcs.TrySetResult();
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (slowShutdown)
+                        {
+                            await shutdownTcs.Task.ConfigureAwait(false);
+                        }
+
+                        throw;
+                    }
+
                     return 0;
                 }
             };
@@ -356,10 +465,26 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         await readyTcs.Task.DefaultTimeout();
         await cts.CancelAsync();
 
+        if (slowShutdown)
+        {
+            try
+            {
+                var firstCompletedTask = await Task.WhenAny(stoppingMessageDisplayedTcs.Task, pendingRun).DefaultTimeout();
+                Assert.Same(stoppingMessageDisplayedTcs.Task, firstCompletedTask);
+            }
+            finally
+            {
+                shutdownTcs.TrySetResult();
+            }
+        }
+
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Empty(testInteractionService.DisplayedMessages);
+        var stoppingMessage = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Equal(expectedMessage, stoppingMessage.Message);
+        Assert.Null(stoppingMessage.ConsoleOverride);
     }
 
     [Theory]
@@ -471,7 +596,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         });
         console.Profile.Width = int.MaxValue;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [dashboard].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
 
@@ -499,7 +624,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
-        TestInteractionService? interactionService = null)
+        TestInteractionService? interactionService = null,
+        TestBundleService? bundleService = null)
     {
         var layoutDir = Path.Combine(workspace.WorkspaceRoot.FullName, "layout");
         var managedDir = Path.Combine(layoutDir, "managed");
@@ -512,6 +638,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             LayoutPath = layoutDir,
             Components = new LayoutComponents { Managed = "managed" }
         };
+        bundleService ??= new TestBundleService(isBundle: true);
+        bundleService.Layout = layout;
 
         var executionFactory = new TestProcessExecutionFactory
         {
@@ -521,7 +649,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.LayoutDiscoveryFactory = _ => new FakeLayoutDiscovery(layout);
-            options.BundleServiceFactory = _ => new TestBundleService(true) { Layout = layout };
+            options.BundleServiceFactory = _ => bundleService;
             options.DotNetCliExecutionFactoryFactory = _ => executionFactory;
             if (interactionService is not null)
             {

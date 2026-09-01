@@ -228,6 +228,7 @@ internal sealed class DoctorCommand : BaseCommand
             "apphost" => DoctorCommandStrings.AppHostCategoryHeader,
             "container" => DoctorCommandStrings.ContainerCategoryHeader,
             "environment" => DoctorCommandStrings.EnvironmentCategoryHeader,
+            "devtools" => DoctorCommandStrings.DevelopmentToolsCategoryHeader,
             _ => category
         };
     }
@@ -241,6 +242,7 @@ internal sealed class DoctorCommand : BaseCommand
             "sdk" => 2,
             "container" => 3,
             "environment" => 4,
+            "devtools" => 5,
             _ => 99
         };
     }

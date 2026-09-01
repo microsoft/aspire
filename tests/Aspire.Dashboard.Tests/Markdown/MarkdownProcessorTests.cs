@@ -2,16 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
-using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Markdown;
 using Aspire.Dashboard.Model.Markdown;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
-using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
-using Aspire.Dashboard.Tests.Model;
-using Aspire.Tests.Shared.DashboardModel;
-using Aspire.Tests.Shared.Telemetry;
 using Markdig;
 using Xunit;
 
@@ -155,7 +147,29 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Contains("language-csharp", html);
+        Assert.Contains("aria-label=\"Localized:GridValueCopyToClipboard\"", html);
         Assert.Contains("</code>", html);
+    }
+
+    [Fact]
+    public void ToHtml_FencedCodeBlockLanguageWithHtml_HtmlEncoded()
+    {
+        // Arrange
+        var processor = CreateMarkdownProcessor();
+
+        var markdown =
+            """
+            ```</div><svg/onload=alert(1)>
+            In code block.
+            ```
+            """;
+
+        // Act
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        // Assert
+        var title = Regex.Match(html, "<div class=\"code-title\">(.*?)</div>").Groups[1].Value;
+        Assert.Equal("&lt;/div&gt;&lt;svg/onload=alert(1)&gt;", title);
     }
 
     [Fact]
@@ -243,6 +257,29 @@ public class MarkdownProcessorTests
         // Assert
         Assert.Equal(
             $"""
+            <p><a href="">test</a></p>
+            """, html.Trim(), ignoreLineEndingDifferences: true);
+    }
+
+    [Theory]
+    [InlineData("vscode://%0alocalhost:8080")]
+    [InlineData("http://%0alocalhost:8080")]
+    public void ToHtml_UrlThatCannotBeParsed_UrlRemoved(string url)
+    {
+        // Arrange
+        var processor = CreateMarkdownProcessor(safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes);
+
+        var markdown =
+            $"""
+            [test]({url})
+            """;
+
+        // Act
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        // Assert
+        Assert.Equal(
+            """
             <p><a href="">test</a></p>
             """, html.Trim(), ignoreLineEndingDifferences: true);
     }
@@ -337,44 +374,6 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Equal(expected, html.Trim(), ignoreLineEndingDifferences: true);
-    }
-
-    [Theory]
-    [InlineData("frontend")]
-    [InlineData("frontend-abcxyz")]
-    [InlineData("**frontend-abcxyz**")]
-    [InlineData("*_frontend-abcxyz_*")]
-    public void ToHtml_ResourceCode_ConvertedToLink(string code)
-    {
-        // Arrange
-        var dashboardClient = new MockDashboardClient(resources: [ModelTestHelpers.CreateResource(resourceName: "frontend-abcxyz", displayName: "frontend")]);
-        var context = CreateAssistantChatDataContext(dashboardClient: dashboardClient);
-        var processor = CreateMarkdownProcessor(extensions: [new AspireEnrichmentExtension(new AspireEnrichmentOptions { DataContext = context })]);
-
-        var markdown =
-            $"""
-            Test: `{code}`
-            """;
-
-        // Act
-        var html = processor.ToHtml(markdown, inCompleteDocument: true);
-
-        // Assert
-        Assert.Contains("""
-            href="/?resource=frontend-abcxyz"
-            """, html.Trim());
-    }
-
-    internal static AssistantChatDataContext CreateAssistantChatDataContext(TelemetryRepository? telemetryRepository = null, IDashboardClient? dashboardClient = null)
-    {
-        var context = new AssistantChatDataContext(
-            telemetryRepository ?? TelemetryTestHelpers.CreateRepository(),
-            dashboardClient ?? new MockDashboardClient(),
-            [],
-            new TestStringLocalizer<Dashboard.Resources.AIAssistant>(),
-            new TestOptionsMonitor<DashboardOptions>(new DashboardOptions()));
-
-        return context;
     }
 
     internal static MarkdownProcessor CreateMarkdownProcessor(HashSet<string>? safeUrlSchemes = null, List<IMarkdownExtension>? extensions = null)

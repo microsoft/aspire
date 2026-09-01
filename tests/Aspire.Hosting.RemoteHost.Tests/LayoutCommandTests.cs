@@ -211,7 +211,7 @@ public class LayoutCommandTests
     }
 
     [Fact]
-    public async Task RestoreAndManifestCommands_WritePackageCacheManifestWithoutCreatingLibsLayout()
+    public async Task RestoreAndManifestCommands_WriteCanonicalPackageIdFromLowercaseRequest()
     {
         var workspaceRoot = Directory.CreateTempSubdirectory("aspire-restore-manifest-tests").FullName;
 
@@ -228,7 +228,7 @@ public class LayoutCommandTests
             var objPath = Path.Combine(workspaceRoot, "restore", "obj");
             var restoreCommand = RestoreCommand.Create();
             var restoreParseResult = restoreCommand.Parse([
-                "--package", "Test.Package,1.0.0",
+                "--package", "test.package,1.0.0",
                 "--framework", "net10.0",
                 "--output", objPath,
                 "--source", sourcePath,
@@ -261,6 +261,7 @@ public class LayoutCommandTests
             Assert.Contains(
                 managedAssemblies,
                 assembly => assembly.GetProperty("name").GetString() == "Test.Package" &&
+                    assembly.GetProperty("packageId").GetString() == "Test.Package" &&
                     assembly.GetProperty("path").GetString() == expectedAssemblyPath);
             Assert.DoesNotContain(
                 managedAssemblies,

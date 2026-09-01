@@ -17,6 +17,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Aspire.Tests;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -123,6 +124,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/19150")]
     public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
     {
         // RecordingAppHostServerProject spawns `dotnet --version`, which exits almost immediately
@@ -444,7 +446,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreatePrebuiltAppHostServer_DisposesLayoutLeaseWhenConstructorFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.CreateDirectory("apphost").FullName;
         var integrationCachePathBlockedByFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations");
         File.WriteAllText(integrationCachePathBlockedByFile, string.Empty);
@@ -599,7 +601,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AppHostServerRunResult> RunAsync(
+        public async Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -619,13 +621,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             startInfo.ArgumentList.Add("--version");
 
             var execution = CreateServerExecution(startInfo, runControl);
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None);
 
             StartedExecution = execution;
-            return Task.FromResult(new AppHostServerRunResult(
+            return new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution));
+                Execution: execution);
         }
     }
 
@@ -643,7 +645,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AppHostServerRunResult> RunAsync(
+        public async Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -668,12 +670,12 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             }
 
             var execution = CreateServerExecution(startInfo, runControl);
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None);
 
-            return Task.FromResult(new AppHostServerRunResult(
+            return new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution));
+                Execution: execution);
         }
     }
 

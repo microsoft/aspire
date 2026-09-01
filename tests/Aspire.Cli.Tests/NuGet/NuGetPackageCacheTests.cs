@@ -15,7 +15,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NonAspireCliPackagesWillNotBeConsidered()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>
@@ -48,7 +48,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeprecatedPackagesAreFilteredByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>
@@ -87,7 +87,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeprecatedPackagesAreIncludedWhenShowDeprecatedPackagesEnabled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             // Enable showing deprecated packages
@@ -129,7 +129,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CustomFilterBypassesDeprecatedPackageFiltering()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>
@@ -173,7 +173,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeprecatedPackageFilteringIsCaseInsensitive()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>
@@ -208,7 +208,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AnalyzerPackageIsFilteredFromDefaultPackageSearch()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>
@@ -246,7 +246,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         int observedSkip = -1;
         bool? observedUseCache = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.DotNetCliRunnerFactory = (sp) =>

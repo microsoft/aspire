@@ -26,22 +26,22 @@ Our verification chain relies on these trust anchors:
 
 | Trust anchor | What it provides | How it's protected |
 |---|---|---|
-| **npm registry** | Package metadata, tarball hosting | HTTPS/TLS, npm's infrastructure security |
+| **npm registry (registry.npmjs.org)** | Package metadata, tarball hosting | HTTPS/TLS, public npm registry |
 | **Sigstore (Fulcio + Rekor)** | Cryptographic attestation signatures | Public CA with OIDC federation, append-only transparency log, verified in-process via Sigstore .NET library with TUF trust root |
 | **GitHub Actions OIDC** | Builder identity claims in Sigstore certificates | GitHub's infrastructure security |
 | **Hardcoded expected values** | Package name, version range, expected source repository | Code review, our own release process |
 
 ## Verification Process
 
-### Step 1: Resolve package version and metadata
+### Step 1: Resolve package version
 
-**Action:** Run `npm view @playwright/cli@{versionRange} version` and `npm view @playwright/cli@{version} dist.integrity` to get the resolved version and the registry's SRI integrity hash. The default version range is `>=0.1.1`, which resolves to the latest published version at or above 0.1.1. This can be overridden to a specific version via the `playwrightCliVersion` configuration key.
+**Action:** Run `npm view @playwright/cli@{versionRange} version` against the public npm registry (`https://registry.npmjs.org/`). The default version range is `>=0.1.3`, which resolves to the latest published version at or above 0.1.3. This can be overridden to a specific version via the `playwrightCliVersion` configuration key.
 
-**What this establishes:** We know the exact version we intend to install and the hash the registry claims for its tarball.
+**What this establishes:** We know the exact version we intend to install.
 
-**Trust basis:** npm registry over HTTPS/TLS.
+**Trust basis:** The public npm registry over HTTPS/TLS.
 
-**Limitations:** If the registry is compromised, both the version and hash could be attacker-controlled. This step alone is insufficient — it only establishes what the registry *claims*.
+**Limitations:** If the registry is compromised, it could select an attacker-controlled version. This step alone is insufficient.
 
 ### Step 2: Check if already installed at a suitable version
 
@@ -51,13 +51,21 @@ Our verification chain relies on these trust anchors:
 
 **Trust basis:** The previously-installed binary. If the user's system is compromised, this could be spoofed, but that's outside our threat model.
 
-### Step 3: Verify Sigstore attestation and provenance metadata
+### Step 3: Download and hash the tarball
+
+**Action:** Run `npm pack @playwright/cli@{version}` against the public npm registry, then compute the archive's SHA-512 SRI value.
+
+**What this establishes:** We have a stable digest for the exact local archive that will be installed.
+
+**Trust basis:** The digest itself is not trusted until the signed attestation verifies it in Step 4.
+
+### Step 4: Verify Sigstore attestation and provenance metadata
 
 **Action:**
 1. Fetch the attestation bundle from `https://registry.npmjs.org/-/npm/v1/attestations/@playwright/cli@{version}`
 2. Find the attestation with `predicateType: "https://slsa.dev/provenance/v1"` (SLSA Build L3 provenance)
 3. Extract the Sigstore bundle from the `bundle` field of the attestation
-4. Cryptographically verify the Sigstore bundle using the `SigstoreVerifier` from the [Sigstore .NET library](https://github.com/mitchdenny/sigstore-dotnet), with a `VerificationPolicy` configured for `CertificateIdentity.ForGitHubActions("microsoft", "playwright-cli")`
+4. Cryptographically verify the Step 3 SHA-512 digest and Sigstore bundle using the `SigstoreVerifier` from the [Sigstore .NET library](https://github.com/mitchdenny/sigstore-dotnet), with a `VerificationPolicy` configured for `CertificateIdentity.ForGitHubActions("microsoft", "playwright-cli")`
 5. Base64-decode the DSSE envelope payload to extract the in-toto statement
 6. Verify the following fields from the provenance predicate:
 
@@ -68,7 +76,7 @@ Our verification chain relies on these trust anchors:
 | **Build type** | `predicate.buildDefinition.buildType` | `https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1` | The build ran on GitHub Actions, which implicitly confirms the OIDC token issuer is `https://token.actions.githubusercontent.com` |
 | **Workflow ref** | `predicate.buildDefinition.externalParameters.workflow.ref` | Validated via caller-provided callback (for `@playwright/cli`: kind=`tags`, name=`v{version}`) | The build was triggered from a version tag matching the package version, not an arbitrary branch or commit. The tag format is package-specific — different packages may use different conventions (e.g., `v0.1.1`, `0.1.1`, `@scope/pkg@0.1.1`). The ref is parsed into structured components (`WorkflowRefInfo`) and the caller provides a validation callback. |
 
-**What this establishes:** That the Sigstore bundle is cryptographically authentic — the signing certificate was issued by Sigstore's Fulcio CA, the signature is recorded in the Rekor transparency log, and the OIDC identity in the certificate matches the `microsoft/playwright-cli` GitHub Actions workflow. Additionally, the provenance metadata confirms the package was built from the expected repository, workflow, CI system, and version tag.
+**What this establishes:** That the local tarball digest is covered by a cryptographically authentic Sigstore bundle, the signing certificate was issued by Sigstore's Fulcio CA, the signature is recorded in Rekor, and the OIDC identity matches the `microsoft/playwright-cli` GitHub Actions workflow. The provenance metadata also confirms the expected repository, workflow, CI system, and version tag.
 
 **Trust basis:** Sigstore's public key infrastructure via the `Sigstore` and `Tuf` .NET libraries. The TUF trust root is automatically downloaded and verified. Even if the npm registry is compromised, an attacker cannot forge valid Sigstore signatures — they would need to compromise Fulcio (the Sigstore CA) or obtain a valid OIDC token from GitHub Actions for the legitimate repository's workflow. Since the Sigstore verification and provenance field checking happen on the same attestation bundle in a single operation, there is no TOCTOU gap between signature verification and content inspection.
 
@@ -76,26 +84,13 @@ Our verification chain relies on these trust anchors:
 
 **Additional fields extracted but not directly verified:** The provenance parser also extracts `runDetails.builder.id` from the attestation. This is available in the `NpmProvenanceData` result for logging and diagnostics but is not currently used as a verification gate.
 
-### Step 4: Download and verify tarball integrity
-
-**Action:**
-1. Run `npm pack @playwright/cli@{version}` to download the tarball
-2. Compute SHA-512 hash of the downloaded tarball
-3. Compare against the SRI integrity hash obtained in Step 1
-
-**What this establishes:** That the tarball we have on disk is bit-for-bit identical to what the npm registry published for this version.
-
-**Trust basis:** Cryptographic hash comparison (SHA-512). If the hash matches, the content is the same regardless of how it was delivered.
-
-**Relationship to Step 3:** The Sigstore attestations verified in Step 3 are bound to the package version and its published content. The integrity hash in the registry packument is the canonical identifier for the tarball content. By verifying our tarball matches this hash, we establish that our tarball is the same artifact that the Sigstore attestations cover.
-
 ### Step 5: Install globally from verified tarball
 
 **Action:** Run `npm install -g {tarballPath}` to install the verified tarball as a global tool.
 
 **What this establishes:** The tool is installed and available on the user's PATH.
 
-**Trust basis:** All preceding verification steps have passed. The tarball content has been verified against the registry's published hash (Step 4), the Sigstore attestations for that content are cryptographically valid (Step 3), and the attestations confirm the correct source repository, workflow, and build system (Step 3).
+**Trust basis:** All preceding verification steps have passed. The Sigstore attestation verifies the local archive digest and confirms the correct source repository, workflow, and build system.
 
 ### Step 6: Generate and mirror skill files
 
@@ -119,23 +114,19 @@ Our verification chain relies on these trust anchors:
                     └──────────────┬────────────────┘
                                    │
                     ┌──────────────▼────────────────┐
-                    │  Step 1: Resolve version +     │
-                    │  integrity hash from registry  │
+                    │  Step 1: Resolve version       │
+                    │  from public registry          │
                     └──────────────┬────────────────┘
                                    │
-              ┌────────────────────┼────────────────────┐
-              │                                         │
-   ┌──────────▼──────────────┐               ┌─────────▼─────────┐
-   │ Step 3: Sigstore verify  │               │ Step 4: npm pack  │
-   │ + provenance checks      │               │ + SHA-512 check   │
-   │ (in-process via Sigstore │               │ (tarball          │
-   │  .NET library + TUF)     │               │  integrity)       │
-   └──────────┬───────────────┘               └─────────┬─────────┘
-              │                                         │
-              │  Attestation is authentic +              │  Tarball matches
-              │  built from expected repo +              │  published hash
-              │  expected pipeline                       │
-              └────────────────────┬────────────────────┘
+                    ┌──────────────▼────────────────┐
+                    │  Step 3: npm pack from        │
+                    │  public registry + SHA-512    │
+                    └──────────────┬────────────────┘
+                                   │
+                    ┌──────────────▼────────────────┐
+                    │  Step 4: Verify digest +       │
+                    │  Sigstore provenance           │
+                    └──────────────┬────────────────┘
                                    │
                     ┌──────────────▼────────────────┐
                     │  Step 5: npm install -g        │
@@ -147,9 +138,9 @@ Our verification chain relies on these trust anchors:
 
 ### 1. Time-of-check-to-time-of-use (TOCTOU)
 
-**Risk:** The package could be replaced on the registry between our verification steps and the global install.
+**Risk:** The package could be replaced on the feed between version resolution and download.
 
-**Mitigation:** We verify the SHA-512 hash of the tarball we actually install (Step 4), and we install from the local tarball file (not from the registry again). The verified tarball is the same file that gets installed.
+**Mitigation:** Sigstore verifies the SHA-512 digest of the tarball we actually install, and installation uses that same local file.
 
 ### 2. Transitive dependency attacks
 
@@ -161,7 +152,8 @@ Our verification chain relies on these trust anchors:
 
 ```csharp
 internal const string PackageName = "@playwright/cli";
-internal const string VersionRange = ">=0.1.1";
+internal const string VersionRange = ">=0.1.3";
+private const string PublicRegistry = "https://registry.npmjs.org/";
 internal const string ExpectedSourceRepository = "https://github.com/microsoft/playwright-cli";
 internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
 internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
@@ -180,4 +172,4 @@ Two break-glass configuration keys are available via `aspire config set`:
 
 ## Future Improvements
 
-1. **Pinned tarball hash** — Ship a known-good SRI hash with each Aspire release, eliminating the need to trust the registry for the hash at all.
+1. **Internal attestation mirror** — Preserve npm's DSSE attestation response in an internal service so provenance verification does not require a public registry request. Azure Artifacts currently mirrors the tarball and SHA-1 metadata but omits the SHA-512 integrity value and attestation bundle. Rekor cannot replace this response because it stores the signed envelope and payload hashes, not the DSSE payload.

@@ -12,17 +12,18 @@ namespace Infrastructure.Tests;
 
 public sealed class DownloadNativeArchivesTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public DownloadNativeArchivesTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "download-native-archives.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
@@ -193,7 +194,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("zip-slip", result.Output);
         Assert.False(
-            File.Exists(Path.Combine(_tempDir.Path, "escaped", "aspire-cli-linux-x64-13.4.0.tar.gz")),
+            File.Exists(Path.Combine(_workspace.Path, "escaped", "aspire-cli-linux-x64-13.4.0.tar.gz")),
             "Escaped file should not have been written.");
     }
 
@@ -421,8 +422,8 @@ public sealed class DownloadNativeArchivesTests : IDisposable
     private (string archivesDir, string nupkgsDir) CreateTargetDirs()
     {
         var unique = Path.GetRandomFileName();
-        var archives = Path.Combine(_tempDir.Path, unique, "archives");
-        var nupkgs = Path.Combine(_tempDir.Path, unique, "nupkgs");
+        var archives = Path.Combine(_workspace.Path, unique, "archives");
+        var nupkgs = Path.Combine(_workspace.Path, unique, "nupkgs");
         return (archives, nupkgs);
     }
 

@@ -5,10 +5,12 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
 using Aspire.Cli.Certificates;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -44,10 +46,17 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private HashSet<string>? _availableCommands;
     private readonly IEnvironment _environment;
+    private readonly Func<string, ProcessStartInfo> _createCertUtilStartInfo = CreateCertUtilStartInfo;
 
     public UnixCertificateManager(ILogger logger, IEnvironment environment) : base(logger)
     {
         _environment = environment;
+    }
+
+    internal UnixCertificateManager(ILogger logger, IEnvironment environment, Func<string, ProcessStartInfo> createCertUtilStartInfo)
+        : this(logger, environment)
+    {
+        _createCertUtilStartInfo = createCertUtilStartInfo;
     }
 
     internal UnixCertificateManager(string subject, int version)
@@ -57,7 +66,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
+        => GetTrustLevel(certificate, CancellationToken.None);
+
+    internal TrustLevel GetTrustLevel(X509Certificate2 certificate, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sawTrustSuccess = false;
         var sawTrustFailure = false;
 
@@ -116,11 +129,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 var certPath = Path.Combine(sslCertDir, certificateNickname + ".pem");
                 if (File.Exists(certPath))
                 {
-                    using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
-                    if (AreCertificatesEqual(certificate, candidate))
+                    try
                     {
-                        foundCert = true;
-                        break;
+                        using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
+                        if (AreCertificatesEqual(certificate, candidate))
+                        {
+                            foundCert = true;
+                            break;
+                        }
+                    }
+                    catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+                    {
+                        // Treat unreadable entries as a miss. A later SSL_CERT_DIR entry may still contain
+                        // the expected certificate, so only report OpenSSL as untrusted after the full search.
                     }
                 }
             }
@@ -150,7 +171,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             {
                 foreach (var nssDb in nssDbs)
                 {
-                    if (IsCertificateInNssDb(certificateNickname, nssDb))
+                    if (IsCertificateInNssDb(certificateNickname, nssDb, cancellationToken))
                     {
                         sawTrustSuccess = true;
                     }
@@ -262,7 +283,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             }
             catch
             {
-                // If we couldn't load the file, then we also can't safely overwite it.
+                // If we couldn't load the file, then we also can't safely overwrite it.
                 Log.UnixNotOverwritingCertificate(certPath);
                 return TrustLevel.None;
             }
@@ -476,17 +497,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         if (File.Exists(certPath))
         {
             var openSslUntrustSucceeded = false;
+            var certificateFileDeleted = TryDeleteCertificateFile(certPath);
 
-            if (IsCommandAvailable(OpenSslCommand))
+            if (certificateFileDeleted)
             {
-                if (TryDeleteCertificateFile(certPath) && TryRehashOpenSslCertificates(certDir))
+                if (IsCommandAvailable(OpenSslCommand))
                 {
+                    openSslUntrustSucceeded = TryRehashOpenSslCertificates(certDir);
+                }
+                else
+                {
+                    Log.UnixMissingOpenSslCommand(OpenSslCommand);
                     openSslUntrustSucceeded = true;
                 }
-            }
-            else
-            {
-                Log.UnixMissingOpenSslCommand(OpenSslCommand);
             }
 
             if (openSslUntrustSucceeded)
@@ -555,7 +578,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
         else
         {
-            Directory.CreateDirectory(directoryPath, DirectoryPermissions);
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryPath);
         }
 #pragma warning restore CA1416 // Validate platform compatibility
     }
@@ -671,32 +694,28 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             RedirectStandardError = true,
         };
 
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-        return process.ExitCode == 0;
+        return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
     }
 
     /// <remarks>
     /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
-    private bool IsCertificateInNssDb(string nickname, NssDb nssDb)
+    private bool IsCertificateInNssDb(string nickname, NssDb nssDb, CancellationToken cancellationToken = default)
     {
         // -V will validate that a cert can be used for a given purpose, in this case, server verification.
         // There is no corresponding -V check for the "Trusted CA" status required by Firefox, so we just check for existence.
         // (The docs suggest that "-V -u A" should do this, but it seems to accept all certs.)
         var operation = nssDb.IsFirefox ? "-L" : "-V -u V";
 
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} {operation}");
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            return process.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo, cancellationToken).ExitCode == 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -715,17 +734,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var usage = nssDb.IsFirefox ? "C" : "P";
 
         // This silently clobbers an existing entry, so there's no need to check for existence first.
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"");
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            return process.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
         }
         catch (Exception ex)
         {
@@ -739,17 +752,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// </remarks>
     private bool TryRemoveCertificateFromNssDb(string nickname, NssDb nssDb)
     {
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -D -n {nickname}");
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            if (process.ExitCode == 0)
+            if (CertificateProcessRunner.Run(startInfo).ExitCode == 0)
             {
                 return true;
             }
@@ -762,6 +769,15 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             Log.UnixNssDbRemovalException(nssDb.Path, ex.Message);
             return false;
         }
+    }
+
+    private static ProcessStartInfo CreateCertUtilStartInfo(string arguments)
+    {
+        return new ProcessStartInfo(CertificateHelpers.CertUtilCommand, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
     }
 
     private IEnumerable<string> GetFirefoxProfiles(string firefoxDirectory)
@@ -919,17 +935,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 RedirectStandardError = true
             };
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslVersionFailed();
                 return false;
             }
 
-            var match = OpenSslVersionRegex.Match(stdout);
+            var match = OpenSslVersionRegex.Match(processResult.StandardOutput);
             if (!match.Success)
             {
                 Log.UnixOpenSslVersionParsingFailed();
@@ -963,17 +976,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 RedirectStandardError = true
             };
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslHashFailed(certificatePath);
                 return false;
             }
 
-            hash = stdout.Trim();
+            hash = processResult.StandardOutput.Trim();
             return true;
         }
         catch (Exception ex)

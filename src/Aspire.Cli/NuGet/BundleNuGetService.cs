@@ -7,6 +7,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.NuGet;
@@ -188,6 +189,10 @@ internal sealed class BundleNuGetService : INuGetService
             managedPath,
             restoreArgs,
             environmentVariables: environmentVariables,
+            // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
+            // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
+            // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
+            killOnParentExit: true,
             ct: ct);
 
         // Log stderr at debug level for diagnostics
@@ -234,6 +239,9 @@ internal sealed class BundleNuGetService : INuGetService
             managedPath,
             manifestArgs,
             environmentVariables: environmentVariables,
+            // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
+            // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
+            killOnParentExit: true,
             ct: ct);
 
         // Log stderr at debug level for diagnostics
