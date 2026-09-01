@@ -52,12 +52,7 @@ suite('outdatedCliSuppressionStore', () => {
 
     test('recovers a lock abandoned by another extension host', async () => {
         const exitedProcessId = await startAndWaitForProcess();
-        const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
-        const ownerFileName = `.operation-lock-owner-${Date.now()}-${exitedProcessId}-0`;
-        const ownerPath = path.join(storageDirectory, ownerFileName);
-        fs.mkdirSync(storageDirectory, { recursive: true });
-        fs.writeFileSync(ownerPath, ownerFileName);
-        fs.linkSync(ownerPath, path.join(storageDirectory, '.operation-lock'));
+        createAbandonedLock(directory, exitedProcessId);
 
         const first = new FileSystemOutdatedCliSuppressionStore(directory);
         const second = new FileSystemOutdatedCliSuppressionStore(directory);
@@ -70,7 +65,33 @@ suite('outdatedCliSuppressionStore', () => {
             (await first.readAll()).sort(),
             ['/cli/a\u000013.5.0', '/cli/b\u000013.5.0']);
     });
+
+    test('recovers a lock abandoned after cleanup ownership transfers', async () => {
+        const exitedProcessId = await startAndWaitForProcess();
+        const { ownerPath, storageDirectory } = createAbandonedLock(directory, exitedProcessId);
+        fs.renameSync(
+            ownerPath,
+            path.join(storageDirectory, `.operation-lock-recovery-${exitedProcessId}-${Date.now()}-0`));
+
+        const store = new FileSystemOutdatedCliSuppressionStore(directory);
+        await store.add('/cli/aspire\u000013.5.0');
+
+        assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
+    });
 });
+
+function createAbandonedLock(
+    directory: string,
+    processId: number,
+): { ownerPath: string; storageDirectory: string } {
+    const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
+    const ownerFileName = `.operation-lock-owner-${Date.now()}-${processId}-0`;
+    const ownerPath = path.join(storageDirectory, ownerFileName);
+    fs.mkdirSync(storageDirectory, { recursive: true });
+    fs.writeFileSync(ownerPath, ownerFileName);
+    fs.linkSync(ownerPath, path.join(storageDirectory, '.operation-lock'));
+    return { ownerPath, storageDirectory };
+}
 
 async function startAndWaitForProcess(): Promise<number> {
     const child = spawn(process.execPath, ['-e', '']);

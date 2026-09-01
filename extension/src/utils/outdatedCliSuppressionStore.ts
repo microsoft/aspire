@@ -6,6 +6,7 @@ const suppressionDirectoryName = 'outdated-cli-suppressions';
 const suppressionFilePrefix = 'suppression-';
 const operationLockFileName = '.operation-lock';
 const operationLockOwnerPrefix = '.operation-lock-owner-';
+const operationLockRecoveryPrefix = '.operation-lock-recovery-';
 const operationLockRetryIntervalMs = 10;
 const operationLockAcquireTimeoutMs = 5_000;
 let suppressionSequence = 0;
@@ -144,28 +145,15 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
     }
 
     private async _recoverAbandonedOperationLock(): Promise<void> {
+        let ownerFileName: string;
         try {
             // The lock file contains its unique owner filename:
             //   .operation-lock-owner-1788280000000-12345-0
-            const ownerFileName = await readFile(this._operationLockPath, 'utf8');
+            ownerFileName = await readFile(this._operationLockPath, 'utf8');
             const match = /^\.operation-lock-owner-\d+-(\d+)-\d+$/.exec(ownerFileName);
             if (!match || isProcessRunning(Number(match[1]))) {
                 return;
             }
-
-            try {
-                // Removing the unique owner link grants one cleaner authority to remove the fixed
-                // link. Other cleaners see ENOENT and leave any replacement lock untouched.
-                await unlink(path.join(this._directoryPath, ownerFileName));
-            }
-            catch (error) {
-                if (hasErrorCode(error, 'ENOENT')) {
-                    return;
-                }
-                throw error;
-            }
-
-            await unlink(this._operationLockPath);
         }
         catch (error) {
             if (hasErrorCode(error, 'ENOENT')) {
@@ -173,6 +161,85 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
             }
             throw error;
         }
+
+        const recoveryPath = await this._claimAbandonedOperationLock(ownerFileName);
+        if (!recoveryPath) {
+            return;
+        }
+
+        try {
+            const currentOwner = await readFile(this._operationLockPath, 'utf8').catch(error => {
+                if (hasErrorCode(error, 'ENOENT')) {
+                    return undefined;
+                }
+                throw error;
+            });
+            if (currentOwner === ownerFileName) {
+                await unlink(this._operationLockPath);
+            }
+        }
+        finally {
+            await unlink(recoveryPath).catch(error => {
+                if (!hasErrorCode(error, 'ENOENT')) {
+                    throw error;
+                }
+            });
+        }
+    }
+
+    private async _claimAbandonedOperationLock(ownerFileName: string): Promise<string | undefined> {
+        const generation = `${process.pid}-${Date.now()}-${operationLockSequence++}`;
+        const recoveryPath = path.join(
+            this._directoryPath,
+            `${operationLockRecoveryPrefix}${generation}`);
+        try {
+            // Renaming the owner's unique link transfers cleanup authority atomically. If this
+            // cleaner exits, a later host can transfer the recovery link again.
+            await rename(path.join(this._directoryPath, ownerFileName), recoveryPath);
+            return recoveryPath;
+        }
+        catch (error) {
+            if (!hasErrorCode(error, 'ENOENT')) {
+                throw error;
+            }
+        }
+
+        const entries = await readdir(this._directoryPath, { withFileTypes: true });
+        for (const entry of entries) {
+            if (!entry.isFile() || !entry.name.startsWith(operationLockRecoveryPrefix)) {
+                continue;
+            }
+
+            const currentRecoveryPath = path.join(this._directoryPath, entry.name);
+            const recoveredOwner = await readFile(currentRecoveryPath, 'utf8').catch(error => {
+                if (hasErrorCode(error, 'ENOENT')) {
+                    return undefined;
+                }
+                throw error;
+            });
+            if (recoveredOwner !== ownerFileName) {
+                continue;
+            }
+
+            // Recovery links are named:
+            //   .operation-lock-recovery-<cleaner-pid>-<timestamp>-<process-local-sequence>
+            const match = /^\.operation-lock-recovery-(\d+)-\d+-\d+$/.exec(entry.name);
+            if (!match || isProcessRunning(Number(match[1]))) {
+                return undefined;
+            }
+
+            try {
+                await rename(currentRecoveryPath, recoveryPath);
+                return recoveryPath;
+            }
+            catch (error) {
+                if (!hasErrorCode(error, 'ENOENT')) {
+                    throw error;
+                }
+            }
+        }
+
+        return undefined;
     }
 
     private async _releaseOperationLock(ownerPath: string): Promise<void> {
