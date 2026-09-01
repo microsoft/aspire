@@ -27,6 +27,7 @@ export type Capability =
     | 'java' // Support for running Java projects
     | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
     | 'azure-functions' // Support for running Azure Functions projects
+    | 'message-actions.v1' // Support structured actions on interaction-service notifications
     | 'apphost-log-output.v1'; // Support structured AppHost log correlation in the debug console
 
 export type Capabilities = Capability[];
@@ -110,7 +111,7 @@ export function isJavaInstalled(extensionInstalled: (extensionId: string) => boo
 }
 
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
-    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
+    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'message-actions.v1', 'build-dotnet-using-cli'];
 
     capabilities.push('apphost-log-output.v1');
 

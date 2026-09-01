@@ -12,7 +12,7 @@ import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpc
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
 import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
 import { AspireExtensionContext } from '../../AspireExtensionContext';
-import { debugSessionStopTimedOut, resourceCommandOpenCliLog } from '../../loc/strings';
+import { debugSessionStopTimedOut } from '../../loc/strings';
 import { appHostSelectionOriginConfigKey } from '../../debugger/AspireDebugConfigurationMetadata';
 import { AspireDebugConfigurationProvider } from '../../debugger/AspireDebugConfigurationProvider';
 import type { AspireExtendedDebugConfiguration } from '../../dcp/types';
@@ -386,115 +386,152 @@ suite('InteractionService endpoints', () => {
 
 	test('displayError endpoint', async () => {
 		const testInfo = await createTestRpcServer();
-		const sandbox = sinon.createSandbox();
-		const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-
-		try {
-			const showErrorMessageSpy = sandbox.spy(vscode.window, 'showErrorMessage');
-			testInfo.interactionService.displayError('Test error message');
-
-			assert.strictEqual(showErrorMessageSpy.called, false);
-			await clock.runAllAsync();
-			assert.ok(showErrorMessageSpy.calledWith('Test error message'));
-		}
-		finally {
-			clock.restore();
-			sandbox.restore();
-		}
+		const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
+		await testInfo.interactionService.displayError('Test error message');
+		assert.ok(showErrorMessageSpy.calledWith('Test error message'));
+		showErrorMessageSpy.restore();
 	});
 
-	test('displayError and CLI log message endpoints coalesce into one actionable error', async () => {
+	test('displayError offers existing files and opens the selected structured action', async () => {
 		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const cliLogFilePath = path.join(tempRoot, 'aspire.cli.log');
+		const appHostLogFilePath = path.join(tempRoot, 'apphost.cli.log');
+		await Promise.all([
+			fs.writeFile(cliLogFilePath, 'CLI diagnostics'),
+			fs.writeFile(appHostLogFilePath, 'AppHost diagnostics'),
+		]);
 		const sandbox = sinon.createSandbox();
-		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs with spaces', 'aspire.cli.log');
 
 		try {
-			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(resourceCommandOpenCliLog as any);
-			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
-			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+			let selectAction: (action: vscode.MessageItem | undefined) => void;
+			const selection = new Promise<vscode.MessageItem | undefined>(resolve => selectAction = resolve);
+			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').returns(selection);
+			const openEditorStub = sandbox.stub(testInfo.interactionService, 'openEditor').resolves();
 
-			testInfo.interactionService.displayError('Test error message');
-			testInfo.interactionService.displayMessage('page_facing_up', `Protokolle unter ${logFilePath} anzeigen.`);
+			await testInfo.interactionService.displayError('Test error message', [
+				{
+					displayName: 'Open CLI Log',
+					filePath: cliLogFilePath,
+				},
+				{
+					displayName: 'Open AppHost Log',
+					filePath: appHostLogFilePath,
+				},
+			]);
 			await new Promise<void>(resolve => setImmediate(resolve));
 
 			assert.strictEqual(showErrorMessageStub.callCount, 1);
-			assert.deepStrictEqual(showErrorMessageStub.firstCall.args, ['Test error message', resourceCommandOpenCliLog]);
-			assert.strictEqual(showInformationMessageStub.called, false);
-			assert.ok(executeCommandStub.calledOnceWith('aspire-vscode.viewAppHostLogFile', logFilePath));
+			assert.deepStrictEqual(
+				showErrorMessageStub.firstCall.args.slice(1).map(action => (action as vscode.MessageItem).title),
+				['Open CLI Log', 'Open AppHost Log']);
+			selectAction!(showErrorMessageStub.firstCall.args[2] as vscode.MessageItem);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.ok(openEditorStub.calledOnceWith(appHostLogFilePath));
 		}
 		finally {
 			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
 		}
 	});
 
-	test('displayError preserves separate notifications for a non-log message', () => {
-		const testInfo = new TestCliRpcClient(null, () => null);
-		const sandbox = sinon.createSandbox();
-		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs', 'aspire.cli.log');
-
-		try {
-			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage');
-			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
-
-			testInfo.interactionService.displayError('Test error message');
-			testInfo.interactionService.displayMessage('information', `Output written to ${logFilePath}`);
-
-			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
-			assert.ok(showInformationMessageStub.calledOnceWith(`Output written to ${logFilePath}`));
-		}
-		finally {
-			testInfo.dispose();
-			sandbox.restore();
-		}
-	});
-
-	test('displayError preserves a CLI log message that arrives after the coalescing window', async () => {
+	test('displayMessage executes a registered command selected from a structured action', async () => {
 		const testInfo = await createTestRpcServer();
 		const sandbox = sinon.createSandbox();
-		const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs', 'aspire.cli.log');
 
 		try {
-			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage');
-			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
-			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand');
-			const logMessage = `Protokolle unter ${logFilePath} anzeigen.`;
+			let selectAction: (action: vscode.MessageItem | undefined) => void;
+			const selection = new Promise<vscode.MessageItem | undefined>(resolve => selectAction = resolve);
+			const getCommandsStub = sandbox.stub(vscode.commands, 'getCommands').resolves(['aspire-vscode.testAction']);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').returns(selection);
 
-			testInfo.interactionService.displayError('Test error message');
-			await clock.runAllAsync();
-			testInfo.interactionService.displayMessage('page_facing_up', logMessage);
+			await testInfo.interactionService.displayMessage('information', 'Test info message', [{
+				displayName: 'Run action',
+				command: 'aspire-vscode.testAction',
+			}]);
+			await new Promise<void>(resolve => setImmediate(resolve));
 
-			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
-			assert.ok(showInformationMessageStub.calledOnceWith(logMessage));
-			assert.strictEqual(executeCommandStub.called, false);
+			assert.ok(getCommandsStub.calledOnceWith(true));
+			const action = showInformationMessageStub.firstCall.args[1] as vscode.MessageItem;
+			assert.strictEqual(action.title, 'Run action');
+			selectAction!(action);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.ok(executeCommandStub.calledOnceWith('aspire-vscode.testAction'));
 		}
 		finally {
-			clock.restore();
 			sandbox.restore();
 		}
 	});
 
-	test('disposing the interaction service flushes a pending error', () => {
-		const testInfo = new TestCliRpcClient(null, () => null);
-		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage');
+	test('displayMessage hides unavailable and invalid structured actions', async () => {
+		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
 
 		try {
-			testInfo.interactionService.displayError('Test error message');
-			assert.strictEqual(showErrorMessageStub.called, false);
+			sandbox.stub(vscode.commands, 'getCommands').resolves([]);
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
 
-			testInfo.dispose();
+			await testInfo.interactionService.displayMessage('information', 'Test info message', [
+				{ displayName: 'Missing command', command: 'aspire-vscode.missing' },
+				{ displayName: 'Missing file', filePath: path.join(os.tmpdir(), 'missing-aspire-message-action.log') },
+				{ displayName: 'Ambiguous', command: 'aspire-vscode.missing', filePath: 'file.log' },
+			]);
 
-			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
+			assert.deepStrictEqual(showInformationMessageStub.firstCall.args, ['Test info message']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test('displayError completes while an action notification remains open', async () => {
+		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const logFilePath = path.join(tempRoot, 'aspire.cli.log');
+		await fs.writeFile(logFilePath, 'diagnostics');
+		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').returns(new Promise<vscode.MessageItem | undefined>(() => { }));
+
+		try {
+			await testInfo.interactionService.displayError('Test error message', [{
+				displayName: 'Open CLI Log',
+				filePath: logFilePath,
+			}]);
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
 		}
 		finally {
 			showErrorMessageStub.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('displayError ignores cancellation while an action notification closes', async () => {
+		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const logFilePath = path.join(tempRoot, 'aspire.cli.log');
+		await fs.writeFile(logFilePath, 'diagnostics');
+		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').rejects(new vscode.CancellationError());
+
+		try {
+			await testInfo.interactionService.displayError('Test error message', [{
+				displayName: 'Open CLI Log',
+				filePath: logFilePath,
+			}]);
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
+		}
+		finally {
+			showErrorMessageStub.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
 		}
 	});
 
 	test('displayMessage endpoint', async () => {
 		const testInfo = await createTestRpcServer();
 		const showInformationMessageSpy = sinon.spy(vscode.window, 'showInformationMessage');
-		testInfo.interactionService.displayMessage(":test_emoji:", 'Test info message');
+		await testInfo.interactionService.displayMessage(":test_emoji:", 'Test info message');
 		assert.ok(showInformationMessageSpy.calledWith('Test info message'));
 		showInformationMessageSpy.restore();
 	});

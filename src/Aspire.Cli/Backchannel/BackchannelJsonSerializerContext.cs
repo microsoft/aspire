@@ -38,6 +38,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(List<EnvVar>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(DebugSessionOptions))]
+[JsonSerializable(typeof(InteractionMessageAction[]))]
 [JsonSerializable(typeof(ExtensionAppHostLogEntry))]
 [JsonSerializable(typeof(bool?))]
 [JsonSerializable(typeof(AppHostProjectSearchResultPoco))]

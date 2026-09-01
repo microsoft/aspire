@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import {
     AppHostDataRepository,
     AspireCliFailedError,
@@ -17,7 +18,6 @@ import {
     resourceCommandRunning,
     resourceCommandSucceeded,
 } from '../loc/strings';
-import { getDiagnosticLogPath } from '../utils/diagnosticLogPath';
 
 // Narrow slice of AppHostDataRepository used to execute resource commands. Depending on the
 // interface rather than the concrete repository keeps the executor easy to unit test with a fake.
@@ -213,6 +213,31 @@ function getFailurePresentation(error: AspireCliFailedError, request: ResourceCo
         cliLogPath,
         appHostLogPath,
     };
+}
+
+function getDiagnosticLogPath(line: string, icon: string, englishPrefix: string): string | undefined {
+    if (line.startsWith(icon)) {
+        const text = line.slice(icon.length).trim();
+        for (let index = 0; index < text.length; index++) {
+            if (index > 0 && !/\s/u.test(text[index - 1])) {
+                continue;
+            }
+
+            const candidate = text.slice(index).trim();
+            if (path.isAbsolute(candidate)) {
+                return candidate;
+            }
+        }
+
+        return undefined;
+    }
+
+    if (line.startsWith(englishPrefix)) {
+        const candidate = line.slice(englishPrefix.length).trim();
+        return path.isAbsolute(candidate) ? candidate : undefined;
+    }
+
+    return undefined;
 }
 
 function getFailureMessage(commandName: string, displayName: string, detail: string): string {

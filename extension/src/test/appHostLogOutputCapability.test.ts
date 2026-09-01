@@ -15,6 +15,7 @@ suite('AppHost log output capability', () => {
         addInteractionServiceEndpoints(connection as any, interactionService, {} as any, callback => callback);
 
         assert.ok(getSupportedCapabilities().includes('apphost-log-output.v1'));
+        assert.ok(getSupportedCapabilities().includes('message-actions.v1'));
         assert.ok(methods.includes('writeAppHostLogEntry'));
     });
 });
