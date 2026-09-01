@@ -50,28 +50,9 @@ suite('outdatedCliSuppressionStore', () => {
         assert.strictEqual(await second.tryClaimNotification(notificationKey), undefined);
     });
 
-    test('recovers a lock abandoned by another extension host', async () => {
+    test('does not wait for a claim abandoned by another extension host', async () => {
         const exitedProcessId = await startAndWaitForProcess();
-        createAbandonedLock(directory, exitedProcessId);
-
-        const first = new FileSystemOutdatedCliSuppressionStore(directory);
-        const second = new FileSystemOutdatedCliSuppressionStore(directory);
-        await Promise.all([
-            first.add('/cli/a\u000013.5.0'),
-            second.add('/cli/b\u000013.5.0'),
-        ]);
-
-        assert.deepStrictEqual(
-            (await first.readAll()).sort(),
-            ['/cli/a\u000013.5.0', '/cli/b\u000013.5.0']);
-    });
-
-    test('recovers a lock abandoned after cleanup ownership transfers', async () => {
-        const exitedProcessId = await startAndWaitForProcess();
-        const { ownerPath, storageDirectory } = createAbandonedLock(directory, exitedProcessId);
-        fs.renameSync(
-            ownerPath,
-            path.join(storageDirectory, `.operation-lock-recovery-${exitedProcessId}-${Date.now()}-0`));
+        createNotificationClaim(directory, '/cli/aspire\u000013.5.0', exitedProcessId);
 
         const store = new FileSystemOutdatedCliSuppressionStore(directory);
         await store.add('/cli/aspire\u000013.5.0');
@@ -79,8 +60,8 @@ suite('outdatedCliSuppressionStore', () => {
         assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
     });
 
-    test('recovers an expired lock whose process ID has been reused', async () => {
-        createAbandonedLock(directory, process.pid, 0);
+    test('does not wait for an expired claim whose process ID has been reused', async () => {
+        createNotificationClaim(directory, '/cli/aspire\u000013.5.0', process.pid, 0);
 
         const store = new FileSystemOutdatedCliSuppressionStore(directory);
         await store.add('/cli/aspire\u000013.5.0');
@@ -88,32 +69,30 @@ suite('outdatedCliSuppressionStore', () => {
         assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
     });
 
-    test('recovers expired cleanup ownership whose process ID has been reused', async () => {
+    test('removes a malformed abandoned claim for another notification', async () => {
         const exitedProcessId = await startAndWaitForProcess();
-        const { ownerPath, storageDirectory } = createAbandonedLock(directory, exitedProcessId);
-        fs.renameSync(
-            ownerPath,
-            path.join(storageDirectory, `.operation-lock-recovery-${process.pid}-0-0`));
+        const claimPath = createNotificationClaim(directory, '/cli/other\u000013.5.0', exitedProcessId);
+        fs.writeFileSync(claimPath, '{');
 
         const store = new FileSystemOutdatedCliSuppressionStore(directory);
         await store.add('/cli/aspire\u000013.5.0');
 
+        assert.strictEqual(fs.existsSync(claimPath), false);
         assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
     });
 });
 
-function createAbandonedLock(
+function createNotificationClaim(
     directory: string,
+    notificationKey: string,
     processId: number,
     createdAt = Date.now(),
-): { ownerPath: string; storageDirectory: string } {
+): string {
     const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
-    const ownerFileName = `.operation-lock-owner-${createdAt}-${processId}-0`;
-    const ownerPath = path.join(storageDirectory, ownerFileName);
     fs.mkdirSync(storageDirectory, { recursive: true });
-    fs.writeFileSync(ownerPath, ownerFileName);
-    fs.linkSync(ownerPath, path.join(storageDirectory, '.operation-lock'));
-    return { ownerPath, storageDirectory };
+    const claimPath = path.join(storageDirectory, `notification-claim-${createdAt}-${processId}-0.json`);
+    fs.writeFileSync(claimPath, JSON.stringify({ notificationKey, processId, createdAt }));
+    return claimPath;
 }
 
 async function startAndWaitForProcess(): Promise<number> {

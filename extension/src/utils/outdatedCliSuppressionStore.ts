@@ -1,19 +1,16 @@
-import { link, mkdir, readFile, readdir, rename, unlink, writeFile } from 'fs/promises';
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'fs/promises';
 import * as path from 'path';
 import { setTimeout as delay } from 'timers/promises';
 
 const suppressionDirectoryName = 'outdated-cli-suppressions';
 const suppressionFilePrefix = 'suppression-';
-const operationLockFileName = '.operation-lock';
-const operationLockOwnerPrefix = '.operation-lock-owner-';
-const operationLockRecoveryPrefix = '.operation-lock-recovery-';
-const operationLockRetryIntervalMs = 10;
-const operationLockAcquireTimeoutMs = 5_000;
-const operationLockLeaseMs = 60_000;
-let suppressionSequence = 0;
-let operationLockSequence = 0;
+const notificationClaimFilePrefix = 'notification-claim-';
+const markerFileSuffix = '.json';
+const notificationClaimRetryIntervalMs = 10;
+const notificationClaimLeaseMs = 60_000;
+let markerSequence = 0;
 
-/** Holds suppression writes until the warning has been dispatched, but not while awaiting user input. */
+/** Represents a published claim that remains valid until its bounded lease expires. */
 export interface OutdatedCliNotificationClaim {
     isValid(): boolean;
     release(): Promise<void>;
@@ -25,49 +22,59 @@ export interface OutdatedCliSuppressionStore {
     tryClaimNotification(notificationKey: string): Promise<OutdatedCliNotificationClaim | undefined>;
 }
 
-function isLeaseCurrent(createdAt: number): boolean {
-    return Date.now() - createdAt < operationLockLeaseMs;
+interface NotificationClaimMarker {
+    notificationKey?: unknown;
+    processId?: unknown;
+    createdAt?: unknown;
 }
 
 /**
- * Publishes each suppression as an immutable file so separate extension hosts can add entries
- * without a cross-window read-modify-write race. A short filesystem lease serializes suppression
- * writes with the final notification claim, closing the gap between the last read and showing UI.
+ * Uses immutable markers to order notifications and suppressions across extension hosts. A claim is
+ * published before its final suppression read. A suppression is published before it waits for older
+ * claims to dispatch, so it cannot complete before a warning that already passed the final read.
  */
 export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppressionStore {
     private readonly _directoryPath: string;
-    private readonly _operationLockPath: string;
 
     constructor(globalStoragePath: string) {
         this._directoryPath = path.join(globalStoragePath, suppressionDirectoryName);
-        this._operationLockPath = path.join(this._directoryPath, operationLockFileName);
     }
 
     async readAll(): Promise<string[]> {
         await mkdir(this._directoryPath, { recursive: true });
-        return await this._readAll();
+        return await this._readAllSuppressions();
     }
 
     async add(notificationKey: string): Promise<void> {
-        const claim = await this._acquireOperationLock();
-        try {
-            const generation = `${Date.now()}-${process.pid}-${suppressionSequence++}`;
-            const fileName = `${suppressionFilePrefix}${generation}.json`;
-            const temporaryPath = path.join(this._directoryPath, `.${fileName}.tmp`);
-            const finalPath = path.join(this._directoryPath, fileName);
-
-            await writeFile(temporaryPath, JSON.stringify(notificationKey), { encoding: 'utf8', flag: 'wx' });
-            await rename(temporaryPath, finalPath);
-        }
-        finally {
-            await claim.release();
-        }
+        await this._publishMarker(suppressionFilePrefix, notificationKey);
+        await this._waitForNotificationClaims(notificationKey);
     }
 
     async tryClaimNotification(notificationKey: string): Promise<OutdatedCliNotificationClaim | undefined> {
-        const claim = await this._acquireOperationLock();
+        const createdAt = Date.now();
+        const claimPath = await this._publishMarker(notificationClaimFilePrefix, {
+            notificationKey,
+            processId: process.pid,
+            createdAt,
+        });
+        let released = false;
+        const claim: OutdatedCliNotificationClaim = {
+            isValid: () => isLeaseCurrent(createdAt),
+            release: async () => {
+                if (released) {
+                    return;
+                }
+                await unlink(claimPath).catch(error => {
+                    if (!hasErrorCode(error, 'ENOENT')) {
+                        throw error;
+                    }
+                });
+                released = true;
+            },
+        };
+
         try {
-            if ((await this._readAll()).includes(notificationKey)) {
+            if ((await this._readAllSuppressions()).includes(notificationKey)) {
                 await claim.release();
                 return undefined;
             }
@@ -80,18 +87,21 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
         }
     }
 
-    private async _readAll(): Promise<string[]> {
+    private async _readAllSuppressions(): Promise<string[]> {
         const entries = await readdir(this._directoryPath, { withFileTypes: true });
         const suppressions: string[] = [];
 
         for (const entry of entries) {
-            if (!entry.isFile() || !entry.name.startsWith(suppressionFilePrefix) || !entry.name.endsWith('.json')) {
+            if (!entry.isFile() ||
+                !entry.name.startsWith(suppressionFilePrefix) ||
+                !entry.name.endsWith(markerFileSuffix)) {
                 continue;
             }
 
-            // Each marker contains a JSON string:
+            // Each suppression marker contains a JSON string:
             //   "C:\\tools\\aspire.exe\u000013.5.0"
-            const notificationKey = JSON.parse(await readFile(path.join(this._directoryPath, entry.name), 'utf8')) as unknown;
+            const notificationKey = JSON.parse(
+                await readFile(path.join(this._directoryPath, entry.name), 'utf8')) as unknown;
             if (typeof notificationKey !== 'string') {
                 throw new Error(`Invalid Aspire CLI warning suppression file: ${entry.name}`);
             }
@@ -101,186 +111,108 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
         return suppressions;
     }
 
-    private async _acquireOperationLock(): Promise<OutdatedCliNotificationClaim> {
-        await mkdir(this._directoryPath, { recursive: true });
-        const startedAt = Date.now();
-
+    private async _waitForNotificationClaims(notificationKey: string): Promise<void> {
         while (true) {
-            const createdAt = Date.now();
-            const generation = `${createdAt}-${process.pid}-${operationLockSequence++}`;
-            const ownerFileName = `${operationLockOwnerPrefix}${generation}`;
-            const ownerPath = path.join(this._directoryPath, ownerFileName);
-            await writeFile(ownerPath, ownerFileName, { encoding: 'utf8', flag: 'wx' });
-            try {
-                try {
-                    // The fixed path and unique owner path become hard links to the same file.
-                    // Creating the fixed link is the single atomic cross-process claim operation.
-                    await link(ownerPath, this._operationLockPath);
-                }
-                catch (error) {
-                    if (!hasErrorCode(error, 'EEXIST')) {
-                        throw error;
-                    }
-                    await unlink(ownerPath);
-                    await this._recoverAbandonedOperationLock();
-
-                    if (Date.now() - startedAt >= operationLockAcquireTimeoutMs) {
-                        throw new Error('Timed out acquiring the Aspire CLI warning suppression lock.');
-                    }
-                    await delay(operationLockRetryIntervalMs);
+            let hasActiveClaim = false;
+            const entries = await readdir(this._directoryPath, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isFile() ||
+                    !entry.name.startsWith(notificationClaimFilePrefix) ||
+                    !entry.name.endsWith(markerFileSuffix)) {
                     continue;
                 }
 
-                let released = false;
-                return {
-                    isValid: () => isLeaseCurrent(createdAt),
-                    release: async () => {
-                        if (released) {
-                            return;
-                        }
-                        await this._releaseOperationLock(ownerPath);
-                        released = true;
-                    },
-                };
-            }
-            catch (error) {
-                await unlink(ownerPath).catch(error => {
-                    if (!hasErrorCode(error, 'ENOENT')) {
+                const claimPath = path.join(this._directoryPath, entry.name);
+                const markerIdentity = getNotificationClaimIdentity(entry.name);
+                // Claim markers contain:
+                //   { "notificationKey": "<normalized-path>\\u0000<version>",
+                //     "processId": 12345, "createdAt": 1788280000000 }
+                const contents = await readFile(claimPath, 'utf8').catch(error => {
+                    if (hasErrorCode(error, 'ENOENT')) {
+                        return undefined;
+                    }
+                    throw error;
+                });
+                if (contents === undefined) {
+                    continue;
+                }
+                let claim: NotificationClaimMarker | null = null;
+                try {
+                    claim = JSON.parse(contents) as NotificationClaimMarker | null;
+                }
+                catch (error) {
+                    if (!(error instanceof SyntaxError)) {
                         throw error;
                     }
-                });
-                throw error;
+                }
+
+                if (claim === null ||
+                    !markerIdentity ||
+                    typeof claim.notificationKey !== 'string' ||
+                    claim.processId !== markerIdentity.processId ||
+                    claim.createdAt !== markerIdentity.createdAt) {
+                    if (markerIdentity &&
+                        isLeaseCurrent(markerIdentity.createdAt) &&
+                        isProcessRunning(markerIdentity.processId)) {
+                        hasActiveClaim = true;
+                    } else {
+                        await removeFileIfPresent(claimPath);
+                    }
+                    continue;
+                }
+
+                if (isLeaseCurrent(claim.createdAt) && isProcessRunning(claim.processId)) {
+                    if (claim.notificationKey === notificationKey) {
+                        hasActiveClaim = true;
+                    }
+                    continue;
+                }
+
+                await removeFileIfPresent(claimPath);
             }
+
+            if (!hasActiveClaim) {
+                return;
+            }
+            await delay(notificationClaimRetryIntervalMs);
         }
     }
 
-    private async _recoverAbandonedOperationLock(): Promise<void> {
-        let ownerFileName: string;
+    private async _publishMarker(prefix: string, value: unknown): Promise<string> {
+        await mkdir(this._directoryPath, { recursive: true });
+        const generation = `${Date.now()}-${process.pid}-${markerSequence++}`;
+        const fileName = `${prefix}${generation}${markerFileSuffix}`;
+        const temporaryPath = path.join(this._directoryPath, `.${fileName}.tmp`);
+        const finalPath = path.join(this._directoryPath, fileName);
+
+        await writeFile(temporaryPath, JSON.stringify(value), { encoding: 'utf8', flag: 'wx' });
         try {
-            // The lock file contains its unique owner filename:
-            //   .operation-lock-owner-1788280000000-12345-0
-            ownerFileName = await readFile(this._operationLockPath, 'utf8');
-            const match = /^\.operation-lock-owner-(\d+)-(\d+)-\d+$/.exec(ownerFileName);
-            if (!match ||
-                (isLeaseCurrent(Number(match[1])) && isProcessRunning(Number(match[2])))) {
-                return;
-            }
+            await rename(temporaryPath, finalPath);
         }
         catch (error) {
-            if (hasErrorCode(error, 'ENOENT')) {
-                return;
-            }
+            await unlink(temporaryPath).catch(cleanupError => {
+                if (!hasErrorCode(cleanupError, 'ENOENT')) {
+                    throw cleanupError;
+                }
+            });
             throw error;
         }
 
-        const recoveryPath = await this._claimAbandonedOperationLock(ownerFileName);
-        if (!recoveryPath) {
-            return;
-        }
-
-        await this._removeClaimedOperationLock(ownerFileName, recoveryPath);
+        return finalPath;
     }
+}
 
-    private async _claimAbandonedOperationLock(ownerFileName: string): Promise<string | undefined> {
-        const recoveryPath = this._createRecoveryPath();
-        try {
-            // Renaming the owner's unique link transfers cleanup authority atomically. If this
-            // cleaner exits, a later host can transfer the recovery link again.
-            await rename(path.join(this._directoryPath, ownerFileName), recoveryPath);
-            return recoveryPath;
-        }
-        catch (error) {
-            if (!hasErrorCode(error, 'ENOENT')) {
-                throw error;
-            }
-        }
+function isLeaseCurrent(createdAt: number): boolean {
+    return Date.now() - createdAt < notificationClaimLeaseMs;
+}
 
-        const entries = await readdir(this._directoryPath, { withFileTypes: true });
-        for (const entry of entries) {
-            if (!entry.isFile() || !entry.name.startsWith(operationLockRecoveryPrefix)) {
-                continue;
-            }
-
-            const currentRecoveryPath = path.join(this._directoryPath, entry.name);
-            const recoveredOwner = await readFile(currentRecoveryPath, 'utf8').catch(error => {
-                if (hasErrorCode(error, 'ENOENT')) {
-                    return undefined;
-                }
-                throw error;
-            });
-            if (recoveredOwner !== ownerFileName) {
-                continue;
-            }
-
-            // Recovery links are named:
-            //   .operation-lock-recovery-<cleaner-pid>-<timestamp>-<process-local-sequence>
-            const match = /^\.operation-lock-recovery-(\d+)-(\d+)-\d+$/.exec(entry.name);
-            if (!match ||
-                (isProcessRunning(Number(match[1])) && isLeaseCurrent(Number(match[2])))) {
-                return undefined;
-            }
-
-            try {
-                await rename(currentRecoveryPath, recoveryPath);
-                return recoveryPath;
-            }
-            catch (error) {
-                if (!hasErrorCode(error, 'ENOENT')) {
-                    throw error;
-                }
-            }
-        }
-
-        return undefined;
-    }
-
-    private async _releaseOperationLock(ownerPath: string): Promise<void> {
-        const ownerFileName = path.basename(ownerPath);
-        const recoveryPath = this._createRecoveryPath();
-        try {
-            // Releasing transfers the same cleanup authority used for crash recovery. An expired
-            // holder therefore cannot remove a replacement lock after another host recovers it.
-            await rename(ownerPath, recoveryPath);
-        }
-        catch (error) {
-            if (hasErrorCode(error, 'ENOENT')) {
-                return;
-            }
-            throw error;
-        }
-
-        await this._removeClaimedOperationLock(ownerFileName, recoveryPath);
-    }
-
-    private async _removeClaimedOperationLock(
-        ownerFileName: string,
-        recoveryPath: string,
-    ): Promise<void> {
-        try {
-            const currentOwner = await readFile(this._operationLockPath, 'utf8').catch(error => {
-                if (hasErrorCode(error, 'ENOENT')) {
-                    return undefined;
-                }
-                throw error;
-            });
-            if (currentOwner === ownerFileName) {
-                await unlink(this._operationLockPath);
-            }
-        }
-        finally {
-            await unlink(recoveryPath).catch(error => {
-                if (!hasErrorCode(error, 'ENOENT')) {
-                    throw error;
-                }
-            });
-        }
-    }
-
-    private _createRecoveryPath(): string {
-        return path.join(
-            this._directoryPath,
-            `${operationLockRecoveryPrefix}${process.pid}-${Date.now()}-${operationLockSequence++}`);
-    }
+function getNotificationClaimIdentity(
+    fileName: string,
+): { createdAt: number; processId: number } | undefined {
+    const match = /^notification-claim-(\d+)-(\d+)-\d+\.json$/.exec(fileName);
+    return match
+        ? { createdAt: Number(match[1]), processId: Number(match[2]) }
+        : undefined;
 }
 
 function isProcessRunning(processId: number): boolean {
@@ -291,6 +223,14 @@ function isProcessRunning(processId: number): boolean {
     catch (error) {
         return !hasErrorCode(error, 'ESRCH');
     }
+}
+
+async function removeFileIfPresent(filePath: string): Promise<void> {
+    await unlink(filePath).catch(error => {
+        if (!hasErrorCode(error, 'ENOENT')) {
+            throw error;
+        }
+    });
 }
 
 function hasErrorCode(error: unknown, ...codes: string[]): boolean {
