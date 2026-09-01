@@ -98,6 +98,17 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
 /// </summary>
 internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefinition
 {
+    internal static bool IsPublicHttpsEndpoint(Uri endpointUri)
+    {
+        var host = endpointUri.Host.TrimEnd('.');
+
+        return endpointUri.Scheme == Uri.UriSchemeHttps &&
+            string.IsNullOrEmpty(endpointUri.UserInfo) &&
+            !endpointUri.IsLoopback &&
+            !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
+            !host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
+    }
+
     internal FoundryToolboxMcpToolDefinition(string name, ReferenceExpression endpointExpression)
         : base(name)
     {
@@ -121,8 +132,7 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         }
 
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
-            endpointUri.Scheme != Uri.UriSchemeHttps ||
-            endpointUri.IsLoopback)
+            !IsPublicHttpsEndpoint(endpointUri))
         {
             throw new InvalidOperationException(
                 $"MCP tool '{Name}' must resolve to a publicly reachable absolute HTTPS endpoint.");

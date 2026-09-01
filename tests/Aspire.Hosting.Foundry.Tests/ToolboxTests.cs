@@ -310,6 +310,21 @@ public class ToolboxTests
         Assert.Contains("publicly reachable", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("https://inventory.localhost:7443/mcp")]
+    [InlineData("https://user:password@inventory.example.com/mcp")]
+    public async Task McpToolDefinition_ThrowsWhenEndpointIsNotPubliclyReachable(string endpoint)
+    {
+        var def = new FoundryToolboxMcpToolDefinition(
+            "inventory",
+            ReferenceExpression.Create($"{endpoint}"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+
+        Assert.Contains("publicly reachable", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void WithMcpTool_ThrowsImmediatelyWhenLiteralEndpointIsNotHttps()
     {
@@ -334,6 +349,22 @@ public class ToolboxTests
         var exception = Assert.Throws<ArgumentException>(
             () => project.AddToolbox("field-tools")
                 .WithMcpTool("inventory", "https://localhost:7443/mcp"));
+
+        Assert.Equal("endpoint", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData("https://inventory.localhost:7443/mcp")]
+    [InlineData("https://user:password@inventory.example.com/mcp")]
+    public void WithMcpTool_ThrowsImmediatelyWhenLiteralEndpointIsNotPubliclyReachable(string endpoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithMcpTool("inventory", endpoint));
 
         Assert.Equal("endpoint", exception.ParamName);
     }
