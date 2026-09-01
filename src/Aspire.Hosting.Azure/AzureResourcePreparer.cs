@@ -33,6 +33,8 @@ internal sealed class AzureResourcePreparer(
         var azureResources = GetAzureResourcesFromAppModel(model);
         if (azureResources.Count == 0)
         {
+            // AddAzureProvisioning creates the environment before resources are configured, so wait until
+            // preparation to hide it when the final run-mode model contains only local emulators.
             if (executionContext.IsRunMode &&
                 model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } environmentResource &&
                 !environmentResource.HasAnnotationOfType<HiddenAnnotation>())
