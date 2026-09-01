@@ -40,6 +40,33 @@ internal static class ResourceCommandHelper
         JsonNode? arguments,
         CancellationToken cancellationToken)
     {
+        var result = await ExecuteResourceCommandWithResponseAsync(
+            connection,
+            interactionService,
+            logger,
+            resourceName,
+            commandName,
+            progressVerb,
+            baseVerb,
+            pastTenseVerb,
+            arguments,
+            cancellationToken).ConfigureAwait(false);
+
+        return result.ExitCode;
+    }
+
+    internal static async Task<(int ExitCode, ExecuteResourceCommandResponse Response)> ExecuteResourceCommandWithResponseAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IInteractionService interactionService,
+        ILogger logger,
+        string resourceName,
+        string commandName,
+        string progressVerb,
+        string baseVerb,
+        string pastTenseVerb,
+        JsonNode? arguments,
+        CancellationToken cancellationToken)
+    {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
 
         var response = await interactionService.ShowStatusAsync(
@@ -54,13 +81,34 @@ internal static class ResourceCommandHelper
                 },
                 cancellationToken));
 
-        return HandleResponse(response, interactionService, resourceName, commandName, progressVerb, baseVerb, pastTenseVerb);
+        return (HandleResponse(response, interactionService, resourceName, commandName, progressVerb, baseVerb, pastTenseVerb), response);
     }
 
     /// <summary>
     /// Executes a generic command and handles the response with appropriate user feedback.
     /// </summary>
     public static async Task<int> ExecuteGenericCommandAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IInteractionService interactionService,
+        ILogger logger,
+        string resourceName,
+        string commandName,
+        JsonNode? arguments,
+        CancellationToken cancellationToken)
+    {
+        var result = await ExecuteGenericCommandWithResponseAsync(
+            connection,
+            interactionService,
+            logger,
+            resourceName,
+            commandName,
+            arguments,
+            cancellationToken).ConfigureAwait(false);
+
+        return result.ExitCode;
+    }
+
+    internal static async Task<(int ExitCode, ExecuteResourceCommandResponse Response)> ExecuteGenericCommandWithResponseAsync(
         IAppHostAuxiliaryBackchannel connection,
         IInteractionService interactionService,
         ILogger logger,
@@ -90,7 +138,7 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
-            return CliExitCodes.FailedToExecuteResourceCommand;
+            return (CliExitCodes.FailedToExecuteResourceCommand, response);
         }
         else
         {
@@ -114,7 +162,7 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
+        return (response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand, response);
     }
 
     private static int HandleResponse(

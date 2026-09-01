@@ -50,9 +50,12 @@ internal abstract class BaseCommand : Command
     /// </summary>
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
+    protected virtual TimeSpan ExtensionInteractionFlushTimeout => s_extensionInteractionFlushTimeout;
+
     private readonly CliExecutionContext _executionContext;
     private bool _isJsonFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
+    private bool _extensionInteractionFlushTimedOut;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
 
@@ -273,9 +276,9 @@ internal abstract class BaseCommand : Command
         return false;
     }
 
-    private static async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
+    protected async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
     {
-        if (interactionService is not IExtensionInteractionService extensionInteractionService)
+        if (_extensionInteractionFlushTimedOut || interactionService is not IExtensionInteractionService extensionInteractionService)
         {
             return;
         }
@@ -283,15 +286,16 @@ internal abstract class BaseCommand : Command
         // Command cancellation has already been translated into CommandResult; using a canceled
         // token here would skip the final debug-console drain or throw after the command selected
         // its exit code. Bound the drain separately so a broken extension cannot hang CLI exit.
-        using var flushCancellationTokenSource = new CancellationTokenSource(s_extensionInteractionFlushTimeout);
+        using var flushCancellationTokenSource = new CancellationTokenSource(ExtensionInteractionFlushTimeout);
         try
         {
             await extensionInteractionService.FlushAsync(flushCancellationTokenSource.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (flushCancellationTokenSource.IsCancellationRequested)
         {
-            // Prefer returning the command's chosen exit code over hanging indefinitely when
-            // VS Code has already gone away or stopped responding to backchannel requests.
+            // Do not spend another full timeout in the final drain after this same extension queue
+            // has already failed to drain. Prefer returning the command's chosen exit code.
+            _extensionInteractionFlushTimedOut = true;
         }
     }
 
