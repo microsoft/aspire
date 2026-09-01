@@ -121,6 +121,44 @@ public class RadiusDeployParametersTests
         Assert.Null(path);
     }
 
+    [Fact]
+    public async Task WriteDeployParametersFile_RejectsRabbitMqGuestUserNameResolvedAtDeployTime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "guest");
+        var radius = builder.AddRadiusEnvironment("myenv");
+        var rabbit = builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        radius.Resource.Annotations.Add(new RadiusDeployParametersAnnotation(
+            new Dictionary<string, ParameterResource> { ["rabbituser"] = userName.Resource },
+            new Dictionary<ParameterResource, IResource> { [userName.Resource] = rabbit.Resource }));
+
+        var step = new RadiusDeploymentPipelineStep(radius.Resource);
+        var ex = await Assert.ThrowsAsync<RadiusBackingResourceProjectionException>(
+            () => step.WriteDeployParametersFileAsync(NullLogger.Instance, default));
+
+        Assert.Contains("ASPIRERADIUS082", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildOptions_RecordsRabbitMqUserNameForDeployValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv");
+        var rabbit = builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Same(rabbit.Resource, annotation.RabbitMqUserNames[userName.Resource]);
+    }
+
     /// <summary>
     /// One secret parameter used by <em>both</em> a container env var and a type-scoped recipe
     /// parameter is a valid model, but each allocator used to declare its own Bicep <c>param</c>

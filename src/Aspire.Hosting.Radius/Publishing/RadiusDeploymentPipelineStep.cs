@@ -534,7 +534,9 @@ internal sealed class RadiusDeploymentPipelineStep
             return null;
         }
 
-        var parameters = annotations.Last().Parameters;
+        var annotation = annotations.Last();
+        var parameters = annotation.Parameters;
+        var rabbitMqUserNames = annotation.RabbitMqUserNames;
         if (parameters.Count == 0)
         {
             return null;
@@ -547,6 +549,12 @@ internal sealed class RadiusDeploymentPipelineStep
         foreach (var (identifier, parameter) in parameters)
         {
             var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? string.Empty;
+            if (rabbitMqUserNames.TryGetValue(parameter, out var rabbitMq) &&
+                string.Equals(value, "guest", StringComparison.Ordinal))
+            {
+                throw RadiusInfrastructureBuilder.CreateRabbitMqGuestUserNameException(rabbitMq);
+            }
+
             parametersNode[identifier] = new JsonObject { ["value"] = value };
         }
 

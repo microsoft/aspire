@@ -50,6 +50,7 @@ internal sealed class RadiusInfrastructureBuilder
     // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
     // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
     private readonly Dictionary<string, ParameterResource> _deployParametersByIdentifier = new(StringComparer.Ordinal);
+    private readonly Dictionary<ParameterResource, IResource> _rabbitMqUserNames = new(ReferenceEqualityComparer.Instance);
 
     // Bicep `param`s allocated for recipe-parameter and inline-secret values that bind an Aspire
     // ParameterResource. Keyed by the Aspire parameter name so repeated references reuse a single
@@ -567,7 +568,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         if (deployParameters.Count > 0)
         {
-            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(deployParameters));
+            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(deployParameters, _rabbitMqUserNames));
         }
     }
 
@@ -2580,6 +2581,13 @@ internal sealed class RadiusInfrastructureBuilder
             }
 
             RegisterRecipeCredential(userNameParameter, resource, isProjectionSubstitution: false);
+            if (string.Equals(
+                _radiusTypeByResourceName[resource.Name],
+                RadiusResourceTypes.RabbitMQ,
+                StringComparison.Ordinal))
+            {
+                _rabbitMqUserNames[userNameParameter] = resource;
+            }
         }
 
         await SetTypePropertyAsync(construct, "username", withConnectionString, "username").ConfigureAwait(false);
@@ -2619,13 +2627,7 @@ internal sealed class RadiusInfrastructureBuilder
             (RenderBicepValue(emittedUserName) is "'guest'" ||
              await ResolvesToGuestUserNameAsync(userNameParameter).ConfigureAwait(false)))
         {
-            throw new RadiusBackingResourceProjectionException(
-                resource,
-                $"Resource '{resource.Name}' would be deployed with the user name 'guest', which RabbitMQ restricts to " +
-                $"loopback connections — the deployed broker would reject every workload that connects to it. Supply an " +
-                $"explicit user name, for example AddRabbitMQ(\"{resource.Name}\", userName: builder.AddParameter(\"{resource.Name}user\")), " +
-                $"so the same value is both provisioned on the broker and composed into the connection string. " +
-                $"Diagnostic: ASPIRERADIUS082.");
+            throw CreateRabbitMqGuestUserNameException(resource);
         }
 
         // `queue` is deliberately not emitted. It is optional on the type, and Aspire's model has no
@@ -2665,6 +2667,15 @@ internal sealed class RadiusInfrastructureBuilder
             return false;
         }
     }
+
+    internal static RadiusBackingResourceProjectionException CreateRabbitMqGuestUserNameException(IResource resource) =>
+        new(
+            resource,
+            $"Resource '{resource.Name}' would be deployed with the user name 'guest', which RabbitMQ restricts to " +
+            $"loopback connections — the deployed broker would reject every workload that connects to it. Supply an " +
+            $"explicit user name, for example AddRabbitMQ(\"{resource.Name}\", userName: builder.AddParameter(\"{resource.Name}user\")), " +
+            $"so the same value is both provisioned on the broker and composed into the connection string. " +
+            $"Diagnostic: ASPIRERADIUS082.");
 
     /// <summary>
     /// Resolves a connection property of <paramref name="source"/> and assigns it to a property on
