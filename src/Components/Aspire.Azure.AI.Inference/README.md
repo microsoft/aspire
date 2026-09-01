@@ -1,6 +1,6 @@
 # Aspire.Azure.AI.Inference library
 
-Registers [ChatCompletionsClient](https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient) as a singleton in the DI container for connecting to Microsoft Foundry and GitHub Models. Enables corresponding metrics, logging and telemetry.
+Registers [ChatCompletionsClient](https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient) as a singleton in the DI container for connecting to Microsoft Foundry. Enables corresponding metrics, logging and telemetry.
 
 ## Getting started
 
@@ -81,7 +81,7 @@ Alternatively, a custom connection string can be used.
 The library supports multiple formats for specifying the deployment:
 
 - **`Deployment={deploymentName}`** - Preferred format for Microsoft Foundry deployments
-- **`Model={modelName}`** - Format used by GitHub Models
+- **`Model={modelName}`** - Generic model identifier
 
 Only one of these keys should be present in a connection string. If multiple are provided, an `ArgumentException` will be thrown.
 
