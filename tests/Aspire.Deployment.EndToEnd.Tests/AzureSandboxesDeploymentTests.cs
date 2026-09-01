@@ -563,9 +563,10 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         var endpointCheck = anonymous
             ? "success=0 && " +
               "for i in $(seq 1 18); do " +
-              "BODY=$(curl -fsS \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && " +
-              $"echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetStorageResponseText)} && {{ echo \"  Anonymous .NET endpoint wrote and read an Azure blob using managed identity (attempt $i)\"; success=1; break; }}; " +
-              "echo \"  Attempt $i failed; retrying in 10s...\"; sleep 10; " +
+              "STATUS=$(curl -sS -o /tmp/aspire-sandbox-dotnet-curl.body -w '%{http_code}' \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && " +
+              "BODY=$(cat /tmp/aspire-sandbox-dotnet-curl.body) && " +
+              $"[ \"$STATUS\" = \"200\" ] && echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetStorageResponseText)} && {{ echo \"  Anonymous .NET endpoint wrote and read an Azure blob using managed identity (attempt $i)\"; success=1; break; }}; " +
+              "echo \"  Attempt $i failed with HTTP ${STATUS:-curl-error}; retrying in 10s...\"; sleep 10; " +
               "done; "
             : "success=0 && " +
               "for i in $(seq 1 18); do " +
@@ -584,7 +585,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             $"grep -Eq '\"{statePrefix}:0:Protocol\"[[:space:]]*:[[:space:]]*\"Http\"' \"$STATE_FILE\" || {{ echo \"Expected HTTP protocol behind sandbox TLS termination\"; cat \"$STATE_FILE\"; exit 1; }} && " +
             accessPolicyCheck +
             endpointCheck +
-            "if [ \"$success\" -ne 1 ]; then echo \"Sandbox URL check failed for $URL\"; cat /tmp/aspire-sandbox-dotnet-curl.err 2>/dev/null || true; exit 1; fi";
+            "if [ \"$success\" -ne 1 ]; then echo \"Sandbox URL check failed for $URL\"; cat /tmp/aspire-sandbox-dotnet-curl.err 2>/dev/null || true; cat /tmp/aspire-sandbox-dotnet-curl.body 2>/dev/null || true; exit 1; fi";
     }
 
     private static string VerifySandboxUrlCommand(string urlFile)

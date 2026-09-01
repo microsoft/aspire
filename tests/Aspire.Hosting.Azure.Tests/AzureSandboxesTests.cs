@@ -2762,6 +2762,43 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SandboxConnectionReferencesAreIncludedInEgressPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+        var worker = builder.AddProject<TestProject>("worker", launchProfileName: null)
+            .WithReference(blobs)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        storage.Resource.Outputs["blobEndpoint"] = "https://storage.blob.core.windows.net/";
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(
+            stepContext,
+            worker.Resource);
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(environment.EgressHosts);
+
+        Assert.Equal("https://storage.blob.core.windows.net/", environment.Values["ConnectionStrings__blobs"]);
+        var hostRule = Assert.Single(egressPolicy.HostRules);
+        Assert.Equal("storage.blob.core.windows.net", hostRule.Pattern);
+    }
+
+    [Fact]
     public async Task SandboxDeployStepsFollowReferencedEndpointDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

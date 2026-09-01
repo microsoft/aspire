@@ -1152,6 +1152,13 @@ internal static class AzureSandboxContainerDeployment
                     return new ResolvedValue(string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 case string s:
                     return new ResolvedValue(s, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                case ConnectionStringReference connectionStringReference:
+                    var connectionString = await ((IValueProvider)connectionStringReference).GetValueAsync(
+                        new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = resource },
+                        context.CancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    return new ResolvedValue(
+                        connectionString,
+                        new HashSet<string>(GetOutboundHttpHosts(connectionString), StringComparer.OrdinalIgnoreCase));
                 case IResourceWithConnectionString connectionStringResource:
                     value = connectionStringResource.ConnectionStringExpression;
                     continue;
