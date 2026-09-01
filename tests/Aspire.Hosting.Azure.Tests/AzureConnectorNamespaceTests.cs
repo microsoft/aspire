@@ -233,6 +233,29 @@ public class AzureConnectorNamespaceTests
     }
 
     [Fact]
+    public async Task ConnectorNamespaceResourceNamesRemainUniqueAfterNormalizationAndTruncation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var firstGateway = builder.AddAzureConnectorNamespace("abcdefghijklmnopqrstuvwx-1");
+        var secondGateway = builder.AddAzureConnectorNamespace("abcdefghijklmnopqrstuvwx1");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, firstBicep) = await AzureManifestUtils.GetManifestWithBicep(model, firstGateway.Resource);
+        var (_, secondBicep) = await AzureManifestUtils.GetManifestWithBicep(model, secondGateway.Resource);
+
+        Assert.Contains(
+            "name: 'abcdefghijk${uniqueString(resourceGroup().id, 'abcdefghijklmnopqrstuvwx-1')}'",
+            firstBicep,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "name: 'abcdefghijk${uniqueString(resourceGroup().id, 'abcdefghijklmnopqrstuvwx1')}'",
+            secondBicep,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ManagedMcpServerSupportsOnlyOneConnector()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

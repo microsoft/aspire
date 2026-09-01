@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 internal static class ConnectorNamespaceBicepIdentifiers
 {
     private const int ReadablePartLength = 16;
+    private const int GatewayResourceNameReadablePartLength = 11;
 
     public static string CreateGateway()
         => "connectorGateway";
@@ -26,7 +27,11 @@ internal static class ConnectorNamespaceBicepIdentifiers
             }
         }
 
-        return prefix.ToString();
+        // Bicep's uniqueString function returns 13 characters. Limit the readable portion first so
+        // the uniqueness suffix is always retained within the Connector Namespace 24-character limit.
+        return prefix.Length <= GatewayResourceNameReadablePartLength
+            ? prefix.ToString()
+            : prefix.ToString(0, GatewayResourceNameReadablePartLength);
     }
 
     public static string CreateConnection(string connectorNamespaceName, string connectionName)

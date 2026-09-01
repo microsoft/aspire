@@ -71,10 +71,10 @@ public static class AzureConnectorNamespaceExtensions
                         gatewayResource.Name);
                     var newGateway = new ConnectorGateway(gatewayBicepIdentifier)
                     {
-                        Name = BicepFunction.Take(
-                            BicepFunction.Interpolate(
-                                $"{gatewayNamePrefix}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
-                            24),
+                        Name = BicepFunction.Interpolate(
+                            $"{gatewayNamePrefix}{BicepFunction.GetUniqueString(
+                                BicepFunction.GetResourceGroup().Id,
+                                new StringLiteralExpression(gatewayResource.Name))}"),
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };

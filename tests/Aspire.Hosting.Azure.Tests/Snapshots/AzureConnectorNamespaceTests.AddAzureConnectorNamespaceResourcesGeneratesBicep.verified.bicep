@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 param worker_identity_outputs_principalid string
 
 resource connectorGateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' = {
-  name: take('location${uniqueString(resourceGroup().id)}', 24)
+  name: 'location${uniqueString(resourceGroup().id, 'location')}'
   location: location
   identity: {
     type: 'SystemAssigned'
