@@ -129,7 +129,7 @@ public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper te
         return CanNewAndBuildActual(
             templateName,
             "",
-            TestSdk.Net10,
+            TestSdk.Net11WithAllSupportedRuntimes,
             TestTargetFramework.Net9,
             error: null,
             useAppHostTargetFramework: false,
