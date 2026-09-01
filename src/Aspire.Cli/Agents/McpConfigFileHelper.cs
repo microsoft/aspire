@@ -79,12 +79,8 @@ internal static class McpConfigFileHelper
 
         try
         {
-            var root = JsonNode.Parse(content);
-            if (root is null)
-            {
-                return new JsonObject();
-            }
-
+            var root = JsonNode.Parse(content)
+                ?? throw new JsonException("The MCP configuration root must be a JSON object.");
             return root as JsonObject
                 ?? throw new JsonException("The MCP configuration root must be a JSON object.");
         }

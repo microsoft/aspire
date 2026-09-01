@@ -314,13 +314,14 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         Assert.Contains(mcpConfigPath, ex.Message);
     }
 
-    [Fact]
-    public async Task ApplyAsync_WithNonObjectMcpJson_ThrowsInvalidOperationExceptionAndDoesNotOverwriteFile()
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    public async Task ApplyAsync_WithNonObjectMcpJson_ThrowsInvalidOperationExceptionAndDoesNotOverwriteFile(string originalContent)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
         var mcpConfigPath = Path.Combine(copilotFolder.FullName, "mcp-config.json");
-        const string originalContent = "[]";
         await File.WriteAllTextAsync(mcpConfigPath, originalContent);
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
