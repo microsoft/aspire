@@ -67,7 +67,7 @@ Tests rely on a deterministic shell prompt for "command finished" detection:
 
 ## Step 4 — Diagnose the "Y/n input race"
 
-This is the most-observed flake class so far. It is what broke `ChannelUpdateWorkflowTests.UpdateProjectChannelToStable_TypeScript_PreviewsStablePackagesAndPreservesChannel` on PR #17522 (run `26489967289`, job `78006625708`).
+This is the most-observed flake class so far. It is what broke `ChannelUpdateWorkflowTests.UpdateToStable_TypeScript_PreviewsStablePkgsAndKeepsChannel` on PR #17522 (run `26489967289`, job `78006625708`).
 
 ### Symptom
 

@@ -993,6 +993,85 @@ public class DocsIndexServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_TitleAndSlugPhraseMatch_OutranksRepeatedBodyAndCodeMatches()
+    {
+        var content = """
+            # Service Discovery
+            > Learn about service discovery in Aspire.
+
+            Service discovery content.
+
+            # Connect to Azure Service Bus
+            > Connect to Azure Service Bus for messaging.
+
+            ## Troubleshooting
+            Service discovery is mentioned in troubleshooting. Service discovery appears again.
+            `ServiceDiscoveryOptions` `ServiceDiscoveryOptions` `ServiceDiscoveryOptions`
+            `ServiceDiscoveryOptions` `ServiceDiscoveryOptions` `ServiceDiscoveryOptions`
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync("service discovery");
+
+        Assert.NotEmpty(results);
+        Assert.Equal("Service Discovery", results[0].Title);
+    }
+
+    [Fact]
+    public async Task SearchAsync_CommandTitleAndSlug_OutrankReleaseNotesForCommonTerms()
+    {
+        var content = """
+            # aspire new command
+            > Learn about the aspire new command and its usage.
+
+            This command creates new Aspire projects or solutions.
+
+            # What's new in Aspire 13.2
+            > Aspire 13.2 is here with new CLI commands, TypeScript AppHost support, and new and improved integrations.
+
+            ## CLI enhancements
+            Aspire has new commands, new templates, new project creation, and new integration updates.
+            New Aspire experiences are easier to use with new command-line workflows.
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync("aspire new");
+
+        Assert.NotEmpty(results);
+        Assert.Equal("aspire new command", results[0].Title);
+    }
+
+    [Fact]
+    public async Task SearchAsync_TitlePhrase_OutranksRepeatedCommonAzureTerms()
+    {
+        var content = """
+            # Configure Azure Container Apps environments
+            > Learn how to configure Azure Container Apps environment settings, scaling rules, and ingress.
+
+            Configure environment details.
+
+            # Manage Azure role assignments
+            > Learn how to manage Azure role assignments.
+
+            Azure resources use Azure role assignments. Azure permissions can apply to Azure Container Apps.
+            Azure Container Apps environment names can appear in Azure role assignment examples.
+            Azure role assignment examples repeat Azure terms many times.
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync("azure container apps environment");
+
+        Assert.NotEmpty(results);
+        Assert.Equal("Configure Azure Container Apps environments", results[0].Title);
+    }
+
+    [Fact]
     public async Task SearchAsync_WhatsNewPenalty_RanksLower()
     {
         // "What's New" pages mention many features and should rank lower than dedicated docs
@@ -1069,6 +1148,31 @@ public class DocsIndexServiceTests
         Assert.NotEmpty(results);
         // The dedicated Redis doc should rank higher than the changelog
         Assert.Equal("Redis Integration", results[0].Title);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReleaseNotesIdentityMatch_RequiresTokenBoundaryMatch()
+    {
+        var content = """
+            # Set up Go apps
+            > Configure applications.
+
+            Basic setup.
+
+            # Changelog
+            > Complete changelog for Aspire.
+
+            ## Go updates
+            Go support was added. Go improvements. Go templates. Go resources.
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync("go");
+
+        Assert.NotEmpty(results);
+        Assert.Equal("Set up Go apps", results[0].Title);
     }
 
     [Fact]
@@ -1178,30 +1282,97 @@ public class DocsIndexServiceTests
         Assert.Equal("Changelog", results[0].Title);
     }
 
-    [Fact]
-    public async Task SearchAsync_WhatsNewQuery_DoesNotApplyPenalty()
+    [Theory]
+    [InlineData("whats new 13.4")]
+    [InlineData("what's new 13.4")]
+    [InlineData("what new 13.4")]
+    [InlineData("13-4 whats new")]
+    public async Task SearchAsync_WhatsNewQuery_RanksReleaseNotesAboveNoisyMatches(string query)
     {
-        // When user searches for "whats new", the whats-new page should NOT be penalized
         var content = """
-            # What's New in Aspire 1.3
-            > Release notes for Aspire 1.3.
+            # Configure Azure Container Apps environments
+            > Learn how to configure new Aspire 13.4 environment settings, scaling rules, and ingress.
 
-            New features and improvements.
+            ## Use an existing ACA environment
+            Aspire 13.4 includes new environment options. New projects can use new environment settings in 13.4.
 
-            # Other Documentation
-            > Some other docs.
+            # Create custom hosting integrations
+            > Learn how to create a new custom Aspire hosting integration for an existing containerized application.
 
-            Nothing new here.
+            ## Add a .NET service project to the AppHost for testing
+            New Aspire 13.4 hosting integration samples can test new service behavior with a new AppHost.
+
+            # What's new in Aspire 13.2
+            > Aspire 13.2 is here with new CLI commands, TypeScript AppHost support, and new and improved integrations.
+
+            ## CLI enhancements
+            New commands, new templates, and new integration updates make Aspire 13.2 easier to use.
+
+            # What's new in Aspire 13.4
+            > Explore Aspire 13.4: GA TypeScript AppHost, new Go, Blazor WebAssembly, and Bun hosting integrations, richer Kubernetes and AKS deployment APIs, AI agent readiness, process resource commands, CLI integration discovery, and dashboard updates.
+
+            ## Upgrade to Aspire 13.4
+            Aspire 13.4 includes breaking changes. Review the release notes before upgrading.
             """;
 
         var fetcher = CreateMockFetcher(content);
         var service = CreateService(fetcher);
 
-        var results = await service.SearchAsync("whats new");
+        var results = await service.SearchAsync(query);
 
         Assert.NotEmpty(results);
-        // The What's New page should rank highest when user searches for it
-        Assert.Equal("What's New in Aspire 1.3", results[0].Title);
+        Assert.Equal("What's new in Aspire 13.4", results[0].Title);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReleaseNotesPenalty_StillAppliesToIncidentalFeatureMatches()
+    {
+        var content = """
+            # JavaScript Integration
+            > How to use JavaScript with Aspire.
+
+            JavaScript integration details.
+
+            # What's new in Aspire 13.4
+            > Release notes for Aspire 13.4 with JavaScript updates.
+
+            JavaScript support was added. JavaScript is now fully supported.
+            JavaScript JavaScript JavaScript. We love JavaScript!
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync("javascript");
+
+        Assert.NotEmpty(results);
+        Assert.Equal("JavaScript Integration", results[0].Title);
+    }
+
+    [Theory]
+    [InlineData("13.4")]
+    [InlineData("13-4")]
+    public async Task SearchAsync_VersionQuery_MatchesSlugWithCollapsedVersion(string query)
+    {
+        var content = """
+            # Aspire 13.4 Release Notes
+            > Release notes for Aspire.
+
+            Upgrade details.
+
+            # Other Documentation
+            > Some other docs.
+
+            Nothing about the release here.
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        var results = await service.SearchAsync(query);
+
+        Assert.NotEmpty(results);
+        Assert.Equal("Aspire 13.4 Release Notes", results[0].Title);
     }
 
     private sealed class MockDocsFetcher(string? content) : IDocsFetcher

@@ -12,6 +12,7 @@ using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -35,7 +36,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_HasTrace_SubscriptionRemovedOnDispose()
+    public async Task Render_HasTrace_SubscriptionRemovedOnDispose()
     {
         // Arrange
         SetupTraceDetailsServices();
@@ -45,8 +46,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -75,14 +76,132 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Assert
-        Assert.Collection(telemetryRepository.TracesSubscriptions, t =>
-        {
-            Assert.Equal(nameof(TelemetryRepository.OnNewTraces), t.Name);
-        });
+        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>().FindAll(".fluent-data-grid-row").Count));
+        cut.WaitForAssertion(() => Assert.Equal(1, telemetryRepository.TraceSubscriptionCount));
 
         DisposeComponents();
 
-        Assert.Empty(telemetryRepository.TracesSubscriptions);
+        Assert.Equal(0, telemetryRepository.TraceSubscriptionCount);
+    }
+
+    [Fact]
+    public async Task Render_LogQueryPending_PageTitleRendered()
+    {
+        SetupTraceDetailsServices();
+
+        var queryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<ITelemetryRepository>(services =>
+        {
+            var inner = services.GetRequiredService<SqliteTelemetryRepository>();
+            return new TestTelemetryRepository(inner)
+            {
+                GetLogSummariesAsyncHandler = async (context, cancellationToken) =>
+                {
+                    queryStarted.SetResult();
+                    await continueQuery.Task.WaitAsync(cancellationToken);
+                    return await inner.GetLogSummariesAsync(context, cancellationToken);
+                }
+            };
+        });
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        await queryStarted.Task.WaitAsync(DefaultWaitTimeout);
+        Assert.NotEmpty(Assert.IsType<string>(cut.Instance.GetPageTitle()));
+
+        continueQuery.SetResult();
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>().FindAll(".fluent-data-grid-row").Count));
+    }
+
+    [Fact]
+    public async Task Render_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        SetupTraceDetailsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        var scrollContainer = cut.Find("#traceDetailScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.TraceDetail>>();
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
+        var header = cut.Find(".trace-header");
+        var filterGroup = cut.Find(".trace-header-filters");
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        Assert.Equal("tracedetails-grid-container", scrollContainer.GetAttribute("class"));
+        Assert.Null(header.GetAttribute("role"));
+        Assert.Equal("group", filterGroup.GetAttribute("role"));
+        Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-details"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-filters"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "traceDetailScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]
@@ -99,8 +218,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -167,8 +286,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -206,7 +325,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             return rows.Count == 3;
         }, "Expected rows to be rendered.", logger);
 
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -249,8 +368,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -289,7 +408,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         }, "Expected rows to be rendered.", logger);
 
         logger.LogInformation($"Adding span for difference trace");
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -326,8 +445,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -373,6 +492,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
         var data = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
         // Assert
@@ -385,6 +505,30 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ApplySpanFilters_ContextMatchIncludesAncestorsAndDescendants()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, s_testTime);
+        var scope = CreateOtlpScope(context);
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "root", parentSpanId: null, startDate: s_testTime));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "match", parentSpanId: "root", startDate: s_testTime.AddSeconds(1)));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "descendant", parentSpanId: "match", startDate: s_testTime.AddSeconds(2)));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "sibling", parentSpanId: "root", startDate: s_testTime.AddSeconds(3)));
+        var viewModels = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [resource]));
+
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            viewModels,
+            contextFilterMatches: ["match"],
+            durationFilterMatches: null);
+
+        Assert.Collection(filteredItems,
+            item => Assert.Equal("root", item.Span.SpanId),
+            item => Assert.Equal("match", item.Span.SpanId),
+            item => Assert.Equal("descendant", item.Span.SpanId));
+    }
+
+    [Fact]
     public async Task Render_DurationFilter_FiltersShortSpans()
     {
         SetupTraceDetailsServices();
@@ -394,8 +538,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -444,15 +588,15 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
         // though they don't themselves satisfy the duration filter.
-        var filteredItems = TraceDetail.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        var durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -460,8 +604,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "10"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         Assert.Collection(filteredItems,
             item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
@@ -474,10 +621,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         // ancestor of 1-3 and 1-5.
         // This is the per-span behavior expected for a "min duration" filter; otherwise
         // a long root span would expose every short descendant in the waterfall.
-        var rootMatchFilteredItems = TraceDetail.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -485,8 +631,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "2"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var rootMatchFilteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         Assert.Collection(rootMatchFilteredItems,
             item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
@@ -519,8 +668,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -566,12 +715,12 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
-        var filteredItems = TraceDetail.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        var durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -579,8 +728,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "50"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         // Direct matches: 2-1 (100ms) and 2-4 (80ms). 2-3 (3ms) is kept as an ancestor
         // of 2-4 so the waterfall stays navigable. 2-2 (2ms) has no matching descendant
@@ -593,7 +745,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ToggleCollapse_SpanStateChanges()
+    public async Task ToggleCollapse_SpanStateChanges()
     {
         // Arrange
         SetupTraceDetailsServices();
@@ -602,8 +754,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -676,7 +828,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void CollapseAllSpans_CollapsesAllSpans()
+    public async Task CollapseAllSpans_CollapsesAllSpans()
     {
         // Arrange
         SetupTraceDetailsServices();
@@ -685,8 +837,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -725,9 +877,9 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act - Find the dropdown menu and click Collapse All
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        var collapseAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
+        var collapseAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
         Assert.NotNull(collapseAllMenuItem);
-        cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
+        await cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
         // Assert
         cut.WaitForAssertion(() =>
@@ -751,7 +903,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ExpandAllSpans_ExpandsAllSpans()
+    public async Task ExpandAllSpans_ExpandsAllSpans()
     {
         // Arrange
         SetupTraceDetailsServices();
@@ -760,8 +912,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(),
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
@@ -800,9 +952,9 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // First click "Collapse All" to collapse everything
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        var collapseAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
+        var collapseAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
         Assert.NotNull(collapseAllMenuItem);
-        cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
+        await cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
         // Wait for spans to collapse
         cut.WaitForAssertion(() =>
@@ -813,9 +965,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Act - Click "Expand All"
-        var expandAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Expand all"); // Locate by text since ID was removed
+        var expandAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Expand all"); // Locate by text since ID was removed
         Assert.NotNull(expandAllMenuItem);
-        cut.InvokeAsync(() => expandAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
+        await cut.InvokeAsync(() => expandAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
         // Assert
         cut.WaitForAssertion(() =>
@@ -827,6 +979,22 @@ public partial class TraceDetailsTests : DashboardTestContext
                 Assert.True(container.ClassList.Contains("main-grid-expanded"));
             }
         });
+    }
+
+    private static async Task<HashSet<string>> GetMatchingSpanIdsAsync(
+        SqliteTelemetryRepository repository,
+        string traceId,
+        List<TelemetryFilter> filters)
+    {
+        var response = await repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = filters,
+            TraceId = traceId
+        }, CancellationToken.None);
+        return response.PagedResult.Items.Select(span => span.SpanId).ToHashSet(StringComparer.Ordinal);
     }
 
     private void SetupTraceDetailsServices(ILoggerFactory? loggerFactory = null)
@@ -845,7 +1013,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         loggerFactory ??= NullLoggerFactory.Instance;
 

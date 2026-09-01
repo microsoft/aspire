@@ -37,10 +37,12 @@ public interface ILayoutDiscovery
 public sealed class LayoutDiscovery : ILayoutDiscovery
 {
     private readonly ILogger<LayoutDiscovery> _logger;
+    private readonly IEnvironment _environment;
 
-    public LayoutDiscovery(ILogger<LayoutDiscovery> logger)
+    public LayoutDiscovery(ILogger<LayoutDiscovery> logger, IEnvironment environment)
     {
         _logger = logger;
+        _environment = environment;
     }
 
     /// <summary>
@@ -52,7 +54,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
     {
         // 1. Try environment variable for layout path
-        var envLayoutPath = Environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
+        var envLayoutPath = _environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
         if (!string.IsNullOrEmpty(envLayoutPath))
         {
             _logger.LogDebug("Found ASPIRE_LAYOUT_PATH: {Path}", envLayoutPath);
@@ -117,8 +119,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Check environment variable overrides first
         var envPath = component switch
         {
-            LayoutComponent.Dcp => Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
-            LayoutComponent.Managed => Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
+            LayoutComponent.Dcp => _environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
+            LayoutComponent.Managed => _environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
             _ => null
         };
 
@@ -135,7 +137,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     public bool IsBundleModeAvailable(string? projectDirectory = null)
     {
         // Check if user explicitly wants SDK mode
-        var useSdk = Environment.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
+        var useSdk = _environment.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
         if (string.Equals(useSdk, "true", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(useSdk, "1", StringComparison.OrdinalIgnoreCase))
         {
@@ -249,6 +251,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         var bundleManagedPath = Path.Combine(bundlePath, BundleDiscovery.ManagedDirectoryName);
         var bundleDcpPath = Path.Combine(bundlePath, BundleDiscovery.DcpDirectoryName);
         var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
+        var bundleDcpExe = BundleDiscovery.GetDcpExecutablePath(bundleDcpPath);
 
         _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
         _logger.LogDebug("  {Dir}/{Managed}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, Directory.Exists(bundleManagedPath) ? "exists" : "MISSING");
@@ -258,8 +261,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         {
             var bundleManagedExe = Path.Combine(bundleManagedPath, managedExeName);
             _logger.LogDebug("  {Dir}/{Managed}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, managedExeName, File.Exists(bundleManagedExe) ? "exists" : "MISSING");
+            _logger.LogDebug("  {Dir}/{Dcp}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Path.GetFileName(bundleDcpExe), File.Exists(bundleDcpExe) ? "exists" : "MISSING");
 
-            if (File.Exists(bundleManagedExe))
+            if (File.Exists(bundleManagedExe) && File.Exists(bundleDcpExe))
             {
                 _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
                 return new LayoutConfiguration
@@ -277,6 +281,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Legacy layout: top-level managed/ and dcp/ directories (or reparse points).
         var managedPath = Path.Combine(layoutPath, BundleDiscovery.ManagedDirectoryName);
         var dcpPath = Path.Combine(layoutPath, BundleDiscovery.DcpDirectoryName);
+        var dcpExePath = BundleDiscovery.GetDcpExecutablePath(dcpPath);
 
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, Directory.Exists(managedPath) ? "exists" : "MISSING");
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, Directory.Exists(dcpPath) ? "exists" : "MISSING");
@@ -290,10 +295,11 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Check for aspire-managed executable
         var managedExePath = Path.Combine(managedPath, managedExeName);
         _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, File.Exists(managedExePath) ? "exists" : "MISSING");
+        _logger.LogDebug("  dcp/{DcpExe}: {Exists}", Path.GetFileName(dcpExePath), File.Exists(dcpExePath) ? "exists" : "MISSING");
 
-        if (!File.Exists(managedExePath))
+        if (!File.Exists(managedExePath) || !File.Exists(dcpExePath))
         {
-            _logger.LogDebug("TryInferLayout: Layout rejected - aspire-managed not found");
+            _logger.LogDebug("TryInferLayout: Layout rejected - required executable not found");
             return null;
         }
 
@@ -312,11 +318,11 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Environment variables for specific components take precedence
         // These will be checked at GetComponentPath time, but we note them here for logging
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
         {
             _logger.LogDebug("DCP path override from {EnvVar}", BundleDiscovery.DcpPathEnvVar);
         }
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
         {
             _logger.LogDebug("Managed path override from {EnvVar}", BundleDiscovery.ManagedPathEnvVar);
         }
@@ -336,7 +342,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
         // Require DCP for valid layouts
         var dcpPath = layout.GetComponentPath(LayoutComponent.Dcp);
-        if (dcpPath is null || !Directory.Exists(dcpPath))
+        if (dcpPath is null ||
+            !Directory.Exists(dcpPath) ||
+            !File.Exists(BundleDiscovery.GetDcpExecutablePath(dcpPath)))
         {
             _logger.LogDebug("Layout validation failed: DCP not found");
             return false;

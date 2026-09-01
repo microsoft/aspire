@@ -24,6 +24,28 @@
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
     },
+    "docs": {
+      "description": "Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.",
+      "type": "object",
+      "properties": {
+        "llmsTxtUrl": {
+          "description": "Optional override for the llms.txt documentation source consumed by aspire docs. Defaults to https://aspire.dev/llms-full.txt.",
+          "type": "string"
+        },
+        "api": {
+          "description": "Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.",
+          "type": "object",
+          "properties": {
+            "sitemapUrl": {
+              "description": "Optional override for the API sitemap consumed by aspire docs api. Defaults to https://aspire.dev/sitemap-0.xml.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "features": {
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
@@ -42,22 +64,6 @@
             }
           ],
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
-          "default": false
-        },
-        "execCommandEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable the 'aspire exec' command for executing commands inside running resources",
           "default": false
         },
         "experimentalPolyglot:go": {
@@ -124,6 +130,38 @@
           "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
           "default": false
         },
+        "nugetSignatureVerificationEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+          "default": true
+        },
+        "polyglotIntegrationFilterEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
+          "default": false
+        },
         "showAllTemplates": {
           "anyOf": [
             {
@@ -170,6 +208,22 @@
             }
           ],
           "description": "Enable or disable access to the staging channel for early access to preview features and packages",
+          "default": false
+        },
+        "terminalCommandsEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
           "default": false
         },
         "updateNotificationsEnabled": {

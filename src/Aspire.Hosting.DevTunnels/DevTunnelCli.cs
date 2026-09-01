@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
 
-internal sealed class DevTunnelCli
+internal class DevTunnelCli
 {
     public const int ResourceConflictsWithExistingExitCode = 1;
     public const int ResourceNotFoundExitCode = 2;
@@ -48,7 +48,7 @@ internal sealed class DevTunnelCli
     public Task<int> UserStatusAsync(TextWriter? outputWriter = null, TextWriter? errorWriter = null, ILogger? logger = default, CancellationToken cancellationToken = default)
         => RunAsync(["user", "show", "--json", "--nologo"], outputWriter, errorWriter, logger, cancellationToken);
 
-    public Task<int> CreateTunnelAsync(
+    public virtual Task<int> CreateTunnelAsync(
         string? tunnelId = null,
         DevTunnelOptions? options = null,
         TextWriter? outputWriter = null,
@@ -60,6 +60,7 @@ internal sealed class DevTunnelCli
         return RunAsync(new ArgsBuilder(["create"])
             .AddIfNotNull(tunnelId)
             .AddIfNotNull("--description", options.Description)
+            .AddIfNotNull("--service-uri", GetServiceUri(options))
             .AddIfTrue("--allow-anonymous", options.AllowAnonymous)
             .AddValues("--labels", options.Labels)
             .Add("--json")
@@ -67,7 +68,7 @@ internal sealed class DevTunnelCli
         , outputWriter, errorWriter, logger, cancellationToken);
     }
 
-    public Task<int> UpdateTunnelAsync(
+    public virtual Task<int> UpdateTunnelAsync(
         string tunnelId,
         DevTunnelOptions? options = null,
         TextWriter? outputWriter = null,
@@ -390,6 +391,16 @@ internal sealed class DevTunnelCli
                 onLine(line);
             }
         }
+    }
+
+    private static string? GetServiceUri(DevTunnelOptions options)
+    {
+        if (options.Region is null)
+        {
+            return null;
+        }
+
+        return $"https://{options.RegionCode}.rel.tunnels.api.visualstudio.com";
     }
 }
 

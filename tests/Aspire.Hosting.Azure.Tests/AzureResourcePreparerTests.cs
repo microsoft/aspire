@@ -538,6 +538,204 @@ public class AzureResourcePreparerTests
         Assert.DoesNotContain(model.Resources, r => r.Name == "frontend-identity");
     }
 
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_PublishMode_GrantsRolesOnImpliedTargetToConsumer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+
+        // A non-Azure compute resource (the "agent" node app) that fronts the storage account: any
+        // resource referencing it should be granted a role on storage even though storage is only a
+        // transitive dependency that the IAzureResource-only reference walk cannot reach.
+        var agent = builder.AddContainer("agent", "img:latest")
+            .WithHttpEndpoint();
+        agent.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(
+            storage.Resource,
+            new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) }));
+
+        var consumer = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(agent.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.True(consumer.Resource.TryGetLastAnnotation<RoleAssignmentAnnotation>(out var consumerRoleAssignments));
+        Assert.Equal(storage.Resource, consumerRoleAssignments.Target);
+        Assert.Single(consumerRoleAssignments.Roles, role => role.Id == StorageBuiltInRole.StorageBlobDataReader.ToString());
+    }
+
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_RunMode_AppliesRolesToGlobalRolesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+
+        var agent = builder.AddContainer("agent", "img:latest")
+            .WithHttpEndpoint();
+        agent.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(
+            storage.Resource,
+            new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) }));
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(agent.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var storageRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "storage-roles");
+        Assert.Same(storage.Resource, storageRoles.TargetAzureResource);
+    }
+
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_ConsumerNotReferencingFrontingResource_GetsNoRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+
+        var agent = builder.AddContainer("agent", "img:latest")
+            .WithHttpEndpoint();
+        agent.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(
+            storage.Resource,
+            new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) }));
+
+        // This compute resource does not reference the fronting agent, so it must not be granted any
+        // role on the implied storage target.
+        var bystander = builder.AddProject<Project>("bystander", launchProfileName: null);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.False(bystander.Resource.TryGetLastAnnotation<RoleAssignmentAnnotation>(out _));
+    }
+
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_SameTargetFromTwoDependencies_DedupesRoles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+
+        // Two fronting resources (e.g. two hosted agents on the same Foundry account) each imply the
+        // same role on the same target. A consumer referencing both must end up with a single role
+        // assignment for that role, otherwise two RoleAssignment bicep resources collide on the same
+        // identifier ("{prefix}_{roleName}") and bicep compilation fails.
+        var role = new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) };
+
+        var agent1 = builder.AddContainer("agent1", "img:latest").WithHttpEndpoint();
+        agent1.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(storage.Resource, role));
+
+        var agent2 = builder.AddContainer("agent2", "img:latest").WithHttpEndpoint();
+        agent2.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(storage.Resource, role));
+
+        var consumer = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(agent1.GetEndpoint("http"))
+            .WithReference(agent2.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "api-roles-storage");
+        Assert.Same(storage.Resource, roleAssignmentResource.TargetAzureResource);
+        Assert.Same(consumer.Resource, roleAssignmentResource.OwnerResource);
+
+        // The generated bicep must contain exactly one role assignment, not two duplicates of the same role.
+        var manifest = await GetManifestWithBicep(roleAssignmentResource, skipPreparer: true);
+        var roleAssignmentCount = System.Text.RegularExpressions.Regex.Matches(manifest.BicepText, "Microsoft.Authorization/roleAssignments@").Count;
+        Assert.Equal(1, roleAssignmentCount);
+    }
+
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_ConsumerWithExplicitRoleAssignment_DoesNotReintroduceSuppressedDefaults()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+
+        // A fronting resource (e.g. a Foundry hosted agent's node app) implies the Reader role on storage.
+        var agent = builder.AddContainer("agent", "img:latest").WithHttpEndpoint();
+        agent.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(
+            storage.Resource,
+            new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) }));
+
+        // The consumer references storage directly (so its default role assignments would normally be
+        // applied) but declares an explicit WithRoleAssignments, which intentionally suppresses those
+        // defaults. The implied-reference hook must add only its Reader role and must NOT re-introduce the
+        // suppressed defaults - that was the "pit of failure" the union-of-defaults pattern would have caused.
+        var consumer = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDelegator)
+            .WithReference(blobs)
+            .WithReference(agent.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roleIds = consumer.Resource.Annotations.OfType<RoleAssignmentAnnotation>()
+            .Where(a => a.Target == storage.Resource)
+            .SelectMany(a => a.Roles)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        // Explicit role + implied Reader are present.
+        Assert.Contains(StorageBuiltInRole.StorageBlobDelegator.ToString(), roleIds);
+        Assert.Contains(StorageBuiltInRole.StorageBlobDataReader.ToString(), roleIds);
+
+        // The suppressed defaults must not be re-introduced by the implied-reference hook.
+        Assert.DoesNotContain(StorageBuiltInRole.StorageBlobDataContributor.ToString(), roleIds);
+        Assert.DoesNotContain(StorageBuiltInRole.StorageTableDataContributor.ToString(), roleIds);
+        Assert.DoesNotContain(StorageBuiltInRole.StorageQueueDataContributor.ToString(), roleIds);
+    }
+
+    [Fact]
+    public async Task ReferenceRoleAssignmentAnnotation_ConsumerWithDirectReference_KeepsDefaultsAndAddsImpliedRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+
+        // A fronting resource (e.g. a Foundry hosted agent's node app) implies the Reader role on storage.
+        var agent = builder.AddContainer("agent", "img:latest").WithHttpEndpoint();
+        agent.Resource.Annotations.Add(new ReferenceRoleAssignmentAnnotation(
+            storage.Resource,
+            new HashSet<RoleDefinition> { new(StorageBuiltInRole.StorageBlobDataReader.ToString(), nameof(StorageBuiltInRole.StorageBlobDataReader)) }));
+
+        // The consumer references storage directly without declaring explicit role assignments, so the
+        // account defaults still apply. The implied-reference hook must add its Reader role alongside the
+        // defaults (the caller - the preparer - owns defaults; the hook never replaces or removes them).
+        var consumer = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(blobs)
+            .WithReference(agent.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roleIds = consumer.Resource.Annotations.OfType<RoleAssignmentAnnotation>()
+            .Where(a => a.Target == storage.Resource)
+            .SelectMany(a => a.Roles)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        // Defaults are preserved by the preparer's normal reference walk.
+        Assert.Contains(StorageBuiltInRole.StorageBlobDataContributor.ToString(), roleIds);
+        Assert.Contains(StorageBuiltInRole.StorageTableDataContributor.ToString(), roleIds);
+        Assert.Contains(StorageBuiltInRole.StorageQueueDataContributor.ToString(), roleIds);
+
+        // The implied Reader role is added on top of the defaults.
+        Assert.Contains(StorageBuiltInRole.StorageBlobDataReader.ToString(), roleIds);
+    }
+
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";

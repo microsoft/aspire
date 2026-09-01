@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -26,45 +22,38 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_tracesIcon = new Icons.Regular.Size16.GanttChart();
     private static readonly Icon s_metricsIcon = new Icons.Regular.Size16.ChartMultiple();
     private static readonly Icon s_linkIcon = new Icons.Regular.Size16.Link();
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
     private static readonly Icon s_toolboxIcon = new Icons.Regular.Size16.Toolbox();
     private static readonly Icon s_linkMultipleIcon = new Icons.Regular.Size16.LinkMultiple();
     private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
     private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
 
     private readonly NavigationManager _navigationManager;
-    private readonly TelemetryRepository _telemetryRepository;
-    private readonly IAIContextProvider _aiContextProvider;
+    private readonly DashboardDataSource _dataSource;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
-    private readonly IStringLocalizer<Resources.AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<Resources.AIPrompts> _aiPromptsLoc;
     private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
+    private readonly IDashboardClient _dashboardClient;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceMenuBuilder"/> class.
     /// </summary>
     public ResourceMenuBuilder(
         NavigationManager navigationManager,
-        TelemetryRepository telemetryRepository,
-        IAIContextProvider aiContextProvider,
+        DashboardDataSource dataSource,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
-        IStringLocalizer<Resources.AIAssistant> aiAssistantLoc,
-        IStringLocalizer<Resources.AIPrompts> aiPromptsLoc,
         IconResolver iconResolver,
-        DashboardDialogService dialogService)
+        DashboardDialogService dialogService,
+        IDashboardClient dashboardClient)
     {
         _navigationManager = navigationManager;
-        _telemetryRepository = telemetryRepository;
-        _aiContextProvider = aiContextProvider;
+        _dataSource = dataSource;
         _controlLoc = controlLoc;
         _loc = loc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _iconResolver = iconResolver;
         _dialogService = dialogService;
+        _dashboardClient = dashboardClient;
     }
 
     /// <summary>
@@ -107,7 +96,7 @@ public sealed class ResourceMenuBuilder
 
         menuItems.Add(new MenuButtonItem
         {
-            Text = _controlLoc[nameof(ControlsStrings.ExportJson)],
+            Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
@@ -142,23 +131,6 @@ public sealed class ResourceMenuBuilder
                         ContainsSecret = true,
                         FixedFormat = DashboardUIHelpers.PropertiesFormat
                     }).ConfigureAwait(false);
-                }
-            });
-        }
-
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = s_gitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext => PromptContextsBuilder.AnalyzeResource(
-                            promptContext,
-                            _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeResource), resource.Name),
-                            resource)).ConfigureAwait(false);
                 }
             });
         }
@@ -233,7 +205,7 @@ public sealed class ResourceMenuBuilder
     private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
     {
         // Show telemetry menu items if there is telemetry for the resource.
-        var telemetryResource = _telemetryRepository.GetResourceByCompositeName(resource.Name);
+        var telemetryResource = _dataSource.TelemetryRepository.GetResourceByCompositeName(resource.Name);
         if (telemetryResource != null)
         {
             menuItems.Add(new MenuButtonItem { IsDivider = true });
@@ -333,15 +305,13 @@ public sealed class ResourceMenuBuilder
 
         MenuButtonItem CreateMenuItem(CommandViewModel command)
         {
-            var icon = (!string.IsNullOrEmpty(command.IconName) && _iconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } i) ? i : null;
-
             return new MenuButtonItem
             {
                 Text = command.GetDisplayName(),
                 Tooltip = command.GetDisplayDescription(),
-                Icon = icon,
+                Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
                 OnClick = () => commandSelected.InvokeAsync(command),
-                IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
+                IsDisabled = _dashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };
         }
     }

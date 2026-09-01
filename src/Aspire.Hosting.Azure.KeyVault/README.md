@@ -1,8 +1,6 @@
-# Azure Key Vault extensions library for Aspire application model
+# Azure Key Vault hosting integration
 
-Azure Key Vault is a cloud service that provides a secure storage of secrets, such as passwords and database connection strings.
-
-The Azure Key Vault extensions library allows you to extend the Aspire application model to support to provisioning Key Vaults as part of application development and testing.
+Use this integration to model, configure, and provision Azure Key Vault resources in an Aspire solution.
 
 ## Getting started
 
@@ -11,29 +9,24 @@ The Azure Key Vault extensions library allows you to extend the Aspire applicati
 * Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 * An Aspire project based on the starter template.
  
-### Install the package
+### Add the integration
 
-Install the Azure Key Vault extensions library for Aspire application model with [NuGet](https://www.nuget.org/packages/Aspire.Hosting.Azure.KeyVault):
+From your AppHost directory, add the `Aspire.Hosting.Azure.KeyVault` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.KeyVault
+```bash
+aspire add Aspire.Hosting.Azure.KeyVault
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -41,9 +34,11 @@ automatically.
 
 ## Usage examples
 
-### Adding a Key Vault resource to the Aspire application model
+### Adding a Key Vault resource to the AppHost model
 
-In order to provision a Key Vault resource as part of an Aspire application you need to add the resource via the `IDistributedApplicationBuilder` interface. The `builder.AddAzureKeyVault(...)` extension method is used to register a Key Vault resource with the application model. Then use the `WithReference` extension method on a resource to inject the necessary connection string information for accessing Key Vault into the application that depends on it.
+Add a Key Vault resource in the AppHost, then reference it from another resource with `WithReference`.
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -54,7 +49,18 @@ builder.AddProject<Projects.MyApp>("myapp")
        .WithReference(keyVault);
 ```
 
-Inside the the implementation of the application that depends on Key Vault (MyApp in this case) add the `Aspire.Azure.Security.KeyVault` package and follow the instructions in that package README to use the connection string that was injected by the code above.
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const keyVault = await builder.addAzureKeyVault("mykeyvault");
+
+await builder.addNodeApp("myapp", "../my-app", "server.js")
+    .withReference(keyVault);
+```
 
 ## Connection Properties
 
@@ -87,3 +93,12 @@ var keyVault = builder.AddAzureKeyVault("mykeyvault", (_, construct, kv) => {
 builder.AddProject<Projects.MyApp>("myapp")
        .WithReference(keyVault);
 ```
+
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/cloud/azure/azure-key-vault/azure-key-vault-host/
+
+## Feedback & contributing
+
+https://github.com/microsoft/aspire

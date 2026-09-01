@@ -16,6 +16,7 @@ internal static class ProcessCaptureRunner
     // latency but small enough not to noticeably stall the caller.
     private static readonly TimeSpan s_postKillExitWaitBound = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan s_postKillCaptureWaitBound = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan s_postExitCaptureWaitBound = TimeSpan.FromSeconds(2);
 
     public static async Task<ProcessCaptureResult<TCapture>> RunAsync<TCapture>(
         ProcessStartInfo startInfo,
@@ -135,9 +136,10 @@ internal static class ProcessCaptureRunner
             // stdout/stderr handles keeps them open. timeoutCts is still ticking, so an
             // unbounded await here would block up to the remaining wall-clock timeout
             // budget (potentially several seconds for a peer that exited in
-            // milliseconds). Cap the post-exit drain at the same bound we use after a
-            // kill so the success path doesn't pay the full timeout for that scenario.
-            var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postKillCaptureWaitBound).ConfigureAwait(false);
+            // milliseconds). Cap the post-exit drain, but allow more time than the
+            // post-kill path: the peer has already exited normally, so losing recently
+            // emitted stdout/stderr would make diagnostics flaky under CI load.
+            var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postExitCaptureWaitBound).ConfigureAwait(false);
             var exitCode = process.ExitCode;
 
             // If the bounded drain timed out (pipes inherited by descendants), the
@@ -228,7 +230,7 @@ internal static class ProcessCaptureRunner
         }
         catch (TimeoutException ex)
         {
-            logger.LogDebug(ex, "Timed out waiting for process output capture after process interruption.");
+            logger.LogDebug(ex, "Timed out waiting {Bound}s for process output capture.", bound?.TotalSeconds);
             ObserveCaptureFault(task);
             return createEmptyCapture();
         }

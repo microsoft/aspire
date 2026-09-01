@@ -4,10 +4,8 @@
 using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,8 +19,9 @@ internal sealed class DestroyCommand : PipelineCommandBase
 
     private readonly Option<bool> _yesOption;
 
-    public DestroyCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole)
-        : base("destroy", DestroyCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+    public DestroyCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole,
+        CommonCommandServices services)
+        : base("destroy", DestroyCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
     {
         _yesOption = new Option<bool>("--yes", "-y")
         {
@@ -37,7 +36,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => DestroyCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => DestroyCommandStrings.OutputPathArgumentDescription;
 
-    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "destroy" };
 

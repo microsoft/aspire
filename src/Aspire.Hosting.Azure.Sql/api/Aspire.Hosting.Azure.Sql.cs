@@ -10,10 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzureSqlExtensions
     {
-        [AspireExport(Description = "Adds an Azure SQL Database server resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> AddAzureSqlServer(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure SQL database resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, string name, string? databaseName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureSqlServer instead to add an Azure SQL server resource.")]
@@ -22,18 +22,18 @@ namespace Aspire.Hosting
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureSqlServer instead to add an Azure SQL server resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> PublishAsAzureSqlDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure SQL server to run locally in a SQL Server container", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource>>? configureContainer = null) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptStorage(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure SQL database to use the default Azure SKU")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> WithDefaultAzureSku(this ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> builder) { throw null; }
     }
 }

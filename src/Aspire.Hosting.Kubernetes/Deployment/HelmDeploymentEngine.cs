@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREINTERACTION001
 
 using System.Globalization;
 using System.Text;
@@ -14,6 +13,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.Yaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -353,6 +353,9 @@ internal static partial class HelmDeploymentEngine
         if (overrideValues.Count > 0)
         {
             var serializer = new YamlDotNet.Serialization.SerializerBuilder()
+                // Parameter values are strings. Quote them so Helm does not reinterpret values such
+                // as "01", "1.0", or "True" as numeric or boolean YAML scalars.
+                .WithEventEmitter(nextEmitter => new ForceQuotedStringsEventEmitter(nextEmitter))
                 .WithNewLine("\n")
                 .Build();
             var overrideContent = serializer.Serialize(overrideValues);

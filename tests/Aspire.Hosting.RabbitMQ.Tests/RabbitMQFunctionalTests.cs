@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Text;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -17,7 +19,7 @@ namespace Aspire.Hosting.RabbitMQ.Tests;
 public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnRabbitMQBlocksDependentResources()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -54,7 +56,7 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyRabbitMQResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -92,7 +94,7 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -233,4 +235,27 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public Task RabbitMQ_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public Task RabbitMQ_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }

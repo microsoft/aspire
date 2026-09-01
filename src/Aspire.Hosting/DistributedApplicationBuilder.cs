@@ -8,11 +8,13 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -26,6 +28,7 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
@@ -141,22 +144,26 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _innerBuilder.Configuration["Publishing:Publisher"] switch
             {
                 { } publisher => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, publisher),
-                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() }
             };
         }
 
-        var operation = _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
+        return _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
         {
-            "publish" => DistributedApplicationOperation.Publish,
-            "run" => DistributedApplicationOperation.Run,
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            "run" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
+            "publish" or "inspect" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
+            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish', 'run', or 'inspect'.")
         };
+    }
 
-        return operation switch
+    private RunConfiguration BuildRunConfiguration()
+    {
+        // Only "true" and "false" (case-insensitively) are accepted. bool.TryParse rejects everything else,
+        // including values some configuration sources emit for booleans such as "1" or "yes". An unusable
+        // value must never fail an otherwise valid run, so anything unrecognized falls back to the default.
+        return new RunConfiguration
         {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(operation),
-            DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            WatchEnabled = bool.TryParse(_innerBuilder.Configuration["AppHost:Run:WatchEnabled"], out var watchEnabled) && watchEnabled
         };
     }
 
@@ -185,16 +192,24 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _options = options;
 
-        var innerBuilderOptions = new HostApplicationBuilderSettings();
+        var innerBuilderOptions = new HostApplicationBuilderSettings
+        {
+            ContentRootPath = options.ContentRootPath
+        };
 
         // Args are set later in config with switch mappings. But specify them when creating the builder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
-        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // Pre-seed fallback values before environment and host-default sources so every normal
+        // configuration provider can override them, then add ASPIRE_-prefixed environment variables.
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
+        if (options.DefaultConfiguration is not null)
+        {
+            configuration.AddInMemoryCollection(options.DefaultConfiguration);
+        }
         configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
         innerBuilderOptions.Configuration = configuration;
 
@@ -211,8 +226,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
-        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
+        // Allow warnings from Aspire's dashboard code. We control this code and want to be able to log warnings to help troubleshoot issues in the dashboard.
+        // For example, misconfigured icons from the apphost are logged as warnings, and we want those to be visible to users.
+        // The volume of logs from this category should be low, so it shouldn't cause too much noise.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+        // Third-party dashboard categories (e.g. Microsoft.AspNetCore, Grpc) are routed under
+        // Aspire.Hosting.Dashboard.ThirdParty so they can be filtered with a single rule.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
 
         // This is to reduce log noise when we activate health checks for resources which may not yet be
         // fully initialized. For example a database which is not yet created.
@@ -275,10 +296,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _executionContextOptions = BuildExecutionContextOptions();
         ExecutionContext = new DistributedApplicationExecutionContext(_executionContextOptions);
 
-        // Compute both PathSha and ProjectNameSha to support different use cases:
-        // - PathSha: For disambiguating projects with the same name in different locations (deployment state)
+        // Compute path, deployment-state, and project-name identities for different use cases:
+        // - PathSha: Historical directory identity used by persistent run-mode resources.
+        // - DeploymentStatePathSha: Source-file-specific identity used by deployment state.
         // - ProjectNameSha: For stable naming across deployments regardless of path (Azure Functions, Azure environments)
         string appHostPathSha;
+        string deploymentStatePathSha;
+        string? legacyDeploymentStatePathSha = null;
         string appHostProjectNameSha;
         string appHostSha; // Legacy value, computed based on mode
 
@@ -288,14 +312,31 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // For backward compatibility with tests
             appHostPathSha = configuredAppHostSha;
+            deploymentStatePathSha = configuredAppHostSha;
             appHostProjectNameSha = configuredAppHostSha;
             appHostSha = configuredAppHostSha;
         }
         else
         {
-            // Normalize the casing of AppHostPath and compute PathSha
             var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
             appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
+
+            // Source-file and polyglot AppHosts can share a host process and project directory,
+            // so use the actual source file to keep their deployment state isolated.
+            var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
+                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
+            var appHostIdentityPath = isSourceFileAppHost
+                ? PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(appHostFilePath!))
+                : AppHostPath;
+            var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
+                ? appHostIdentityPath
+                : appHostIdentityPath.ToLowerInvariant();
+            var deploymentStatePathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
+            deploymentStatePathSha = Convert.ToHexString(deploymentStatePathShaBytes);
+            if (!string.Equals(deploymentStatePathSha, appHostPathSha, StringComparison.Ordinal))
+            {
+                legacyDeploymentStatePathSha = appHostPathSha;
+            }
 
             // Compute ProjectNameSha
             var appHostProjectNameShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostName));
@@ -316,8 +357,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // PathSha for deployment state (path-based disambiguation)
+            // Historical path identity used by persistent run-mode resources.
             ["AppHost:PathSha256"] = appHostPathSha,
+            // Source-file-specific deployment identity and its migration fallback.
+            ["AppHost:DeploymentStatePathSha256"] = deploymentStatePathSha,
+            ["AppHost:LegacyDeploymentStatePathSha256"] = legacyDeploymentStatePathSha,
             // ProjectNameSha for Azure Functions and Azure environments (stable naming)
             ["AppHost:ProjectNameSha256"] = appHostProjectNameSha,
             // Legacy Sha256 for backward compatibility (mode-dependent)
@@ -328,7 +372,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // This must happen before command line args are added so they can override saved state
         if (ExecutionContext.IsPublishMode)
         {
-            LoadDeploymentState(appHostPathSha);
+            LoadDeploymentState(deploymentStatePathSha, legacyDeploymentStatePathSha);
         }
 
         // Core things
@@ -362,11 +406,18 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
-        _innerBuilder.Services.AddSingleton<ParameterProcessor>();
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
+        {
+            var parameterProcessor = ActivatorUtilities.CreateInstance<ParameterProcessor>(sp);
+            // Wire the AppHost-scoped redaction history after construction (not through the public constructor) so
+            // the processor records resolved secret values as they are assigned/replaced. This populates the
+            // describe/watch redaction set from startup, independent of any backchannel connection, while keeping
+            // ParameterProcessor's public constructor unchanged (https://github.com/microsoft/aspire/issues/19241).
+            parameterProcessor.SecretRedactionHistory = sp.GetRequiredService<SecretRedactionHistory>();
+            return parameterProcessor;
+        });
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -409,7 +460,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
+        // Shared by every per-connection AuxiliaryBackchannelRpcTarget so the describe/watch secret redaction set
+        // outlives an individual connection (https://github.com/microsoft/aspire/issues/19241).
+        _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
+        _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
 
         ConfigureHealthChecks();
 
@@ -500,6 +555,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+
+            // Terminal host binary path resolution (WithTerminal)
+            _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
 
         ConfigureProfilingTelemetry();
@@ -512,6 +577,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
+            _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -739,6 +807,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Pipeline options (valid for aspire do based commands)
             { "--step", "Pipeline:Step" },
+            { "--list-steps", "Pipeline:ListSteps" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
             { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },
@@ -802,7 +871,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         var application = new DistributedApplication(_innerBuilder.Build());
 
-        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
         LogAppBuilt(application);
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
@@ -953,8 +1022,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// Loads deployment state from the filesystem based on the app host SHA and environment name.
     /// Only loads if ClearCache is false.
     /// </summary>
-    /// <param name="appHostSha">The SHA hash of the app host.</param>
-    private void LoadDeploymentState(string appHostSha)
+    /// <param name="appHostSha">The current SHA hash of the app host.</param>
+    /// <param name="legacyAppHostSha">The previous SHA hash used for source-file AppHosts.</param>
+    private void LoadDeploymentState(string appHostSha, string? legacyAppHostSha)
     {
         // Only load if ClearCache is false
         var clearCache = _innerBuilder.Configuration.GetValue<bool>("Pipeline:ClearCache");
@@ -964,24 +1034,37 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
-
-        if (!File.Exists(deploymentStatePath))
-        {
-            return;
-        }
 
         try
         {
-            _innerBuilder.Configuration.AddJsonFile(deploymentStatePath, optional: true, reloadOnChange: false);
+            // GetStatePath validates the environment name and throws ArgumentException for names
+            // outside [a-zA-Z0-9_-]. Compute the paths inside the try so an unusual environment name
+            // degrades to skipping this best-effort load instead of failing builder construction.
+            var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                appHostSha,
+                environment)!;
+            var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+                ? null
+                : FileDeploymentStateManager.GetStatePath(
+                    _innerBuilder.Configuration,
+                    legacyAppHostSha,
+                    environment);
+
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
+                deploymentStatePath,
+                legacyDeploymentStatePath);
+            if (effectiveState.Count > 0)
+            {
+                var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(flattenedState.ToJsonString()));
+                _innerBuilder.Configuration.AddJsonStream(stream);
+            }
         }
-        catch { }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        {
+            Debug.WriteLine($"Failed to load deployment state for environment '{environment}': {ex}");
+        }
     }
 
     /// <summary>

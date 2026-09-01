@@ -288,6 +288,84 @@ public class InputViewModelTests
     }
 
     [Fact]
+    public void SetInput_DisabledToEnabledInputUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Placeholder = "Select subscription ID",
+            Disabled = true
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Placeholder = "Select subscription ID",
+            Value = "12345678-1234-1234-1234-123456789012"
+        };
+        updatedInput.Options.Add("12345678-1234-1234-1234-123456789012", "Test Subscription");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.False(viewModel.InputDisabled);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", viewModel.Value);
+    }
+
+    [Fact]
+    public void SetInput_EnabledToDisabledInputUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Value = "local"
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Disabled = true,
+            Value = "server"
+        };
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.True(viewModel.InputDisabled);
+        Assert.Equal("server", viewModel.Value);
+    }
+
+    [Fact]
+    public void SetInput_LoadingCompletionUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Loading = true,
+            Value = "local"
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Value = "server"
+        };
+        updatedInput.Options.Add("server", "Server");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.False(viewModel.InputDisabled);
+        Assert.Equal("server", viewModel.Value);
+    }
+
+    [Fact]
     public void SetInput_EnabledInputPreservesLocalValue()
     {
         var input = new InteractionInput
@@ -308,5 +386,68 @@ public class InputViewModelTests
         viewModel.SetInput(updatedInput);
 
         Assert.Equal("local", viewModel.Value);
+    }
+
+    [Fact]
+    public void InputViewModel_File_DefaultsToEmptyValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File
+        };
+
+        var viewModel = new InputViewModel(input);
+
+        Assert.True(string.IsNullOrEmpty(viewModel.Value));
+        Assert.Empty(viewModel.FileReferences);
+    }
+
+    [Fact]
+    public void InputViewModel_File_SetFileReferencesSerializesToValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" }
+        ]);
+
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("readme.txt", viewModel.FileReferences[0].Name);
+        Assert.Contains("abc123", viewModel.Value);
+        Assert.Contains("readme.txt", viewModel.Value);
+    }
+
+    [Fact]
+    public void InputViewModel_File_SetInputPreservesFileReferencesWhenValueIsPreserved()
+    {
+        var initialInput = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File,
+            Value = "[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]"
+        };
+        var viewModel = new InputViewModel(initialInput);
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "id1", Name = "local-file.txt" }
+        ]);
+
+        var newInput = new InteractionInput
+        {
+            Label = "Select Another File",
+            InputType = InputType.File,
+            Value = string.Empty,
+        };
+
+        viewModel.SetInput(newInput);
+
+        Assert.Equal("[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]", viewModel.Value);
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("local-file.txt", viewModel.FileReferences[0].Name);
     }
 }

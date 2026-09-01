@@ -26,11 +26,13 @@ internal static class KnownProperties
         public const string Source = "resource.source";
         public const string HealthState = "resource.healthState";
         public const string ConnectionString = "resource.connectionString";
+        public const string ConnectionProperties = "resource.connectionProperties";
         public const string ParentName = "resource.parentName";
         public const string AppArgs = "resource.appArgs";
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
+        public const string LaunchConfigurationType = "resource.launchConfigurationType";
     }
 
     public static class Container
@@ -57,6 +59,14 @@ internal static class KnownProperties
         public const string LaunchProfile = "project.launchProfile";
     }
 
+    public static class Terminal
+    {
+        public const string Enabled = "terminal.enabled";
+        public const string ReplicaIndex = "terminal.replicaIndex";
+        public const string ReplicaCount = "terminal.replicaCount";
+        public const string ConsumerUdsPath = "terminal.consumerUdsPath";
+    }
+
     public static class Parameter
     {
         public const string Value = "Value";
@@ -68,4 +78,23 @@ internal static class KnownProperties
         public const string Version = "tool.version";
         public const string ExecArgs = "tool.execArgs";
     }
+}
+
+/// <summary>
+/// Defines dashboard sort order values for known resource properties.
+/// </summary>
+internal static class KnownResourcePropertySortOrder
+{
+    public const int DisplayName = 0;
+    public const int State = 1;
+    public const int HealthState = 2;
+    public const int StartTime = 3;
+    public const int StopTime = 4;
+    public const int ExitCode = 5;
+    public const int ConnectionString = 6;
+
+    // Producers use local sort orders for their own resource-specific properties. The
+    // dashboard normalizes those values after the generic dashboard-owned properties.
+    // This value should always be greater than the largest known resource property.
+    public static int GetProducerDefinedStart() => ConnectionString + 1;
 }

@@ -42,6 +42,16 @@ public class GlobalizationHelpersTests
     }
 
     [Theory]
+    [InlineData("", "en")]
+    [InlineData("en-US", "en-US")]
+    public void GetHtmlLanguageName_ReturnsExpectedLanguage(string cultureName, string expectedLanguageName)
+    {
+        var culture = CultureInfo.GetCultureInfo(cultureName);
+
+        Assert.Equal(expectedLanguageName, GlobalizationHelpers.GetHtmlLanguageName(culture));
+    }
+
+    [Theory]
     [InlineData("en", true, "en")]
     [InlineData("en-US", true, "en")]
     [InlineData("fr", true, "fr")]

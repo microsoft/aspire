@@ -251,9 +251,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
     {
-        // Containers are always "created" (submitted to DCP), they just get Spec.Start = false initially
-        // if explicit startup is used.
-        return true;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -308,11 +306,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         var spec = dcpContainer.Spec;
 
-        if (cr.ServicesProduced.Count > 0)
-        {
-            spec.Ports = BuildContainerPorts(cr);
-        }
-
         spec.VolumeMounts = BuildContainerMounts(cr.ModelResource);
 
         var (runArgs, failedToApplyRunArgs) = await BuildRunArgsAsync(logger, cr.ModelResource, cToken).ConfigureAwait(false);
@@ -323,9 +316,17 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
+
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
+        }
+
+        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
+        // so build ports afterward.
+        if (cr.ServicesProduced.Count > 0)
+        {
+            spec.Ports = BuildContainerPorts(cr);
         }
 
         var args = configuration.Arguments.ToList();
@@ -351,6 +352,38 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
         spec.PemCertificates = pemCertificates;
 
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). PTY allocation
+        // is implemented by DCP for Windows (ConPTY), Linux, and macOS
+        // (Unix98 /dev/ptmx); the container runtime CLI's `attach` command
+        // is what actually gets PTY-attached, so behaviour is uniform across
+        // hosts that support docker/podman.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (terminalAnnotation.TerminalHosts.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
+
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)
         {
@@ -366,9 +399,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             await factory.CreateRenderedResourcesAsync(containerExecCreator, containerExes, EmptyCreationContext.s_instance, cToken).ConfigureAwait(false);
         }
     }
-
-    IEnumerable<RenderedModelResource<ContainerExec>> IObjectCreator<ContainerExec, EmptyCreationContext>.PrepareObjects()
-        => _appResources.Get().OfType<RenderedModelResource<ContainerExec>>();
 
     bool IObjectCreator<ContainerExec, EmptyCreationContext>.IsReadyToCreate(RenderedModelResource<ContainerExec> resource, EmptyCreationContext context)
         => true;
@@ -479,8 +509,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         ContainerNetworkService[] containerNetworkServices;
 
         // While not strictly necessary from correctness perspective, it is better for performance if tunnel creation
-        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies, 
-        // so concurrently-created containers that share host dependencies do not "split" these dependencies 
+        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies,
+        // so concurrently-created containers that share host dependencies do not "split" these dependencies
         // (and associated tunnels) between themselves.
         await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -537,7 +567,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             finally
             {
                 _tunnelSemaphore.Release();
-            };
+            }
         }
 
         await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
@@ -691,6 +721,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.crt"),
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pem"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
@@ -743,6 +774,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{thumbprint}.crt"),
                 KeyPath = tlsCertificateConfiguration.KeyPathReference,
+                CertificateWithKeyPath = tlsCertificateConfiguration.CertificateWithKeyPathReference,
                 PfxPath = tlsCertificateConfiguration.PfxPathReference,
                 Password = tlsCertificateConfiguration.Password,
             };
@@ -771,10 +803,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
             (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
+                certificate: tlsCertificateConfiguration.Certificate,
+                password: tlsCertificateConfiguration.Password,
+                needKeyPem: tlsCertificateConfiguration.IsKeyPathReferenced || tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced,
+                needPfx: tlsCertificateConfiguration.IsPfxPathReferenced,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -785,7 +817,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Name = thumbprint + ".crt",
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(publicCertificatePem),
-                }
+                },
             };
 
             if (keyPem is not null)
@@ -796,6 +828,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(keyPem),
                 });
+
+                if (tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced)
+                {
+                    certificateFiles.Add(new ContainerFileSystemEntry
+                    {
+                        Name = thumbprint + ".pem",
+                        Type = ContainerFileSystemEntryType.File,
+                        Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
+                    });
+                }
 
                 Array.Clear(keyPem, 0, keyPem.Length);
             }
@@ -834,7 +876,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     new()
                     {
                         Model = context.Resource,
-                        ServiceProvider = _executionContext.ServiceProvider,
+                        Services = _executionContext.Services,
                         HttpsCertificateContext = context.HttpsCertificateContext,
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -888,7 +930,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.ServiceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -938,7 +980,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
 #pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
             var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
-                executionContext.ServiceProvider,
+                executionContext.Services,
                 logger,
                 executionContext,
                 cancellationToken).ConfigureAwait(false);
@@ -989,10 +1031,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
+                sp.Service.Spec.Port ??= hostPort;
                 portSpec.HostPort = hostPort;
             }
 
-            switch (sp.EndpointAnnotation.Protocol)
+            switch (ea.Protocol)
             {
                 case ProtocolType.Tcp:
                     portSpec.Protocol = PortProtocol.TCP;
@@ -1002,9 +1045,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     break;
             }
 
-            if (sp.EndpointAnnotation.TargetHost != KnownHostNames.Localhost)
+            if (ea.TargetHost != KnownHostNames.Localhost)
             {
-                portSpec.HostIP = sp.EndpointAnnotation.TargetHost;
+                portSpec.HostIP = ea.TargetHost;
             }
 
             ports.Add(portSpec);

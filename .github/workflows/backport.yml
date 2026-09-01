@@ -40,7 +40,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Extract backport target branch
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       id: target-branch-extractor
       with:
         result-encoding: string
@@ -55,7 +55,7 @@ jobs:
           return target_branch[1];
 
     - name: Verify user has write access
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const comment_user = context.payload.comment.user.login;
@@ -73,7 +73,7 @@ jobs:
           console.log(`Verified ${comment_user} has ${permission.permission} access to the repo.`);
 
     - name: Unlock comments if PR is locked
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       if: github.event.issue.locked == true
       with:
         script: |
@@ -85,7 +85,7 @@ jobs:
           });
 
     - name: Post backport started comment to pull request
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
@@ -114,7 +114,7 @@ jobs:
         token: ${{ steps.app-token.outputs.token }}
 
     - name: Run backport
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
         BACKPORT_PR_TITLE_TEMPLATE: '[%target_branch%] %source_pr_title%'
@@ -259,7 +259,7 @@ jobs:
           }
 
     - name: Re-lock PR comments
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       if: github.event.issue.locked == true && (success() || failure())
       with:
         script: |

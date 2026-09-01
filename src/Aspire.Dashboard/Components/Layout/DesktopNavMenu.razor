@@ -1,5 +1,6 @@
 ﻿@using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Layout> Loc
+@inject IStringLocalizer<Aspire.Dashboard.Resources.StructuredLogs> StructuredLogsLoc
 @inject IDashboardClient DashboardClient
 
 <FluentAppBar PopoverShowSearch="false" Class="desktop-nav-menu">
@@ -19,7 +20,7 @@
     <FluentAppBarItem Href="@DashboardUrls.StructuredLogsUrl()"
         IconRest="StructuredLogsIcon()"
         IconActive="StructuredLogsIcon(active: true)"
-        Text="@Loc[nameof(Layout.NavMenuStructuredLogsTab)]" />
+        Text="@StructuredLogsLoc[nameof(Aspire.Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]" />
     <FluentAppBarItem Href="@DashboardUrls.TracesUrl()"
         IconRest="TracesIcon()"
         IconActive="TracesIcon(active: true)"

@@ -64,7 +64,7 @@ public class ResourceCommandAnnotationTests
                 ResourceType = "test",
                 State = resourceState
             },
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         });
 
         // Assert
@@ -144,7 +144,7 @@ public class ResourceCommandAnnotationTests
                 ResourceType = "test",
                 State = resourceState
             },
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         });
 
         Assert.Equal(commandState, state);

@@ -174,7 +174,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     private async Task WriteProjectAsync(ProjectResource project)
     {
-        if (!project.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (!project.TryGetProjectMetadata(out var metadata))
         {
             throw new DistributedApplicationException($"Project metadata was not found for resource '{project.Name}'.");
         }
@@ -378,7 +378,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{container.Name}.Dockerfile");
                 var dockerfileContext = new DockerfileFactoryContext
                 {
-                    Services = ExecutionContext.ServiceProvider,
+                    Services = ExecutionContext.Services,
                     Resource = container,
                     CancellationToken = CancellationToken
                 };

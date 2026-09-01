@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +16,7 @@ namespace Aspire.Hosting.Tests;
 public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void WithHttpHealthCheckThrowsIfReferencingEndpointByNameThatIsNotHttpScheme()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -35,7 +36,7 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void WithHttpHealthCheckThrowsIfReferencingEndpointThatIsNotHttpScheme()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -55,7 +56,7 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void WithHttpsHealthCheckThrowsIfReferencingEndpointThatIsNotHttpsScheme()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -76,7 +77,39 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    public async Task WithHttpHealthCheckResolvesUriFromEndpointDuringCheck()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var resource = builder.AddContainer("resource", "dummycontainer")
+            .WithHttpEndpoint(port: 49217, targetPort: 80)
+            .WithHttpHealthCheck();
+
+        using var app = builder.Build();
+
+        var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, KnownHostNames.Localhost, 49217, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: null);
+
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var registration = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Single(r => r.Name == "resource_http_/_200_check");
+
+        await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
+
+        var healthCheck = registration.Factory(app.Services);
+        Assert.NotNull(healthCheck);
+
+        // The health check resolves the endpoint URI directly via GetValueAsync during CheckHealthAsync.
+        // The HTTP request will fail (nothing listening), but the error message confirms the URI was resolved.
+        var context = new HealthCheckContext { Registration = registration };
+        var result = await healthCheck.CheckHealthAsync(context);
+
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.Contains("http://localhost:49217/", result.Description);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithHttpHealthCheckBlocksDependentResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);

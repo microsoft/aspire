@@ -3,10 +3,10 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Microsoft.Extensions.DependencyInjection;
+using Azure.AI.Projects.Agents;
 
 namespace Aspire.Hosting;
 
@@ -16,26 +16,51 @@ namespace Aspire.Hosting;
 public static class HostedAgentResourceBuilderExtensions
 {
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
+    private const string ResponsesProtocol = "responses";
+    private const string InvocationsProtocol = "invocations";
 
     /// <summary>
-    /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent.
     /// </summary>
-    /// <ats-summary>Configures the resource to run locally as a Microsoft Foundry hosted agent.</ats-summary>
+    /// <ats-summary>Configures the resource to run and publish as a Microsoft Foundry hosted agent.</ats-summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="protocol">The protocol exposed by the hosted agent container.</param>
+    /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// This method applies in run mode. It configures the resource with the hosted agent responses endpoint,
-    /// a dashboard command for sending messages to the agent, and OpenTelemetry environment variables expected
-    /// by the Microsoft Foundry agent server SDK.
+    /// In run mode, this method configures the resource with the hosted agent protocol endpoint, a dashboard
+    /// command for sending messages to the agent, and OpenTelemetry environment variables expected by the
+    /// Microsoft Foundry agent server SDK. In publish mode, it resolves or creates a Microsoft Foundry project
+    /// and configures the resource to deploy as a hosted agent using the selected protocol version.
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
     /// var agent = builder.AddProject&lt;Projects.AgentService&gt;("agent")
-    ///     .AsHostedAgent();
+    ///     .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
     /// </code>
     /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent(project) overload which is exported.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        HostedAgentProtocol protocol,
+        string protocolVersion)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        return AsHostedAgent(builder, project: null, protocol, protocolVersion, configure: null);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for source compatibility. Prefer overloads that pass the Microsoft Foundry project
+    /// and hosted agent protocol explicitly.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent(project) overload which is exported.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
@@ -43,19 +68,64 @@ public static class HostedAgentResourceBuilderExtensions
         return AsHostedAgent(builder, project: null, configure: null);
     }
 
-    // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
-    // The CLR method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
-    // overload, but the ATS capability name must stay "asHostedAgent" for compatibility.
-    // .NET callers should keep using the Action<HostedAgentConfiguration> overload above, which exposes
-    // the full HostedAgentConfiguration surface (tools, content filters, container protocol versions, etc.).
+    /// <summary>
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration. When <see langword="null"/>, an existing Foundry project in the model is reused or a new project is created in publish mode.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This C# convenience overload defaults to the Responses protocol version 2.0.0, mirroring the exported
+    /// <c>asHostedAgent</c> entry point used by polyglot app hosts. Polyglot hosts that need a different protocol
+    /// or version should use the exported <c>asHostedAgentWithProtocol</c> entry point instead. The configuration
+    /// callback is applied in publish mode.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the defaulted asHostedAgent export covers this case.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
+        Action<HostedAgentConfiguration>? configure = null)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        return ConfigureAsHostedAgent(builder, project, HostedAgentProtocol.Responses, AzureHostedAgentResource.DefaultResponsesProtocolVersion, configure);
+    }
 
     /// <summary>
-    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, targeting the specified Foundry project.
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for source compatibility. Prefer overloads that pass the Microsoft Foundry project
+    /// and hosted agent protocol explicitly.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        Action<HostedAgentConfiguration> configure)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        return AsHostedAgent(builder, project: null, configure);
+    }
+
+    // The internal adapters below keep ATS compatibility without adding CLR overloads that would be
+    // ambiguous with the public Action-based overloads. The original asHostedAgent capability retains
+    // its Responses/2.0.0 defaults, while asHostedAgentWithProtocol exposes explicit protocol selection.
+    // .NET callers should keep using the public overloads when they need the full HostedAgentConfiguration
+    // surface (tools, content filters, additional protocol versions, etc.).
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry using the Responses protocol version 2.0.0.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
     /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
-    /// <param name="options">Optional hosted agent deployment options (description, CPU, memory, metadata, environment variables) applied in publish mode.</param>
+    /// <param name="options">Optional hosted agent deployment options. Options apply in publish mode.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
@@ -69,7 +139,39 @@ public static class HostedAgentResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(project);
 
         Action<HostedAgentConfiguration>? configure = options is null ? null : options.ApplyTo;
-        return AsHostedAgent(builder, project: project, configure: configure);
+        return ConfigureAsHostedAgent(
+            builder,
+            project,
+            HostedAgentProtocol.Responses,
+            AzureHostedAgentResource.DefaultResponsesProtocolVersion,
+            configure);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry using an explicit protocol and version.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
+    /// <param name="protocol">The protocol exposed by the hosted agent container.</param>
+    /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
+    /// <param name="options">Optional hosted agent deployment options. Options apply in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
+    [AspireExport("asHostedAgentWithProtocol")]
+    internal static IResourceBuilder<T> AsHostedAgentWithProtocolForExport<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        HostedAgentProtocol protocol,
+        string protocolVersion,
+        HostedAgentOptions? options = null)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        Action<HostedAgentConfiguration>? configure = options is null ? null : options.ApplyTo;
+        return ConfigureAsHostedAgent(builder, project, protocol, protocolVersion, configure);
     }
 
     /// <summary>
@@ -80,20 +182,40 @@ public static class HostedAgentResourceBuilderExtensions
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
     /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration. When <see langword="null"/>, an existing Foundry project in the model is reused or a new project is created in publish mode.</param>
-    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <param name="protocol">The protocol exposed by the hosted agent container.</param>
+    /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the HostedAgentOptions overload is exported instead.")]
+    /// <remarks>
+    /// The <paramref name="protocol"/> parameter affects both run and publish mode. The <paramref name="protocolVersion"/>
+    /// parameter is emitted in publish mode. The configuration callback is applied in publish mode.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the HostedAgentOptions DTO shape is exported instead.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
+        HostedAgentProtocol protocol,
+        string protocolVersion,
         Action<HostedAgentConfiguration>? configure = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        return ConfigureAsHostedAgent(builder, project, protocol, protocolVersion, configure);
+    }
+
+    private static IResourceBuilder<T> ConfigureAsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
+        HostedAgentProtocol protocol,
+        string protocolVersion,
+        Action<HostedAgentConfiguration>? configure)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
+        var protocolVersionRecord = CreateProtocolVersionRecord(protocol, protocolVersion);
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            ConfigureRunMode(builder);
+            ConfigureRunMode(builder, protocol);
 
             if (project is not null)
             {
@@ -104,7 +226,7 @@ public static class HostedAgentResourceBuilderExtensions
         }
 
         var publishProject = project ?? ResolveProjectBuilderForPublish(builder);
-        ConfigurePublishMode(builder, publishProject, configure);
+        ConfigurePublishMode(builder, publishProject, protocolVersionRecord, configure);
 
         return builder;
     }
@@ -116,16 +238,20 @@ public static class HostedAgentResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <param name="protocol">The protocol exposed by the hosted agent container.</param>
+    /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
+        HostedAgentProtocol protocol,
+        string protocolVersion,
         Action<HostedAgentConfiguration> configure)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         ArgumentNullException.ThrowIfNull(configure);
-        return AsHostedAgent(builder, project: null, configure: configure);
+        return AsHostedAgent(builder, project: null, protocol, protocolVersion, configure);
     }
 
     private static void AddProjectReferenceForRunMode<T>(
@@ -157,9 +283,11 @@ public static class HostedAgentResourceBuilderExtensions
             .AddProject($"{builder.Resource.Name}-proj");
     }
 
-    private static void ConfigureRunMode<T>(IResourceBuilder<T> builder)
+    private static void ConfigureRunMode<T>(IResourceBuilder<T> builder, HostedAgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        var runProtocol = GetRunProtocol(protocol);
+
         // Preserve any target port already configured on an existing "http" endpoint;
         // fall back to the default MAF agent port (8088) when none is set.
         var existingHttpEndpoint = builder.Resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(e => e.Name == "http");
@@ -175,40 +303,52 @@ public static class HostedAgentResourceBuilderExtensions
                 {
                     return;
                 }
-                http.DisplayText = "Responses Endpoint";
+                http.DisplayText = runProtocol.EndpointDisplayText;
                 http.Url = new UriBuilder(http.Url)
                 {
-                    Path = "/responses"
+                    Path = runProtocol.Path
                 }.ToString();
             })
             .WithHttpCommand(
-                path: "/responses",
+                path: runProtocol.Path,
                 displayName: "Send Message",
                 endpointName: "http",
+                commandName: "send-message",
                 commandOptions: new()
                 {
+                    Progress = new() { Message = "Sending message to agent..." },
                     Method = HttpMethod.Post,
                     IconName = "ChatSparkle",
                     IconVariant = IconVariant.Regular,
                     IsHighlighted = true,
-                    PrepareRequest = async ctx =>
-                    {
-                        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                        var result = await interactionService.PromptInputAsync(
-                            title: "Responses API",
-                            message: "Enter a message to send to the agent.",
-                            inputLabel: "Message",
-                            placeHolder: "I would like to know the weather today.",
-                            cancellationToken: ctx.CancellationToken
-                        ).ConfigureAwait(true);
-                        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+                    Arguments =
+                    [
+                        new InteractionInput
                         {
-                            ctx.HttpClient.CancelPendingRequests();
-                            throw new OperationCanceledException("User canceled the input prompt.");
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Label = "Message",
+                            Required = true,
+                            Placeholder = "I would like to know the weather today.",
+                            Description = "Enter a message to send to the agent."
                         }
+                    ],
+                    ValidateArguments = ctx =>
+                    {
+                        var message = ctx.Inputs["message"];
+                        if (string.IsNullOrWhiteSpace(message.Value))
+                        {
+                            ctx.AddValidationError(message, "Message is required.");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    PrepareRequest = ctx =>
+                    {
+                        var input = ctx.Arguments.GetString("message")!;
                         var request = ctx.Request;
-                        var input = result.Data.Value;
-                        request.Content = new StringContent(new JsonObject() { ["input"] = input }.ToString(), System.Text.Encoding.UTF8, "application/json");
+                        request.Content = runProtocol.CreateRequestContent(input);
+                        return Task.CompletedTask;
                     },
                     GetCommandResult = async ctx =>
                     {
@@ -224,17 +364,32 @@ public static class HostedAgentResourceBuilderExtensions
                                 CommandResultFormat.Text);
                         }
 
-                        var responseJson = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
-                        if (responseJson is null)
+                        if (runProtocol.ExpectsJsonResponse)
+                        {
+                            var responseJson = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
+                            if (responseJson.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                            {
+                                return CommandResults.Failure("Agent returned an empty response.");
+                            }
+
+                            var formattedResponse = JsonSerializer.Serialize(responseJson, s_indentedJsonOptions);
+                            return CommandResults.Success(
+                                message: "Agent response received.",
+                                result: formattedResponse,
+                                resultFormat: CommandResultFormat.Json,
+                                displayImmediately: true);
+                        }
+
+                        var responseText = await response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+                        if (string.IsNullOrEmpty(responseText))
                         {
                             return CommandResults.Failure("Agent returned an empty response.");
                         }
 
-                        var formattedResponse = JsonSerializer.Serialize(responseJson, s_indentedJsonOptions);
                         return CommandResults.Success(
                             message: "Agent response received.",
-                            result: formattedResponse,
-                            resultFormat: CommandResultFormat.Json,
+                            result: responseText,
+                            resultFormat: CommandResultFormat.Text,
                             displayImmediately: true);
                     },
                 }
@@ -261,9 +416,25 @@ public static class HostedAgentResourceBuilderExtensions
             });
     }
 
+    private static HostedAgentRunProtocol GetRunProtocol(HostedAgentProtocol protocol)
+    {
+        if (protocol == HostedAgentProtocol.Responses)
+        {
+            return HostedAgentRunProtocol.Responses;
+        }
+
+        if (protocol == HostedAgentProtocol.Invocations)
+        {
+            return HostedAgentRunProtocol.Invocations;
+        }
+
+        throw new NotSupportedException($"Foundry hosted agent protocol '{protocol}' is not supported in run mode. Supported protocols: '{ResponsesProtocol}', '{InvocationsProtocol}'.");
+    }
+
     private static void ConfigurePublishMode<T>(
         IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        ProtocolVersionRecord protocolVersion,
         Action<HostedAgentConfiguration>? configure)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -284,18 +455,16 @@ public static class HostedAgentResourceBuilderExtensions
 
         // Hosted Agent resource name
         var agentName = $"{resource.Name}-ha";
+        var configureHostedAgent = CreateConfigureCallback(protocolVersion, configure);
         if (builder.ApplicationBuilder.TryCreateResourceBuilder<AzureHostedAgentResource>(agentName, out var existingHostedAgent))
         {
             // We already have a hosted agent for this resource
-            if (configure is not null)
-            {
-                existingHostedAgent.Resource.Configure = configure;
-            }
+            existingHostedAgent.Resource.Configure = configureHostedAgent;
             return;
         }
 
         // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
-        IResource target;
+        IResourceWithEnvironment target;
         if (resource is ContainerResource containerResource)
         {
             target = containerResource;
@@ -308,7 +477,8 @@ public static class HostedAgentResourceBuilderExtensions
         {
             // Ensure we have a container resource to deploy.
             // ExecutableResource needs PublishAsDockerFile() to convert it into a container resource at this stage.
-            builder.ApplicationBuilder.CreateResourceBuilder(executableResource).PublishAsDockerFile();
+            builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
+                .PublishAsDockerFile();
 
             if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out containerResourceBuilder))
             {
@@ -328,8 +498,25 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        EnsureDefaultHostedAgentEndpoint(builder, target);
+
+        if (target is ProjectResource projectTarget)
+        {
+            // Foundry hosted agents are containerized and the platform owns the listening port contract.
+            // Keep the user's local endpoint metadata intact, but do not emit project endpoint variables
+            // such as ASPNETCORE_URLS/HTTP_PORTS because they require EndpointProperty.TargetPort, which
+            // Foundry hosted-agent deployment endpoints intentionally do not support.
+            builder.ApplicationBuilder.CreateResourceBuilder(projectTarget)
+                .WithEndpointsInEnvironment(_ => false);
+        }
+
+        // The hosted agent wrapper is not the deployed workload. Apply the Foundry
+        // reference to the target so its connection annotations flow into the deployment.
+        builder.ApplicationBuilder.CreateResourceBuilder(target)
+            .WithReference(project);
+
         // Create a separate agent resource to host the deployment.
-        var hostedAgent = new AzureHostedAgentResource(agentName, target, configure);
+        var hostedAgent = new AzureHostedAgentResource(agentName, target, configureHostedAgent);
 
         // Ensure image gets pushed properly.
         target.Annotations.Add(new DeploymentTargetAnnotation(hostedAgent)
@@ -340,7 +527,113 @@ public static class HostedAgentResourceBuilderExtensions
 
         builder.ApplicationBuilder.AddResource(hostedAgent)
             .WithIconName("Agents")
-            .WithReferenceRelationship(target)
-            .WithReference(project);
+            .WithReferenceRelationship(target);
+
+        // Referencing a hosted agent (its node app) only injects the agent's service-discovery URL.
+        // Unlike referencing a first-class Azure resource, it does not give the consumer a managed
+        // identity or any RBAC on the Foundry account, so calls to the agent's invocation endpoint
+        // fail with 401/403 at runtime. Stamp a ReferenceRoleAssignmentAnnotation on the agent's
+        // target so AzureResourcePreparer grants the "Azure AI User" role on the owning Foundry
+        // account to every consumer that references this agent, and provisions the identity that
+        // makes ACA inject AZURE_CLIENT_ID.
+        StampHostedAgentConsumerRoleAnnotation(target, projectResource.Parent);
+    }
+
+    private static void StampHostedAgentConsumerRoleAnnotation(IResourceWithEnvironment target, FoundryResource account)
+    {
+        // Grant only the "Azure AI User" role required to invoke the hosted agent. We deliberately do
+        // not union the account's default data-plane roles here:
+        //  - A consumer that also references the account directly still receives those defaults through
+        //    AzureResourcePreparer's normal reference walk (they are preserved when GetAllRoleAssignments
+        //    unions per target).
+        //  - A consumer that declares explicit role assignments on the account intentionally suppresses
+        //    the account defaults; folding them back in here would defeat that suppression.
+        // So the minimal, least-privilege grant for a pure agent consumer is "Azure AI User" alone.
+        var roles = new HashSet<RoleDefinition>
+        {
+            new(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, "Azure AI User")
+        };
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        target.Annotations.Add(new ReferenceRoleAssignmentAnnotation(account, roles));
+#pragma warning restore ASPIREAZURE003
+    }
+
+    private static void EnsureDefaultHostedAgentEndpoint<T>(IResourceBuilder<T> builder, IResourceWithEnvironment target)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        if (target is not IResourceWithEndpoints targetWithEndpoints ||
+            targetWithEndpoints.Annotations.OfType<EndpointAnnotation>().Any(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName)))
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.CreateResourceBuilder(targetWithEndpoints)
+            .WithHttpEndpoint(name: "http", isProxied: true);
+    }
+
+    private static Action<HostedAgentConfiguration> CreateConfigureCallback(
+        ProtocolVersionRecord protocolVersion,
+        Action<HostedAgentConfiguration>? configure)
+    {
+        return configuration =>
+        {
+            configure?.Invoke(configuration);
+            if (!configuration.ProtocolVersions.Any(existing => ProtocolVersionsEqual(existing, protocolVersion)))
+            {
+                configuration.ProtocolVersions.Add(protocolVersion);
+            }
+        };
+    }
+
+    private static bool ProtocolVersionsEqual(ProtocolVersionRecord left, ProtocolVersionRecord right)
+    {
+        return left.Protocol == right.Protocol &&
+            string.Equals(left.Version, right.Version, StringComparison.Ordinal);
+    }
+
+    private static ProtocolVersionRecord CreateProtocolVersionRecord(HostedAgentProtocol protocol, string protocolVersion)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
+
+        return protocol switch
+        {
+            HostedAgentProtocol.Responses => new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, protocolVersion),
+            HostedAgentProtocol.Invocations => new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, protocolVersion),
+            _ => throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "The hosted agent protocol is not supported.")
+        };
+    }
+
+    private sealed class HostedAgentRunProtocol
+    {
+        public static HostedAgentRunProtocol Responses { get; } = new()
+        {
+            Path = "/responses",
+            EndpointDisplayText = "Responses Endpoint",
+            PromptTitle = "Responses API",
+            ExpectsJsonResponse = true,
+            CreateRequestContent = input => JsonContent.Create(new { input })
+        };
+
+        public static HostedAgentRunProtocol Invocations { get; } = new()
+        {
+            Path = "/invocations",
+            EndpointDisplayText = "Invocations Endpoint",
+            PromptTitle = "Invocations API",
+            ExpectsJsonResponse = false,
+            // Agent Framework's Python invocations host expects a JSON body with a "message" field:
+            // https://github.com/microsoft/agent-framework/blob/main/python/packages/foundry_hosting/agent_framework_foundry_hosting/_invocations.py
+            CreateRequestContent = input => JsonContent.Create(new { message = input })
+        };
+
+        public required string Path { get; init; }
+
+        public required string EndpointDisplayText { get; init; }
+
+        public required string PromptTitle { get; init; }
+
+        public required bool ExpectsJsonResponse { get; init; }
+
+        public required Func<string, HttpContent> CreateRequestContent { get; init; }
     }
 }

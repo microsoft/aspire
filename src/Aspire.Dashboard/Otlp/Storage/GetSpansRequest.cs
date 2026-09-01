@@ -7,11 +7,13 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed class GetSpansRequest
 {
-    public required ResourceKey? ResourceKey { get; init; }
+    public required IReadOnlyList<ResourceKey> ResourceKeys { get; init; }
     public required int StartIndex { get; init; }
     public required int Count { get; init; }
     public required List<TelemetryFilter> Filters { get; init; }
     public string? TraceId { get; init; }
     public bool? HasError { get; init; }
     public string[]? TextFragments { get; init; }
+
+    internal IReadOnlyList<(string TraceId, string SpanId)>? SpanIdentities { get; init; }
 }

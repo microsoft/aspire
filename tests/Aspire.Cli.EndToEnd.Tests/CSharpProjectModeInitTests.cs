@@ -3,7 +3,6 @@
 
 using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -56,7 +55,7 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
     [Theory]
     [InlineData("Test.sln")]
     [InlineData("Test.slnx")]
-    public async Task AspireInitWithSolutionFileGeneratesAppHostThatBuildsAgainstChannelHive(string solutionFileName)
+    public async Task AspireInit_SolutionFile_BuildsAgainstChannelHive(string solutionFileName)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -127,7 +126,7 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
     /// </remarks>
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task AspireInitWithExistingAppHostDirRecreatesMissingNuGetConfigAndPreservesFiles()
+    public async Task AspireInit_ExistingAppHostDir_RecreatesNuGetConfigKeepsFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

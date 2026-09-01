@@ -117,6 +117,8 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         List<AtsParameterInfo> OptionalParameters,
         string? Experimental);
 
+    private sealed record ParameterMappingSignature(string[] RequiredParameters, string[] OptionalParameters);
+
     /// <summary>
     /// Tracks the alternate capability ID for merged capabilities.
     /// Key: the merged capability ID (the "short" one without the extra param).
@@ -125,7 +127,13 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private sealed record MergedCapabilityDispatch(string AlternateCapabilityId, string DiscriminatingParamName);
     private readonly Dictionary<string, MergedCapabilityDispatch> _mergedCapabilityDispatches = new(StringComparer.Ordinal);
 
+    // Type ID of InteractionInputCollection. The by-name accessors below are hand-authored on top of the
+    // generated to_array capability so Python matches the .NET indexer and TypeScript get/value helpers.
+    private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
     private PythonModuleBuilder _moduleBuilder = null!;
+
+    private readonly Dictionary<string, ParameterMappingSignature> _parameterMappingSignatures = new(StringComparer.Ordinal);
 
     // Mapping of typeId -> wrapper class name for all generated wrapper types
     // Used to resolve parameter types to wrapper classes instead of handle types
@@ -334,8 +342,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             var capWithExtra = items.First(c => c.Parameters.Any(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal)));
             var extraParam = capWithExtra.Parameters.First(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal));
 
-            // Only merge if the extra param is required (not already optional)
-            if (extraParam.IsOptional || extraParam.IsNullable)
+            // Only merge if the extra param is required (not already optional).
+            // Never merge when the differing parameter is a callback: a callback cannot be represented as a
+            // positional tuple element, so merging would (a) change the option shape from the published
+            // `str | tuple[...]` shorthand to a TypedDict (a breaking change for the non-callback overload)
+            // and (b) require conditional capability dispatch that always registers the callback argument even
+            // when routing to the non-callback capability. Keeping the callback overload as its own separate
+            // option avoids both problems.
+            if (extraParam.IsOptional || extraParam.IsNullable || extraParam.IsCallback)
             {
                 result.AddRange(items);
                 continue;
@@ -562,6 +576,12 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             return wrapperClassName;
         }
+
+        if (ExtractSimpleTypeName(typeId) == "IDistributedApplicationBuilder")
+        {
+            return "DistributedApplicationBuilder";
+        }
+
         return GetHandleTypeName(typeId);
     }
 
@@ -655,7 +675,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
         // Convert camelCase to snake_case
         var snakeName = ToSnakeCase(methodName);
-        if (snakeName.EndsWith("_async"))
+        if (snakeName.EndsWith("_async", StringComparison.Ordinal))
         {
             snakeName = snakeName[..^6];
         }
@@ -664,7 +684,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private static string GetMethodAsOptionName(string methodName)
     {
-        if (methodName.StartsWith("with_"))
+        if (methodName.StartsWith("with_", StringComparison.Ordinal))
         {
             return methodName[5..];
         }
@@ -674,18 +694,37 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private static string GetMethodParametersName(string methodName)
     {
         methodName = char.ToUpper(methodName[0]) + methodName.Substring(1);
-        if (methodName.StartsWith("With"))
+        if (methodName.StartsWith("With", StringComparison.Ordinal))
         {
             methodName = methodName[4..];
         }
         return methodName + "Parameters";
     }
+
+    /// <summary>
+    /// Extracts the trailing segment of a capability ID, for example "withDataVolume" from
+    /// "Aspire.Hosting.Azure.Storage/withDataVolume".
+    /// </summary>
+    /// <remarks>
+    /// This only needs to be a better-than-nothing disambiguator, not a uniquely correct name. It is
+    /// one rung of the widening ladder in <see cref="ResolveParameterMappingName"/>, which starts at the
+    /// projected method name and ends at a namespace-qualified name plus a numeric suffix, so a
+    /// collision here simply falls through to the next rung.
+    /// </remarks>
+    private static string GetCapabilityName(string capabilityId)
+    {
+        var slashIndex = capabilityId.LastIndexOf('/');
+
+        return slashIndex >= 0 ? capabilityId[(slashIndex + 1)..] : capabilityId;
+    }
+
     /// <summary>
     /// Generates the aspire.py SDK file with capability-based API.
     /// </summary>
     private string GenerateAspireSdk(AtsContext context)
     {
         _moduleBuilder = new PythonModuleBuilder();
+        _parameterMappingSignatures.Clear();
 
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
@@ -832,7 +871,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapDtoPropertyTypeToPython(prop.Type);
+                // Callback-typed DTO properties carry the same CallbackParameters/CallbackReturnType
+                // metadata as method parameters, so render the strongly-typed Callable signature
+                // (e.g. typing.Callable[[InputsDialogValidationContext], None]) instead of a bare
+                // typing.Callable. The runtime marshaller already registers callables embedded in
+                // DTO dicts, so no serialization change is needed.
+                var propType = prop.IsCallback
+                    ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
+                    : MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();
@@ -1052,8 +1098,47 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Generate methods
         foreach (var method in allMethods)
         {
-            GenerateTypeClassMethod(sb, method);
+            GenerateTypeClassMethod(sb, method, className == "AbstractDistributedApplicationBuilder");
         }
+
+        if (string.Equals(model.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+        {
+            EmitInteractionInputCollectionAccessors(sb);
+        }
+    }
+
+    private static void EmitInteractionInputCollectionAccessors(System.Text.StringBuilder sb)
+    {
+        sb.AppendLine("    def get(self, name: str) -> InteractionInput | None:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or None if no input matches.\"\"\"");
+        sb.AppendLine("        lookup_name = name.lower()");
+        sb.AppendLine("        for interaction_input in self.to_array():");
+        sb.AppendLine("            input_name = interaction_input.get(\"Name\")");
+        sb.AppendLine("            if input_name is not None and input_name.lower() == lookup_name:");
+        sb.AppendLine("                return interaction_input");
+        sb.AppendLine("        return None");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required(self, name: str) -> InteractionInput:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            raise ValueError(f\"no input with name '{name}' was found\")");
+        sb.AppendLine("        return interaction_input");
+        sb.AppendLine();
+
+        sb.AppendLine("    def value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or an empty string if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            return \"\"");
+        sb.AppendLine("        return interaction_input.get(\"Value\") or \"\"");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required_value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        return self.required(name).get(\"Value\") or \"\"");
+        sb.AppendLine();
     }
 
     /// <summary>
@@ -1203,7 +1288,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates a method on a type class.
     /// </summary>
-    private void GenerateTypeClassMethod(System.Text.StringBuilder sb, AtsCapabilityInfo capability)
+    private void GenerateTypeClassMethod(
+        System.Text.StringBuilder sb,
+        AtsCapabilityInfo capability,
+        bool isDistributedApplicationBuilder)
     {
         // Use OwningTypeName if available to extract method name, otherwise parse from MethodName
         var methodName = !string.IsNullOrEmpty(capability.OwningTypeName) && capability.MethodName.Contains('.')
@@ -1218,7 +1306,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var optionalParams = userParams.Where(p => !requiredParams.Contains(p)).ToList();
 
         // Determine return type
-        var returnType = GetReturnTypeId(capability) != null
+        var returnsSelf = isDistributedApplicationBuilder && capability.ReturnType?.TypeId == capability.TargetTypeId;
+        var returnType = returnsSelf
+            ? "typing.Self"
+            : GetReturnTypeId(capability) != null
             ? MapTypeRefToPython(capability.ReturnType)
             : "None";
         var isResourceBuilder = capability.ReturnType != null && capability.ReturnType.Category == AtsTypeCategory.Handle &&
@@ -1272,12 +1363,16 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Invoke capability
-        if (returnType == "None")
+        if (returnType == "None" || returnsSelf)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"        self._client.invoke_capability(");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            '{capability.CapabilityId}',");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            rpc_args");
             sb.AppendLine(CultureInfo.InvariantCulture, $"        )");
+            if (returnsSelf)
+            {
+                sb.AppendLine("        return self");
+            }
         }
         else
         {
@@ -2298,7 +2393,6 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         var requiredParamsTypes = string.Join(", ", requiredParameters.Select(MapParameterToPython));
         var optionalParamsTypes = string.Join(", ", optionalParameters.Select(MapParameterToPython));
-        var parameterMappingName = GetMethodParametersName(capability.MethodName);
         string? experimental = null; // TODO: get experimental tag
         var variations = new List<OptionVariation>();
         
@@ -2327,7 +2421,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             }
             else
             {
-                AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+                var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
                 variations.Add(new OptionVariation(requiredParamsTypes, requiredParameters, optionalParameters, experimental));
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
             }
@@ -2336,7 +2430,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             if (optionalParameters.Count > 0)
             {
-                AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+                var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
                 variations.Add(new OptionVariation("(" + requiredParamsTypes + ")", requiredParameters, optionalParameters, experimental));
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
             }
@@ -2347,7 +2441,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
         else
         {
-            AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+            var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
             if (requiredParameters.Count == 0)
             {
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
@@ -2362,12 +2456,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return variations;
     }
 
-    private void AddParameterMapping(string methodName, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    private string AddParameterMapping(AtsCapabilityInfo capability, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
     {
+        var methodName = ResolveParameterMappingName(capability, requiredParameters, optionalParameters);
         if (_moduleBuilder.MethodParameters.ContainsKey(methodName))
         {
-            return;
+            return methodName;
         }
+
         var parameters = new System.Text.StringBuilder();
         parameters.AppendLine();
         parameters.AppendLine(CultureInfo.InvariantCulture, $"class {methodName}(typing.TypedDict, total=False):");
@@ -2380,6 +2476,90 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             parameters.AppendLine(CultureInfo.InvariantCulture, $"    {ToSnakeCase(optionalParam.Name!)}: {MapParameterToPython(optionalParam)}");
         }
         _moduleBuilder.MethodParameters[methodName] = parameters;
+        _parameterMappingSignatures[methodName] = CreateParameterMappingSignature(requiredParameters, optionalParameters);
+
+        return methodName;
+    }
+
+    private string ResolveParameterMappingName(AtsCapabilityInfo capability, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    {
+        var signature = CreateParameterMappingSignature(requiredParameters, optionalParameters);
+
+        // Capabilities can share a projected method name while accepting different parameter shapes.
+        // Reusing one TypedDict in that case makes one capability type-check against another
+        // capability's required/optional keys, so try progressively more specific names and take
+        // the first that is either free or already holds an identical shape.
+        var methodName = GetMethodParametersName(capability.MethodName);
+        if (IsParameterMappingNameAvailable(methodName, signature))
+        {
+            return methodName;
+        }
+
+        var capabilityName = GetMethodParametersName(GetCapabilityName(capability.CapabilityId));
+        if (IsParameterMappingNameAvailable(capabilityName, signature))
+        {
+            return capabilityName;
+        }
+
+        // A capability declared with a bare [AspireExport] gets a capability ID whose trailing
+        // segment is its method name, so the capability-ID candidate above degenerates to the
+        // method-name candidate that just failed. The declaring namespace is then the only
+        // remaining information that distinguishes it. This is not exotic: withDataVolume is
+        // bare-exported by many integration packages with differing optional parameters, so any
+        // AppHost referencing two such packages reaches this point.
+        var namespaceQualifiedName = GetNamespaceQualifiedParameterMappingName(capability);
+        if (IsParameterMappingNameAvailable(namespaceQualifiedName, signature))
+        {
+            return namespaceQualifiedName;
+        }
+
+        // Two capabilities can share both a namespace and a method name only when one of them
+        // renames the other's method, so this is a last resort rather than a normal outcome.
+        // Generation must still produce a usable SDK, so keep widening instead of failing.
+        for (var disambiguator = 2; ; disambiguator++)
+        {
+            var candidate = FormattableString.Invariant($"{namespaceQualifiedName}{disambiguator}");
+            if (IsParameterMappingNameAvailable(candidate, signature))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private bool IsParameterMappingNameAvailable(string name, ParameterMappingSignature signature)
+    {
+        return !_parameterMappingSignatures.TryGetValue(name, out var existingSignature)
+            || AreParameterMappingSignaturesEqual(existingSignature, signature);
+    }
+
+    private static string GetNamespaceQualifiedParameterMappingName(AtsCapabilityInfo capability)
+    {
+        // Capability IDs are "<declaring namespace>/<capability name>", for example
+        // "Aspire.Hosting.Azure.Storage/withDataVolume". Dots are stripped because the result is a
+        // Python identifier: that yields AspireHostingAzureStorageDataVolumeParameters.
+        var capabilityId = capability.CapabilityId;
+        var separatorIndex = capabilityId.LastIndexOf('/');
+        var declaringNamespace = separatorIndex >= 0 ? capabilityId[..separatorIndex] : string.Empty;
+
+        return declaringNamespace.Replace(".", string.Empty, StringComparison.Ordinal)
+            + GetMethodParametersName(GetCapabilityName(capabilityId));
+    }
+
+    private static bool AreParameterMappingSignaturesEqual(ParameterMappingSignature left, ParameterMappingSignature right)
+    {
+        return left.RequiredParameters.SequenceEqual(right.RequiredParameters, StringComparer.Ordinal)
+            && left.OptionalParameters.SequenceEqual(right.OptionalParameters, StringComparer.Ordinal);
+    }
+
+    private ParameterMappingSignature CreateParameterMappingSignature(List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    {
+        return new ParameterMappingSignature(
+            [.. requiredParameters
+                .OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => $"{ToSnakeCase(p.Name!)}:{MapParameterToPython(p)}")],
+            [.. optionalParameters
+                .OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => $"{ToSnakeCase(p.Name!)}:{MapParameterToPython(p)}")]);
     }
 
     /// <summary>
@@ -2414,14 +2594,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Dict/Parameters format includes all params (required + optional)
-        if (optionType.EndsWith("Parameters"))
+        if (optionType.EndsWith("Parameters", StringComparison.Ordinal))
         {
             return optionalParams.Any(p => string.Equals(p.Name, paramName, StringComparison.Ordinal));
         }
 
         // Tuple format includes optional params only when there's exactly 1 optional
         // and the tuple has an extra slot for it
-        if (optionType.StartsWith("("))
+        if (optionType.StartsWith("(", StringComparison.Ordinal))
         {
             var tupleSlots = SplitTupleTypes(optionType.Trim('(', ')'));
             if (tupleSlots.Count == requiredParams.Count + 1 && optionalParams.Count == 1)
@@ -2477,7 +2657,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
         }
-        else if (currentOption.EndsWith("Parameters"))
+        else if (currentOption.EndsWith("Parameters", StringComparison.Ordinal))
         {
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_dict_types(_{optionName}, {currentOption}):");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
@@ -2504,7 +2684,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
             }
         }
-        else if (currentOption.StartsWith("(")) // Tuple of parameters
+        else if (currentOption.StartsWith("(", StringComparison.Ordinal)) // Tuple of parameters
         {
             var paramTypes = SplitTupleTypes(currentOption.Trim('(', ')'));
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_tuple_types(_{optionName}, {currentOption}):");

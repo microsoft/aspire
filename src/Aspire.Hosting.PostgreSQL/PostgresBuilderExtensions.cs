@@ -174,6 +174,7 @@ public static class PostgresBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(postgresDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 
@@ -208,6 +209,7 @@ public static class PostgresBuilderExtensions
             var pgAdminContainerBuilder = builder.ApplicationBuilder.AddResource(pgAdminContainer)
                                                  .WithImage(PostgresContainerImageTags.PgAdminImage, PostgresContainerImageTags.PgAdminTag)
                                                  .WithImageRegistry(PostgresContainerImageTags.PgAdminRegistry)
+                                                 .WithIconName("WindowDatabase")
                                                  .WithHttpEndpoint(targetPort: 80, name: "http")
                                                  .WithEnvironment(SetPgAdminEnvironmentVariables)
                                                  .WithHttpHealthCheck("/browser")
@@ -217,7 +219,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/pgadmin4",
                 callback: async (context, cancellationToken) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresServerResource>();
 
                     return [
@@ -318,6 +320,7 @@ public static class PostgresBuilderExtensions
             var pgwebContainerBuilder = builder.ApplicationBuilder.AddResource(pgwebContainer)
                                                .WithImage(PostgresContainerImageTags.PgWebImage, PostgresContainerImageTags.PgWebTag)
                                                .WithImageRegistry(PostgresContainerImageTags.PgWebRegistry)
+                                               .WithIconName("WindowDatabase")
                                                .WithHttpEndpoint(targetPort: 8081, name: "http")
                                                .WithArgs("--bookmarks-dir=/.pgweb/bookmarks")
                                                .WithArgs("--sessions")
@@ -333,7 +336,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/",
                 callback: async (context, ct) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresDatabaseResource>();
 
                     // Add the bookmarks to the pgweb container
@@ -421,7 +424,7 @@ public static class PostgresBuilderExtensions
         // When running in the context of Codespaces we need to set some additional environment
         // variables so that PGAdmin will trust the forwarded headers that Codespaces port
         // forwarding will send.
-        var config = context.ExecutionContext.ServiceProvider.GetRequiredService<IConfiguration>();
+        var config = context.ExecutionContext.Services.GetRequiredService<IConfiguration>();
         if (context.ExecutionContext.IsRunMode && config.GetValue<bool>("CODESPACES", false))
         {
             context.EnvironmentVariables["PGADMIN_CONFIG_PROXY_X_HOST_COUNT"] = "1";
@@ -734,8 +737,30 @@ public static class PostgresBuilderExtensions
         {
             var quotedDatabaseIdentifier = new NpgsqlCommandBuilder().QuoteIdentifier(npgsqlDatabase.DatabaseName);
             using var command = npgsqlConnection.CreateCommand();
-            command.CommandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var commandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
+            command.CommandText = commandText;
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+            }
+
+            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", npgsqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+                }
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
         catch (PostgresException p) when (p.SqlState == "42P04")

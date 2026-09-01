@@ -19,12 +19,20 @@
 
 ::deep .logs-summary-layout {
     display: grid;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     width: 100%;
+    /* The desktop toolbar lives inside the summary pane so details can extend to the page top.
+       Give it the same named container as the shared page header so its wrap behavior matches Traces. */
+    container-type: inline-size;
+    container-name: page-toolbar;
     grid-template-areas:
-        "main"
-        "foot";
+        "toolbar"
+        "main";
+}
+
+::deep .logs-summary-layout > fluent-toolbar {
+    grid-area: toolbar;
 }
 
 ::deep .logs-summary-layout > .logs-grid-container {

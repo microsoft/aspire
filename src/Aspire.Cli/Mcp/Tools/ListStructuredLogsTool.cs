@@ -3,10 +3,11 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -18,7 +19,7 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing structured logs.
 /// Gets log data directly from the Dashboard telemetry API.
 /// </summary>
-internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListStructuredLogsTool> logger) : CliMcpTool
+internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListStructuredLogsTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListStructuredLogs;
 
@@ -70,6 +71,16 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
             // Resolve resource name to specific instances (handles replicas)
             var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
 
+            // If a specific resource was requested, check if it's excluded from MCP.
+            if (!string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(auxiliaryBackchannelMonitor, resourceName, cancellationToken).ConfigureAwait(false);
+                if (excludedResult is not null)
+                {
+                    return excludedResult;
+                }
+            }
+
             // If a resource was specified but not found, return error
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resourceName, resources, out var resolvedResources))
             {
@@ -90,6 +101,18 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceLogs = apiResponse?.Data?.ResourceLogs;
+
+            // Filter out logs from resources that are excluded from MCP.
+            if (resourceLogs is not null && string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedNames = await McpToolHelpers.GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
+                if (excludedNames.Count > 0)
+                {
+                    resourceLogs = resourceLogs
+                        .Where(rl => rl.Resource?.GetServiceName() is not { } name || !excludedNames.Contains(name))
+                        .ToArray();
+                }
+            }
 
             var (logsData, limitMessage) = SharedAIHelpers.GetStructuredLogsJson(
                 resourceLogs,

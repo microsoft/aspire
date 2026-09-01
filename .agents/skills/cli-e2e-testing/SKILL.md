@@ -1,6 +1,6 @@
 ---
 name: cli-e2e-testing
-description: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation. Use this when asked to create, modify, or debug CLI E2E tests.
+description: Use when creating, modifying, debugging, or reviewing Aspire CLI end-to-end tests that use Hex1b terminal automation under tests/Aspire.Cli.EndToEnd.Tests/.
 ---
 
 # Aspire CLI End-to-End Testing with Hex1b
@@ -22,7 +22,7 @@ CLI E2E tests use the Hex1b library to automate terminal sessions, simulating re
 - **`Hex1bTerminal`**: The main terminal class from the Hex1b library for terminal automation
 - **`Hex1bTerminalAutomator`**: Async/await API for driving a `Hex1bTerminal` — the preferred approach for new tests
 - **`Hex1bAutomatorTestHelpers`** (shared helpers): Async extension methods on `Hex1bTerminalAutomator` (`WaitForSuccessPromptAsync`, `AspireNewAsync`, etc.)
-- **`CliE2EAutomatorHelpers`** (`Helpers/CliE2EAutomatorHelpers.cs`): CLI-specific async extension methods on `Hex1bTerminalAutomator` (`PrepareDockerEnvironmentAsync`, `InstallAspireCliInDockerAsync`, etc.)
+- **`CliE2EAutomatorHelpers`** (`Helpers/CliE2EAutomatorHelpers.cs`): CLI-specific async extension methods on `Hex1bTerminalAutomator` (`PrepareDockerEnvironmentAsync`, `InstallAspireCliAsync`, etc.)
 - **`CellPatternSearcher`**: Pattern matching for terminal cell content
 - **`SequenceCounter`** (`Helpers/SequenceCounter.cs`): Tracks command execution count for deterministic prompt detection
 - **`CliE2ETestHelpers`** (`Helpers/CliE2ETestHelpers.cs`): Environment variable helpers and terminal factory methods
@@ -53,7 +53,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -80,7 +80,7 @@ using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strate
 
 var counter = new SequenceCounter();
 var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
 // ... test body — no exit/pendingRun needed at the end
 
@@ -199,6 +199,52 @@ ASPIRE_E2E_QUALITY=dev dotnet test ...
 ASPIRE_E2E_VERSION=13.2.1 dotnet test ...
 ```
 
+### Emulated channel matrix tests (identity sidecar)
+
+A set of tests validates the **CLI identity sidecar** — the ability to make a locally built CLI
+emulate a different channel/version via `ASPIRE_CLI_*` env vars. They form an AppHost-language ×
+channel-emulation matrix (one test per language because C# and TypeScript scaffold through different
+code paths and have diverged before):
+
+| Class | Channel emulated | `Aspire*` source | NuGet.config dropped? |
+|-------|------------------|------------------|------------------------|
+| `EmulatedReleasedBuildTests` | `stable` (latest shipped) | nuget.org | No (C# and TS) |
+| `EmulatedStagingBuildTests` | `staging` (latest darc build) | `darc-pub-...` feed | Yes — darc feed pin |
+| `EmulatedLocalReleaseBuildTests` | `stable` (**future, local-only**) | local hive via `ASPIRE_CLI_PACKAGES` | No (C# and TS) |
+
+`EmulatedLocalReleaseBuildTests` is the **all-local "future release"** row: it emulates a version
+(e.g. `13.5.0`) that exists only in a locally built hive, so a successful resolve proves the CLI
+consulted `ASPIRE_CLI_PACKAGES` rather than nuget.org. Run it by building a **stable-shaped** archive
+with `localhive --version`:
+
+```bash
+# 1. Build a stable-shaped archive (note: --version X.Y.Z, NOT a prerelease suffix)
+./localhive.sh --version 13.5.0 -o /tmp/aspire-localrelease -r linux-arm64 --archive
+
+# 2. Run the all-local class
+ASPIRE_E2E_ARCHIVE=/tmp/aspire-localrelease.tar.gz \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-class "*.EmulatedLocalReleaseBuildTests"
+```
+
+These tests **skip** unless the CLI was installed from a `LocalHive` archive *and* that archive is
+stable-shaped (no prerelease suffix). In default CI the archive is a prerelease `LocalArchive`, so they
+skip and add zero CI cost — CI relies on `--ignore-exit-code 8` (set in `eng/Testing.props`
+`MtpBaseArgs`) so an all-skipped class job still passes. The test also registers the hive as an
+**ambient** NuGet source (`dotnet nuget add source`) because MSBuild resolves the apphost's
+`Aspire.AppHost.Sdk` before restore from nuget.config sources only, ignoring `ASPIRE_CLI_PACKAGES`.
+
+> **⚠️ Local rebuilds: isolate the NuGet global cache.** This only affects **local** iteration of a
+> stable-shaped emulation (the E2E tests run in fresh Docker containers, so CI is immune). NuGet's
+> global packages folder (`~/.nuget/packages/<id>/<version>/`) caches **extracted** packages keyed by
+> version. When you emulate a *fixed* stable version (e.g. `13.5.0`) and **rebuild** it, a stale
+> `13.5.0` in that shared cache silently shadows the freshly built one — same version, different
+> content — so restore drifts (the stale AppHost SDK injects a prerelease floor and you get `NU1603`
+> warnings binding the graph to a stray `13.5.0-pr.…`). **Fix:** point `NUGET_PACKAGES` at a
+> per-emulation directory (`export NUGET_PACKAGES=/tmp/aspire-localrelease/.nuget-packages`).
+> `localhive … -o DIR`'s generated `activate.sh`/`activate.ps1` already sets this up. See the cache
+> hazard note in `.agents/skills/cli-channel-debugging/SKILL.md` (Scenario 7c) for the full mechanism.
+
 ## SequenceCounter and Prompt Detection
 
 The `SequenceCounter` class tracks the number of shell commands executed. This enables deterministic waiting for command completion via a custom shell prompt.
@@ -284,7 +330,7 @@ See [AspireNew Helper](#aspirenew-helper) below for detailed usage.
 | Method | Description |
 |--------|-------------|
 | `PrepareDockerEnvironmentAsync(counter, workspace)` | Sets up Docker container environment with custom prompt and command tracking |
-| `InstallAspireCliInDockerAsync(installMode, counter)` | Installs the Aspire CLI inside the Docker container |
+| `InstallAspireCliAsync(installMode, counter)` | Installs the Aspire CLI inside the Docker container |
 | `ClearScreenAsync(counter)` | Clears the terminal screen and waits for prompt |
 
 ### SequenceCounterExtensions
@@ -442,10 +488,10 @@ await auto.WaitForSuccessPromptAsync(counter);
 Some operations only apply in CI (like installing CLI from PR artifacts):
 
 ```csharp
-var installMode = CliE2ETestHelpers.DetectDockerInstallMode();
+var installMode = CliInstallStrategy.Detect(output.WriteLine);
 
 await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-await auto.InstallAspireCliInDockerAsync(installMode, counter);
+await auto.InstallAspireCliAsync(installMode, counter);
 
 // Continue with test commands...
 ```
@@ -610,6 +656,45 @@ Each test class runs as a separate CI job via the unified `TestEnumerationRunshe
 When CLI E2E tests fail in CI, follow these steps to diagnose the issue:
 
 > **Flaky test investigation:** for recurring/intermittent failures, see [`troubleshooting.md`](./troubleshooting.md) for a catalog of known flake classes (Y/n input race, prompt-counter desync, etc.) and the recipes to identify them from `.cast` recordings.
+
+### VS Code Extension E2E Diagnostics
+
+For VS Code extension behavior or extension/CLI integration issues, strongly prefer adding or
+updating a reproducible test under `extension/src/test-e2e/`. Use agent-driven Playwright/VS Code UI
+driving only as exploratory diagnosis when the E2E scenario is not clear yet; convert any successful
+manual reproduction into an E2E test before fixing the bug unless there is a strong, explicit reason
+not to.
+
+When running extension E2E tests against an older published CLI for compatibility validation, set
+`ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` to skip tests that intentionally cover bugs
+fixed only by the current repo-built CLI.
+
+VS Code extension E2E jobs upload shard-specific diagnostics as `extension-e2e-diagnostics-<rid>-<shard>-attempt<N>` artifacts. Linux shards include `.mp4` display recordings from Xvfb by default; Windows shards do not record video and instead rely on screenshots, VS Code logs, state files, and workspace diagnostics.
+
+```bash
+# List VS Code extension E2E diagnostic artifacts for a run.
+gh api "repos/microsoft/aspire/actions/runs/<run-id>/artifacts?per_page=100" --paginate \
+  --jq '.artifacts[] | select(.name | startswith("extension-e2e-diagnostics")) | "\(.size_in_bytes)\t\(.name)"'
+
+# Download one shard's diagnostics. The artifact contains .mp4 recordings
+# on Linux, .ffmpeg.log files, screenshots, VS Code logs, state files, and
+# captured workspace diagnostics.
+mkdir -p ./e2e-diagnostics && cd ./e2e-diagnostics
+gh run download <run-id> --repo microsoft/aspire \
+  -n extension-e2e-diagnostics-linux-x64-<shard>-attempt<N> \
+  -D <shard>
+```
+
+Important paths inside the downloaded shard:
+
+```text
+<shard>/.test-recordings/<shard>/<runId>.mp4
+<shard>/.test-recordings/<shard>/<runId>.ffmpeg.log
+<shard>/.test-storage/**/screenshots/
+<shard>/.test-results/e2e/<shard>/extension-state.json
+```
+
+The workflow keeps Linux recordings by default with `ASPIRE_EXTENSION_E2E_RECORDING_MODE=always`. Use `failure` to keep only failed-run videos or `off` to disable recording for local runs.
 
 ### Quick Start: Download and Play Recordings
 

@@ -32,6 +32,15 @@ variables:
   - name: _InternalBuildArgs
     value: ''
 
+  # npm global installs and the Corepack Yarn cache seeder don't use the repo
+  # .npmrc, so pass this registry explicitly.
+  - name: NPM_REGISTRY
+    value: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+  # Disable the interactive "Do you want to download yarn@x.y.z?" prompt so
+  # pipeline steps don't hang waiting for stdin.
+  - name: COREPACK_ENABLE_DOWNLOAD_PROMPT
+    value: '0'
+
   # Set test variants based on parameter or build reason
   - ${{ if ne(parameters.testVariants, '') }}:
     - name: testVariants

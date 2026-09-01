@@ -21,7 +21,7 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string? ConfigurationSectionName => "Aspire:MongoDB:Driver";
 
@@ -52,10 +52,11 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
         ("""{"Aspire": { "MongoDB":{ "Driver": { "DisableTracing": "true"}}}}""", "Value is \"string\" but should be \"boolean\""),
     };
 
-    protected override string[] RequiredLogCategories => [
-        "MongoDB.SDAM",
-        "MongoDB.ServerSelection",
-        "MongoDB.Connection",
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("MongoDB.SDAM"),
+        new("MongoDB.ServerSelection"),
+        new("MongoDB.Connection"),
     ];
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
@@ -72,7 +73,7 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
 
     private string GetConnectionString()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             var builder = new UriBuilder(_containerFixture.GetConnectionString());
             builder.Path = "test_db";

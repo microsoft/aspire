@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureBicepResourceTests
+public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddBicepResource()
@@ -253,18 +253,18 @@ public class AzureBicepResourceTests
         // When a templateFile is specified, GetBicepTemplateFile should return the original path
         // and not combine it with the directory parameter.
 
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a test bicep file
         var bicepFileName = "test-template.bicep";
-        var bicepFilePath = Path.Combine(tempDir.Path, bicepFileName);
+        var bicepFilePath = Path.Combine(workspace.Path, bicepFileName);
         File.WriteAllText(bicepFilePath, "param location string = resourceGroup().location");
 
         // Create the AzureBicepResource with the templateFile
         var resource = new AzureBicepResource("test-resource", templateFile: bicepFilePath);
 
         // Create a different directory to pass to GetBicepTemplateFile
-        var outputDir = Path.Combine(tempDir.Path, "output");
+        var outputDir = Path.Combine(workspace.Path, "output");
         Directory.CreateDirectory(outputDir);
 
         // Get the bicep template file with a directory parameter
@@ -278,11 +278,11 @@ public class AzureBicepResourceTests
     [Fact]
     public void GetBicepTemplateFile_WithTemplateFile_ReturnsOriginalPathWithoutDirectory()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a test bicep file
         var bicepFileName = "test-template.bicep";
-        var bicepFilePath = Path.Combine(tempDir.Path, bicepFileName);
+        var bicepFilePath = Path.Combine(workspace.Path, bicepFileName);
         File.WriteAllText(bicepFilePath, "param location string = resourceGroup().location");
 
         // Create the AzureBicepResource with the templateFile
@@ -298,7 +298,7 @@ public class AzureBicepResourceTests
     [Fact]
     public void GetBicepTemplateFile_WithTemplateString_WritesToDirectory()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var bicepContent = "param location string = resourceGroup().location";
 
@@ -306,7 +306,7 @@ public class AzureBicepResourceTests
         var resource = new AzureBicepResource("test-resource", templateString: bicepContent);
 
         // Create a directory to pass to GetBicepTemplateFile
-        var outputDir = Path.Combine(tempDir.Path, "output");
+        var outputDir = Path.Combine(workspace.Path, "output");
         Directory.CreateDirectory(outputDir);
 
         // Get the bicep template file with a directory parameter

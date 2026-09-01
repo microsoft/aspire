@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -18,6 +21,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public partial class KubernetesResource(string name, IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>
 {
+    private const long DefaultPersistentVolumeFsGroup = 2000;
+    private const string DefaultPersistentVolumeFsGroupChangePolicy = "OnRootMismatch";
+
     /// <inheritdoc/>
     public KubernetesEnvironmentResource Parent => kubernetesEnvironmentResource;
 
@@ -44,10 +50,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
     internal Dictionary<string, HelmValue> Parameters { get; } = [];
     internal Dictionary<string, HelmValue> AdditionalConfigValues { get; } = [];
+    internal Dictionary<string, HelmValue> AdditionalSecretValues { get; } = [];
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
-    internal List<PersistentVolume> PersistentVolumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
 #pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
@@ -125,11 +131,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             yield return Service;
         }
 
-        foreach (var volume in PersistentVolumes)
-        {
-            yield return volume;
-        }
-
         foreach (var volumeClaim in PersistentVolumeClaims)
         {
             yield return volumeClaim;
@@ -167,13 +168,31 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void CreateApplication()
     {
-        if (resource is IResourceWithConnectionString)
+        var hasPersistentVolumeBinding = resource.HasAnnotationOfType<KubernetesPersistentVolumeBindingAnnotation>();
+
+        // Promote to a StatefulSet when the workload is bound to a first-class persistent
+        // volume — Kubernetes requires stable identity and ordered rollout for pods that
+        // share named PVCs. The historical IResourceWithConnectionString rule remains so
+        // existing integrations that imply state continue to render as StatefulSets.
+        if (resource is IResourceWithConnectionString || hasPersistentVolumeBinding)
         {
             Workload = resource.ToStatefulSet(this);
-            return;
+        }
+        else
+        {
+            Workload = resource.ToDeployment(this);
         }
 
-        Workload = resource.ToDeployment(this);
+        if (hasPersistentVolumeBinding)
+        {
+            // fsGroup is a supplemental group, not the image's primary GID. A stable
+            // publisher-owned value lets non-root images access supported volumes without
+            // coupling the manifest to image-specific identities. Kubernetes customization
+            // callbacks run after this default is applied and can replace or remove it.
+            var securityContext = Workload.PodTemplate.Spec.SecurityContext ??= new();
+            securityContext.FsGroup ??= DefaultPersistentVolumeFsGroup;
+            securityContext.FsGroupChangePolicy ??= DefaultPersistentVolumeFsGroupChangePolicy;
+        }
     }
 
     internal string GetContainerImageName(IResource resourceInstance)
@@ -227,8 +246,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 // This matches the core framework's SetBothPortsEnvVariables() behavior,
                 // which skips DefaultHttpsEndpoint when setting HTTPS_PORTS.
                 // See: https://github.com/microsoft/aspire/issues/14029
-                if (resource is ProjectResource projectResource &&
-                    endpoint == projectResource.DefaultHttpsEndpoint)
+                if (resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) &&
+                    endpoint == launchDefaults.DefaultHttpsEndpoint)
                 {
                     // Find the existing http endpoint's HelmValue to share it
                     var httpMapping = EndpointMappings.Values.FirstOrDefault(m => m.Scheme == "http");
@@ -420,8 +439,20 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentHelmExpression(HelmValue helmExpression, string key)
     {
+        if (helmExpression.ValueString is { } template &&
+            template.ContainsHelmFlowControlExpression())
+        {
+            helmExpression = HelmValue.Literal(template.ToQuotedHelmTemplateExpression());
+        }
+
         switch (helmExpression)
         {
+            case { ValueContainsSecretValuesExpression: true, ValueString: { } secretValue }:
+                // Parameter-driven conditionals are stored as literal Helm flow-control expressions.
+                // Route the final environment variable through a Secret when either branch references
+                // a secret value, even though the HelmValue itself has no Expression metadata.
+                Secrets[key] = new(key.ToHelmSecretExpression(TargetResource.Name), secretValue);
+                return;
             case { ExpressionContainsHelmSecretExpression: true, ValueContainsSecretValuesExpression: false }:
                 Secrets[key] = helmExpression;
                 return;
@@ -433,6 +464,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentStringValue(string stringValue, string key, string resourceName)
     {
+        if (stringValue.ContainsHelmFlowControlExpression())
+        {
+            stringValue = stringValue.ToQuotedHelmTemplateExpression();
+        }
+
         if (stringValue.ContainsHelmValuesSecretExpression())
         {
             var secretExpression = stringValue.ToHelmSecretExpression(resourceName);
@@ -453,7 +489,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     private static void RemoveHttpsServiceDiscoveryVariables(Dictionary<string, object> environmentVariables)
     {
         var keysToRemove = environmentVariables
-            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__"))
+            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__", StringComparison.Ordinal))
             .Select(kvp => kvp.Key)
             .ToList();
 
@@ -486,6 +522,16 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is EndpointReference ep)
             {
+                // The referenced endpoint may belong to a resource deployed to a different compute
+                // environment (for example a Foundry hosted agent). In that case delegate to the owning
+                // compute environment instead of looking it up in this environment's local endpoint map.
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    ep, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = ep.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(ep.Resource, executionContext, default).ConfigureAwait(false);
@@ -499,7 +545,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ParameterResource param)
             {
-                return AllocateParameter(param, TargetResource);
+                var helmValue = AllocateParameter(param, TargetResource, embedded);
+                if (embedded)
+                {
+                    AllocateAdditionalParameter(param, helmValue);
+                }
+
+                return helmValue;
             }
 
             if (value is ConnectionStringReference cs)
@@ -516,6 +568,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is EndpointReferenceExpression epExpr)
             {
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    epExpr, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);
@@ -594,31 +653,41 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         var formattedName = conditionParam.Name.ToHelmValuesSectionName();
         var paramExpression = formattedName.ToHelmParameterExpression(TargetResource.Name);
 
-        if (!Parameters.ContainsKey(formattedName))
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        var conditionValue = new HelmValue(paramExpression, conditionParam)
         {
-            Parameters[formattedName] = conditionParam.Default is null || conditionParam.Secret
-                ? new HelmValue(paramExpression, (string?)null)
-                : new HelmValue(paramExpression, conditionParam);
-        }
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = true
+        };
+        AddParameterMapping(
+            Parameters,
+            conditionParam,
+            conditionValue,
+            HelmExtensions.ParametersKey,
+            "condition parameter");
 
         // Ensure parameter values referenced in branches are populated in values.yaml.
         AllocateBranchParameters(expr.WhenTrue!);
         AllocateBranchParameters(expr.WhenFalse!);
 
-        // Extract the values path (e.g., .Values.parameters.myapp.enable_tls) from {{ expression }}.
-        // Pipe through | lower for case-insensitive comparison, matching .NET's
-        // StringComparison.OrdinalIgnoreCase used in other execution/publish paths.
-        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | lower)";
-        var escapedMatch = (expr.MatchValue ?? string.Empty).ToLowerInvariant().Replace("\\", "\\\\").Replace("\"", "\\\"");
+        // Deploy override YAML can parse values such as "True" as booleans. Convert the value back
+        // to a string before the case-insensitive comparison so both string and boolean values work.
+        // See https://helm.sh/docs/chart_template_guide/function_list/#type-conversion-functions.
+        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | toString | lower)";
+        var matchValue = System.Text.Json.JsonSerializer.Serialize((expr.MatchValue ?? string.Empty).ToLowerInvariant());
 
-        var ifElseExpression = $"{{{{ if eq {conditionPath} \"{escapedMatch}\" }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
+        // Keep the flow control raw while expressions are composed. Once the complete environment
+        // value is known, ProcessEnvironmentHelmExpression or ProcessEnvironmentStringValue wraps
+        // the whole template in `tpl ... | quote` so nested conditionals remain composable and the
+        // final output is emitted as one YAML-safe scalar.
+        var ifElseExpression = $"{{{{ if eq {conditionPath} {matchValue} }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
         return HelmValue.Literal(ifElseExpression);
     }
 
     /// <summary>
     /// Ensures that any <see cref="ParameterResource"/> instances referenced in a branch's
-    /// value providers are allocated in the appropriate dictionary (EnvironmentVariables or
-    /// Secrets) so their values flow to values.yaml via <c>AddValuesToHelmSectionAsync</c>.
+    /// value providers are allocated so their values flow to values.yaml.
     /// </summary>
     private void AllocateBranchParameters(ReferenceExpression branch)
     {
@@ -626,35 +695,75 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         {
             if (vp is ParameterResource branchParam)
             {
-                var helmValue = AllocateParameter(branchParam, TargetResource);
-                var key = branchParam.Name.ToHelmValuesSectionName();
-
-                // Store in AdditionalConfigValues rather than EnvironmentVariables to avoid
-                // case-insensitive key collisions in ToConfigMap's processedKeys. These values
-                // flow to the config section of values.yaml but do not appear as env vars.
-                if (helmValue.ExpressionContainsHelmSecretExpression)
-                {
-                    Secrets.TryAdd(key, helmValue);
-                }
-                else
-                {
-                    AdditionalConfigValues.TryAdd(key, helmValue);
-                }
+                var helmValue = AllocateParameter(branchParam, TargetResource, isEmbedded: true);
+                AllocateAdditionalParameter(branchParam, helmValue);
             }
         }
     }
 
+    /// <summary>
+    /// Allocates an embedded parameter without adding a synthetic environment variable.
+    /// </summary>
+    private void AllocateAdditionalParameter(ParameterResource parameter, HelmValue helmValue)
+    {
+        var values = parameter.Secret ? AdditionalSecretValues : AdditionalConfigValues;
+
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        AddParameterMapping(
+            values,
+            parameter,
+            helmValue,
+            parameter.Secret ? HelmExtensions.SecretsKey : HelmExtensions.ConfigKey,
+            "embedded parameter");
+    }
+
+    private void AddParameterMapping(
+        Dictionary<string, HelmValue> mappings,
+        ParameterResource parameter,
+        HelmValue helmValue,
+        string helmKey,
+        string sourceKind)
+    {
+        if (!mappings.TryGetValue(parameter.Name, out var existing))
+        {
+            mappings.Add(parameter.Name, helmValue);
+            return;
+        }
+
+        if (ReferenceEquals(existing.ParameterSource, parameter))
+        {
+            return;
+        }
+
+        var resourceKey = TargetResource.Name.ToHelmValuesSectionName();
+        var valuesKey = helmValue.ValuesKey ?? parameter.Name.ToHelmValuesSectionName();
+        throw new InvalidOperationException(
+            $"Resource '{TargetResource.Name}' maps multiple distinct {sourceKind} sources named '{parameter.Name}' " +
+            $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.");
+    }
+
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
     {
-        var (scheme, _, host, port, _, _, _) = mapping;
+        var (scheme, _, host, targetPort, _, _, exposedPort) = mapping;
+
+        // In Kubernetes a Service publishes `port` and forwards traffic to the pod's `targetPort`.
+        // Other resources reach this resource through the Service, so the client-facing address must
+        // use the Service (exposed) port, not the container's listening port. When no distinct
+        // exposed port was configured (`port == targetPort`, or the deployment tool assigns it),
+        // ServicePort is null and we fall back to the target port. Only EndpointProperty.TargetPort
+        // surfaces the container's listening port. This mirrors the Azure Container Apps publisher.
+        // See: https://github.com/microsoft/aspire/issues/18321
+        var servicePort = exposedPort ?? targetPort;
 
         return property switch
         {
-            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix()),
+            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix(servicePort)),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
-            EndpointProperty.Port => GetPort(),
-            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix()),
-            EndpointProperty.TargetPort => GetPort(),
+            EndpointProperty.Port => GetPort(servicePort),
+            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix(servicePort)),
+            EndpointProperty.TargetPort => GetPort(targetPort),
             EndpointProperty.Scheme => scheme,
             _ => throw new NotSupportedException(),
         };
@@ -664,7 +773,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             return $"{prefix}{host}{suffix}";
         }
 
-        string GetPort()
+        string GetPort(HelmValue port)
         {
             var rawPort = embedded ? port.Expression ?? port.ValueString : port.ToScalar();
 
@@ -673,7 +782,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 : rawPort;
         }
 
-        string GetPortSuffix()
+        string GetPortSuffix(HelmValue port)
         {
             var portValue = port switch
             {
@@ -689,7 +798,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource)
+    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource, bool isEmbedded)
     {
         var formattedName = parameter.Name.ToHelmValuesSectionName();
 
@@ -700,7 +809,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         // Always store the parameter reference for deferred resolution.
         // Secrets and parameters without defaults are resolved at deploy time (not publish time).
         // ValuesKey preserves the parameter name so values.yaml key matches the Helm expression path.
-        return new(expression, parameter) { ValuesKey = formattedName };
+        return new(expression, parameter)
+        {
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = isEmbedded
+        };
     }
     
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
@@ -851,6 +964,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// the Helm expression path (e.g., parameter name "cache_password" vs env var name "REDIS_PASSWORD").
         /// </summary>
         public string? ValuesKey { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether this value supplies a parameter embedded in another Helm value.
+        /// </summary>
+        public bool IsEmbeddedParameter { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

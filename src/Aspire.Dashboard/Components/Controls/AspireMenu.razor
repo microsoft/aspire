@@ -3,7 +3,15 @@
 @inherits FluentComponentBase
 
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
-<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@CalculatedVerticalThreshold" HorizontalThreshold="200">
+<FluentMenu Class="aspire-menu-container"
+            @ref="_menu"
+            Anchor="@Anchor"
+            Anchored="@Anchored"
+            Open="@Open"
+            OpenChanged="OnOpenChanged"
+            Style="@Style"
+            VerticalThreshold="@CalculatedVerticalThreshold"
+            HorizontalThreshold="200">
     @foreach (var item in Items)
     {
         @RenderMenuItem(item)
@@ -24,16 +32,34 @@
                 { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
             };
 
-            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
+            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" Role="@item.Role" Checked="@item.Checked" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
                 @if (item.Icon != null)
                 {
-                    <span slot="start">
-                        <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" />
+                    <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" Slot="@GetIconSlot(item.Role)" />
+                }
+                @if (item.SecondaryActionIcon is not null)
+                {
+                    <span slot="end" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                        <FluentButton Class="@($"aspire-menu-secondary-action{(item.IsSecondaryActionSelected ? " selected" : null)}")"
+                                      Appearance="Appearance.Stealth"
+                                      Title="@item.SecondaryActionAriaLabel"
+                                      AriaLabel="@item.SecondaryActionAriaLabel"
+                                      aria-pressed="@(item.IsSecondaryActionSelected ? "true" : "false")"
+                                      @onclick="() => HandleSecondaryActionClicked(item)">
+                            <FluentIcon Value="@item.SecondaryActionIcon" Width="16px" />
+                        </FluentButton>
                     </span>
                 }
             </FluentMenuItem>;
         }
     }
+
+    private static string GetIconSlot(MenuItemRole? role) => role switch
+    {
+        MenuItemRole.MenuItemCheckbox => "checkbox-indicator",
+        MenuItemRole.MenuItemRadio => "radio-indicator",
+        _ => "start"
+    };
 
     private RenderFragment? RenderNestedItems(MenuButtonItem item)
     {

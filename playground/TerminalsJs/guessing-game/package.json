@@ -1,0 +1,11 @@
+{
+  "name": "guessing-game",
+  "version": "1.0.0",
+  "description": "Small interactive number-guessing game used by the TerminalsJs playground.",
+  "private": true,
+  "type": "module",
+  "main": "game.mjs",
+  "scripts": {
+    "start": "node game.mjs"
+  }
+}

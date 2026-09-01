@@ -5,7 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
-using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -94,9 +93,33 @@ public class FoundryExtensionsTests
         // Wait until it's not in Starting state anymore (started or failed whether the Foundry Local service is setup or not)
         await rns.WaitForResourceAsync(resource.Name, [KnownResourceStates.FailedToStart, KnownResourceStates.Running], cts.Token);
 
-        var foundryManager = app.Services.GetRequiredService<FoundryLocalManager>();
+        Assert.Equal(FoundryLocalService.ApiKey, localResource.ApiKey);
+    }
 
-        Assert.Equal(foundryManager.ApiKey, localResource.ApiKey);
+    [Fact]
+    public void FoundryLocalService_TryParseModelId_ParsesModelInfoOutput()
+    {
+        var output = """
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Fact]
+    public void FoundryLocalService_TryParseModelId_IgnoresDiagnosticOutputBeforeTable()
+    {
+        var output = """
+            [15:12:56 ERR] Exception fetching models from Azure Foundry catalog
+            Model management service is running on http://127.0.0.1:54597/openai/status
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
     }
 
     [Fact]
@@ -128,8 +151,8 @@ public class FoundryExtensionsTests
 
         Assert.Single(resource.Deployments);
 
-        // NB: The value of the ModelName property is updated with the downloaded model id when the resource is starting.
-        // We are only testing that the value in the ModelName property is referenced in the connection string.
+        // NB: The ModelId property is updated with the downloaded model id when the resource is starting.
+        // We are only testing that the ModelName fallback is referenced in the connection string.
 
         Assert.Equal("{myAIFoundry.connectionString};Model=gpt-4", deployment.Resource.ConnectionStringExpression.ValueExpression);
     }
@@ -294,7 +317,7 @@ public class FoundryExtensionsTests
         var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -304,6 +327,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -325,13 +349,14 @@ public class FoundryExtensionsTests
             .AddProject("my-project");
 
         var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -362,7 +387,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
             })
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -372,6 +397,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -402,7 +428,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
             })
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -412,6 +438,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -441,7 +468,7 @@ public class FoundryExtensionsTests
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent);
 
-        advisorAgent.AsHostedAgent(project);
+        advisorAgent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -460,6 +487,16 @@ public class FoundryExtensionsTests
         Assert.Contains("Foundry hosted agent 'advisor-agent-ha'", ex.Message);
         Assert.Contains("Endpoint 'http' on resource 'weather-agent' cannot be used", ex.Message);
         Assert.Contains("internal", ex.Message);
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        // These tests call the deployment-time environment resolver directly. In a real publish,
+        // provisioning populates the Foundry project Bicep outputs before references are resolved.
+        // Seed the outputs here so BicepOutputReference.GetValueAsync does not wait for provisioning.
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     private sealed class Project : IProjectMetadata

@@ -17,7 +17,7 @@ namespace Aspire.Hosting;
 /// </summary>
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport]
-public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
+public sealed class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <summary>Fully-qualified path to the .csproj file.</summary>
     public string ProjectPath { get; } = projectPath;
@@ -26,8 +26,14 @@ public class BlazorWasmAppResource(string name, string projectPath) : Resource(n
     public string ProjectDirectory => Path.GetDirectoryName(ProjectPath)!;
 
     /// <summary>
+    /// Gets the browser launched when starting a debug session for this app.
+    /// Defaults to <c>"msedge"</c>. Configure it with <see cref="BlazorGatewayExtensions.WithBlazorDebuggerBrowser"/>.
+    /// </summary>
+    public string DebuggerBrowser { get; internal set; } = "msedge";
+
+    /// <summary>
     /// Gets the parent gateway resource whose lifecycle state is mirrored to this resource.
-    /// Set internally when <see cref="BlazorGatewayExtensions.WithBlazorClientApp"/> associates
+    /// Set internally when <see cref="BlazorGatewayExtensions.WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/> associates
     /// this WASM app with a gateway.
     /// </summary>
     public IResource Parent { get; internal set; } = null!;

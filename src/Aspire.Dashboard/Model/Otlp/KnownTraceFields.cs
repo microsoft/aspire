@@ -11,6 +11,7 @@ public static class KnownTraceFields
     public const string TraceIdField = "trace.traceid";
     public const string SpanIdField = "trace.spanid";
     public const string DurationField = "trace.duration";
+    public const string TimestampField = "trace.timestamp";
 
     // Not used in search.
     public const string StatusMessageField = "trace.statusmessage";
@@ -25,6 +26,7 @@ public static class KnownTraceFields
         TraceIdField,
         SpanIdField,
         KnownSourceFields.NameField,
-        DurationField
+        DurationField,
+        TimestampField
     ];
 }

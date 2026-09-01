@@ -1276,6 +1276,20 @@ The CLI is **not** responsible for language-specific logic. A single `GuestAppHo
 
 > **Note:** The .NET AppHost (`DotNetAppHostProject`) currently has its logic in the CLI. We plan to migrate it to the guest model, where .NET becomes just another language with its own `ILanguageSupport` and `RuntimeSpec`. This will unify the architecture and allow the CLI to be truly language-agnostic.
 
+### Polyglot-Compatible Integration Discovery
+
+A guest (non-C#) AppHost can only consume integrations that expose their API surface through `[AspireExport]` (ATS) coverage. Integrations are polyglot-compatible by default: any project that runs the export analyzer automatically gets the `polyglot` NuGet tag appended at pack time. A project acknowledges that it is not a polyglot integration by setting `<IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>` in its project file, which omits the tag. The `ASPIREEXPORT017` analyzer rule fails the build if a project has no `[AspireExport]` coverage and has not opted out, keeping the tag and the export surface in sync.
+
+CLI-side filtering on this tag is gated behind the `features.polyglotIntegrationFilterEnabled` feature flag and is **disabled by default**. When enabled and the active AppHost is not C#, `aspire add`, `aspire integration list`, and `aspire integration search` filter discovery down to integrations carrying the `polyglot` tag (resolved via a `tags:polyglot` search on remote feeds or by reading the nuspec `<tags>` for local package sources). Pass `--all` to bypass the filter — useful when an integration has not yet been marked. Naming an integration that exists but lacks the tag yields a clear "not available for this language" error.
+
+The flag defaults to off because no remote feed resolves the tag usefully today. Azure DevOps Artifacts feeds — which back the daily, staging, and PR channels — silently ignore `tags:` query scoping and return zero results even for packages whose search payload contains the tag. nuget.org does honour the scoping, but `dotnet package search` broadens the query before it is sent, so the response is a relevance ranking rather than an exact tag set — and in either form it contains no first-party integration, because the only tagged Aspire packages there (`Aspire.TypeSystem`, `Aspire.Hosting.Integration.Analyzers`) are excluded by `PackageIdFilters.IsIntegrationPackageId`. The filter fails closed, so an unanswerable query is indistinguishable from "nothing is compatible" and every integration disappears (see [#19161](https://github.com/microsoft/aspire/issues/19161)). The nuspec-reading local package source path is the only one that resolves a correct allow-list, so enable the flag only against a pinned local package source or hive:
+
+```console
+aspire config set features.polyglotIntegrationFilterEnabled true
+```
+
+The `polyglot` tag itself is still emitted at pack time and `ASPIREEXPORT017` still enforces export coverage, so the metadata remains available regardless of the flag.
+
 ```mermaid
 classDiagram
     class IAppHostProject {
@@ -1350,6 +1364,25 @@ Configuration for polyglot app hosts:
 | `packages` | Package references added via `aspire add` |
 
 **Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
+
+### Application settings
+
+Polyglot AppHosts use the standard .NET configuration convention. The managed application builder loads these optional files from the directory containing the AppHost:
+
+- `appsettings.json`
+- `appsettings.{Environment}.json`
+
+The environment-specific file overrides the base file. Environment variables and AppHost command-line arguments retain the standard .NET configuration precedence over both JSON files.
+
+The generated guest SDK exposes the resulting configuration through the application builder. For example, a TypeScript AppHost can read a value as follows:
+
+```typescript
+const builder = await createBuilder();
+const configuration = await builder.getConfiguration();
+const region = await configuration.getConfigValue("Deployment:Region");
+```
+
+The managed server keeps its own internal configuration separate, so application settings do not replace ATS assembly discovery or server logging settings.
 
 ### apphost.run.json
 

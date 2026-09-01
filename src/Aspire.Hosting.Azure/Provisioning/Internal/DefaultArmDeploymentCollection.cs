@@ -18,4 +18,10 @@ internal sealed class DefaultArmDeploymentCollection(ArmDeploymentCollection arm
     {
         return armDeploymentCollection.CreateOrUpdateAsync(waitUntil, deploymentName, content, cancellationToken);
     }
+
+    public async Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default)
+    {
+        var deployment = await armDeploymentCollection.GetAsync(deploymentName, cancellationToken).ConfigureAwait(false);
+        await deployment.Value.CancelAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

@@ -23,6 +23,9 @@ internal sealed class AspireVersionCheck(
     CliExecutionContext executionContext,
     ILogger<AspireVersionCheck> logger) : IEnvironmentCheck
 {
+    internal const string AppHostVersionCheckName = "apphost-version";
+    internal const string CliVersionCheckName = "cli-version";
+
     // Version checks should appear first so users immediately see which Aspire bits
     // produced the rest of the doctor output before reading environment diagnostics.
     public int Order => 0;
@@ -49,8 +52,8 @@ internal sealed class AspireVersionCheck(
 
             appHostVersionCheck = new EnvironmentCheckResult
             {
-                Category = "apphost",
-                Name = "apphost-version",
+                Category = EnvironmentCheckCategories.AppHost,
+                Name = AppHostVersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AppHostVersionCheckFailedMessage,
                 Details = ex.Message
@@ -88,8 +91,8 @@ internal sealed class AspireVersionCheck(
             {
                 return new EnvironmentCheckResult
                 {
-                    Category = "aspire",
-                    Name = "cli-version",
+                    Category = EnvironmentCheckCategories.Aspire,
+                    Name = CliVersionCheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = FormatCliVersionMessage(currentVersion, identityChannel),
                     Details = $"{DoctorCommandStrings.CliVersionUpdateCheckFailedMessage}: {updateCheckError}",
@@ -101,8 +104,8 @@ internal sealed class AspireVersionCheck(
             {
                 return new EnvironmentCheckResult
                 {
-                    Category = "aspire",
-                    Name = "cli-version",
+                    Category = EnvironmentCheckCategories.Aspire,
+                    Name = CliVersionCheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     // Both versions get their channel inline next to them so
                     // the message is unambiguous:
@@ -124,8 +127,8 @@ internal sealed class AspireVersionCheck(
 
             return new EnvironmentCheckResult
             {
-                Category = "aspire",
-                Name = "cli-version",
+                Category = EnvironmentCheckCategories.Aspire,
+                Name = CliVersionCheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = FormatCliVersionMessage(currentVersion, identityChannel),
                 Metadata = BuildCliVersionMetadata(currentVersion, latestVersion: null, status.UpdateCommand, updateCheckError: null, identityChannel, latestVersionChannel: null)
@@ -141,8 +144,8 @@ internal sealed class AspireVersionCheck(
 
             return new EnvironmentCheckResult
             {
-                Category = "aspire",
-                Name = "cli-version",
+                Category = EnvironmentCheckCategories.Aspire,
+                Name = CliVersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.CliVersionUpdateCheckFailedMessage,
                 Details = ex.Message,
@@ -194,17 +197,23 @@ internal sealed class AspireVersionCheck(
 
     private string? TryReadIdentityChannel()
     {
-        try
+        // physical-binary-channel-by-design (see docs/specs/cli-identity-sidecar.md):
+        // doctor reports the channel BAKED INTO the installed assembly, not the emulated
+        // ASPIRE_CLI_CHANNEL / sidecar identity. Like `doctor --self`, this check is a
+        // "what is actually installed" diagnostic, so it must describe physical reality.
+        // When the CLI is emulating another build, that fact is surfaced separately by the
+        // startup override notice (Program.DisplayFirstTimeUseNoticeIfNeededAsync), which
+        // fires for human-readable `aspire doctor`. Routing this through
+        // CliExecutionContext.IdentityChannel would make doctor misreport the install.
+        if (identityChannelReader.TryReadChannel(out var channel, out var error))
         {
-            return identityChannelReader.ReadChannel();
+            return channel;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Identity channel is informational; a misconfigured dev build
-            // (no AspireCliChannel assembly metadata) must not break doctor.
-            logger.LogDebug(ex, "Could not read identity channel for doctor output.");
-            return null;
-        }
+
+        // Identity channel is informational; a misconfigured dev build
+        // (no AspireCliChannel assembly metadata) must not break doctor.
+        logger.LogDebug("Could not read identity channel for doctor output: {Error}", error);
+        return null;
     }
 
     private async Task<EnvironmentCheckResult?> GetAppHostVersionCheckAsync(CancellationToken cancellationToken)
@@ -228,8 +237,8 @@ internal sealed class AspireVersionCheck(
         {
             return new EnvironmentCheckResult
             {
-                Category = "apphost",
-                Name = "apphost-version",
+                Category = EnvironmentCheckCategories.AppHost,
+                Name = AppHostVersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AppHostVersionCheckFailedMessage,
                 Details = ex.Message
@@ -241,8 +250,8 @@ internal sealed class AspireVersionCheck(
 
             return new EnvironmentCheckResult
             {
-                Category = "apphost",
-                Name = "apphost-version",
+                Category = EnvironmentCheckCategories.AppHost,
+                Name = AppHostVersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.AppHostVersionCheckFailedMessage,
                 Details = ex.Message
@@ -275,8 +284,8 @@ internal sealed class AspireVersionCheck(
                 {
                     return new EnvironmentCheckResult
                     {
-                        Category = "apphost",
-                        Name = "apphost-version",
+                        Category = EnvironmentCheckCategories.AppHost,
+                        Name = AppHostVersionCheckName,
                         Status = EnvironmentCheckStatus.Warning,
                         Message = AppendChannelSuffix(
                             string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AppHostVersionUnknownMessageFormat, relativePath),
@@ -287,8 +296,8 @@ internal sealed class AspireVersionCheck(
 
                 return new EnvironmentCheckResult
                 {
-                    Category = "apphost",
-                    Name = "apphost-version",
+                    Category = EnvironmentCheckCategories.AppHost,
+                    Name = AppHostVersionCheckName,
                     Status = EnvironmentCheckStatus.Pass,
                     // Channel goes inline next to the version, not at the
                     // end of the message: "AppHost version 13.0.0 (channel: stable) (path/to/AppHost.csproj)"
@@ -314,8 +323,8 @@ internal sealed class AspireVersionCheck(
 
                 return new EnvironmentCheckResult
                 {
-                    Category = "apphost",
-                    Name = "apphost-version",
+                    Category = EnvironmentCheckCategories.AppHost,
+                    Name = AppHostVersionCheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = DoctorCommandStrings.AppHostVersionCheckFailedMessage,
                     Details = ex.Message,

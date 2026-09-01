@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
@@ -23,39 +20,26 @@ public sealed class TraceMenuBuilder
 {
     private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
     private static readonly Icon s_structuredLogsIcon = new Icons.Regular.Size16.SlideTextSparkle();
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
     private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
 
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
-    private readonly IStringLocalizer<AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<AIPrompts> _aiPromptsLoc;
     private readonly NavigationManager _navigationManager;
-    private readonly IAIContextProvider _aiContextProvider;
     private readonly DashboardDialogService _dialogService;
-    private readonly TelemetryRepository _telemetryRepository;
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TraceMenuBuilder"/> class.
     /// </summary>
     public TraceMenuBuilder(
         IStringLocalizer<ControlsStrings> controlsLoc,
-        IStringLocalizer<AIAssistant> aiAssistantLoc,
-        IStringLocalizer<AIPrompts> aiPromptsLoc,
         NavigationManager navigationManager,
-        IAIContextProvider aiContextProvider,
         DashboardDialogService dialogService,
-        TelemetryRepository telemetryRepository,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+        DashboardDataSource dataSource)
     {
         _controlsLoc = controlsLoc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _navigationManager = navigationManager;
-        _aiContextProvider = aiContextProvider;
         _dialogService = dialogService;
-        _telemetryRepository = telemetryRepository;
-        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -69,6 +53,29 @@ public sealed class TraceMenuBuilder
         OtlpTrace trace,
         bool showViewDetails = true)
     {
+        AddMenuItems(menuItems, trace.TraceId, () => trace, showViewDetails);
+    }
+
+    /// <summary>
+    /// Adds menu items for a trace summary to the provided list.
+    /// </summary>
+    /// <param name="menuItems">The list to add menu items to.</param>
+    /// <param name="summary">The trace summary to create menu items for.</param>
+    /// <param name="showViewDetails">Whether to include the View Details menu item. Defaults to <c>true</c>.</param>
+    public void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        TraceSummary summary,
+        bool showViewDetails = true)
+    {
+        AddMenuItems(menuItems, summary.TraceId, () => _dataSource.TelemetryRepository.GetTrace(summary.TraceId), showViewDetails);
+    }
+
+    private void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        string traceId,
+        Func<OtlpTrace?> getTrace,
+        bool showViewDetails)
+    {
         if (showViewDetails)
         {
             menuItems.Add(new MenuButtonItem
@@ -77,7 +84,7 @@ public sealed class TraceMenuBuilder
                 Icon = s_viewDetailsIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(trace.TraceId));
+                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(traceId));
                     return Task.CompletedTask;
                 }
             });
@@ -89,18 +96,24 @@ public sealed class TraceMenuBuilder
             Icon = s_structuredLogsIcon,
             OnClick = () =>
             {
-                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: trace.TraceId));
+                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: traceId));
                 return Task.CompletedTask;
             }
         });
 
         menuItems.Add(new MenuButtonItem
         {
-            Text = _controlsLoc[nameof(ControlsStrings.ExportJson)],
+            Text = _controlsLoc[nameof(ControlsStrings.ViewJson)],
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository, _outgoingPeerResolvers);
+                var trace = getTrace();
+                if (trace is null)
+                {
+                    return;
+                }
+
+                var result = await ExportHelpers.GetTraceAsJsonAsync(trace, _dataSource.TelemetryRepository, CancellationToken.None).ConfigureAwait(false);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,
@@ -111,25 +124,5 @@ public sealed class TraceMenuBuilder
                 }).ConfigureAwait(false);
             }
         });
-
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = s_gitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext =>
-                        {
-                            return PromptContextsBuilder.AnalyzeTrace(
-                                promptContext,
-                                _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeTrace), OtlpHelpers.ToShortenedId(trace.TraceId)),
-                                trace);
-                        }).ConfigureAwait(false);
-                }
-            });
-        }
     }
 }

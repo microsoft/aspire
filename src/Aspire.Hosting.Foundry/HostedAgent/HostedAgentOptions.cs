@@ -3,9 +3,9 @@
 
 namespace Aspire.Hosting.Foundry;
 
-// HostedAgentOptions exposes the subset of HostedAgentConfiguration that is meaningful to non-.NET
-// app hosts. .NET callers should use the AsHostedAgent overload that takes Action<HostedAgentConfiguration>
-// to access the full configuration surface (tools, content filters, container protocol versions, etc.).
+// HostedAgentOptions exposes the subset of HostedAgentConfiguration that can be shared by .NET and
+// polyglot app hosts. .NET callers can use the AsHostedAgent overload that takes
+// Action<HostedAgentConfiguration> when they need the full Azure SDK-specific configuration surface.
 
 /// <summary>
 /// Options that control how a compute resource is deployed as a Microsoft Foundry hosted agent.

@@ -4,7 +4,7 @@
 # 1. Creates a Git tag for the release
 # 2. Creates a GitHub Release with release notes
 # 3. Creates a PR to merge release branch back to main
-# 4. Creates a PR to update PackageValidationBaselineVersion
+# 4. Creates a branch/PR to update PackageValidationBaselineVersion
 #
 # Designed for idempotency - safe to re-run after partial failures.
 #
@@ -63,6 +63,11 @@ on:
         default: false
       skip_baseline_pr:
         description: 'Skip baseline version PR creation (set true if already completed)'
+        required: false
+        type: boolean
+        default: false
+      defer_baseline_pr:
+        description: 'Create the baseline branch but defer PR creation to a later workflow'
         required: false
         type: boolean
         default: false
@@ -154,6 +159,7 @@ jobs:
           echo "Skip GitHub Release: ${{ inputs.skip_github_release }}"
           echo "Skip Merge PR: ${{ inputs.skip_merge_pr }}"
           echo "Skip Baseline PR: ${{ inputs.skip_baseline_pr }}"
+          echo "Defer Baseline PR: ${{ inputs.defer_baseline_pr }}"
           echo "==================================="
 
           if [ "${{ inputs.dry_run }}" == "true" ]; then
@@ -186,10 +192,10 @@ jobs:
       # --- App token and checkout (shared by all subsequent steps) ----------
       # Mint the aspire-repo-bot App installation token. Used by every step
       # that needs to fire a downstream event (release create, PR create,
-      # branch push). Using the App token instead of the default GITHUB_TOKEN
-      # causes the `release: released` event to actually trigger
-      # release-notes-generate.lock.yml (events fired by GITHUB_TOKEN do not
-      # cascade into other workflow runs).
+      # branch push) and to dispatch release-notes-generate. Using the App
+      # token instead of the default GITHUB_TOKEN is what lets those actions
+      # cascade into other workflow runs (events fired by GITHUB_TOKEN do not
+      # trigger further workflows).
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
@@ -278,11 +284,15 @@ jobs:
         run: |
           # Write a short placeholder. The real release notes are generated
           # asynchronously by the release-notes-generate agentic workflow,
-          # which fires on the `release: [released]` event once `gh release
-          # create` below publishes the release, and edits this body in
-          # place.
+          # which we dispatch explicitly (via workflow_dispatch) right after
+          # creating the draft release below. It edits this body in place while
+          # the release is still a draft. (We can't rely on the
+          # `release: [created]` event because GitHub Actions does not fire
+          # release events for draft releases.) The release manager publishes
+          # the draft as a final manual step once both the notes and the CLI
+          # assets are attached.
           cat << EOF > release_notes.md
-          *Release notes are being generated automatically and will be added to this release shortly. If they haven't appeared within a few hours, ping the Aspire team.*
+          *This release is currently a draft. Release notes are being generated automatically and CLI assets are being uploaded — both will appear here within a few minutes. Once everything looks correct, the release manager will publish the draft. If notes or assets are missing after ~30 minutes, ping the Aspire team.*
 
           ---
           *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
@@ -290,13 +300,14 @@ jobs:
 
           echo "Placeholder release notes generated"
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (draft)
         if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         env:
-          # Use the App token here so the `release: released` event is
-          # authored by aspire-repo-bot and downstream workflows
-          # (release-notes-generate.lock.yml) get triggered. Events fired by
-          # GITHUB_TOKEN intentionally do NOT trigger other workflows.
+          # Use the App token so the draft release is authored by
+          # aspire-repo-bot, consistent with the rest of the release flow.
+          # (release-notes-generate is triggered by an explicit
+          # workflow_dispatch in the next step, not by a release event —
+          # draft releases don't fire release events.)
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
@@ -306,12 +317,21 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
 
+          # IMPORTANT: We always create the release as a draft. Immutable
+          # releases (https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
+          # lock assets and the tag at publish time, so every mutation
+          # (release-notes-generate agentic workflow rewriting the body,
+          # PublishReleaseAssetsJob uploading aspire-cli-* archives) must
+          # happen before publish. A human publishes the draft as the final
+          # step after reviewing it — see docs/release-process.md "Publish
+          # the draft release" for the procedure.
           if [ "$DRY_RUN" == "true" ]; then
-            echo "🔍 [DRY RUN] Would create GitHub Release:"
+            echo "🔍 [DRY RUN] Would create DRAFT GitHub Release:"
             echo "   Tag: $TAG_NAME"
             echo "   Title: Aspire ${{ inputs.release_version }}"
             echo "   Target: ${{ inputs.commit_sha }}"
             echo "   Prerelease: ${{ inputs.is_prerelease }}"
+            echo "   Draft: true"
             echo ""
             echo "   Release notes content:"
             echo "   ─────────────────────────────────────"
@@ -319,13 +339,48 @@ jobs:
             echo "   ─────────────────────────────────────"
           else
             gh release create "$TAG_NAME" \
+              --draft \
               --title "Aspire ${{ inputs.release_version }}" \
               --notes-file release_notes.md \
               --target "${{ inputs.commit_sha }}" \
               $PRERELEASE_FLAG
 
-            echo "✓ Created GitHub Release: $TAG_NAME"
+            echo "✓ Created DRAFT GitHub Release: $TAG_NAME"
+            echo "  Release manager must publish the draft manually after notes + assets are attached."
           fi
+
+      - name: Dispatch release-notes-generate workflow
+        # Draft releases do not fire the `release: [created]` event, so we
+        # explicitly dispatch the release-notes-generate agentic workflow to
+        # rewrite the placeholder body while the release is still a draft.
+        #
+        # We dispatch on every eligible non-dry run — including reruns where the
+        # draft already existed — and deliberately do NOT gate on
+        # `release_exists`. If a first run created the draft but died before
+        # dispatching, gating on `release_exists` would permanently skip note
+        # generation on the rerun and leave the placeholder body in place.
+        # Re-dispatching is safe: release-notes-generate is idempotent (it exits
+        # early unless the body is still the exact placeholder, and exits if the
+        # release was already published or edited), so a duplicate dispatch is a
+        # guaranteed no-op. We still skip on dry runs and when GitHub-release
+        # creation was skipped entirely.
+        if: inputs.skip_github_release != true && inputs.dry_run != true
+        env:
+          # The App token (aspire-repo-bot) is used so the dispatch is authored
+          # by the same identity the gh-aw workflow's `bots:` allow-list and
+          # GitHub App integration expect. Dispatching with GITHUB_TOKEN would
+          # run it as github-actions[bot], which the workflow's activation gate
+          # is not configured for.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          echo "Dispatching release-notes-generate for $TAG_NAME"
+          # The runnable workflow is the gh-aw-compiled lock file; dispatch it
+          # on the default branch (where workflow_dispatch requires it to live).
+          gh workflow run release-notes-generate.lock.yml \
+            --repo "${{ github.repository }}" \
+            --field tag_name="$TAG_NAME"
+          echo "✓ Dispatched release-notes-generate (tag_name=$TAG_NAME)"
 
   # ----------------------------------------------------------------------------
   # merge-pr: runs in parallel with baseline-pr after the release job. A
@@ -416,7 +471,7 @@ jobs:
   # baseline-pr: runs in parallel with merge-pr after the release job.
   # ----------------------------------------------------------------------------
   baseline-pr:
-    name: Create Baseline Version PR
+    name: Create Baseline Version Branch/PR
     needs: release
     if: inputs.skip_baseline_pr != true && inputs.is_prerelease != true
     runs-on: ubuntu-latest
@@ -441,7 +496,7 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Check for Existing Baseline PR
+      - name: Check for Existing Baseline Branch and PR
         id: check-baseline-pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -458,8 +513,23 @@ jobs:
             echo "pr_exists=false" >> $GITHUB_OUTPUT
           fi
 
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null; then
+            echo "✓ Baseline update branch already exists: $BRANCH_NAME"
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No existing baseline update branch found"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Existing Baseline Branch
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists == 'true' && inputs.dry_run != true
+        run: |
+          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          git fetch origin "$BRANCH_NAME:$BRANCH_NAME"
+          git checkout "$BRANCH_NAME"
+
       - name: Update PackageValidationBaselineVersion
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true'
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true'
         run: |
           VERSION="${{ inputs.release_version }}"
           FILE="src/Directory.Build.props"
@@ -497,9 +567,14 @@ jobs:
           echo "   ─────────────────────────────────────"
           echo ""
           echo "   Commit message: Update PackageValidationBaselineVersion to $VERSION"
+          if [ "${{ inputs.defer_baseline_pr }}" == "true" ]; then
+            echo "   Note: PR creation is deferred. release-publish-nuget.yml dispatches update-nix-cli-flake.yml later, after CLI release assets are uploaded, to add eng/nix/versions.json and open the PR from this branch."
+          else
+            echo "   Note: release-publish-nuget.yml dispatches update-nix-cli-flake.yml later, after CLI release assets are uploaded, to add eng/nix/versions.json to this same branch."
+          fi
 
       - name: Create Branch and Commit for Baseline PR
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true' && inputs.dry_run != true
         run: |
           BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
           VERSION="${{ inputs.release_version }}"
@@ -514,8 +589,14 @@ jobs:
 
           echo "✓ Created branch: $BRANCH_NAME"
 
+      - name: Baseline PR Deferred
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.defer_baseline_pr == true && inputs.dry_run != true
+        run: |
+          echo "Baseline branch update-baseline-${{ inputs.release_version }} is ready."
+          echo "PR creation is deferred until update-nix-cli-flake.yml commits eng/nix/versions.json to the same branch."
+
       - name: Create Baseline PR
-        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.defer_baseline_pr != true && inputs.dry_run != true
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -527,6 +608,7 @@ jobs:
 
             ## Changes
             - Updated `src/Directory.Build.props` with new baseline version
+            - When the release pipeline also runs the Nix updater, `eng/nix/versions.json` is committed to this same branch after CLI release assets are uploaded
 
             ---
             *Created automatically by the release workflow.*
@@ -610,9 +692,32 @@ jobs:
 
           | Job | Result |
           |-----|--------|
-          | Release Tasks (tag + GitHub release) | ${RELEASE_STATUS} |
+          | Release Tasks (tag + draft GitHub release) | ${RELEASE_STATUS} |
           | Create Merge-Back PR | ${MERGE_STATUS} |
-          | Create Baseline Version PR | ${BASELINE_STATUS} |
+          | Create Baseline Version Branch/PR | ${BASELINE_STATUS} |
+
+          ## ⚠️ Manual step required — publish the draft release
+
+          The GitHub release was created as a **draft** so the release-notes-generate
+          agentic workflow can rewrite its body and the AzDO pipeline's
+          PublishReleaseAssetsJob can attach the \`aspire-cli-*\` archives before
+          publish. This is required for compatibility with GitHub's
+          [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
+          which lock assets and the tag at publish time.
+
+          The release manager must, after both notes and assets are in place:
+
+          1. Open the [Releases page](https://github.com/${{ github.repository }}/releases)
+             and find the draft for \`v${{ inputs.release_version }}\` at the
+             top (drafts are assigned a random \`untagged-<hash>\` URL by
+             GitHub, so there is no stable deep link until publish).
+          2. Confirm the auto-generated release notes look correct.
+          3. Confirm the \`aspire-cli-*\` archives are attached.
+          4. Click **Publish release**.
+
+          Publishing the draft fires \`release: [published]\`, which triggers
+          downstream workflows such as \`release-update-support-mdx\` and
+          \`homebrew-validate-release\`.
 
           ## Details
           - **Tag**: v${{ inputs.release_version }}
@@ -626,6 +731,6 @@ jobs:
           - **Skip Baseline PR**: ${{ inputs.skip_baseline_pr }}
 
           ## Links
-          - [Release](https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.release_version }})
+          - [Releases page](https://github.com/${{ github.repository }}/releases)
           - [Tag](https://github.com/${{ github.repository }}/tree/v${{ inputs.release_version }})
           EOF

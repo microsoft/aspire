@@ -81,6 +81,57 @@ public partial class InteractionsProviderTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Initialize_InteractionsUseLiveDashboardClientAsync()
+    {
+        var liveInteractionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var liveRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var selectedInteractionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var selectedRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var liveSubscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveSubscriptionCount = 0;
+        var selectedSubscriptionCount = 0;
+
+        var liveDashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () =>
+            {
+                Interlocked.Increment(ref liveSubscriptionCount);
+                liveSubscriptionStarted.TrySetResult();
+                return liveInteractionsChannel;
+            },
+            sendInteractionUpdateChannel: liveRequestsChannel);
+        var selectedDashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () =>
+            {
+                Interlocked.Increment(ref selectedSubscriptionCount);
+                return selectedInteractionsChannel;
+            },
+            sendInteractionUpdateChannel: selectedRequestsChannel,
+            isReadOnly: true);
+
+        SetupInteractionProviderServices(liveDashboardClient, selectedDashboardClient: selectedDashboardClient);
+
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Same(liveDashboardClient, cut.Instance.DashboardClient);
+        await liveSubscriptionStarted.Task.DefaultTimeout();
+        Assert.Equal(1, Volatile.Read(ref liveSubscriptionCount));
+        Assert.Equal(0, Volatile.Read(ref selectedSubscriptionCount));
+
+        var request = new WatchInteractionsRequestUpdate();
+        await cut.Instance.DashboardClient.SendInteractionRequestAsync(request, CancellationToken.None);
+
+        Assert.Same(request, await liveRequestsChannel.Reader.ReadAsync().AsTask().DefaultTimeout());
+        Assert.False(selectedRequestsChannel.Reader.TryRead(out _));
+
+        await cut.Instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ReceiveData_MessageBoxOpen_OpenDialog()
     {
         // Arrange
@@ -289,6 +340,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         // Act 2
         Assert.NotNull(dialogParameters);
         Assert.NotNull(vm);
+        Assert.Same(dashboardClient, vm.DashboardClient);
 
         await vm.OnSubmitCallback(response, false).DefaultTimeout();
 
@@ -509,7 +561,124 @@ public partial class InteractionsProviderTests : DashboardTestContext
         await instance.DisposeAsync().DefaultTimeout();
     }
 
-    private void SetupInteractionProviderServices(TestDashboardClient? dashboardClient = null, TestDialogService? dialogService = null, TestMessageService? messageService = null)
+    [Fact]
+    public async Task ReceiveData_ProgressDialogOpenAndCancel_OpenDialogAndSendResult()
+    {
+        // Arrange
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+
+        DialogParameters? dialogParameters = null;
+        var dialogReference = new DialogReference("abc", null!);
+        var dashboardClient = new TestDashboardClient(isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
+        {
+            dialogParameters = parameters;
+            return Task.FromResult<IDialogReference>(dialogReference);
+        });
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        // Act 1
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var instance = cut.Instance;
+
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            PrimaryButtonText = "Cancel",
+            PromptProgress = new InteractionPromptProgress()
+        });
+
+        // Assert 1
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+        {
+            var reference = instance._interactionDialogReference;
+            if (reference == null)
+            {
+                return false;
+            }
+
+            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+        }, "Wait for dialog reference created.");
+
+        // Act 2 - click the cancel button
+        Assert.NotNull(dialogParameters);
+
+        await cut.InvokeAsync(() => dialogParameters.OnDialogResult.InvokeAsync(DialogResult.Ok(true))).DefaultTimeout();
+
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync();
+
+        // Assert 2 - verify the server is notified with PromptProgress and Result = false
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress, update.KindCase);
+        Assert.False(update.PromptProgress.Result);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_ProgressDialogOpenAndCompletion_OpenAndCloseDialog()
+    {
+        // Arrange
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+
+        var dialogReference = new DialogReference("abc", null!);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.FromResult<IDialogReference>(dialogReference));
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        // Act 1
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var instance = cut.Instance;
+
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            PromptProgress = new InteractionPromptProgress()
+        });
+
+        // Assert 1
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+        {
+            var reference = instance._interactionDialogReference;
+            if (reference == null)
+            {
+                return false;
+            }
+
+            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+        }, "Wait for dialog reference created.");
+
+        // Act 2 - server completes the interaction
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            Complete = new InteractionComplete()
+        });
+
+        // Assert 2
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => instance._interactionDialogReference == null, "Wait for dialog reference dismissed.");
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    private void SetupInteractionProviderServices(
+        TestDashboardClient? dashboardClient = null,
+        TestDialogService? dialogService = null,
+        TestMessageService? messageService = null,
+        TestDashboardClient? selectedDashboardClient = null)
     {
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
@@ -518,7 +687,8 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         Services.AddSingleton<IDialogService>(dialogService ?? new TestDialogService());
         Services.AddSingleton<IMessageService>(messageService ?? new TestMessageService());
-        Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
+        Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
         Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         Services.AddSingleton<ComponentTelemetryContextProvider>();
