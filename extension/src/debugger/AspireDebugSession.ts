@@ -1690,7 +1690,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 
   registerResourceCleanup(disposable: vscode.Disposable): void {
-    this._disposables.push(disposable);
+    this.registerDisposable(disposable);
   }
 
   private getDebugSessionWorkspaceFolder(debugConfig: AspireResourceExtendedDebugConfiguration): vscode.WorkspaceFolder | undefined {
