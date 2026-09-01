@@ -221,7 +221,7 @@ internal static class CliTestHelper
         // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
-        services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton(options.EnvironmentFactory);
         services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
@@ -367,6 +367,12 @@ internal sealed class CliServiceCollectionTestOptions
     public DirectoryInfo WorkingDirectory { get; set; }
 
     public DirectoryInfo? PackagesDirectory { get; set; }
+
+    public Func<IServiceProvider, IEnvironment> EnvironmentFactory { get; set; } = _ =>
+        new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["PATH"] = Environment.GetEnvironmentVariable("PATH")
+        });
 
     public Action<Dictionary<string, string?>> ConfigurationCallback { get; set; } = (Dictionary<string, string?> config) =>
     {
