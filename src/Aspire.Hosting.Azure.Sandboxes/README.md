@@ -28,7 +28,10 @@ Then, in the AppHost, add an Azure sandbox group. When it is the only compute en
 #pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
 
 builder.AddAzureSandboxGroup("sandboxes");
-builder.AddProject<Projects.ApiService>("api");
+var api = builder.AddProject<Projects.ApiService>("api");
+
+builder.AddProject<Projects.WebFrontend>("frontend")
+    .WithReference(api);
 ```
 
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
@@ -76,6 +79,10 @@ await api.publishAsAzureSandbox({
     autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
     endpoints: [{ name: "http", anonymous: true }]
 });
+
+await builder
+    .addContainer("frontend", "nginx", "alpine")
+    .withReference(api);
 
 await builder.build().run();
 ```
