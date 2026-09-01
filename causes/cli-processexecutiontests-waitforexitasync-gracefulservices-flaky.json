@@ -1,0 +1,17 @@
+{
+  "id": "cli-processexecutiontests-waitforexitasync-gracefulservices-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill fails with 'Assert.Single() Failure: The collection was empty' on Windows",
+  "test_name": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill",
+  "error_pattern": "Assert.Single() Failure: The collection was empty\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(Boolean isolateConsole) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionTests.cs:line 265",
+  "occurrences": [
+    {
+      "run_id": 33494022725,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33494022725",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 19826,
+      "observed_at": "2026-09-01T10:23:09Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19839"
+}

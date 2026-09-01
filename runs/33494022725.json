@@ -1,0 +1,83 @@
+{
+  "run_id": 33494022725,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33494022725",
+  "analyzed_at": "2026-09-01T10:23:09Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19826,
+    "title": "Add a csi volume source to VolumeV1 (Aspire.Hosting.Kubernetes)",
+    "author": "timritzer",
+    "state": "closed",
+    "head_branch": "tritzer-microsoft-csi-volume-source",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19826"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 99812452071,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812452071",
+      "classification": "flaky-test",
+      "reason": "Only TRX failure is ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill, a Windows-only timing/race assertion in Aspire.Cli.Tests unrelated to this PR's Kubernetes hosting changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "id": 99812455661,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812455661",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1 and no logs available. PR only touches Aspire.Hosting.Kubernetes files; Hosting.Azure test project has no dependency on those changes.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (ubuntu-latest)",
+      "id": 99812455708,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812455708",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1 and no logs available, occurring simultaneously across multiple unrelated jobs, indicating shared infra failure rather than a code issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 99812455754,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812455754",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1 and no logs available, part of the same widespread build-project failure pattern seen across unrelated jobs in this run.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Playground / Playground (ubuntu-latest)",
+      "id": 99812455861,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812455861",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1 and no logs available. Playground project build is unrelated to Aspire.Hosting.Kubernetes CSI volume changes in the PR.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 99812456074,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33494022725/job/99812456074",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1 and no logs available, consistent with the widespread build failure across unrelated jobs.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(isolateConsole: True)",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Assert.Single() Failure: The collection was empty",
+      "stack_trace": "at Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(Boolean isolateConsole) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionTests.cs:line 265",
+      "classification": "flaky",
+      "reason": "Timing/race-dependent process signaling assertion in a Windows-only CLI test; test file not touched by this PR, which only modifies Aspire.Hosting.Kubernetes resources."
+    }
+  ],
+  "causes": ["build-test-project-widespread-exit1-unrelated", "cli-processexecutiontests-waitforexitasync-gracefulservices-flaky"]
+}
