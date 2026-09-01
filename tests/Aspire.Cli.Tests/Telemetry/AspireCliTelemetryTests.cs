@@ -551,11 +551,11 @@ public class AspireCliTelemetryTests
         };
         var machineInformationProvider = new TelemetryFixture.TestMachineInformationProvider
         {
-            // Tag calculation is awaited before the detector result. Delaying it proves the timeout
-            // reports when cancellation was observed rather than echoing the configured budget.
+            // Tag calculation is awaited separately from the detector. Delaying it proves the
+            // detector duration is captured when cancellation is observed, not after tag calculation.
             GetDeviceIdCallback = async () =>
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100));
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
                 return "test-device-id";
             }
         };
@@ -573,7 +573,7 @@ public class AspireCliTelemetryTests
         var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
         Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
         var durationMilliseconds = Assert.IsType<long>(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs));
-        Assert.True(durationMilliseconds > timeout.TotalMilliseconds, $"Actual duration was {durationMilliseconds} ms.");
+        Assert.InRange(durationMilliseconds, 1, 150);
     }
 
     [Fact]

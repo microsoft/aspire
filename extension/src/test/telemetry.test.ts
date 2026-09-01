@@ -12,6 +12,7 @@ import {
     initializeTelemetry,
     isCommandCancellation,
     isExtensionTelemetryEnabled,
+    isExtensionUsageTelemetryEnabled,
     sendTelemetryErrorEvent,
     sendTelemetryEvent,
     setCommandInvocationListener,
@@ -296,6 +297,14 @@ suite('telemetry utilities', () => {
 
         fake.telemetryLevel = 'crash';
         assert.strictEqual(isExtensionTelemetryEnabled(), false);
+    });
+
+    test('isExtensionUsageTelemetryEnabled excludes errors-only telemetry', () => {
+        fake.telemetryLevel = 'error';
+        assert.strictEqual(isExtensionUsageTelemetryEnabled(), false);
+
+        fake.telemetryLevel = 'all';
+        assert.strictEqual(isExtensionUsageTelemetryEnabled(), true);
     });
 
     test('uninitialized telemetry drops regular and error events', () => {

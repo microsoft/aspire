@@ -142,8 +142,12 @@ export function isExtensionTelemetryEnabled(): boolean {
     return telemetryLogger?.isUsageEnabled === true || telemetryLogger?.isErrorsEnabled === true;
 }
 
-export function onDidChangeExtensionTelemetryEnabled(listener: (enabled: boolean) => void): vscode.Disposable {
-    return telemetryLogger?.onDidChangeEnableStates(() => listener(isExtensionTelemetryEnabled())) ??
+export function isExtensionUsageTelemetryEnabled(): boolean {
+    return telemetryLogger?.isUsageEnabled === true;
+}
+
+export function onDidChangeExtensionUsageTelemetryEnabled(listener: (enabled: boolean) => void): vscode.Disposable {
+    return telemetryLogger?.onDidChangeEnableStates(() => listener(isExtensionUsageTelemetryEnabled())) ??
         { dispose() { } };
 }
 
@@ -175,6 +179,10 @@ export function setTelemetryEnrichmentTask(task: Promise<void>): void {
             telemetryEnrichmentTask = undefined;
         }
     });
+}
+
+export function clearTelemetryEnrichmentTask(): void {
+    telemetryEnrichmentTask = undefined;
 }
 
 function mergeProperties<E extends KnownTelemetryEventName>(

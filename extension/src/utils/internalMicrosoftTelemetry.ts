@@ -28,7 +28,7 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
         private readonly _logWarning: (message: string) => void = message => extensionLogOutputChannel.warn(message),
         private readonly _initialAccountLoadGraceMs = initialAccountLoadGraceMs,
     ) {
-        this.publish({ isInternal: false });
+        this.clear();
     }
 
     async initializeAsync(): Promise<void> {
@@ -54,7 +54,7 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
         this._refreshGeneration++;
         this._authenticationChangeRegistration?.dispose();
         this._authenticationChangeRegistration = undefined;
-        this.publish({ isInternal: false });
+        this.clear();
     }
 
     dispose(): void {
@@ -79,10 +79,12 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
             return undefined;
         }
 
-        const identity = getInternalMicrosoftTelemetryIdentity(accounts);
-        if (!this._disposed && generation === this._refreshGeneration) {
-            this.publish(identity);
+        if (this._disposed || generation !== this._refreshGeneration) {
+            return undefined;
         }
+
+        const identity = getInternalMicrosoftTelemetryIdentity(accounts);
+        this.publish(identity);
 
         return identity;
     }
@@ -93,6 +95,15 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
             is_microsoft_internal: identity.isInternal ? 'true' : 'false',
             microsoft_internal_alias: identity.alias,
             microsoft_internal_domain: identity.domain,
+        });
+    }
+
+    private clear(): void {
+        this._identity = { isInternal: false };
+        this._setCommonProperties({
+            is_microsoft_internal: undefined,
+            microsoft_internal_alias: undefined,
+            microsoft_internal_domain: undefined,
         });
     }
 }
@@ -118,11 +129,13 @@ export function getInternalMicrosoftTelemetryIdentity(
         return { isInternal: false };
     }
 
+    if (accounts.length > 1) {
+        return { isInternal: true };
+    }
+
     const identities = internalAccounts
         .map(account => getLoginIdentity(account.label))
-        .filter(identity => identity !== undefined)
-        .sort((left, right) =>
-            left.alias.localeCompare(right.alias) || left.domain.localeCompare(right.domain));
+        .filter(identity => identity !== undefined);
 
     return identities[0]
         ? { isInternal: true, ...identities[0] }

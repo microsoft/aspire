@@ -1193,7 +1193,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStore);
             }
 
-            InternalMicrosoftProbeResult? fallback = null;
+            var personalizationResults = new List<InternalMicrosoftProbeResult>();
+            var fallbackResults = new List<InternalMicrosoftProbeResult>();
             InternalMicrosoftProbeResult? failure = null;
             foreach (var account in store.RootElement.EnumerateArray())
             {
@@ -1212,13 +1213,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
                 if (TryGetBoolean(account, "IsPersonalizationAccount") == true)
                 {
-                    return result;
+                    personalizationResults.Add(result);
                 }
-
-                fallback ??= result;
+                else
+                {
+                    fallbackResults.Add(result);
+                }
             }
 
-            return fallback ?? failure ?? InternalMicrosoftProbeResult.NotDetected;
+            var candidates = personalizationResults.Count > 0 ? personalizationResults : fallbackResults;
+            return SelectUnambiguousIdentity(candidates) ?? failure ?? InternalMicrosoftProbeResult.NotDetected;
         }
         catch (JsonException)
         {
@@ -1227,6 +1231,21 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 InternalMicrosoftProbeFailureStage.AccountStore,
                 ExceptionType: InternalMicrosoftProbeExceptionType.Json));
         }
+    }
+
+    private static InternalMicrosoftProbeResult? SelectUnambiguousIdentity(IReadOnlyList<InternalMicrosoftProbeResult> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var first = candidates[0];
+        return candidates.Skip(1).All(candidate =>
+            string.Equals(candidate.Alias, first.Alias, StringComparison.Ordinal) &&
+            string.Equals(candidate.Domain, first.Domain, StringComparison.Ordinal))
+                ? first
+                : Detected(alias: null);
     }
 
     private static InternalMicrosoftProbeResult TryDetectVisualStudioMicrosoftTenantAccount(JsonElement account)

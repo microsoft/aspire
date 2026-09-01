@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { RpcClient } from './server/rpcClient';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, isExtensionTelemetryEnabled, onDidChangeExtensionTelemetryEnabled, sendTelemetryEvent, setTelemetryEnrichmentTask } from './utils/telemetry';
+import { clearTelemetryEnrichmentTask, initializeTelemetry, isExtensionUsageTelemetryEnabled, onDidChangeExtensionUsageTelemetryEnabled, sendTelemetryEvent, setTelemetryEnrichmentTask } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -55,11 +55,12 @@ export async function activate(context: vscode.ExtensionContext) {
       setTelemetryEnrichmentTask(internalMicrosoftTelemetryProvider.initializeAsync());
     }
     else {
+      clearTelemetryEnrichmentTask();
       internalMicrosoftTelemetryProvider.disable();
     }
   };
-  updateInternalMicrosoftTelemetry(isExtensionTelemetryEnabled());
-  context.subscriptions.push(onDidChangeExtensionTelemetryEnabled(updateInternalMicrosoftTelemetry));
+  updateInternalMicrosoftTelemetry(isExtensionUsageTelemetryEnabled());
+  context.subscriptions.push(onDidChangeExtensionUsageTelemetryEnabled(updateInternalMicrosoftTelemetry));
   sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
     extension_mode: getExtensionModeForTelemetry(context.extensionMode),

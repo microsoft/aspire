@@ -1033,6 +1033,39 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DetectVisualStudioMicrosoftTenantForTesting_OmitsAmbiguousIdentity(bool personalizationAccounts)
+    {
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("first.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts),
+            new VisualStudioAccountRecord("second.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_EmitsDuplicateIdentity()
+    {
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("same.alias@microsoft.com"),
+            new VisualStudioAccountRecord("same.alias@microsoft.com"));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("same.alias", result.Alias);
+    }
+
+    [Theory]
     [InlineData("stale")]
     [InlineData("identity-provider")]
     [InlineData("home-tenant")]

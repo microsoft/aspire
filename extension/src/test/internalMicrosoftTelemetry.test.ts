@@ -29,9 +29,8 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         assert.deepStrictEqual(identity, { isInternal: true });
     });
 
-    test('ignores non-Microsoft tenants and preserves legitimate alias prefixes', () => {
+    test('preserves legitimate alias prefixes for one corporate account', () => {
         const identity = getInternalMicrosoftTelemetryIdentity([
-            { id: 'unique.external-tenant', label: 'other@microsoft.com' },
             { id: `unique.${microsoftTenantId}`, label: 'Microsoft-User@Microsoft.com' },
         ]);
 
@@ -42,17 +41,30 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         });
     });
 
-    test('selects the same identity regardless of account ordering', () => {
-        const accounts = [
+    test('ignores a non-Microsoft tenant', () => {
+        const identity = getInternalMicrosoftTelemetryIdentity([
+            { id: 'unique.external-tenant', label: 'other@microsoft.com' },
+        ]);
+
+        assert.deepStrictEqual(identity, { isInternal: false });
+    });
+
+    test('omits identity details when multiple Microsoft accounts are returned', () => {
+        const identity = getInternalMicrosoftTelemetryIdentity([
             { id: `second.${microsoftTenantId}`, label: 'z.user@microsoft.com' },
             { id: `first.${microsoftTenantId}`, label: 'a.user@microsoft.com' },
-        ];
+        ]);
 
-        const forward = getInternalMicrosoftTelemetryIdentity(accounts);
-        const reverse = getInternalMicrosoftTelemetryIdentity([...accounts].reverse());
+        assert.deepStrictEqual(identity, { isInternal: true });
+    });
 
-        assert.deepStrictEqual(forward, reverse);
-        assert.strictEqual(forward.alias, 'a.user');
+    test('omits identity details when a corporate account shares the provider with another account', () => {
+        const identity = getInternalMicrosoftTelemetryIdentity([
+            { id: `corporate.${microsoftTenantId}`, label: 'corporate.user@microsoft.com' },
+            { id: 'personal.consumer-tenant', label: 'personal@example.com' },
+        ]);
+
+        assert.deepStrictEqual(identity, { isInternal: true });
     });
 
     test('publishes account changes to common telemetry properties', async () => {
@@ -218,7 +230,7 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
             await new Promise(resolve => setTimeout(resolve, 0));
             assert.strictEqual(accountQueries, 1);
             assert.deepStrictEqual(published.at(-1), {
-                is_microsoft_internal: 'false',
+                is_microsoft_internal: undefined,
                 microsoft_internal_alias: undefined,
                 microsoft_internal_domain: undefined,
             });
@@ -232,6 +244,39 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
             sessionChanges.dispose();
         }
     });
+
+    test('does not publish an account query that completes after telemetry is disabled', async () => {
+        let resolveAccounts: (accounts: readonly vscode.AuthenticationSessionAccountInformation[]) => void = () => { };
+        const accounts = new Promise<readonly vscode.AuthenticationSessionAccountInformation[]>(resolve => {
+            resolveAccounts = resolve;
+        });
+        const published: CommonTelemetryProperties[] = [];
+        const provider = new InternalMicrosoftTelemetryProvider(
+            {
+                getAccounts: () => accounts,
+                onDidChangeSessions: () => ({ dispose() { } }),
+            },
+            properties => published.push({ ...properties }),
+            () => { },
+            10);
+
+        try {
+            const initialization = provider.initializeAsync();
+            provider.disable();
+            resolveAccounts([{ id: `current.${microsoftTenantId}`, label: 'current.user@microsoft.com' }]);
+            await initialization;
+
+            assert.deepStrictEqual(published.at(-1), {
+                is_microsoft_internal: undefined,
+                microsoft_internal_alias: undefined,
+                microsoft_internal_domain: undefined,
+            });
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {

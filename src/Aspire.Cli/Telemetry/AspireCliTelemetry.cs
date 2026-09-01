@@ -289,61 +289,24 @@ internal sealed class AspireCliTelemetry : IHostedService
                 var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
 
                 Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
-                var internalMicrosoftStartTimestamp = 0L;
                 if (_telemetryConfiguration.ReportedTelemetryEnabled)
                 {
                     // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
                     // telemetry is enabled. Ordinary commands are not interrupted by app shutdown. The
                     // high-frequency agent hook has its own 10-second process deadline, so it uses a
                     // shorter detector budget to leave time for activity export and process teardown.
-                    var detectorCancellationToken = CancellationToken.None;
                     if (_telemetryConfiguration.InternalMicrosoftDetectionTimeout is { } timeout)
                     {
                         internalMicrosoftTimeoutSource = new(timeout);
-                        detectorCancellationToken = internalMicrosoftTimeoutSource.Token;
                     }
-                    internalMicrosoftStartTimestamp = Stopwatch.GetTimestamp();
-                    var detectionTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(detectorCancellationToken);
-                    internalMicrosoftTask = detectionTask.WaitAsync(detectorCancellationToken);
+                    internalMicrosoftTask = GetInternalMicrosoftResultAsync(internalMicrosoftTimeoutSource);
                 }
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
 
                 if (internalMicrosoftTask is not null)
                 {
-                    try
-                    {
-                        internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (internalMicrosoftTimeoutSource?.IsCancellationRequested == true)
-                    {
-                        internalMicrosoftResult = new InternalMicrosoftDetectionResult(
-                            IsInternalMicrosoft: false,
-                            Source: null,
-                            Alias: null,
-                            Domain: null,
-                            Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
-                            CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                            Duration: Stopwatch.GetElapsedTime(internalMicrosoftStartTimestamp),
-                            ProbeDiagnostics: []);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug(ex, "Internal Microsoft detection failed.");
-                        }
-
-                        internalMicrosoftResult = new InternalMicrosoftDetectionResult(
-                            IsInternalMicrosoft: false,
-                            Source: null,
-                            Alias: null,
-                            Domain: null,
-                            Outcome: InternalMicrosoftDetectorOutcome.Failed,
-                            CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                            Duration: Stopwatch.GetElapsedTime(internalMicrosoftStartTimestamp),
-                            ProbeDiagnostics: []);
-                    }
+                    internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
                 }
 
                 var isCIEnvironment = _ciEnvironmentDetector.IsCIEnvironment();
@@ -414,6 +377,49 @@ internal sealed class AspireCliTelemetry : IHostedService
         // activities are enriched on stop, so emitting from inside the calculation would make the
         // enrichment processor synchronously wait on the task that is currently producing the activity.
         _internalMicrosoftDiagnosticsTask = EmitInternalMicrosoftDetectorDiagnosticsAsync(internalMicrosoftResultSource.Task);
+    }
+
+    private async Task<InternalMicrosoftDetectionResult> GetInternalMicrosoftResultAsync(CancellationTokenSource? timeoutSource)
+    {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var cancellationToken = timeoutSource?.Token ?? CancellationToken.None;
+
+        try
+        {
+            return await _internalMicrosoftDetector
+                .IsInternalMicrosoftMachineAsync(cancellationToken)
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutSource?.IsCancellationRequested == true)
+        {
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Internal Microsoft detection failed.");
+            }
+
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.Failed,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
+        }
     }
 
     private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
