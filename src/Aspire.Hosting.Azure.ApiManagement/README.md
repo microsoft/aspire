@@ -351,7 +351,9 @@ Classic Developer and Premium VNet injection can use an existing undelegated Asp
 
 ```csharp
 var subnet = builder.AddAzureVirtualNetwork("vnet")
-    .AddSubnet("apim-subnet", "10.0.0.0/24");
+    .AddSubnet("apim-subnet", "10.0.0.0/24")
+    .AllowInbound(port: "3443", from: "ApiManagement", protocol: SecurityRuleProtocol.Tcp)
+    .AllowInbound(port: "6390", from: AzureServiceTags.AzureLoadBalancer, protocol: SecurityRuleProtocol.Tcp);
 
 apim.WithClassicVirtualNetwork(
     subnet,
@@ -388,7 +390,10 @@ Place the Container Apps environment and APIM in separate subnets of the same vi
 ```csharp
 var vnet = builder.AddAzureVirtualNetwork("vnet");
 var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
-var apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24");
+var apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24")
+    .AllowInbound(port: "3443", from: "ApiManagement", protocol: SecurityRuleProtocol.Tcp)
+    .AllowInbound(port: "6390", from: AzureServiceTags.AzureLoadBalancer, protocol: SecurityRuleProtocol.Tcp)
+    .AllowInbound(port: "443", from: AzureServiceTags.Internet, protocol: SecurityRuleProtocol.Tcp);
 
 var environment = builder.AddAzureContainerAppEnvironment("env")
     .WithDelegatedSubnet(containerAppsSubnet)
