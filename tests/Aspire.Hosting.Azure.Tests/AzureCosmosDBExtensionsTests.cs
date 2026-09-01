@@ -574,7 +574,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var cosmos = builder.AddAzureCosmosDB("cosmos")
-                           .RunAsPreviewEmulator();
+                           .RunAsEmulator();
 
         Assert.NotEmpty(cosmos.Resource.Annotations.OfType<OtlpExporterAnnotation>());
 
