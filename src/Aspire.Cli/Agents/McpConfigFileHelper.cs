@@ -77,17 +77,19 @@ internal static class McpConfigFileHelper
             content = preprocessContent(content);
         }
 
+        JsonNode? root;
         try
         {
-            var root = JsonNode.Parse(content)
-                ?? throw new JsonException("The MCP configuration root must be a JSON object.");
-            return root as JsonObject
-                ?? throw new JsonException("The MCP configuration root must be a JSON object.");
+            root = JsonNode.Parse(content);
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.MalformedConfigFileError, configFilePath), ex);
         }
+
+        return root as JsonObject
+            ?? throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, configFilePath));
     }
 }

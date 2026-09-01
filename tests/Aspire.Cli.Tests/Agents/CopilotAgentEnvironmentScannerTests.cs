@@ -3,10 +3,12 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -333,7 +335,10 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
 
-        Assert.Contains(mcpConfigPath, ex.Message);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, mcpConfigPath),
+            ex.Message);
+        Assert.Null(ex.InnerException);
         Assert.Equal(originalContent, await File.ReadAllTextAsync(mcpConfigPath));
     }
 
