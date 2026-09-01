@@ -135,8 +135,8 @@ builder.Build().Run();
                 "[ -n \"$BACKEND\" ] && " +
                 "{ if getent hosts \"$BACKEND\" >/dev/null; then BACKEND_PRIVATE=0; else BACKEND_PRIVATE=1; fi; " +
                 "OK=0; for i in $(seq 1 24); do " +
-                "STATUS=$(curl -s -o /tmp/apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
-                "if [ \"$STATUS\" = \"200\" ]; then cat /tmp/apim-response.json; OK=1; break; fi; " +
+                "STATUS=$(curl -s -o .aspire-apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
+                "if [ \"$STATUS\" = \"200\" ]; then cat .aspire-apim-response.json; OK=1; break; fi; " +
                 "echo \"Attempt $i returned $STATUS; retrying in 10s\"; sleep 10; " +
                 "done; [ \"$BACKEND_PRIVATE\" = \"1\" ] && [ \"$OK\" = \"1\" ]; }");
             await auto.EnterAsync();

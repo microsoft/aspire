@@ -381,23 +381,27 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vnet = builder.AddAzureVirtualNetwork("vnet");
-        var privateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet", "10.0.1.0/24");
+        var firstPrivateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet-1", "10.0.1.0/24");
+        var secondPrivateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet-2", "10.0.2.0/24");
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
         });
-        privateEndpointSubnet.AddPrivateEndpoint(apim);
+        firstPrivateEndpointSubnet.AddPrivateEndpoint(apim);
+        secondPrivateEndpointSubnet.AddPrivateEndpoint(apim);
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.NotNull(apim.Resource.PublicNetworkAccessUpdate);
+        Assert.Equal(2, apim.Resource.PublicNetworkAccessUpdate.PrivateEndpoints.Count);
         var (_, serviceBicep) = await GetManifestWithBicep(apim.Resource);
         var (_, updateBicep) = await GetManifestWithBicep(apim.Resource.PublicNetworkAccessUpdate);
 
         Assert.DoesNotContain("publicNetworkAccess:", serviceBicep);
         Assert.Contains("Microsoft.Resources/deploymentScripts@2023-08-01", updateBicep);
         Assert.Contains("PRIVATE_ENDPOINT_ID", updateBicep);
+        Assert.Contains("PRIVATE_ENDPOINT_ID_1", updateBicep);
         Assert.Contains("privateLinkServiceConnectionState.status", updateBicep);
         Assert.Contains("publicNetworkAccess", updateBicep);
         Assert.Contains("Disabled", updateBicep);
@@ -445,6 +449,18 @@ public class AzureApiManagementTests(ITestOutputHelper output)
                 cancellationToken: default));
 
         Assert.Contains("Public network access was not disabled", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1)]
+    [InlineData(1, 0, 0)]
+    [InlineData(1, 2, 2)]
+    public void MultiplePrivateEndpointApprovalStatesAreCombined(int first, int second, int expected)
+    {
+        var actual = AzureApiManagementPublicNetworkAccessUpdater.GetCombinedPrivateEndpointApprovalState(
+            [(PrivateEndpointApprovalState)first, (PrivateEndpointApprovalState)second]);
+
+        Assert.Equal((PrivateEndpointApprovalState)expected, actual);
     }
 
     [Theory]

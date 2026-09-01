@@ -180,6 +180,9 @@ public class AzureApiManagementResource(
     {
         if (PublicNetworkAccessUpdate is not null)
         {
+            PublicNetworkAccessUpdate.AddPrivateEndpoint(privateEndpoint.Resource);
+            privateEndpoint.ApplicationBuilder.CreateResourceBuilder(PublicNetworkAccessUpdate)
+                .WithRelationship(privateEndpoint.Resource, "Private endpoint");
             return;
         }
 
