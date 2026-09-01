@@ -215,7 +215,7 @@ elif [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
     clientName="copilot-app"
 elif [ "$COPILOT_CLI" = "1" ]; then
     clientName="copilot-cli"
-elif printf '%s' "$rawInput" | grep -q '"toolArgs"'; then
+elif has_top_level_json_field "$rawInput" "toolArgs"; then
     clientName="copilot-cli"
 else
     clientName="unknown"

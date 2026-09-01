@@ -239,6 +239,19 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_CopilotStringArgs_WithoutEnvironmentMarker_DetectsClient()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--client-name", "copilot-cli");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_SkillMdRead_CopilotStringArgs_ForwardsSkillName()
     {
         // The exact real Copilot shape: a view tool whose toolArgs is a JSON string with a
