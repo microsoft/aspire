@@ -64,9 +64,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.Empty(result.SelectedSkillLocations);
-        Assert.Empty(result.SelectedSkills);
-        Assert.Empty(result.SelectedMcpAssets);
+        Assert.Empty(result.GetLocations(AgentAssetKind.Skill));
+        Assert.Empty(result.GetAssets(AgentAssetKind.Skill));
+        Assert.Empty(result.GetAssets(AgentAssetKind.Mcp));
         foreach (var assetKind in Enum.GetValues<AgentAssetKind>())
         {
             Assert.Single(
@@ -117,7 +117,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var applyCounts = new int[5];
         AgentEnvironmentApplicator CreateApplicator(string description, string targetId, int index)
             => AgentEnvironmentApplicator.ForAsset(
-                AgentAssetDefinition.AspireMcpServer,
+                AgentAssetCatalog.AspireMcpServer,
                 targetId,
                 description,
                 _ =>
@@ -137,7 +137,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
             Assert.Equal(AgentCommandStrings.InitCommand_SelectMcpServers, prompt);
             var mcpAsset = Assert.Single(items.OfType<AgentActionAssetDefinition>());
-            Assert.Same(AgentAssetDefinition.AspireMcpServer, mcpAsset);
+            Assert.Same(AgentAssetCatalog.AspireMcpServer, mcpAsset);
             return [mcpAsset];
         };
         var detector = new FakeAgentEnvironmentDetector(
@@ -178,7 +178,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal([1, 0, 1, 1, 1], applyCounts);
-        Assert.Equal([AgentAssetDefinition.AspireMcpServer], result.SelectedMcpAssets);
+        Assert.Equal([AgentAssetCatalog.AspireMcpServer], result.GetAssets(AgentAssetKind.Mcp));
     }
 
     [Fact]
@@ -201,12 +201,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Applicators =
             [
                 AgentEnvironmentApplicator.ForAsset(
-                    AgentAssetDefinition.AspireMcpServer,
+                    AgentAssetCatalog.AspireMcpServer,
                     "vscode",
                     "Unwritable VS Code MCP",
                     _ => throw new IOException("Configuration is read-only.")),
                 AgentEnvironmentApplicator.ForAsset(
-                    AgentAssetDefinition.AspireMcpServer,
+                    AgentAssetCatalog.AspireMcpServer,
                     "opencode",
                     "OpenCode MCP",
                     _ =>
@@ -649,7 +649,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
             (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
-            (AgentAssetDefinition.PlaywrightCli.Name, "Bundle-provided Playwright collision"));
+            (AgentAssetCatalog.PlaywrightCli.Name, "Bundle-provided Playwright collision"));
         var promptedSkills = new List<AgentFileAssetDefinition>();
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -681,8 +681,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        var playwrightSkill = Assert.Single(promptedSkills, static skill => skill.HasName(AgentAssetDefinition.PlaywrightCli.Name, StringComparison.OrdinalIgnoreCase));
-        Assert.Same(AgentAssetDefinition.PlaywrightCli, playwrightSkill);
+        var playwrightSkill = Assert.Single(promptedSkills, static skill => skill.HasName(AgentAssetCatalog.PlaywrightCli.Name, StringComparison.OrdinalIgnoreCase));
+        Assert.Same(AgentAssetCatalog.PlaywrightCli, playwrightSkill);
     }
 
     [Fact]
@@ -770,7 +770,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
         var installResult = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
         Assert.NotNull(installResult.Bundle);
-        var bundleSkillNames = installResult.Bundle.GetSkillDefinitions().Select(static s => s.Name).ToList();
+        var bundleSkillNames = installResult.Bundle.GetAssetDefinitions().Select(static asset => asset.Name).ToList();
         Assert.NotEmpty(bundleSkillNames);
 
         // Explicit names instead of `all` keeps the assertion focused on bundle skills and
@@ -914,7 +914,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.DoesNotContain(result.SelectedSkills, static skill => skill.SourceKind is AgentFileAssetSourceKind.AspireSkillsBundle);
+        Assert.DoesNotContain(
+            result.GetAssets(AgentAssetKind.Skill).OfType<AgentFileAssetDefinition>(),
+            static skill => skill.SourceKind is AgentFileAssetSourceKind.AspireSkillsBundle);
         Assert.DoesNotContain(
             interactionService.DisplayedMessages,
             message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
@@ -950,7 +952,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.Contains(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        Assert.Contains(result.GetAssets(AgentAssetKind.Skill), static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
     }
 
@@ -984,7 +986,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.DoesNotContain(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        Assert.DoesNotContain(result.GetAssets(AgentAssetKind.Skill), static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
@@ -1019,7 +1021,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Applicators =
             [
                 AgentEnvironmentApplicator.ForAsset(
-                    AgentAssetDefinition.AspireMcpServer,
+                    AgentAssetCatalog.AspireMcpServer,
                     "vscode",
                     "VS Code MCP",
                     _ =>
@@ -1058,7 +1060,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Applicators =
             [
                 AgentEnvironmentApplicator.ForAsset(
-                    AgentAssetDefinition.AspireMcpServer,
+                    AgentAssetCatalog.AspireMcpServer,
                     "vscode",
                     "VS Code MCP",
                     _ =>

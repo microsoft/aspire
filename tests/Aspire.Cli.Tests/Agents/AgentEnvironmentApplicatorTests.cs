@@ -73,12 +73,12 @@ public class AgentEnvironmentApplicatorTests
     public void ForAsset_AssociatesActionAssetAndTarget()
     {
         var applicator = AgentEnvironmentApplicator.ForAsset(
-            AgentAssetDefinition.AspireMcpServer,
+            AgentAssetCatalog.AspireMcpServer,
             "vscode",
             "VS Code MCP",
             _ => Task.CompletedTask);
 
-        Assert.Same(AgentAssetDefinition.AspireMcpServer, applicator.Asset);
+        Assert.Same(AgentAssetCatalog.AspireMcpServer, applicator.Asset);
         Assert.Equal(AgentAssetKind.Mcp, applicator.AssetKind);
         Assert.Equal("vscode", applicator.TargetId);
     }
@@ -92,12 +92,12 @@ public class AgentEnvironmentApplicatorTests
             RepositoryRoot = new DirectoryInfo("."),
         };
         var first = AgentEnvironmentApplicator.ForAsset(
-            AgentAssetDefinition.AspireMcpServer,
+            AgentAssetCatalog.AspireMcpServer,
             "copilot",
             "Copilot CLI MCP",
             _ => Task.CompletedTask);
         var duplicate = AgentEnvironmentApplicator.ForAsset(
-            AgentAssetDefinition.AspireMcpServer,
+            AgentAssetCatalog.AspireMcpServer,
             "copilot",
             "Copilot App MCP",
             _ => Task.CompletedTask);

@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Formats.Tar;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -175,7 +175,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        List<ValidatedAspireSkill> validatedSkills = [];
+        List<ValidatedAspireSkillsBundleAsset> validatedSkills = [];
         foreach (var skill in skills)
         {
             if (skill is null)
@@ -215,6 +215,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             }
 
             var definition = AgentFileAssetDefinition.CreateAspireSkillsBundle(
+                AgentAssetKind.Skill,
                 skillName,
                 skill.Description,
                 installExcludedRelativePaths,
@@ -249,10 +250,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must contain SKILL.md.", skillName));
             }
 
-            validatedSkills.Add(new ValidatedAspireSkill(definition, files));
+            validatedSkills.Add(new ValidatedAspireSkillsBundleAsset(definition, files));
         }
 
-        return new AspireSkillsBundle(version, validatedSkills);
+        return new AspireSkillsBundle(version, AgentAssetKind.Skill, validatedSkills);
     }
 
     private static void ValidateSkillName(string skillName)

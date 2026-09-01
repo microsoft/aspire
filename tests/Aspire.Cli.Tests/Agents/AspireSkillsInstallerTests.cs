@@ -229,8 +229,8 @@ public class AspireSkillsInstallerTests
             Assert.True(File.Exists(Path.Combine(
                 cachedBundleDirectory,
                 AspireSkillsInstaller.GitHubAttestationVerifiedFileName)));
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Downloaded GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -350,8 +350,8 @@ public class AspireSkillsInstallerTests
                 await File.ReadAllTextAsync(Path.Combine(
                     cachedBundleDirectory,
                     AspireSkillsInstaller.GitHubArchiveSha256FileName)));
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Downloaded GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -407,8 +407,8 @@ public class AspireSkillsInstallerTests
                 await File.ReadAllTextAsync(Path.Combine(
                     cachedBundleDirectory,
                     AspireSkillsInstaller.ArchiveSha512FileName)));
-            Assert.NotEmpty(await oldResult.Bundle.GetSkillFilesAsync(
-                oldResult.Bundle.GetSkillDefinitions()[0],
+            Assert.NotEmpty(await oldResult.Bundle.GetAssetFilesAsync(
+                oldResult.Bundle.GetAssetDefinitions()[0],
                 CancellationToken.None));
 
             var restoredEmbeddedBundleProvider = new TestEmbeddedAspireSkillsBundleProvider
@@ -496,8 +496,8 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1198,8 +1198,8 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Verified GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1247,8 +1247,8 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Compatible GitHub", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1302,8 +1302,8 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.True(assetDownloadRequested);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1364,8 +1364,8 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.True(assetDownloadRequested);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1659,8 +1659,8 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.False(attestationVerifier.VerifyCalled);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1714,8 +1714,8 @@ public class AspireSkillsInstallerTests
             Assert.NotNull(result.Bundle);
             Assert.True(attestationVerifier.VerifyCalled);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally
@@ -1776,8 +1776,8 @@ public class AspireSkillsInstallerTests
             Assert.False(File.Exists(Path.Combine(
                 cachedGitHubDirectory,
                 AspireSkillsInstaller.GitHubAttestationVerifiedFileName)));
-            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
-            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            var skill = Assert.Single(result.Bundle.GetAssetDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetAssetFilesAsync(skill, CancellationToken.None));
             Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
         }
         finally

@@ -29,40 +29,6 @@ internal abstract class AgentAssetDefinition
     }
 
     /// <summary>
-    /// The Playwright CLI skill for browser automation.
-    /// </summary>
-    public static readonly AgentFileAssetDefinition PlaywrightCli = new(
-        AgentAssetKind.Skill,
-        "playwright-cli",
-        AgentCommandStrings.SkillDescription_PlaywrightCli,
-        AgentFileAssetSourceKind.ExternalInstaller,
-        files: [],
-        installExcludedRelativePaths: [],
-        isDefault: false);
-
-    /// <summary>
-    /// The dotnet-inspect skill for querying .NET API surfaces.
-    /// </summary>
-    public static readonly AgentFileAssetDefinition DotnetInspect = new(
-        AgentAssetKind.Skill,
-        CommonAgentApplicators.DotnetInspectSkillName,
-        AgentCommandStrings.SkillDescription_DotnetInspect,
-        AgentFileAssetSourceKind.Static,
-        files: [new AgentAssetFile("SKILL.md", CommonAgentApplicators.DotnetInspectSkillFileContent)],
-        installExcludedRelativePaths: [],
-        isDefault: false,
-        applicableLanguages: [KnownLanguageId.CSharp]);
-
-    /// <summary>
-    /// The Aspire MCP server configuration applied to detected agent environments.
-    /// </summary>
-    public static readonly AgentActionAssetDefinition AspireMcpServer = new(
-        AgentAssetKind.Mcp,
-        "aspire",
-        AgentCommandStrings.InitCommand_ConfigureMcpServer,
-        isDefault: false);
-
-    /// <summary>
     /// Gets the asset kind.
     /// </summary>
     public AgentAssetKind AssetKind { get; }
@@ -81,28 +47,6 @@ internal abstract class AgentAssetDefinition
     /// Gets whether the asset should be selected by default.
     /// </summary>
     public bool IsDefault { get; }
-
-    /// <summary>
-    /// Gets agent assets defined directly by the CLI.
-    /// </summary>
-    public static IReadOnlyList<AgentAssetDefinition> CliDefined { get; } =
-        [PlaywrightCli, DotnetInspect, AspireMcpServer];
-
-    /// <summary>
-    /// Gets CLI-defined file assets of the specified kind.
-    /// </summary>
-    public static IReadOnlyList<AgentFileAssetDefinition> GetCliDefinedFileAssets(AgentAssetKind assetKind)
-        => CliDefined.OfType<AgentFileAssetDefinition>()
-            .Where(asset => asset.AssetKind == assetKind)
-            .ToList();
-
-    /// <summary>
-    /// Gets CLI-defined action assets of the specified kind.
-    /// </summary>
-    public static IReadOnlyList<AgentActionAssetDefinition> GetCliDefinedActionAssets(AgentAssetKind assetKind)
-        => CliDefined.OfType<AgentActionAssetDefinition>()
-            .Where(asset => asset.AssetKind == assetKind)
-            .ToList();
 
     /// <summary>
     /// Gets whether this asset has the specified name.
@@ -147,13 +91,14 @@ internal sealed class AgentFileAssetDefinition : AgentAssetDefinition
     /// Creates a skill asset sourced from the Aspire skills bundle.
     /// </summary>
     internal static AgentFileAssetDefinition CreateAspireSkillsBundle(
+        AgentAssetKind assetKind,
         string name,
         string description,
         IReadOnlyList<string>? installExcludedRelativePaths = null,
         IReadOnlyList<string>? applicableLanguages = null)
     {
         return new(
-            AgentAssetKind.Skill,
+            assetKind,
             name,
             description,
             AgentFileAssetSourceKind.AspireSkillsBundle,
@@ -255,9 +200,71 @@ internal sealed class AgentActionAssetDefinition : AgentAssetDefinition
     {
         if (assetKind is not AgentAssetKind.Mcp)
         {
-            throw new ArgumentException("Only MCP assets can be action-backed.", nameof(assetKind));
+            throw new ArgumentException("Only MCP assets can be action-backed in this layer.", nameof(assetKind));
         }
     }
+}
+
+/// <summary>
+/// Provides the agent assets defined directly by the CLI.
+/// </summary>
+internal static class AgentAssetCatalog
+{
+    /// <summary>
+    /// The Playwright CLI skill for browser automation.
+    /// </summary>
+    public static readonly AgentFileAssetDefinition PlaywrightCli = new(
+        AgentAssetKind.Skill,
+        "playwright-cli",
+        AgentCommandStrings.SkillDescription_PlaywrightCli,
+        AgentFileAssetSourceKind.ExternalInstaller,
+        files: [],
+        installExcludedRelativePaths: [],
+        isDefault: false);
+
+    /// <summary>
+    /// The dotnet-inspect skill for querying .NET API surfaces.
+    /// </summary>
+    public static readonly AgentFileAssetDefinition DotnetInspect = new(
+        AgentAssetKind.Skill,
+        CommonAgentApplicators.DotnetInspectSkillName,
+        AgentCommandStrings.SkillDescription_DotnetInspect,
+        AgentFileAssetSourceKind.Static,
+        files: [new AgentAssetFile("SKILL.md", CommonAgentApplicators.DotnetInspectSkillFileContent)],
+        installExcludedRelativePaths: [],
+        isDefault: false,
+        applicableLanguages: [KnownLanguageId.CSharp]);
+
+    /// <summary>
+    /// The Aspire MCP server configuration applied to detected agent environments.
+    /// </summary>
+    public static readonly AgentActionAssetDefinition AspireMcpServer = new(
+        AgentAssetKind.Mcp,
+        "aspire",
+        AgentCommandStrings.InitCommand_ConfigureMcpServer,
+        isDefault: false);
+
+    /// <summary>
+    /// Gets every agent asset defined directly by the CLI.
+    /// </summary>
+    public static IReadOnlyList<AgentAssetDefinition> All { get; } =
+        [PlaywrightCli, DotnetInspect, AspireMcpServer];
+
+    /// <summary>
+    /// Gets file-backed assets of the specified kind.
+    /// </summary>
+    public static IReadOnlyList<AgentFileAssetDefinition> GetFileAssets(AgentAssetKind assetKind)
+        => All.OfType<AgentFileAssetDefinition>()
+            .Where(asset => asset.AssetKind == assetKind)
+            .ToList();
+
+    /// <summary>
+    /// Gets action-backed assets of the specified kind.
+    /// </summary>
+    public static IReadOnlyList<AgentActionAssetDefinition> GetActionAssets(AgentAssetKind assetKind)
+        => All.OfType<AgentActionAssetDefinition>()
+            .Where(asset => asset.AssetKind == assetKind)
+            .ToList();
 }
 
 /// <summary>

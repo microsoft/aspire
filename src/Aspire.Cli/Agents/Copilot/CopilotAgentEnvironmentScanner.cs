@@ -148,7 +148,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
     private static AgentEnvironmentApplicator CreateApplicator(string configDirectory)
     {
         return AgentEnvironmentApplicator.ForAsset(
-            AgentAssetDefinition.AspireMcpServer,
+            AgentAssetCatalog.AspireMcpServer,
             GetMcpConfigFilePath(configDirectory),
             CopilotAgentEnvironmentScannerStrings.ApplicatorDescription,
             ct => ApplyMcpConfigurationAsync(

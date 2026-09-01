@@ -14,9 +14,9 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -605,7 +605,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             Applicators =
             [
                 AgentEnvironmentApplicator.ForAsset(
-                    AgentAssetDefinition.AspireMcpServer,
+                    AgentAssetCatalog.AspireMcpServer,
                     "vscode",
                     "VS Code MCP",
                     _ =>
