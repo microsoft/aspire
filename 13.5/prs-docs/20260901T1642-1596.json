@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal fix to the docs site's integration updater tooling, not related to any product changelog entry",
+  "mergedAt": "2026-09-01T16:42:36Z",
+  "number": 1596,
+  "runDate": "2026-09-01T18:06:27Z",
+  "status": "excluded",
+  "title": "fix: harden integration updater type collision handling"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#19404, which is not part of the 13.5 milestone (targets release/13.6) - no matching changelog entry",
+  "mergedAt": "2026-09-01T12:05:42Z",
+  "number": 1593,
+  "runDate": "2026-09-01T18:06:27Z",
+  "status": "excluded",
+  "title": "[docs] Add portable volume path environment variables"
+}
