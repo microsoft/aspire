@@ -76,24 +76,6 @@ internal static class DotnetProjectBuildEnvironment
     public static string CreateMsBuildPropertyArgument(string name, string value) =>
         $"--property:{EscapeMsBuildPropertyValue(name)}={EscapeMsBuildPropertyValue(value)}";
 
-    public static string RedactEnvironmentValues(
-        string value,
-        IReadOnlyDictionary<string, string> environment)
-    {
-        var redacted = value;
-        var sensitiveValues = environment.Values
-            .Where(environmentValue => !string.IsNullOrEmpty(environmentValue))
-            .SelectMany(environmentValue => new[] { environmentValue, EscapeMsBuildPropertyValue(environmentValue) })
-            .Distinct(StringComparer.Ordinal)
-            .OrderByDescending(environmentValue => environmentValue.Length);
-        foreach (var environmentValue in sensitiveValues)
-        {
-            redacted = redacted.Replace(environmentValue, "<redacted>", StringComparison.Ordinal);
-        }
-
-        return redacted;
-    }
-
     private static string EscapeMsBuildPropertyValue(string value)
     {
         // MSBuild decodes %-escaped special characters in property values. Response files are

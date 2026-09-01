@@ -21,18 +21,27 @@ internal static class GitIgnoreMerger
             return scaffoldContent;
         }
 
-        var existingEntries = ReadEntries(existingContent).ToHashSet(StringComparer.Ordinal);
-        var existingUnanchoredEntries = existingEntries
+        var existingEntries = ReadEntries(existingContent).ToArray();
+        var existingPositiveEntries = existingEntries
+            .Where(entry => !IsNegated(entry))
+            .ToHashSet(StringComparer.Ordinal);
+        var existingUnanchoredEntries = existingPositiveEntries
             .Where(entry => !IsAnchored(entry))
             .ToHashSet(StringComparer.Ordinal);
-        var existingAnchoredEntries = existingEntries
+        var existingAnchoredEntries = existingPositiveEntries
             .Where(IsAnchored)
+            .Select(RemoveRoot)
+            .ToHashSet(StringComparer.Ordinal);
+        var existingNegatedEntries = existingEntries
+            .Where(IsNegated)
+            .Select(RemoveNegation)
             .Select(RemoveRoot)
             .ToHashSet(StringComparer.Ordinal);
 
         var missingEntries = ReadEntries(scaffoldContent)
-            .Where(entry => !existingEntries.Contains(entry)
-                && !ContainsCoveringEntry(existingUnanchoredEntries, existingAnchoredEntries, entry))
+            .Where(entry => !existingPositiveEntries.Contains(entry)
+                && !ContainsCoveringEntry(existingUnanchoredEntries, existingAnchoredEntries, entry)
+                && !ContainsCoveringEntry(existingNegatedEntries, RemoveRoot(entry)))
             .ToArray();
 
         if (missingEntries.Length == 0)
@@ -55,6 +64,7 @@ internal static class GitIgnoreMerger
         // Entries are line-oriented, for example:
         //   node_modules/
         //   /.aspire/
+        //   !.aspire/
         // Blank lines and trailing whitespace do not participate in duplicate detection,
         // while the original content remains unchanged in the merged result.
         using var reader = new StringReader(content);
@@ -105,9 +115,21 @@ internal static class GitIgnoreMerger
     private static string RemoveRoot(string entry)
         => entry.StartsWith('/') ? entry[1..] : entry;
 
+    private static string RemoveNegation(string entry)
+        => entry[1..];
+
+    private static bool IsNegated(string entry)
+        => entry.StartsWith('!');
+
     private static bool IsAnchored(string entry)
     {
         var pattern = RemoveRoot(entry).TrimEnd('/');
         return entry.StartsWith('/') || pattern.Contains('/');
+    }
+
+    internal static bool IsSymbolicLink(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return new FileInfo(path).LinkTarget is not null;
     }
 }

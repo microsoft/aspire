@@ -234,6 +234,10 @@
   <data name="ProjectAlreadyExists" xml:space="preserve">
     <value>The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location.</value>
   </data>
+  <data name="GitIgnoreSymbolicLinkNotSupported" xml:space="preserve">
+    <value>Cannot update '{0}' because Git does not read .gitignore files through symbolic links. Replace it with a regular file or configure core.excludesFile, then try again.</value>
+    <comment>{0} is the .gitignore path</comment>
+  </data>
   <data name="CreateNugetConfigConfirmation" xml:space="preserve">
     <value>Create NuGet.config for selected channels?</value>
   </data>

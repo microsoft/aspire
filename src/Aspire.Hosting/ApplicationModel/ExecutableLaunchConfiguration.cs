@@ -152,7 +152,8 @@ public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration
     /// </summary>
     /// <remarks>
     /// IDE launchers use these authoritative values when evaluating build properties such as <c>TargetPath</c>.
-    /// Empty means no project-specific build environment. Values can contain sensitive data and must not be logged.
+    /// Empty means no project-specific build environment. These values are not a secret transport and can appear
+    /// in build diagnostics.
     /// </remarks>
     [JsonPropertyName("build_environment")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -77,11 +77,21 @@ internal static class DotnetProjectRunPropertiesResolver
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            if (!process.HasExited)
+            try
             {
-                process.Kill(entireProcessTree: true);
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+            {
+                // The process can exit between HasExited and Kill, and termination itself can fail. Neither cleanup
+                // outcome should replace the cancellation that caused this path.
             }
 
+            await ((Task)Task.WhenAll(standardOutputTask, standardErrorTask))
+                .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             throw;
         }
 
@@ -92,8 +102,8 @@ internal static class DotnetProjectRunPropertiesResolver
             logger.LogDebug(
                 "dotnet msbuild failed while resolving the run command for project {ProjectPath}. Standard output: {StandardOutput} Standard error: {StandardError}",
                 projectPath,
-                DotnetProjectBuildEnvironment.RedactEnvironmentValues(standardOutput, buildEnvironment),
-                DotnetProjectBuildEnvironment.RedactEnvironmentValues(standardError, buildEnvironment));
+                standardOutput,
+                standardError);
             throw new DistributedApplicationException(
                 $"dotnet msbuild failed with exit code {process.ExitCode} while resolving the run command for project '{projectPath}'.");
         }

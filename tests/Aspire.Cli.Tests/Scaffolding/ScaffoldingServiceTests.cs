@@ -457,4 +457,26 @@ public class ScaffoldingServiceTests
 
         Assert.Equal(".aspire/\n.aspire\n", mergedContent);
     }
+
+    [Theory]
+    [InlineData("!.aspire/\n")]
+    [InlineData("!/.aspire/\n")]
+    [InlineData(".*\n!.aspire/\n")]
+    [InlineData("!.aspire\n")]
+    public void GitIgnoreMerger_HonorsExplicitNegation(string existingContent)
+    {
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
+
+        Assert.Equal(existingContent, mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_TreatsEscapedNegationAsLiteral()
+    {
+        const string existingContent = "\\!.aspire/\n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
+
+        Assert.Equal("\\!.aspire/\n.aspire/\n", mergedContent);
+    }
 }

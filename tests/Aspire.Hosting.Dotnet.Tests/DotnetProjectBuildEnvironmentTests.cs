@@ -60,20 +60,4 @@ public class DotnetProjectBuildEnvironmentTests
 
         Assert.Null(responseFile);
     }
-
-    [Fact]
-    public void RedactEnvironmentValuesRemovesRawAndEscapedValues()
-    {
-        var environment = new Dictionary<string, string>
-        {
-            ["BUILD_PREFIX"] = "custom",
-            ["BUILD_FLAVOR"] = "custom-sensitive;value%",
-        };
-
-        var redacted = DotnetProjectBuildEnvironment.RedactEnvironmentValues(
-            "raw=custom-sensitive;value% escaped=custom-sensitive%3Bvalue%25",
-            environment);
-
-        Assert.Equal("raw=<redacted> escaped=<redacted>", redacted);
-    }
 }

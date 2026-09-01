@@ -37,9 +37,10 @@ public static class DotnetProjectHostingExtensions
     /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
     /// </para>
     /// <para>
-    /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments.
-    /// Protected temporary MSBuild response files preserve global-property semantics without exposing values in process
-    /// command lines, but they are not a general-purpose secret transport.
+    /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments,
+    /// and the value can appear in build diagnostics. Protected temporary MSBuild response files preserve
+    /// global-property semantics without exposing values in process command lines, but they are not a general-purpose
+    /// secret transport.
     /// </para>
     /// </remarks>
     /// <example>
@@ -75,7 +76,7 @@ public static class DotnetProjectHostingExtensions
     /// <remarks>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files.
+    /// temporary MSBuild response files, and the values can appear in build diagnostics.
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
@@ -105,7 +106,7 @@ public static class DotnetProjectHostingExtensions
     /// <remarks>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
-    /// temporary MSBuild response files.
+    /// temporary MSBuild response files, and the values can appear in build diagnostics.
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]

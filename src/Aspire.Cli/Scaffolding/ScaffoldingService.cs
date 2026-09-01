@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -115,11 +116,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
-        if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrEmpty(context.Channel))
-        {
-            config.Save(directory.FullName);
-        }
 
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);
@@ -175,6 +171,25 @@ internal sealed class ScaffoldingService : IScaffoldingService
                 string.Join(", ", conflictingFiles));
             _interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
             return false;
+        }
+
+        var symlinkedGitIgnorePath = scaffoldFiles.Keys
+            .Where(IsGitIgnoreFile)
+            .Select(fileName => Path.Combine(scaffoldDirectory.FullName, fileName))
+            .FirstOrDefault(GitIgnoreMerger.IsSymbolicLink);
+        if (symlinkedGitIgnorePath is not null)
+        {
+            _interactionService.DisplayError(string.Format(
+                CultureInfo.CurrentCulture,
+                TemplatingStrings.GitIgnoreSymbolicLinkNotSupported,
+                symlinkedGitIgnorePath));
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
+            !string.IsNullOrEmpty(context.Channel))
+        {
+            config.Save(directory.FullName);
         }
 
         // Step 4: Write scaffold files to disk, merging package.json, .gitignore, and VS Code

@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
@@ -22,12 +23,15 @@ internal static class DotnetProjectBuildCoordinator
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
     internal const string BuildResourceName = "__dotnet-project-build";
+    private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
+    private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
+    private const string SupportedLaunchConfigurationsPropertyName = "supported_launch_configurations";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
         DotnetProjectMetadata projectMetadata)
     {
-        if (!builder.ExecutionContext.IsRunMode)
+        if (!builder.ExecutionContext.IsRunMode || !ShouldCoordinateBuild(builder))
         {
             return null;
         }
@@ -185,6 +189,37 @@ internal static class DotnetProjectBuildCoordinator
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
+    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
+    {
+        if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
+        {
+            return true;
+        }
+
+        try
+        {
+            if (builder.Configuration[DebugSessionInfoConfigurationKey] is not { } debugSessionInfoJson)
+            {
+                return false;
+            }
+
+            using var document = JsonDocument.Parse(debugSessionInfoJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(
+                    SupportedLaunchConfigurationsPropertyName,
+                    out var supportedLaunchConfigurations)
+                && supportedLaunchConfigurations.ValueKind == JsonValueKind.Array
+                && supportedLaunchConfigurations.EnumerateArray().Any(
+                    element => element.ValueKind == JsonValueKind.String
+                        && element.GetString() == KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
+        }
+        catch (JsonException)
+        {
+            // IDEs that omit or cannot provide a usable capability list use the legacy project launch path.
+            return false;
+        }
+    }
+
     internal sealed class CoordinatorState : IDisposable
     {
         private readonly IDistributedApplicationBuilder _builder;
@@ -319,7 +354,7 @@ internal static class DotnetProjectBuildCoordinator
                 {
                     // Missing project files intentionally remain on the ordinary resource-start path so the
                     // resulting dotnet error names only that resource instead of failing the shared build.
-                    missingEntry.Metadata.SuppressBuild = false;
+                    ConfigureMissingProjectFallback(missingEntry);
                 }
 
                 RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
@@ -394,6 +429,9 @@ internal static class DotnetProjectBuildCoordinator
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                         rollbackActions.Push(ApplyBuildEnvironment(buildResource, sharedBuildEnvironment));
                         rollbackActions.Push(ApplyBuildProperties(buildResource, sharedBuildEnvironment));
+                        rollbackActions.Push(EnsureBuildEnvironmentBeforeResourceLaunch(
+                            entry.Registration.Resource,
+                            sharedBuildEnvironment));
                         if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
                         {
                             rollbackActions.Push(ValidateMaterializedBuildCallbacks(rebuilder, step.Projects));
@@ -441,7 +479,7 @@ internal static class DotnetProjectBuildCoordinator
                 {
                     // Do this only after every throwing plan mutation has succeeded, so a failed materialization can
                     // be retried without leaving the missing project on a partially changed launch path.
-                    missingEntry.Metadata.SuppressBuild = false;
+                    ConfigureMissingProjectFallback(missingEntry);
                 }
 
                 RemoveEagerBuildDependencies(inactiveResources);
@@ -538,6 +576,22 @@ internal static class DotnetProjectBuildCoordinator
             return steps;
         }
 
+        private static void ConfigureMissingProjectFallback(ProjectEntry entry)
+        {
+            entry.Metadata.SuppressBuild = false;
+            foreach (var annotation in entry.Registration.Resource.Annotations
+                .OfType<SupportsDebuggingAnnotation>()
+                .Where(annotation =>
+                    annotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.ProjectWithExternalBuild)
+                .ToArray())
+            {
+                // The external-build debug annotation and launch-tool ownership were selected before file existence
+                // was checked. Removing that capability makes the launch-tool callback emit the complete `dotnet run`
+                // fallback instead of producing a legacy project configuration under the external-build capability.
+                entry.Registration.Resource.Annotations.Remove(annotation);
+            }
+        }
+
         private DotnetProjectBuildResource CreateBuildResource(string? configuration, int? ordinal = null)
         {
             var name = ordinal is null
@@ -558,6 +612,18 @@ internal static class DotnetProjectBuildCoordinator
         private static Action ApplyBuildEnvironment(IResource target, SharedBuildEnvironment sharedBuildEnvironment)
         {
             var annotation = new EnvironmentCallbackAnnotation(sharedBuildEnvironment.ApplyBuildEnvironmentAsync);
+            target.Annotations.Add(annotation);
+            return () => target.Annotations.Remove(annotation);
+        }
+
+        private static Action EnsureBuildEnvironmentBeforeResourceLaunch(
+            IResource target,
+            SharedBuildEnvironment sharedBuildEnvironment)
+        {
+            // DCP resolves executable resources concurrently. This callback participates in the project resource's
+            // own configuration path so launch metadata cannot be created before the coordinated build environment
+            // is available, while deliberately leaving the runtime environment unchanged.
+            var annotation = new EnvironmentCallbackAnnotation(sharedBuildEnvironment.EnsureEvaluatedAsync);
             target.Annotations.Add(annotation);
             return () => target.Annotations.Remove(annotation);
         }
@@ -699,6 +765,14 @@ internal static class DotnetProjectBuildCoordinator
                 {
                     context.EnvironmentVariables[name] = value;
                 }
+            }
+
+            public async Task EnsureEvaluatedAsync(EnvironmentCallbackContext context)
+            {
+                _ = await EvaluateOnceAsync(
+                    context.ExecutionContext,
+                    context.Logger,
+                    context.CancellationToken).ConfigureAwait(false);
             }
 
             public async Task ApplyBuildPropertiesAsync(CommandLineArgsCallbackContext context)

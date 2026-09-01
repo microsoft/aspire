@@ -248,6 +248,16 @@ internal sealed class InitCommand : BaseCommand
 
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        var gitIgnorePath = Path.Combine(workingDirectory.FullName, ".gitignore");
+        if (GitIgnoreMerger.IsSymbolicLink(gitIgnorePath))
+        {
+            InteractionService.DisplayError(string.Format(
+                CultureInfo.CurrentCulture,
+                TemplatingStrings.GitIgnoreSymbolicLinkNotSupported,
+                gitIgnorePath));
+            return CliExitCodes.InvalidCommand;
+        }
+
         // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
         // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
         // staging, daily, pr-<N>, or local). Run this BEFORE the apphost.cs-already-exists
@@ -356,12 +366,12 @@ internal sealed class InitCommand : BaseCommand
 
     internal static async Task WriteAllTextAtomicallyAsync(string path, string content, CancellationToken cancellationToken)
     {
-        var fileInfo = new FileInfo(path);
-        if (fileInfo.LinkTarget is not null)
+        if (GitIgnoreMerger.IsSymbolicLink(path))
         {
-            // Replace the resolved target rather than the directory entry for the link. Renaming over
-            // the original path would silently turn a user-authored .gitignore symlink into a regular file.
-            path = fileInfo.ResolveLinkTarget(returnFinalTarget: true)!.FullName;
+            throw new IOException(string.Format(
+                CultureInfo.CurrentCulture,
+                TemplatingStrings.GitIgnoreSymbolicLinkNotSupported,
+                path));
         }
 
         ReclaimStaleAtomicWriteTemporaryFiles(path);

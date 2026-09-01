@@ -75,7 +75,8 @@ with `WithEnvironment` as well when it is needed at runtime.
 
 Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
 process environments. Protected temporary MSBuild response files preserve global-property semantics
-without exposing values in process command lines, but they are not a general-purpose secret transport.
+without exposing values in process command lines, but values can appear in build diagnostics and are
+not a general-purpose secret transport.
 
 **C#**
 

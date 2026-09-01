@@ -719,10 +719,10 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenOnlyLegacyProjectLaunchIsSupported()
+    public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffoldingWhenLegacyProjectLaunchIsSupported()
     {
-        // An older IDE may support ordinary project launch but not the coordinated-build contract. Keep process
-        // execution so build environment, working directory, and suppression cannot be silently ignored.
+        // An IDE that supports only ordinary project launch owns both building and launching the resource. The
+        // coordinated-build path is disabled for this session, so only the user's program arguments are emitted.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -739,14 +739,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
-        // run --project <path> [--configuration <cfg>] --no-launch-profile --config prod.yaml
-        // (--configuration is only present when the app host assembly declares a build configuration)
-        Assert.Equal("run", args[0]);
-        Assert.Equal("--project", args[1]);
-        Assert.Equal(projectPath, args[2]);
-        Assert.Contains("--no-launch-profile", args);
-        Assert.Equal("--config", args[^2]);
-        Assert.Equal("prod.yaml", args[^1]);
+        Assert.Equal(["--config", "prod.yaml"], args);
     }
 
     [Fact]

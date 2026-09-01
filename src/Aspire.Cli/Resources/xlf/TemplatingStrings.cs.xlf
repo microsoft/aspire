@@ -87,6 +87,11 @@
         <target state="translated">Načítají se šablony...</target>
         <note />
       </trans-unit>
+      <trans-unit id="GitIgnoreSymbolicLinkNotSupported">
+        <source>Cannot update '{0}' because Git does not read .gitignore files through symbolic links. Replace it with a regular file or configure core.excludesFile, then try again.</source>
+        <target state="new">Cannot update '{0}' because Git does not read .gitignore files through symbolic links. Replace it with a regular file or configure core.excludesFile, then try again.</target>
+        <note>{0} is the .gitignore path</note>
+      </trans-unit>
       <trans-unit id="IntegrationTestsTemplate_Description">
         <source>Integration tests</source>
         <target state="translated">Integrační testy</target>

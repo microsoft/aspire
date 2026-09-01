@@ -810,7 +810,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(createResolvedEnvStub.firstCall.args[1]?.BUILD_FLAVOR, 'custom\u2003"flavor";\r\n\tvalue%');
     });
 
-    test('project property evaluation errors redact build environment values and command line', async () => {
+    test('project property evaluation errors preserve diagnostics and omit the command line', async () => {
         const secretValue = 'sentinel-build-secret';
         let responseFilePath: string | undefined;
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
@@ -839,9 +839,8 @@ suite('Dotnet Debugger Extension Tests', () => {
                     BUILD_SECRET: secretValue
                 }),
             (error: Error) => {
-                assert.ok(error.message.includes('safe stdout containing <redacted>'));
-                assert.ok(error.message.includes('safe stderr containing <redacted>'));
-                assert.ok(!error.message.includes(secretValue));
+                assert.ok(error.message.includes(`safe stdout containing ${secretValue}`));
+                assert.ok(error.message.includes(`safe stderr containing ${secretValue}`));
                 assert.ok(!error.message.includes('Command failed:'));
                 return true;
             });
@@ -942,7 +941,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('dotnet build redacts environment values split across output chunks', async () => {
+    test('dotnet build streams build environment values without corrupting output', async () => {
         const secretValue = 'sentinel-build-secret';
         const sendMessage = sinon.stub();
         const buildProcess = Object.assign(new EventEmitter(), {
@@ -968,7 +967,10 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.deepStrictEqual(
             sendMessage.getCalls().map(call => call.args),
-            [['before <redacted> after', false, 'stdout']]);
+            [
+                ['before sentinel-build-', false, 'stdout'],
+                ['secret after', false, 'stdout']
+            ]);
     });
 
     test('target path property evaluation does not reintroduce a stale differently-cased AspireCliPath on Windows', async () => {

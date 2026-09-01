@@ -211,7 +211,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_SingleFileSkeleton_PreservesEquivalentRootedGitIgnoreEntry()
+    public async Task InitCommand_SingleFileSkeleton_AppendsBroaderUnrootedGitIgnoreEntry()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -226,7 +226,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(existingContent, await File.ReadAllTextAsync(gitIgnorePath));
+        Assert.Equal($"{existingContent}.aspire/\r\n", await File.ReadAllTextAsync(gitIgnorePath));
     }
 
     [Fact]
@@ -362,7 +362,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_SingleFileSkeleton_UpdatesGitIgnoreSymlinkTarget()
+    public async Task InitCommand_SingleFileSkeleton_RejectsGitIgnoreSymlink()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var targetDirectory = workspace.WorkspaceRoot.CreateSubdirectory("config");
@@ -384,9 +384,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.NotNull(new FileInfo(gitIgnorePath).LinkTarget);
-        Assert.Equal("custom/\n.aspire/\n", await File.ReadAllTextAsync(targetPath));
+        Assert.Equal("custom/\n", await File.ReadAllTextAsync(targetPath));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
         Assert.Empty(Directory.GetFiles(targetDirectory.FullName, "shared.gitignore.tmp-*"));
     }
 

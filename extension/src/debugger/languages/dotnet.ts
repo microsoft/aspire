@@ -114,52 +114,25 @@ export class DotNetService implements IDotNetService {
 
                     const stdoutChunks: Buffer[] = [];
                     const stderrChunks: Buffer[] = [];
-                    const bufferOutputForRedaction = hasBuildEnvironmentValues(environment);
-                    let bufferedOutputWritten = false;
-
-                    const writeBufferedOutput = (): void => {
-                        if (!bufferOutputForRedaction || bufferedOutputWritten) {
-                            return;
-                        }
-
-                        bufferedOutputWritten = true;
-                        const stdout = redactBuildEnvironmentValues(Buffer.concat(stdoutChunks).toString(), environment);
-                        const stderr = redactBuildEnvironmentValues(Buffer.concat(stderrChunks).toString(), environment);
-                        if (stdout) {
-                            this.writeToDebugConsole(stdout, 'stdout');
-                        }
-                        if (stderr) {
-                            this.writeToDebugConsole(stderr, 'stderr');
-                        }
-                    };
-
-                    // Buffer output when build values require redaction because a value can span arbitrary
-                    // stream chunks. Builds without build-only values retain real-time console output.
                     buildProcess.stdout?.on('data', (data: Buffer) => {
                         stdoutChunks.push(data);
-                        if (!bufferOutputForRedaction) {
-                            this.writeToDebugConsole(data.toString(), 'stdout');
-                        }
+                        this.writeToDebugConsole(data.toString(), 'stdout');
                     });
 
                     // Keep stdout and stderr separate so their debug-console categories remain intact.
                     buildProcess.stderr?.on('data', (data: Buffer) => {
                         stderrChunks.push(data);
-                        if (!bufferOutputForRedaction) {
-                            this.writeToDebugConsole(data.toString(), 'stderr');
-                        }
+                        this.writeToDebugConsole(data.toString(), 'stderr');
                     });
 
                     buildProcess.on('error', (err) => {
-                        writeBufferedOutput();
-                        extensionLogOutputChannel.error(`dotnet build process error: ${redactBuildEnvironmentValues(err.message, environment)}`);
-                        reject(new Error(buildFailedForProjectWithError(projectFile, redactBuildEnvironmentValues(err.message, environment))));
+                        extensionLogOutputChannel.error(`dotnet build process error: ${err.message}`);
+                        reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
                     });
 
                     buildProcess.on('close', (code) => {
-                        writeBufferedOutput();
-                        const stdoutOutput = redactBuildEnvironmentValues(Buffer.concat(stdoutChunks).toString(), environment);
-                        const stderrOutput = redactBuildEnvironmentValues(Buffer.concat(stderrChunks).toString(), environment);
+                        const stdoutOutput = Buffer.concat(stdoutChunks).toString();
+                        const stderrOutput = Buffer.concat(stderrChunks).toString();
                         if (code === 0) {
                             // if build succeeds, simply return. otherwise throw to trigger error handling
                             if (stderrOutput) {
@@ -209,7 +182,7 @@ export class DotNetService implements IDotNetService {
 
                 return output;
             } catch (err) {
-                throw new Error(failedToGetTargetPath(formatDotNetProcessError(err, environment)));
+                throw new Error(failedToGetTargetPath(formatDotNetProcessError(err)));
             }
         });
     }
@@ -259,7 +232,7 @@ export class DotNetService implements IDotNetService {
                     runWorkingDirectory: properties.RunWorkingDirectory || undefined
                 };
             } catch (err) {
-                throw new Error(failedToGetProjectRunProperties(projectFile, formatDotNetProcessError(err, environment)));
+                throw new Error(failedToGetProjectRunProperties(projectFile, formatDotNetProcessError(err)));
             }
         });
     }
@@ -673,9 +646,9 @@ async function withMsBuildResponseFile<T>(
     }
 }
 
-function formatDotNetProcessError(error: unknown, buildProperties: NodeJS.ProcessEnv | undefined): string {
+function formatDotNetProcessError(error: unknown): string {
     if (!(error instanceof Error)) {
-        return redactBuildEnvironmentValues(String(error), buildProperties);
+        return String(error);
     }
 
     const execError = error as Error & {
@@ -694,9 +667,7 @@ function formatDotNetProcessError(error: unknown, buildProperties: NodeJS.Proces
     const diagnostics = [message, processOutputToString(execError.stdout), processOutputToString(execError.stderr)]
         .filter((value): value is string => Boolean(value?.trim()));
     const distinctDiagnostics = [...new Set(diagnostics)];
-    return redactBuildEnvironmentValues(
-        distinctDiagnostics.length > 0 ? distinctDiagnostics.join(os.EOL) : error.name,
-        buildProperties);
+    return distinctDiagnostics.length > 0 ? distinctDiagnostics.join(os.EOL) : error.name;
 }
 
 function processOutputToString(output: unknown): string | undefined {
@@ -705,24 +676,6 @@ function processOutputToString(output: unknown): string | undefined {
     }
 
     return Buffer.isBuffer(output) ? output.toString() : undefined;
-}
-
-function redactBuildEnvironmentValues(value: string, buildProperties: NodeJS.ProcessEnv | undefined): string {
-    let redacted = value;
-    const sensitiveValues = [...new Set(
-        Object.values(buildProperties ?? {})
-            .filter((propertyValue): propertyValue is string => Boolean(propertyValue))
-            .flatMap(propertyValue => [propertyValue, escapeMsBuildPropertyValue(propertyValue)]))]
-        .sort((left, right) => right.length - left.length);
-    for (const sensitiveValue of sensitiveValues) {
-        redacted = redacted.split(sensitiveValue).join('<redacted>');
-    }
-
-    return redacted;
-}
-
-function hasBuildEnvironmentValues(buildProperties: NodeJS.ProcessEnv | undefined): boolean {
-    return Object.values(buildProperties ?? {}).some(value => value !== undefined);
 }
 
 function escapeMsBuildPropertyValue(value: string): string {

@@ -11,7 +11,7 @@ public class DotnetProjectRunPropertiesResolverTests(ITestOutputHelper outputHel
 {
     [Fact]
     [RequiresTools(["dotnet"])]
-    public async Task FailedResolutionRedactsBuildEnvironmentValuesFromMsBuildOutput()
+    public async Task FailedResolutionPreservesBuildEnvironmentValuesInMsBuildOutput()
     {
         const string errorMarker = "RUN_PROPERTIES_ERROR_MARKER";
 
@@ -42,8 +42,7 @@ public class DotnetProjectRunPropertiesResolverTests(ITestOutputHelper outputHel
         var log = Assert.Single(sink.Writes);
         Assert.Equal(LogLevel.Debug, log.LogLevel);
         Assert.Contains("Standard output:", log.Message, StringComparison.Ordinal);
-        Assert.Contains("<redacted>", log.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(errorMarker, log.Message, StringComparison.Ordinal);
+        Assert.Contains(errorMarker, log.Message, StringComparison.Ordinal);
         Assert.Contains("Standard error:", log.Message, StringComparison.Ordinal);
     }
 }
