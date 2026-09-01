@@ -203,7 +203,8 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
 }
 
 function isLeaseCurrent(createdAt: number): boolean {
-    return Date.now() - createdAt < notificationClaimLeaseMs;
+    const age = Date.now() - createdAt;
+    return age >= 0 && age < notificationClaimLeaseMs;
 }
 
 function getNotificationClaimIdentity(

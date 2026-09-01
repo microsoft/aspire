@@ -69,6 +69,19 @@ suite('outdatedCliSuppressionStore', () => {
         assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
     });
 
+    test('does not wait for a claim timestamped in the future', async () => {
+        createNotificationClaim(
+            directory,
+            '/cli/aspire\u000013.5.0',
+            process.pid,
+            Date.now() + 60_000);
+
+        const store = new FileSystemOutdatedCliSuppressionStore(directory);
+        await store.add('/cli/aspire\u000013.5.0');
+
+        assert.deepStrictEqual(await store.readAll(), ['/cli/aspire\u000013.5.0']);
+    });
+
     test('removes a malformed abandoned claim for another notification', async () => {
         const exitedProcessId = await startAndWaitForProcess();
         const claimPath = createNotificationClaim(directory, '/cli/other\u000013.5.0', exitedProcessId);
