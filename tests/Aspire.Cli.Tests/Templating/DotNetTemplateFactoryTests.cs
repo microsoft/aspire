@@ -267,14 +267,14 @@ public class DotNetTemplateFactoryTests
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
         Assert.Contains("aspire-starter", templateNames);
+        Assert.Contains("aspire-test", templateNames);
         Assert.Contains("aspire", templateNames);
         Assert.Contains("aspire-apphost", templateNames);
         Assert.Contains("aspire-servicedefaults", templateNames);
-        Assert.Contains("aspire-test", templateNames);
     }
 
     [Fact]
-    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
+    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsStarterAndIntegrationTestTemplates()
     {
         // Arrange
         var features = new TestFeatures();
@@ -286,50 +286,10 @@ public class DotNetTemplateFactoryTests
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
         Assert.Contains("aspire-starter", templateNames);
+        Assert.Contains("aspire-test", templateNames);
         Assert.DoesNotContain(KnownTemplateId.DotNetEmptyAppHost, templateNames);
         Assert.DoesNotContain("aspire-apphost", templateNames);
         Assert.DoesNotContain("aspire-servicedefaults", templateNames);
-        Assert.DoesNotContain("aspire-test", templateNames);
-    }
-
-    [Fact]
-    public async Task GetTemplates_WhenCliShowAllTemplatesIsEnabled_ReturnsAllTemplates()
-    {
-        var environment = new TestEnvironment(new Dictionary<string, string?>
-        {
-            [CliConfigNames.ShowAllTemplates] = "true"
-        });
-        var features = new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, false);
-        var factory = CreateTemplateFactory(features, environment: environment);
-
-        var templates = (await factory.GetTemplatesAsync()).ToList();
-
-        var templateNames = templates.Select(t => t.Name).ToList();
-        Assert.Equal(
-            [
-                "aspire-starter",
-                "aspire-ts-cs-starter",
-                KnownTemplateId.DotNetEmptyAppHost,
-                "aspire-apphost",
-                "aspire-servicedefaults",
-                "aspire-test"
-            ],
-            templateNames);
-    }
-
-    [Fact]
-    public async Task GetTemplates_WhenCliShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
-    {
-        var environment = new TestEnvironment(new Dictionary<string, string?>
-        {
-            [CliConfigNames.ShowAllTemplates] = "false"
-        });
-        var factory = CreateTemplateFactory(new TestFeatures(), environment: environment);
-
-        var templates = (await factory.GetTemplatesAsync()).ToList();
-
-        var templateNames = templates.Select(t => t.Name).ToList();
-        Assert.Equal(["aspire-starter", "aspire-ts-cs-starter"], templateNames);
     }
 
     [Fact]
@@ -381,11 +341,7 @@ public class DotNetTemplateFactoryTests
         Assert.Empty(templates);
     }
 
-    private static DotNetTemplateFactory CreateTemplateFactory(
-        TestFeatures features,
-        bool nonInteractive = false,
-        TestDotNetSdkInstaller? sdkInstaller = null,
-        IEnvironment? environment = null)
+    private static DotNetTemplateFactory CreateTemplateFactory(TestFeatures features, bool nonInteractive = false, TestDotNetSdkInstaller? sdkInstaller = null)
     {
         var interactionService = new TestInteractionService();
         var runner = new TestDotNetCliRunner();
@@ -412,7 +368,7 @@ public class DotNetTemplateFactoryTests
             hostEnvironment,
             templateNuGetConfigService,
             appHostInfoResolver,
-            environment ?? new TestEnvironment());
+            new HostEnvironment());
     }
 
     private sealed class TestInteractionService : IInteractionService
