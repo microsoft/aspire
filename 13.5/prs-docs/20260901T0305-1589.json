@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents source PR #19740 which targets release/13.6, not this milestone (13.5); no matching changelog entry found",
+  "mergedAt": "2026-09-01T03:05:24Z",
+  "number": 1589,
+  "runDate": "2026-09-01T06:06:05Z",
+  "status": "excluded",
+  "title": "[docs] Document copilot-app coding agent detection"
+}
