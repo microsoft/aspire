@@ -47,7 +47,7 @@ const apim = await builder.addAzureApiManagement("apim", {
 await apim.addApi("catalog-api", catalog, "catalog");
 ```
 
-The compute-targeted `AddApi` overload creates an API, an APIM backend, and a wildcard operation that forwards requests to the deployed endpoint of the target resource. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
+The compute-targeted `AddApi` overload creates an API, an APIM backend, and catch-all operations for supported HTTP methods that forward requests to the deployed endpoint of the target resource. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 
@@ -69,7 +69,7 @@ apim.AddApi("catalog-api", catalog, "catalog")
     .WithOpenApiDocument("../Catalog/openapi.json");
 ```
 
-JSON and YAML OpenAPI documents are inferred from the file extension. Pass `AzureApiManagementOpenApiFormat.SwaggerJson` explicitly for Swagger 2.0 documents. Imported operations replace the generated wildcard proxy operation; operations added with `AddOperation` are still provisioned in addition to the imported operations.
+JSON and YAML OpenAPI documents are inferred from the file extension. Pass `AzureApiManagementOpenApiFormat.SwaggerJson` explicitly for Swagger 2.0 documents. Imported operations replace the generated catch-all proxy operations; operations added with `AddOperation` are still provisioned in addition to the imported operations.
 
 ## Existing API Management services
 

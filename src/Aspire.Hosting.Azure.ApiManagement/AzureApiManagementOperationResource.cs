@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the Aspire resource.</param>
 /// <param name="operationName">The physical operation name in API Management.</param>
-/// <param name="method">The HTTP method, or <c>*</c> to match every method.</param>
+/// <param name="method">The HTTP method.</param>
 /// <param name="urlTemplate">The URL template relative to the API path.</param>
 /// <param name="displayName">The operation display name.</param>
 /// <param name="parent">The parent API.</param>

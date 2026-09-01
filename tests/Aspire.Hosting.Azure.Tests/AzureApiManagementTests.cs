@@ -273,7 +273,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void OperationPhysicalIdentifiersMustBeUniqueAndCannotUseProxy()
+    public void OperationPhysicalIdentifiersMustBeUniqueAndCannotUseGeneratedProxyNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var backend = builder.AddProject<Project>("backend", launchProfileName: null)
@@ -290,9 +290,15 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             () => api.AddOperation("get-other-product", "GET", "/products/other", operationName: "PHYSICAL-OPERATION"));
         var reservedName = Assert.Throws<ArgumentException>(
             () => api.AddOperation("custom-proxy", "GET", "/proxy", operationName: "PrOxY"));
+        var reservedMethodName = Assert.Throws<ArgumentException>(
+            () => api.AddOperation("custom-proxy-get", "GET", "/proxy", operationName: "PrOxY-GeT"));
+        var wildcardMethod = Assert.Throws<ArgumentException>(
+            () => api.AddOperation("wildcard-operation", "*", "/{*path}"));
 
         Assert.Contains("physical identifier 'PHYSICAL-OPERATION'", duplicateName.Message);
-        Assert.Contains("'proxy' is reserved", reservedName.Message);
+        Assert.Contains("'PrOxY' is reserved", reservedName.Message);
+        Assert.Contains("'PrOxY-GeT' is reserved", reservedMethodName.Message);
+        Assert.Contains("wildcard HTTP method", wildcardMethod.Message);
         Assert.Single(api.Resource.Operations);
     }
 
@@ -660,7 +666,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             "<set-header name=\"x-gateway\" exists-action=\"override\"><value>apim</value></set-header>");
         var api = apim.AddApi("catalog-api", backend, "/catalog", "Catalog API", subscriptionRequired: true)
             .WithInboundPolicy("<rate-limit calls=\"100\" renewal-period=\"60\" />");
-        api.AddOperation("get-product", "get", "/products/{id}", "Get product")
+        api.AddOperation("get-product", "get", "/products/{id}/{*path}", "Get product")
             .WithInboundPolicy("<set-query-parameter name=\"source\" exists-action=\"override\"><value>apim</value></set-query-parameter>");
 
         using var app = builder.Build();
@@ -668,6 +674,13 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         var (_, bicep) = await GetManifestWithBicep(apim.Resource);
 
+        var proxyMethods = new[] { "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE" };
+        foreach (var proxyMethod in proxyMethods)
+        {
+            Assert.Contains($"name: 'proxy-{proxyMethod.ToLowerInvariant()}'", bicep);
+        }
+        Assert.Equal(proxyMethods.Length, bicep.Split("urlTemplate: '/{*path}'").Length - 1);
+        Assert.DoesNotContain("method: '*'", bicep);
         await Verify(bicep, "bicep");
     }
 

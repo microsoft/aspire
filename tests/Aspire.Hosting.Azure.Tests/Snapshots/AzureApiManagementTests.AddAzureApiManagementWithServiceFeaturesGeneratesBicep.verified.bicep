@@ -183,12 +183,138 @@ resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   parent: apim
 }
 
-resource _apim_proxyOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
-  name: 'proxy'
+resource _apim_proxyDELETEOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-delete'
   properties: {
-    displayName: 'Proxy'
-    method: '*'
-    urlTemplate: '/*'
+    displayName: 'Proxy DELETE'
+    method: 'DELETE'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyGETOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-get'
+  properties: {
+    displayName: 'Proxy GET'
+    method: 'GET'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyHEADOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-head'
+  properties: {
+    displayName: 'Proxy HEAD'
+    method: 'HEAD'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyOPTIONSOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-options'
+  properties: {
+    displayName: 'Proxy OPTIONS'
+    method: 'OPTIONS'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyPATCHOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-patch'
+  properties: {
+    displayName: 'Proxy PATCH'
+    method: 'PATCH'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyPOSTOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-post'
+  properties: {
+    displayName: 'Proxy POST'
+    method: 'POST'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyPUTOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-put'
+  properties: {
+    displayName: 'Proxy PUT'
+    method: 'PUT'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource _apim_proxyTRACEOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-trace'
+  properties: {
+    displayName: 'Proxy TRACE'
+    method: 'TRACE'
+    urlTemplate: '/{*path}'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
   }
   parent: catalog_api
 }

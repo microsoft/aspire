@@ -35,7 +35,9 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureApiManagementExtensions
 {
+    private const string ProxyOperationName = "proxy";
     private static readonly char[] s_invalidApiIdentifierCharacters = ['*', '#', '&', '+', ':', '<', '>', '?'];
+    private static readonly string[] s_proxyOperationMethods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"];
 
     /// <summary>
     /// Adds an Azure API Management service.
@@ -149,7 +151,7 @@ public static class AzureApiManagementExtensions
     /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
-    /// The generated API contains a wildcard operation for all HTTP methods and paths. The generated policy routes
+    /// The generated API contains catch-all operations for supported HTTP methods and paths. The generated policy routes
     /// requests through an API Management backend entity whose URL is resolved from the target deployment environment.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="target"/> is null.</exception>
@@ -1201,11 +1203,20 @@ public static class AzureApiManagementExtensions
         var physicalOperationName = operationName ?? name;
         ValidateOperationIdentifier(physicalOperationName, nameof(operationName));
 
-        if (string.Equals(physicalOperationName, "proxy", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(physicalOperationName, ProxyOperationName, StringComparison.OrdinalIgnoreCase) ||
+            s_proxyOperationMethods.Any(proxyMethod =>
+                string.Equals(physicalOperationName, GetProxyOperationName(proxyMethod), StringComparison.OrdinalIgnoreCase)))
         {
             throw new ArgumentException(
-                "The API Management operation identifier 'proxy' is reserved for the generated catch-all operation.",
+                $"The API Management operation identifier '{physicalOperationName}' is reserved for a generated catch-all operation.",
                 nameof(operationName));
+        }
+
+        if (string.Equals(method, "*", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "API Management does not reliably dispatch operations that use the wildcard HTTP method. Specify a concrete HTTP method instead.",
+                nameof(method));
         }
 
         if (builder.Resource.Operations.Any(
@@ -2175,16 +2186,27 @@ public static class AzureApiManagementExtensions
 
         if (apiResource.OpenApiSource is null)
         {
-            var catchAllOperation = new ApiManagementOperationProvisioningResource(
-                CreateGeneratedBicepIdentifier("proxyOperation", apiIdentifier))
+            // APIM's management plane accepts "*" as an operation method, but gateways do not
+            // reliably dispatch it. Materialize the catch-all route for each supported method.
+            foreach (var method in s_proxyOperationMethods)
             {
-                Parent = api,
-                Name = "proxy",
-                DisplayName = "Proxy",
-                Method = "*",
-                UriTemplate = "/*",
-            };
-            infrastructure.Add(catchAllOperation);
+                var catchAllOperation = new ApiManagementOperationProvisioningResource(
+                    CreateGeneratedBicepIdentifier($"proxy{method}Operation", apiIdentifier))
+                {
+                    Parent = api,
+                    Name = GetProxyOperationName(method),
+                    DisplayName = $"Proxy {method}",
+                    Method = method,
+                    UriTemplate = "/{*path}",
+                };
+                catchAllOperation.TemplateParameters.Add(new ApiManagementParameterProvisioningModel
+                {
+                    Name = "path",
+                    Type = "string",
+                    Required = true,
+                });
+                infrastructure.Add(catchAllOperation);
+            }
         }
 
         foreach (var operationResource in apiResource.Operations)
@@ -2929,6 +2951,13 @@ public static class AzureApiManagementExtensions
             }
 
             var parameterName = uriTemplate[(openingBrace + 1)..closingBrace];
+            if (parameterName.StartsWith('*'))
+            {
+                // Catch-all operation templates use /{*path}, while APIM expects the
+                // corresponding templateParameters entry to be named "path".
+                parameterName = parameterName[1..];
+            }
+
             if (parameterName.Length > 0 && parameterNames.Add(parameterName))
             {
                 yield return parameterName;
@@ -2937,6 +2966,9 @@ public static class AzureApiManagementExtensions
             searchIndex = closingBrace + 1;
         }
     }
+
+    private static string GetProxyOperationName(string method) =>
+        $"{ProxyOperationName}-{method.ToLowerInvariant()}";
 
     private static void ValidatePolicyFragment(string policyXml)
     {
