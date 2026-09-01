@@ -1,18 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.ClientModel;
-using System.Globalization;
+using System.ClientModel.Primitives;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Azure.AI.Projects;
-using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Retry;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -20,13 +16,12 @@ namespace Aspire.Hosting.Foundry;
 /// Represents a Microsoft Foundry Toolbox endpoint associated with a Foundry project.
 /// </summary>
 /// <remarks>
-/// Toolboxes are Foundry data-plane resources: there is no ARM/Bicep representation. Each call
-/// to <see cref="AgentToolboxes.CreateToolboxVersionAsync(string, IEnumerable{ProjectsAgentTool}, string, IDictionary{string,string}, ToolboxPolicies, System.Threading.CancellationToken)"/>
-/// creates a new immutable version of the toolbox. Aspire registers a deploy-time pipeline step
-/// that resolves all tool definitions and calls the data plane API once the parent project's
-/// endpoint is ready.
+/// Toolboxes are Foundry data-plane resources with no ARM or Bicep representation. Aspire
+/// reconciles the desired tool definitions after the parent project is provisioned, reuses the
+/// current default version when its configuration matches, and promotes a new immutable version
+/// when the configuration changes.
 /// </remarks>
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 public sealed class FoundryToolboxResource : Resource, IResourceWithParent<AzureCognitiveServicesProjectResource>, IResourceWithConnectionString
 {
     internal const string DefaultApiVersion = "v1";
@@ -34,10 +29,6 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     internal const string AuthorizationScopeValue = "https://ai.azure.com/.default";
 
     private const string BeforeStartStepName = "before-start";
-    private const string RunModeAzureProvisionStepName = "run-mode-azure-provision";
-    private const int ProjectEndpointReadinessMaxRetryAttempts = 11;
-    private static readonly TimeSpan s_projectEndpointReadinessDelay = TimeSpan.FromSeconds(5);
-
     private readonly List<FoundryToolboxToolDefinition> _tools = [];
 
     /// <summary>
@@ -45,8 +36,11 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     /// </summary>
     /// <param name="name">The Toolbox name.</param>
     /// <param name="parent">The parent Microsoft Foundry project resource.</param>
-    /// <param name="version">The optional Toolbox version to reference.</param>
-    public FoundryToolboxResource([ResourceName] string name, AzureCognitiveServicesProjectResource parent, string? version = null)
+    /// <param name="version">The optional existing Toolbox version to reference.</param>
+    public FoundryToolboxResource(
+        [ResourceName] string name,
+        AzureCognitiveServicesProjectResource parent,
+        string? version = null)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(parent);
@@ -54,61 +48,61 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         Parent = parent;
         Version = version;
 
-        // Register pipeline steps to create a new toolbox version on the Foundry data plane.
-        // Mirrors AzurePromptAgentResource: a publish-mode step that always runs and a run-mode
-        // step that kicks off the deployment before the application starts.
         Annotations.Add(new PipelineStepAnnotation(context =>
         {
             var steps = new List<PipelineStep>();
 
             if (context.PipelineContext.ExecutionContext.IsRunMode)
             {
-                var beforeStartDeployStep = new PipelineStep
+                steps.Add(new PipelineStep
                 {
                     Name = $"deploy-{Name}-before-start",
-                    Description = $"Deploys toolbox {Name} before the application starts.",
+                    Description = $"Reconciles Toolbox {Name} after the application starts.",
                     Action = DeployBeforeStartAsync,
                     RequiredBySteps = [BeforeStartStepName],
                     Resource = this,
-                    DependsOnSteps = [RunModeAzureProvisionStepName]
-                };
-                steps.Add(beforeStartDeployStep);
+                    DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName]
+                });
             }
 
-            var toolboxDeployStep = new PipelineStep
+            steps.Add(new PipelineStep
             {
                 Name = $"deploy-{Name}",
-                Description = $"Deploys toolbox {Name}.",
-                Action = async (stepCtx) =>
+                Description = $"Reconciles Toolbox {Name}.",
+                Action = async stepContext =>
                 {
-                    var version = await DeployAsync(Parent, stepCtx, logRetry: null, stepCtx.CancellationToken).ConfigureAwait(false);
-                    stepCtx.ReportingStep.Log(LogLevel.Information,
-                        new MarkdownString($"Successfully deployed **{Name}** as Foundry Toolbox (version {version.Version})"));
-                    DeployedVersion.Set(version.Version);
+                    var result = await ReconcileAsync(
+                        stepContext,
+                        message => stepContext.Logger.LogWarning("{Message}", message),
+                        stepContext.CancellationToken).ConfigureAwait(false);
+                    stepContext.ReportingStep.Log(
+                        LogLevel.Information,
+                        new MarkdownString(
+                            $"Successfully reconciled **{Name}** as Foundry Toolbox (version {result.Version}, action {result.Action})"));
                 },
                 Tags = [WellKnownPipelineTags.DeployCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 Resource = this,
-                DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq, AzureEnvironmentResource.ProvisionInfrastructureStepName]
-            };
-            steps.Add(toolboxDeployStep);
+                DependsOnSteps =
+                [
+                    WellKnownPipelineSteps.DeployPrereq,
+                    AzureEnvironmentResource.ProvisionInfrastructureStepName
+                ]
+            });
 
             return Task.FromResult<IEnumerable<PipelineStep>>(steps);
         }));
 
-        // In publish mode the Foundry data plane calls back into MCP servers, so any MCP tool that
-        // points at a sibling compute resource (project, container, executable, app service, ACA)
-        // must have that resource deployed before the toolbox registers the URL. Walk the resolved
-        // pipeline graph and wire a tag-based dependency from this resource's deploy-compute step
-        // to every referenced compute resource's deploy-compute step.
+        // The Foundry data plane must be able to reach every sibling compute resource referenced
+        // by an MCP endpoint before the Toolbox version is created.
         Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
             var toolboxDeploySteps = context.GetSteps(this, WellKnownPipelineTags.DeployCompute);
 
-            foreach (var referenced in GetMcpReferencedResources(context.Model))
+            foreach (var referencedResource in GetMcpReferencedResources(context.Model))
             {
-                var referencedDeploySteps = context.GetSteps(referenced, WellKnownPipelineTags.DeployCompute);
-                toolboxDeploySteps.DependsOn(referencedDeploySteps);
+                toolboxDeploySteps.DependsOn(
+                    context.GetSteps(referencedResource, WellKnownPipelineTags.DeployCompute));
             }
 
             return Task.CompletedTask;
@@ -121,11 +115,12 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     public AzureCognitiveServicesProjectResource Parent { get; }
 
     /// <summary>
-    /// Gets or sets the Toolbox version to reference. When unset, the default Toolbox version is used.
+    /// Gets or sets the Toolbox version used by consumers.
     /// </summary>
     /// <remarks>
-    /// This is the user-pinned version used in the MCP endpoint URI. To read the version that was
-    /// produced by the most recent deployment, use <see cref="DeployedVersion"/>.
+    /// When unset, consumers use the default Toolbox endpoint. Set this only to target a specific
+    /// existing immutable version for testing. Reconciliation always updates the default version
+    /// independently of this consumer-side pin.
     /// </remarks>
     public string? Version { get; set; }
 
@@ -135,29 +130,29 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     public string ApiVersion { get; set; } = DefaultApiVersion;
 
     /// <summary>
-    /// Gets or sets a description of the toolbox. Persisted as the toolbox version's description in Foundry.
+    /// Gets or sets the description persisted with each Toolbox version.
     /// </summary>
     public string Description { get; set; } = "Foundry Toolbox";
 
     /// <summary>
-    /// Gets the metadata to associate with the toolbox version on creation.
+    /// Gets metadata persisted with each Toolbox version.
     /// </summary>
-    public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>()
-    {
-        { "DeployedBy", "Aspire Hosting Framework" },
-        { "DeployedOn", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
-    };
+    /// <remarks>
+    /// Aspire adds reserved ownership and configuration metadata during deployment. User metadata
+    /// participates in change detection and therefore creates a new version when modified.
+    /// </remarks>
+    public IDictionary<string, string> Metadata { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// The version produced by the most recent deployment. Populated after the deploy pipeline
-    /// step runs successfully; empty before that.
+    /// Gets the version selected by the most recent reconciliation.
     /// </summary>
     public StaticValueProvider<string> DeployedVersion { get; } = new();
 
     /// <summary>
     /// Gets the tool definitions modeled for this Toolbox.
     /// </summary>
-    public IReadOnlyList<FoundryToolboxToolDefinition> Tools => _tools;
+    internal IReadOnlyList<FoundryToolboxToolDefinition> Tools => _tools;
 
     /// <summary>
     /// Gets the Toolbox MCP endpoint URI expression.
@@ -173,16 +168,35 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
     internal void AddTool(FoundryToolboxToolDefinition tool)
     {
+        ArgumentNullException.ThrowIfNull(tool);
+
+        if (_tools.Any(existing => string.Equals(existing.Name, tool.Name, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                $"Toolbox '{Name}' already contains a tool named '{tool.Name}'.");
+        }
+
         _tools.Add(tool);
+    }
+
+    internal async Task<FoundryToolboxDeploymentDefinition> CreateDeploymentDefinitionAsync(
+        CancellationToken cancellationToken)
+    {
+        var tools = new List<ResolvedFoundryToolboxTool>(_tools.Count);
+        foreach (var tool in _tools)
+        {
+            tools.Add(await tool.ResolveAsync(cancellationToken).ConfigureAwait(false));
+        }
+
+        return FoundryToolboxDeploymentDefinition.Create(
+            Name,
+            Description,
+            tools,
+            new Dictionary<string, string>(Metadata, StringComparer.Ordinal));
     }
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        // Each connection property maps to an env var prefixed with the toolbox resource name
-        // (e.g. FIELD_TOOLS_URI). This lets multiple toolboxes coexist on the same consumer without
-        // colliding. Apps that only consume a single toolbox should prefer the canonical Foundry
-        // env vars emitted by the specialized WithReference overload (FOUNDRY_AGENT_TOOLBOX_*) so
-        // the same code path works both locally and in the Foundry hosted-agent runtime.
         yield return new("Name", ReferenceExpression.Create($"{Name}"));
         yield return new("ProjectEndpoint", ReferenceExpression.Create($"{Parent.Endpoint}"));
         yield return new("Uri", UriExpression);
@@ -196,105 +210,59 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
     }
 
-    /// <summary>
-    /// Deploys the toolbox to the given Microsoft Foundry project, creating a new immutable toolbox
-    /// version via the data plane.
-    /// </summary>
-    private async Task<ToolboxVersion> DeployAsync(
-        AzureCognitiveServicesProjectResource project,
+    private async Task<FoundryToolboxReconcileResult> ReconcileAsync(
         PipelineStepContext context,
-        Action<string>? logRetry,
+        Action<string> logRetry,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(project);
-
-        var projectEndpoint = await project.Endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(projectEndpoint))
+        var projectEndpoint = await Parent.Endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttps)
         {
-            throw new InvalidOperationException($"Project '{project.Name}' does not have a valid endpoint.");
+            throw new InvalidOperationException(
+                $"Foundry project '{Parent.Name}' did not resolve to an absolute HTTPS endpoint.");
         }
 
-        var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
-        var credential = tokenCredentialProvider.TokenCredential;
+        endpoint = new Uri(endpoint.GetLeftPart(UriPartial.Path).TrimEnd('/'));
 
-        // Resolve each tool definition to its SDK shape.
-        var tools = new List<ProjectsAgentTool>(_tools.Count);
-        foreach (var tool in _tools)
+        var administration = context.Services.GetService<IFoundryToolboxAdministration>();
+        if (administration is null)
         {
-            var agentTool = await tool.ToProjectsAgentToolAsync(cancellationToken).ConfigureAwait(false);
-            tools.Add(agentTool);
+            var credential = context.Services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
+            var clientOptions = new AIProjectClientOptions();
+            clientOptions.AddPolicy(new FoundryToolboxFeaturesPolicy(), PipelinePosition.PerCall);
+            var projectClient = new AIProjectClient(endpoint, credential, clientOptions);
+            administration = new AzureFoundryToolboxAdministration(
+                projectClient.AgentAdministrationClient.GetAgentToolboxes(),
+                logRetry);
         }
 
-        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
+        var definition = await CreateDeploymentDefinitionAsync(cancellationToken).ConfigureAwait(false);
+        var result = await new FoundryToolboxReconciler(administration)
+            .ReconcileAsync(definition, cancellationToken).ConfigureAwait(false);
+        DeployedVersion.Set(result.Version);
 
-        var retryPipeline = new ResiliencePipelineBuilder<ToolboxVersion>()
-            .AddRetry(new RetryStrategyOptions<ToolboxVersion>
-            {
-                Delay = s_projectEndpointReadinessDelay,
-                MaxRetryAttempts = ProjectEndpointReadinessMaxRetryAttempts,
-                ShouldHandle = new PredicateBuilder<ToolboxVersion>()
-                    .Handle<ClientResultException>(IsProjectEndpointNotReady),
-                OnRetry = retry =>
-                {
-                    var retryMessage = $"Foundry project endpoint for '{project.Name}' is not ready yet. Retrying toolbox deployment in {s_projectEndpointReadinessDelay.TotalSeconds:n0} seconds ({retry.AttemptNumber + 1}/{ProjectEndpointReadinessMaxRetryAttempts}).";
-                    if (logRetry is not null)
-                    {
-                        logRetry?.Invoke(retryMessage);
-                    }
-                    else
-                    {
-                        context.ReportingStep.Log(LogLevel.Warning, retryMessage);
-                    }
-
-                    return ValueTask.CompletedTask;
-                }
-            })
-            .Build();
-
-        return await retryPipeline.ExecuteAsync(async ct =>
-        {
-            // Pass policies: null — this opts in to the V1Preview default policy set. The metadata
-            // dictionary copy guards against later mutation of Metadata on the resource between
-            // deploys (e.g. when a run-mode deploy redeploys after a publish-mode deploy).
-            var result = await projectClient.AgentAdministrationClient
-                .GetAgentToolboxes()
-                .CreateToolboxVersionAsync(
-                    Name,
-                    tools,
-                    Description,
-                    new Dictionary<string, string>(Metadata),
-                    policies: null,
-                    cancellationToken: ct)
-                .ConfigureAwait(false);
-
-            return result.Value;
-        }, cancellationToken).ConfigureAwait(false);
+        return result;
     }
-
-    private static bool IsProjectEndpointNotReady(ClientResultException ex) =>
-        ex.Status == 404 &&
-        (ex.Message.Contains("Subdomain does not map to a resource", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("The project does not exist", StringComparison.OrdinalIgnoreCase));
 
     private Task DeployBeforeStartAsync(PipelineStepContext context)
     {
-        if (!context.ExecutionContext.IsRunMode)
+        if (context.ExecutionContext.IsRunMode)
         {
-            return Task.CompletedTask;
+            StartRunModeDeployment(context);
         }
-
-        StartRunModeDeployment(context);
 
         return Task.CompletedTask;
     }
 
     private void StartRunModeDeployment(PipelineStepContext context)
     {
-        // Fire-and-forget so the application can start before the toolbox finishes deploying.
-        // The notification service surfaces the toolbox state in the dashboard while the deploy
-        // is in flight. Matches AzurePromptAgentResource.
+        // MCP endpoints can reference local compute that starts after the before-start pipeline.
+        // Reconcile in the background so the application can start and make those endpoints reachable.
         var lifetime = context.Services.GetRequiredService<IHostApplicationLifetime>();
-        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, lifetime.ApplicationStopping);
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            context.CancellationToken,
+            lifetime.ApplicationStopping);
 
         _ = Task.Run(async () =>
         {
@@ -316,30 +284,43 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
         var model = context.Services.GetRequiredService<DistributedApplicationModel>();
         var logger = context.Services.GetRequiredService<ResourceLoggerService>().GetLogger(this);
+
         try
         {
-            await notificationService.PublishUpdateAsync(this, s => s with
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Waiting for project", KnownResourceStateStyles.Info)
+                State = new("Waiting for dependencies", KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
 
-            await WaitForProjectAndToolsAsync(notificationService, model, cancellationToken).ConfigureAwait(false);
+            await WaitForProjectAndToolsAsync(
+                notificationService,
+                model,
+                cancellationToken).ConfigureAwait(false);
 
-            await notificationService.PublishUpdateAsync(this, s => s with
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Deploying toolbox", KnownResourceStateStyles.Info)
+                State = new("Reconciling Toolbox", KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
 
-            logger.LogInformation("Deploying toolbox '{ToolboxName}' to Foundry project '{ProjectName}'...", Name, Parent.Name);
+            var result = await ReconcileAsync(
+                context,
+                message => logger.LogWarning("{Message}", message),
+                cancellationToken).ConfigureAwait(false);
 
-            var version = await DeployAsync(Parent, context, message => logger.LogWarning("{Message}", message), cancellationToken).ConfigureAwait(false);
-            DeployedVersion.Set(version.Version);
+            logger.LogInformation(
+                "Reconciled Toolbox '{ToolboxName}' at version {Version} with action {Action}.",
+                Name,
+                result.Version,
+                result.Action);
 
-            logger.LogInformation("Successfully deployed toolbox '{ToolboxName}' (version {Version})", Name, version.Version);
-
-            await notificationService.PublishUpdateAsync(this, s => s with
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Running", KnownResourceStateStyles.Success)
+                State = new("Running", KnownResourceStateStyles.Success),
+                Properties =
+                [
+                    new("Toolbox version", result.Version),
+                    new("Reconciliation action", result.Action.ToString())
+                ]
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -347,16 +328,19 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to deploy toolbox '{ToolboxName}'", Name);
+            logger.LogError(ex, "Failed to reconcile Toolbox '{ToolboxName}'.", Name);
 
-            await notificationService.PublishUpdateAsync(this, s => s with
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Failed to deploy", KnownResourceStateStyles.Error)
+                State = new("Failed to reconcile", KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
         }
     }
 
-    private async Task WaitForProjectAndToolsAsync(ResourceNotificationService notificationService, DistributedApplicationModel model, CancellationToken cancellationToken)
+    private async Task WaitForProjectAndToolsAsync(
+        ResourceNotificationService notificationService,
+        DistributedApplicationModel model,
+        CancellationToken cancellationToken)
     {
         if (Parent is IAzureResource { ProvisioningTaskCompletionSource: { } projectProvisioning })
         {
@@ -370,70 +354,50 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 cancellationToken).ConfigureAwait(false);
         }
 
-        // The only sub-resources we need to await are the Azure AI Search project connections
-        // backing AzureAISearch toolbox tools. WebSearch needs no provisioning, and MCP tools
-        // expose only a URL expression - those are handled separately below.
-        var toolConnectionProvisioningTasks = _tools
-            .Select(tool => tool switch
-            {
-                FoundryToolboxAzureAISearchToolDefinition { Connection: IAzureResource searchConnection } => searchConnection.ProvisioningTaskCompletionSource?.Task,
-                _ => null
-            })
-            .OfType<Task>();
+        var connectionProvisioningTasks = _tools
+            .OfType<FoundryToolboxAzureAISearchToolDefinition>()
+            .Select(tool => tool.Connection.ProvisioningTaskCompletionSource?.Task)
+            .OfType<Task>()
+            .Select(task => task.WaitAsync(cancellationToken));
 
-        // Wait for any locally-hosted compute resources targeted by MCP tools before we try to
-        // register their URLs with Foundry. Restrict to IComputeResource + IResourceWithWaitSupport
-        // so we don't block forever on Azure-only or model-only resources that never publish a
-        // Running state via the notification service.
-        var mcpRunModeWaits = GetMcpReferencedResources(model)
-            .Where(r => r is IComputeResource and IResourceWithWaitSupport)
-            .Select(r => notificationService.WaitForResourceAsync(r.Name, KnownResourceStates.Running, cancellationToken));
+        var mcpResourceWaits = GetMcpReferencedResources(model)
+            .Where(resource => resource is IComputeResource and IResourceWithWaitSupport)
+            .Select(resource => notificationService.WaitForResourceAsync(
+                resource.Name,
+                KnownResourceStates.Running,
+                cancellationToken));
 
-        await Task.WhenAll(toolConnectionProvisioningTasks
-            .Select(task => task.WaitAsync(cancellationToken))
-            .Concat(mcpRunModeWaits)).ConfigureAwait(false);
+        await Task.WhenAll(connectionProvisioningTasks.Concat(mcpResourceWaits)).ConfigureAwait(false);
     }
 
-    // Returns the distinct set of resources referenced by the MCP tools' endpoint expressions that
-    // also exist in the current application model. Restricting to model membership avoids waiting on
-    // externally constructed references (e.g. a synthetic EndpointReference produced for test setup)
-    // and avoids self-dependencies that would deadlock the pipeline.
     private IEnumerable<IResource> GetMcpReferencedResources(DistributedApplicationModel model)
     {
-        var modelResources = new HashSet<IResource>(model.Resources);
-        var seen = new HashSet<IResource>();
+        // Publish transformations can replace a referenced compute resource while endpoint
+        // expressions still point at the original instance. Match by resource name so the
+        // Toolbox deploy step retains its dependency on the replacement resource.
+        var modelResourceNames = new HashSet<string>(
+            model.Resources.Select(resource => resource.Name),
+            StringComparer.Ordinal);
+        var seenResourceNames = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var tool in _tools.OfType<FoundryToolboxMcpToolDefinition>())
         {
-            foreach (var referenced in WalkValueReferences(tool.EndpointExpression).OfType<IResource>())
+            foreach (var referencedResource in WalkValueReferences(tool.EndpointExpression).OfType<IResource>())
             {
-                if (ReferenceEquals(referenced, this))
+                if (!ReferenceEquals(referencedResource, this) &&
+                    modelResourceNames.Contains(referencedResource.Name) &&
+                    seenResourceNames.Add(referencedResource.Name))
                 {
-                    continue;
-                }
-
-                if (!modelResources.Contains(referenced))
-                {
-                    continue;
-                }
-
-                if (seen.Add(referenced))
-                {
-                    yield return referenced;
+                    yield return referencedResource;
                 }
             }
         }
     }
 
-    // Depth-first walk of every object reachable via IValueWithReferences. Used to surface the
-    // concrete IResource instances that back an arbitrary ReferenceExpression so we can wire
-    // pipeline dependencies and run-mode waits regardless of how the user composed the expression
-    // (raw EndpointReference, EndpointReferenceExpression, nested ReferenceExpression, etc.).
     private static IEnumerable<object> WalkValueReferences(object root)
     {
         var stack = new Stack<object>();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-
         stack.Push(root);
 
         while (stack.Count > 0)
@@ -446,9 +410,9 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
             yield return current;
 
-            if (current is IValueWithReferences withRefs)
+            if (current is IValueWithReferences valueWithReferences)
             {
-                foreach (var reference in withRefs.References)
+                foreach (var reference in valueWithReferences.References)
                 {
                     if (reference is not null)
                     {
@@ -457,5 +421,28 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 }
             }
         }
+    }
+}
+
+internal sealed class FoundryToolboxFeaturesPolicy : PipelinePolicy
+{
+    private const string HeaderName = "Foundry-Features";
+
+    public override void Process(
+        PipelineMessage message,
+        IReadOnlyList<PipelinePolicy> pipeline,
+        int currentIndex)
+    {
+        message.Request.Headers.Add(HeaderName, FoundryToolboxResource.PreviewFeatureHeaderValue);
+        ProcessNext(message, pipeline, currentIndex);
+    }
+
+    public override ValueTask ProcessAsync(
+        PipelineMessage message,
+        IReadOnlyList<PipelinePolicy> pipeline,
+        int currentIndex)
+    {
+        message.Request.Headers.Add(HeaderName, FoundryToolboxResource.PreviewFeatureHeaderValue);
+        return ProcessNextAsync(message, pipeline, currentIndex);
     }
 }

@@ -20,9 +20,10 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="configure">Optional callback used to configure the Toolbox resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Toolbox resource.</returns>
     /// <remarks>
-    /// A new immutable toolbox version is created on the Foundry data plane at deploy time. The
-    /// <see cref="FoundryToolboxResource.Version"/> property pins the version used by consumers in
-    /// the MCP endpoint URI; the version produced by the most recent deploy is exposed via
+    /// Aspire reuses the current default version when its configuration matches. Otherwise, it
+    /// creates and promotes a new immutable version. The <see cref="FoundryToolboxResource.Version"/>
+    /// property pins the version used by consumers in the MCP endpoint URI; the version selected
+    /// by the most recent reconciliation is exposed via
     /// <see cref="FoundryToolboxResource.DeployedVersion"/>.
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -83,29 +84,49 @@ public static class FoundryToolboxBuilderExtensions
     }
 
     /// <summary>
+    /// Sets the description persisted with each Toolbox version.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Toolbox.</param>
+    /// <param name="description">The Toolbox description.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<FoundryToolboxResource> WithDescription(
+        this IResourceBuilder<FoundryToolboxResource> builder,
+        string description)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        builder.Resource.Description = description;
+
+        return builder;
+    }
+
+    /// <summary>
     /// Adds an MCP tool definition to the Toolbox.
     /// </summary>
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint URI.</param>
-    /// <param name="configure">
-    /// Optional callback used to configure the tool definition. Use this to set
-    /// <see cref="FoundryToolboxMcpToolDefinition.AuthorizationTokenExpression"/> or populate
-    /// <see cref="FoundryToolboxMcpToolDefinition.Headers"/> when the MCP server requires
-    /// authentication.
-    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        string endpoint,
-        Action<FoundryToolboxMcpToolDefinition>? configure = null)
+        string endpoint)
     {
         ArgumentException.ThrowIfNullOrEmpty(endpoint);
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
+            endpointUri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException(
+                "The MCP endpoint must be an absolute HTTPS URI.",
+                nameof(endpoint));
+        }
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"), configure);
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpointUri.AbsoluteUri}"));
     }
 
     /// <summary>
@@ -114,24 +135,17 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint.</param>
-    /// <param name="configure">
-    /// Optional callback used to configure the tool definition. Use this to set
-    /// <see cref="FoundryToolboxMcpToolDefinition.AuthorizationTokenExpression"/> or populate
-    /// <see cref="FoundryToolboxMcpToolDefinition.Headers"/> when the MCP server requires
-    /// authentication.
-    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        EndpointReference endpoint,
-        Action<FoundryToolboxMcpToolDefinition>? configure = null)
+        EndpointReference endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"), configure);
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"));
     }
 
     /// <summary>
@@ -143,43 +157,24 @@ public static class FoundryToolboxBuilderExtensions
     /// pointing at a resource endpoint, or a <see cref="ReferenceExpression"/> for cases where the
     /// endpoint URL needs to be composed (for example, appending the MCP server's mount path or
     /// chaining through a public ingress like a dev tunnel).</param>
-    /// <param name="options">Optional auth/headers configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withMcpTool")]
     internal static IResourceBuilder<FoundryToolboxResource> WithMcpToolForPolyglot(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        [AspireUnion(typeof(string), typeof(EndpointReference), typeof(ReferenceExpression))] object endpoint,
-        FoundryToolboxMcpToolOptions? options = null)
+        [AspireUnion(typeof(string), typeof(EndpointReference), typeof(ReferenceExpression))] object endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        // Project the polyglot options onto the same configure callback the .NET overloads use so
-        // headers/auth wiring stays consistent across surface areas.
-        Action<FoundryToolboxMcpToolDefinition>? configure = options is null
-            ? null
-            : tool =>
-            {
-                if (options.AuthorizationToken is not null)
-                {
-                    tool.AuthorizationTokenExpression = options.AuthorizationToken;
-                }
-
-                foreach (var header in options.Headers)
-                {
-                    tool.Headers[header.Key] = header.Value;
-                }
-            };
-
         return endpoint switch
         {
-            string endpointString => builder.WithMcpTool(name, endpointString, configure),
-            EndpointReference endpointReference => builder.WithMcpTool(name, endpointReference, configure),
+            string endpointString => builder.WithMcpTool(name, endpointString),
+            EndpointReference endpointReference => builder.WithMcpTool(name, endpointReference),
             // ReferenceExpression lets polyglot callers compose URLs (e.g. `refExpr\`${endpoint}/mcp\``)
             // because the polyglot type system can't express a templated string built from a typed
             // endpoint reference any other way.
-            ReferenceExpression endpointExpression => builder.WithMcpTool(name, endpointExpression, configure),
+            ReferenceExpression endpointExpression => builder.WithMcpTool(name, endpointExpression),
             _ => throw new ArgumentException("Endpoint must be a string, endpoint reference, or reference expression.", nameof(endpoint))
         };
     }
@@ -218,16 +213,13 @@ public static class FoundryToolboxBuilderExtensions
     private static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        ReferenceExpression endpointExpression,
-        Action<FoundryToolboxMcpToolDefinition>? configure = null)
+        ReferenceExpression endpointExpression)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(endpointExpression);
 
-        var tool = new FoundryToolboxMcpToolDefinition(name, endpointExpression);
-        configure?.Invoke(tool);
-        builder.Resource.AddTool(tool);
+        builder.Resource.AddTool(new FoundryToolboxMcpToolDefinition(name, endpointExpression));
 
         return builder;
     }

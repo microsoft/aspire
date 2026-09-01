@@ -29,6 +29,133 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         await DeployFoundryHostedAgentToAzureCore(cancellationToken);
     }
 
+    [Fact]
+    public async Task DeployFoundryToolboxToAzure()
+    {
+        using var cts = new CancellationTokenSource(s_testTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, TestContext.Current.CancellationToken);
+        var cancellationToken = linkedCts.Token;
+
+        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
+        }
+
+        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+        {
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+            }
+            else
+            {
+                Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            }
+        }
+
+        var workspace = TemporaryWorkspace.Create(output);
+        var startTime = DateTime.UtcNow;
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("foundry-toolbox");
+        const string projectName = "FoundryToolbox";
+
+        try
+        {
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
+            var pendingRun = terminal.RunAsync(cancellationToken);
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Foundry");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            var appHostFilePath = Path.Combine(
+                workspace.WorkspaceRoot.FullName,
+                projectName,
+                $"{projectName}.AppHost",
+                "AppHost.cs");
+            var appHostContent = File.ReadAllText(appHostFilePath);
+            appHostContent = "using Aspire.Hosting.Foundry;\n" + appHostContent;
+            appHostContent = appHostContent.Replace(
+                "builder.Build().Run();",
+                """
+                var foundry = builder.AddFoundry("aif-myfoundry");
+                var foundryProject = foundry.AddProject("proj-myproject");
+
+                foundryProject.AddToolbox("field-tools")
+                    .WithDescription("Tools for field technicians.")
+                    .WithWebSearchTool();
+
+                builder.Build().Run();
+                """);
+            File.WriteAllText(appHostFilePath, appHostContent);
+
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.TypeAsync(
+                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The first deployment creates a Toolbox version; the second must reconcile to the same
+            // immutable version rather than producing another one.
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("action Created", timeout: TimeSpan.FromMinutes(35));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("action Reused", timeout: TimeSpan.FromMinutes(15));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync(
+                $"az group show -n \"{resourceGroupName}\" --query name -o tsv");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(resourceGroupName, timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
+            await pendingRun;
+
+            DeploymentReporter.ReportDeploymentSuccess(
+                nameof(DeployFoundryToolboxToAzure),
+                resourceGroupName,
+                new Dictionary<string, string>(),
+                DateTime.UtcNow - startTime);
+        }
+        catch (Exception ex)
+        {
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployFoundryToolboxToAzure),
+                resourceGroupName,
+                ex.Message,
+                ex.StackTrace);
+            throw;
+        }
+        finally
+        {
+            TriggerCleanupResourceGroup(resourceGroupName, output);
+            DeploymentReporter.ReportCleanupStatus(
+                resourceGroupName,
+                success: true,
+                "Cleanup triggered (fire-and-forget)");
+        }
+    }
+
     private async Task DeployFoundryHostedAgentToAzureCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites

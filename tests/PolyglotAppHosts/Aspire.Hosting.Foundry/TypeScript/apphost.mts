@@ -82,7 +82,8 @@ await _promptAgent.withTool(azFunc);
 await _promptAgent.withTool(funcTool);
 
 // Foundry Toolbox
-const toolbox = await project.addToolbox('field-tools', { version: 'v1' });
+const toolbox = await project.addToolbox('field-tools');
+await toolbox.withDescription('Tools for field technicians.');
 await toolbox.withWebSearchTool();
 await toolbox.withMcpTool('inventory', api.getEndpoint('http'));
 await toolbox.withAISearchTool('knowledge-base', search);

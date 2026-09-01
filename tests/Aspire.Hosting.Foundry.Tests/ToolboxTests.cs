@@ -25,10 +25,10 @@ public class ToolboxTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        var toolbox = project.AddToolbox("field-tools", t => t.Version = "v1");
+        var toolbox = project.AddToolbox("field-tools", t => t.Version = "7");
 
         Assert.Equal("field-tools", toolbox.Resource.Name);
-        Assert.Equal("v1", toolbox.Resource.Version);
+        Assert.Equal("7", toolbox.Resource.Version);
         Assert.Same(project.Resource, toolbox.Resource.Parent);
     }
 
@@ -41,6 +41,7 @@ public class ToolboxTests
         var search = builder.AddAzureSearch("search");
 
         var toolbox = project.AddToolbox("field-tools")
+            .WithDescription("Tools for field technicians.")
             .WithWebSearchTool()
             .WithMcpTool("inventory", "https://inventory.example.com/mcp")
             .WithAISearchTool("knowledge-base", search, "docs");
@@ -74,7 +75,7 @@ public class ToolboxTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var toolbox = project.AddToolbox("field-tools", t => t.Version = "v1");
+        var toolbox = project.AddToolbox("field-tools", t => t.Version = "7");
 
         var pyapp = builder.AddPythonApp("app", "./app.py", "main:app")
             .WithReference(toolbox);
@@ -91,7 +92,7 @@ public class ToolboxTests
             && kvp.Value == "{my-project.outputs.endpoint}");
         Assert.Contains(envVars, kvp =>
             kvp.Key == "FIELD_TOOLS_URI"
-            && kvp.Value == "{my-project.outputs.endpoint}/toolboxes/field-tools/versions/v1/mcp?api-version=v1");
+            && kvp.Value == "{my-project.outputs.endpoint}/toolboxes/field-tools/versions/7/mcp?api-version=v1");
         Assert.Contains(envVars, kvp =>
             kvp.Key == "FIELD_TOOLS_FOUNDRYFEATURES"
             && kvp.Value == "Toolboxes=V1Preview");
@@ -109,7 +110,7 @@ public class ToolboxTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var toolbox = project.AddToolbox("field-tools", t => t.Version = "v1");
+        var toolbox = project.AddToolbox("field-tools", t => t.Version = "7");
 
         var agent = builder.AddPythonApp("agent", "./app.py", "main:app")
             .WithReference(toolbox)
@@ -133,7 +134,7 @@ public class ToolboxTests
             NullLogger<ToolboxTests>.Instance,
             cts.Token);
 
-        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/v1/mcp?api-version=v1", envVars["ConnectionStrings__field-tools"]);
+        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/7/mcp?api-version=v1", envVars["ConnectionStrings__field-tools"]);
     }
 
     [Fact]
@@ -142,7 +143,7 @@ public class ToolboxTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var toolbox = project.AddToolbox("field-tools", t => t.Version = "v1");
+        var toolbox = project.AddToolbox("field-tools");
 
         using var app = builder.Build();
 
@@ -172,7 +173,7 @@ public class ToolboxTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var toolbox = project.AddToolbox("field-tools", t => t.Version = "v1");
+        var toolbox = project.AddToolbox("field-tools");
 
         using var app = builder.Build();
 
@@ -190,7 +191,7 @@ public class ToolboxTests
 
         var beforeStart = Assert.Single(steps, s => s.Name == "deploy-field-tools-before-start");
         Assert.Contains("before-start", beforeStart.RequiredBySteps);
-        Assert.Contains("run-mode-azure-provision", beforeStart.DependsOnSteps);
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, beforeStart.DependsOnSteps);
         Assert.Same(toolbox.Resource, beforeStart.Resource);
 
         var deploy = Assert.Single(steps, s => s.Name == "deploy-field-tools");
@@ -266,67 +267,31 @@ public class ToolboxTests
     }
 
     [Fact]
-    public void WithMcpTool_ConfigureCallback_SetsAuthorizationTokenAndHeaders()
+    public async Task McpToolDefinition_ThrowsWhenEndpointIsNotHttps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var def = new FoundryToolboxMcpToolDefinition(
+            "inventory",
+            ReferenceExpression.Create($"http://inventory.example.com/mcp"));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+        Assert.Contains("absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithMcpTool_ThrowsImmediatelyWhenLiteralEndpointIsNotHttps()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var token = builder.AddParameter("mcp-token", () => "secret-value");
-        var traceparent = builder.AddParameter("traceparent", () => "00-aaaa-bbbb-01");
 
-        var toolbox = project.AddToolbox("field-tools")
-            .WithMcpTool("inventory", "https://inventory.example.com/mcp", t =>
-            {
-                t.AuthorizationTokenExpression = ReferenceExpression.Create($"{token.Resource}");
-                t.Headers["X-Trace-Parent"] = ReferenceExpression.Create($"{traceparent.Resource}");
-                // Header name matching is case-insensitive: writing through one casing and then
-                // reading through another must resolve to the same entry.
-                t.Headers["x-trace-parent"] = ReferenceExpression.Create($"{traceparent.Resource}-2");
-            });
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithMcpTool("inventory", "http://inventory.example.com/mcp"));
 
-        var def = Assert.IsType<FoundryToolboxMcpToolDefinition>(toolbox.Resource.Tools[0]);
-
-        Assert.NotNull(def.AuthorizationTokenExpression);
-        Assert.Single(def.Headers);
-        Assert.True(def.Headers.ContainsKey("X-TRACE-PARENT"));
-    }
-
-    [Fact]
-    public async Task McpToolDefinition_AuthorizationToken_EmptyValue_Throws()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var empty = builder.AddParameter("empty-token", () => string.Empty);
-
-        var def = new FoundryToolboxMcpToolDefinition(
-            "inventory",
-            ReferenceExpression.Create($"https://inventory.example.com/mcp"))
-        {
-            AuthorizationTokenExpression = ReferenceExpression.Create($"{empty.Resource}")
-        };
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
-        Assert.Contains("authorization token", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task McpToolDefinition_Headers_EmptyValueOmitted_DoesNotThrow()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var present = builder.AddParameter("present", () => "v1");
-        var empty = builder.AddParameter("empty-header", () => string.Empty);
-
-        var def = new FoundryToolboxMcpToolDefinition(
-            "inventory",
-            ReferenceExpression.Create($"https://inventory.example.com/mcp"));
-        def.Headers["X-Present"] = ReferenceExpression.Create($"{present.Resource}");
-        // Empty header values are silently dropped (vs. throwing) so optional headers backed by
-        // parameters can be safely omitted in environments where the upstream value isn't set.
-        def.Headers["X-Optional"] = ReferenceExpression.Create($"{empty.Resource}");
-
-        var projectTool = await def.ToProjectsAgentToolAsync(CancellationToken.None);
-
-        Assert.NotNull(projectTool);
+        Assert.Equal("endpoint", exception.ParamName);
     }
 
     [Fact]
@@ -343,6 +308,9 @@ public class ToolboxTests
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var replacement = new ContainerResource(mcp.Resource.Name);
+        model.Resources.Remove(mcp.Resource);
+        model.Resources.Add(replacement);
 
         // Materialize the toolbox's own deploy-compute step via its PipelineStepAnnotation, then
         // fabricate a stand-in deploy-compute step for the referenced container - in a real publish
@@ -361,7 +329,7 @@ public class ToolboxTests
         {
             Name = "deploy-mcp",
             Action = _ => Task.CompletedTask,
-            Resource = mcp.Resource,
+            Resource = replacement,
             Tags = { WellKnownPipelineTags.DeployCompute },
         };
 
