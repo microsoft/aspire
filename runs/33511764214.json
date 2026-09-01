@@ -1,0 +1,74 @@
+{
+  "run_id": 33511764214,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33511764214",
+  "analyzed_at": "2026-09-01T13:43:06Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19760,
+    "title": "ci(vscode): Keep CI green when Azure Functions E2E flakes",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "radical-advisory-azure-functions-e2e",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19760"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Microsoft.Data.SqlClient / Microsoft.Data.SqlClient (windows-latest)",
+      "id": 99869622410,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869622410",
+      "classification": "transient-infra",
+      "reason": "Process exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) occurred in post-test steps (hang dump check, upload logs/results, generate summary) after tests completed, on windows-latest runner. Known recurring transient Windows runner process-init failure, unrelated to PR changes which only touch VS Code extension e2e workflow files.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (windows-latest)",
+      "id": 99869632125,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869632125",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1; job logs unavailable ('Failed to fetch logs for job'). PR only modifies a VS Code extension e2e test workflow/matrix file and does not touch Hosting.Azure.Kubernetes code. Fails simultaneously with 4 other unrelated 'Build test project' jobs, indicating a widespread transient build/infra issue rather than a PR code issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 99869632365,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869632365",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1; job logs unavailable. PR does not modify Hosting.Azure code; fails alongside other unrelated Build test project jobs simultaneously, indicating shared transient infra/build issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "id": 99869632466,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869632466",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1; job logs unavailable. PR does not modify Hosting.Azure code; fails alongside other unrelated Build test project jobs simultaneously, indicating shared transient infra/build issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Hosting.Azure.Kubernetes / Hosting.Azure.Kubernetes (ubuntu-latest)",
+      "id": 99869632504,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869632504",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1; job logs unavailable. PR does not modify Hosting.Azure.Kubernetes code; fails alongside other unrelated Build test project jobs simultaneously, indicating shared transient infra/build issue.",
+      "failed_steps": ["Build test project"]
+    },
+    {
+      "name": "Tests / Playground / Playground (ubuntu-latest)",
+      "id": 99869632774,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33511764214/job/99869632774",
+      "classification": "transient-infra",
+      "reason": "'Build test project' step failed with generic exit code 1; job logs unavailable. PR does not modify Playground code; fails alongside other unrelated Build test project jobs simultaneously, indicating shared transient infra/build issue.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142", "build-test-project-widespread-exit1-unrelated"]
+}

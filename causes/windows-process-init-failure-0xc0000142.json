@@ -108,6 +108,13 @@
       "job": "Tests / RabbitMQ.Client / RabbitMQ.Client (windows-latest)",
       "pr_number": 19661,
       "observed_at": "2026-08-28T07:06:16Z"
+    },
+    {
+      "run_id": 33511764214,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33511764214",
+      "job": "Tests / Microsoft.Data.SqlClient / Microsoft.Data.SqlClient (windows-latest)",
+      "pr_number": 19760,
+      "observed_at": "2026-09-01T13:43:06Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"
