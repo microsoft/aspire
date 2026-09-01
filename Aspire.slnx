@@ -56,7 +56,6 @@
     <Project Path="src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" />
     <Project Path="src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
     <Project Path="src/Aspire.Hosting.Garnet/Aspire.Hosting.Garnet.csproj" />
-    <Project Path="src/Aspire.Hosting.GitHub.Models/Aspire.Hosting.GitHub.Models.csproj" />
     <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
     <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
     <Project Path="src/Aspire.Hosting.Java/Aspire.Hosting.Java.csproj" />
@@ -273,10 +272,6 @@
     <Project Path="playground/FoundryAgents/DotNetInvocationHostedAgent/DotNetInvocationHostedAgent.csproj" />
     <Project Path="playground/FoundryAgents/FoundryAgents.AppHost/FoundryAgents.AppHost.csproj" />
     <Project Path="playground/FoundryAgents/PromptAgentChat/PromptAgentChat.csproj" />
-  </Folder>
-  <Folder Name="/playground/GitHubModelsEndToEnd/">
-    <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
-    <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.WebStory/GitHubModelsEndToEnd.WebStory.csproj" />
   </Folder>
   <Folder Name="/playground/ExternalServices/">
     <Project Path="playground/ExternalServices/ExternalServices.AppHost/ExternalServices.AppHost.csproj" />
@@ -547,7 +542,6 @@
     <Project Path="tests/Aspire.Hosting.EntityFrameworkCore.Tests/Aspire.Hosting.EntityFrameworkCore.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Garnet.Tests/Aspire.Hosting.Garnet.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.GitHub.Models.Tests/Aspire.Hosting.GitHub.Models.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Java.Tests/Aspire.Hosting.Java.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
