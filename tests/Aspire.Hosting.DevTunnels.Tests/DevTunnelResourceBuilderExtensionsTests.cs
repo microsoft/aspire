@@ -192,6 +192,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         var client = new TestDevTunnelClient
         {
+            CreatedTunnelId = "mytunnel.eun1",
             PortList = new()
             {
                 Ports = [
@@ -211,6 +212,46 @@ public class DevTunnelResourceBuilderExtensionsTests
         {
             Region = DevTunnelRegion.NorthEurope
         }).WithReference(target);
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000);
+
+        using var app = builder.Build();
+
+        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnel.Resource, app.Services)).DefaultTimeout();
+
+        var calls = client.Calls.ToArray();
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.CreateTunnelAsync) && call.TunnelId == "mytunnel");
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.GetPortListAsync) && call.TunnelId == "mytunnel.eun1");
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 5001);
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.DeletePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 6000);
+    }
+
+    [Fact]
+    public async Task OnBeforeResourceStarted_WithAutoSelectedRegion_UsesCreatedTunnelIdForPortOperations()
+    {
+        var client = new TestDevTunnelClient
+        {
+            CreatedTunnelId = "mytunnel.eun1",
+            PortList = new()
+            {
+                Ports = [
+                    new(5001, "https"),
+                    new(6000, "https")
+                ]
+            }
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDevTunnelClient>(client);
+        builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
+            .WithReference(target);
         var tunnelPort = Assert.Single(tunnel.Resource.Ports);
         tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
             tunnelPort.TargetEndpoint.EndpointAnnotation,
