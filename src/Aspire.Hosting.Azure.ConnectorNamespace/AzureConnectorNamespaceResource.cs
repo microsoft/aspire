@@ -57,7 +57,7 @@ public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
     {
-        var bicepIdentifier = this.GetBicepIdentifier();
+        var bicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
         var existing = infra.GetProvisionableResources()
             .OfType<ConnectorGateway>()
             .SingleOrDefault(gateway => gateway.BicepIdentifier == bicepIdentifier);

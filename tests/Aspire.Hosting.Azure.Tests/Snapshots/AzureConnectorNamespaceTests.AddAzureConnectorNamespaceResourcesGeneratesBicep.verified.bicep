@@ -3,30 +3,30 @@ param location string = resourceGroup().location
 
 param worker_identity_outputs_principalid string
 
-resource gateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' = {
-  name: take('gateway${uniqueString(resourceGroup().id)}', 24)
+resource connectorGateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' = {
+  name: take('location${uniqueString(resourceGroup().id)}', 24)
   location: location
   identity: {
     type: 'SystemAssigned'
   }
   properties: { }
   tags: {
-    'aspire-resource-name': 'gateway'
+    'aspire-resource-name': 'location'
   }
 }
 
-resource connectorConnection_gateway_office365_ff65bf7e6a298940 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
+resource connectorConnection_location_office365_aeeb69f5db2f2579 'Microsoft.Web/connectorGateways/connections@2026-05-01-preview' = {
   name: 'office365-outlook'
   properties: {
     displayName: 'Office 365 Outlook'
     connectorName: 'office365'
   }
-  parent: gateway
+  parent: connectorGateway
 }
 
-resource connectorAccessPolicy_gateway_office365_worker_access_4c96cd5e6ccf4c9e 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource connectorAccessPolicy_location_office365_worker_access_219548f1dffff16f 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-acl'
-  location: gateway.location
+  location: location
   properties: {
     principal: {
       type: 'ActiveDirectory'
@@ -36,12 +36,12 @@ resource connectorAccessPolicy_gateway_office365_worker_access_4c96cd5e6ccf4c9e 
       }
     }
   }
-  parent: connectorConnection_gateway_office365_ff65bf7e6a298940
+  parent: connectorConnection_location_office365_aeeb69f5db2f2579
 }
 
-resource connectorAccessPolicy_gateway_office365_worker_identity__e8ca2c1b62ef8e81 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource connectorAccessPolicy_location_office365_worker_identity__b35655bad0e10beb 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'worker-identity-acl'
-  location: gateway.location
+  location: location
   properties: {
     principal: {
       type: 'ActiveDirectory'
@@ -51,10 +51,10 @@ resource connectorAccessPolicy_gateway_office365_worker_identity__e8ca2c1b62ef8e
       }
     }
   }
-  parent: connectorConnection_gateway_office365_ff65bf7e6a298940
+  parent: connectorConnection_location_office365_aeeb69f5db2f2579
 }
 
-resource connectorMcpServer_gateway_outlook_mcp_7e6242840bbe075d 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' = {
+resource connectorMcpServer_location_outlook_mcp_9fda0444956c6cd1 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' = {
   name: 'outlook-tools'
   kind: 'ManagedMcpServer'
   properties: {
@@ -76,16 +76,16 @@ resource connectorMcpServer_gateway_outlook_mcp_7e6242840bbe075d 'Microsoft.Web/
       }
     ]
   }
-  parent: gateway
+  parent: connectorGateway
   dependsOn: [
-    connectorConnection_gateway_office365_ff65bf7e6a298940
+    connectorConnection_location_office365_aeeb69f5db2f2579
   ]
 }
 
-output id string = gateway.id
+output id string = connectorGateway.id
 
-output name string = gateway.name
+output name string = connectorGateway.name
 
-output principalId string = gateway.identity.principalId
+output principalId string = connectorGateway.identity.principalId
 
-output tenantId string = gateway.identity.tenantId
+output tenantId string = connectorGateway.identity.tenantId

@@ -12,6 +12,23 @@ internal static class ConnectorNamespaceBicepIdentifiers
 {
     private const int ReadablePartLength = 16;
 
+    public static string CreateGateway()
+        => "connectorGateway";
+
+    public static string CreateGatewayResourceNamePrefix(string connectorNamespaceName)
+    {
+        var prefix = new StringBuilder(connectorNamespaceName.Length);
+        foreach (var character in connectorNamespaceName)
+        {
+            if (char.IsAsciiLetter(character))
+            {
+                prefix.Append(char.ToLowerInvariant(character));
+            }
+        }
+
+        return prefix.ToString();
+    }
+
     public static string CreateConnection(string connectorNamespaceName, string connectionName)
         => Create("connectorConnection", connectorNamespaceName, connectionName);
 

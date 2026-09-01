@@ -56,18 +56,25 @@ public static class AzureConnectorNamespaceExtensions
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
             var gatewayResource = (AzureConnectorNamespaceResource)infrastructure.AspireResource;
+            var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
             var gateway = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
                 infrastructure,
-                (identifier, name) =>
+                (_, name) =>
                 {
-                    var existingGateway = ConnectorGateway.FromExisting(identifier);
+                    var existingGateway = ConnectorGateway.FromExisting(gatewayBicepIdentifier);
                     existingGateway.Name = name;
                     return existingGateway;
                 },
-                infrastructure =>
+                _ =>
                 {
-                    var newGateway = new ConnectorGateway(infrastructure.AspireResource.GetBicepIdentifier())
+                    var gatewayNamePrefix = ConnectorNamespaceBicepIdentifiers.CreateGatewayResourceNamePrefix(
+                        gatewayResource.Name);
+                    var newGateway = new ConnectorGateway(gatewayBicepIdentifier)
                     {
+                        Name = BicepFunction.Take(
+                            BicepFunction.Interpolate(
+                                $"{gatewayNamePrefix}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                            24),
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
@@ -107,13 +114,9 @@ public static class AzureConnectorNamespaceExtensions
                         Name = accessPolicyResource.PolicyName
                     };
 
-                    // Existing resource properties are runtime values and cannot be used for the
-                    // early-bound location property. The infrastructure location parameter must
-                    // be configured to match the existing Connector Namespace location.
-                    if (!gatewayResource.IsExisting())
-                    {
-                        accessPolicy.Location = gateway.Location;
-                    }
+                    // Preview Connector Namespace types do not have Bicep type metadata, so parent
+                    // location references are runtime values that cannot populate this property.
+                    // Leaving it unset uses the infrastructure's early-bound location parameter.
 
                     accessPolicy.Principal.Type = "ActiveDirectory";
                     if (accessPolicyResource.IdentityResource is { } identityResource)
@@ -532,7 +535,7 @@ public static class AzureConnectorNamespaceExtensions
 
     private static IEnumerable<string> GetConnectorNamespaceBicepIdentifiers(AzureConnectorNamespaceResource connectorNamespace)
     {
-        yield return Infrastructure.NormalizeBicepIdentifier(connectorNamespace.Name);
+        yield return ConnectorNamespaceBicepIdentifiers.CreateGateway();
 
         foreach (var connection in connectorNamespace.Connections)
         {

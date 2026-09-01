@@ -4,8 +4,8 @@
 #pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 using Aspire.Hosting.Utils;
-using Azure.Provisioning;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -31,7 +31,7 @@ public class AzureConnectorNamespaceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        var gateway = builder.AddAzureConnectorNamespace("location");
         var connection = gateway.AddConnection(
             "office365",
             "office365",
@@ -196,7 +196,7 @@ public class AzureConnectorNamespaceTests
     }
 
     [Fact]
-    public void ConnectorChildBicepIdentifiersAreCollisionResistant()
+    public async Task ConnectorBicepIdentifiersAreCollisionResistant()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -204,17 +204,32 @@ public class AzureConnectorNamespaceTests
         var firstConnection = gateway.AddConnection("abcdefghijklmnop-a", "office365");
         var secondConnection = gateway.AddConnection("abcdefghijklmnop-b", "sharepointonline");
         var mcp = gateway.AddMcpServerConfig("abcdefghijklmnop-c");
+        mcp.WithConnector(
+            "office365",
+            firstConnection,
+            new AzureConnectorNamespaceMcpConnectorOptions
+            {
+                Operations = [new AzureConnectorNamespaceMcpOperationOptions { Name = "GetEmailsV3" }]
+            });
 
+        var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
         Assert.NotEqual(firstConnection.Resource.BicepIdentifier, secondConnection.Resource.BicepIdentifier);
         Assert.NotEqual(secondConnection.Resource.BicepIdentifier, mcp.Resource.BicepIdentifier);
         Assert.All(
             ["location", "outputs", "principalId", "tenantId"],
             reservedName => Assert.False(string.Equals(
                 reservedName,
-                firstConnection.Resource.BicepIdentifier,
+                gatewayBicepIdentifier,
                 StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("connectorGateway", gatewayBicepIdentifier);
         Assert.StartsWith("connectorConnection_location_abcdefghijklmnop_", firstConnection.Resource.BicepIdentifier, StringComparison.Ordinal);
         Assert.StartsWith("connectorMcpServer_location_abcdefghijklmnop_", mcp.Resource.BicepIdentifier, StringComparison.Ordinal);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
+
+        Assert.Contains($"resource {gatewayBicepIdentifier} ", bicep, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -449,7 +464,7 @@ public class AzureConnectorNamespaceTests
 
         var identifiers = new[]
         {
-            Infrastructure.NormalizeBicepIdentifier(gateway.Resource.Name),
+            ConnectorNamespaceBicepIdentifiers.CreateGateway(),
             connection.Resource.BicepIdentifier,
             Assert.Single(connection.Resource.AccessPolicies).BicepIdentifier,
             mcp.Resource.BicepIdentifier
