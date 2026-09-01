@@ -1,9 +1,9 @@
 import path from "path";
-import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession } from "../dcp/types";
+import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, isProjectLaunchConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentForChildProcess, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
-import { projectDebuggerExtension } from "./languages/dotnet";
+import { externalBuildProjectDebuggerExtension, projectDebuggerExtension } from "./languages/dotnet";
 import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isJavaInstalled, isMauiInstalled, isPythonInstalled, isRustInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
@@ -74,8 +74,13 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
             Object.assign(configuration, debugSessionConfig.debuggers['apphost']);
         }
 
-        // 2. Check for resource type specific debugger settings
-        if (debugSessionConfig.debuggers[launchConfig.type]) {
+        // 2. Both project wire contracts use the established project debugger settings.
+        if (isProjectLaunchConfiguration(launchConfig) && debugSessionConfig.debuggers['project']) {
+            Object.assign(configuration, debugSessionConfig.debuggers['project']);
+        }
+
+        // 3. Allow an exact resource-type entry to override the shared project settings.
+        if (launchConfig.type !== 'project' && debugSessionConfig.debuggers[launchConfig.type]) {
             Object.assign(configuration, debugSessionConfig.debuggers[launchConfig.type]);
         }
     }
@@ -96,6 +101,7 @@ export function getResourceDebuggerExtensions(platform: NodeJS.Platform = proces
     const extensions = [];
     if (isCsharpInstalled()) {
         extensions.push(projectDebuggerExtension);
+        extensions.push(externalBuildProjectDebuggerExtension);
 
         if (isAzureFunctionsExtensionInstalled()) {
             extensions.push(azureFunctionsDebuggerExtension);

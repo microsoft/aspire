@@ -46,6 +46,18 @@ public static class KnownLaunchConfigurationTypes
     /// project path and launch profile to the IDE, which owns building and launching the project.
     /// </remarks>
     public const string Project = "project";
+
+    /// <summary>
+    /// The .NET project launch configuration type for output produced by an external build.
+    /// </summary>
+    /// <remarks>
+    /// IDEs advertise this capability only when they honor the build environment, working directory, and build
+    /// suppression values carried by <see cref="ProjectLaunchConfiguration"/>.
+    /// </remarks>
+    public const string ProjectWithExternalBuild = "project-with-external-build.v1";
+
+    internal static bool IsProject(string? type) =>
+        type is Project or ProjectWithExternalBuild;
 }
 
 /// <summary>
@@ -99,7 +111,9 @@ public class ExecutableLaunchConfiguration(string type)
 /// The launch configuration used for .NET projects and file-based C# apps.
 /// </summary>
 /// <remarks>
-/// The IDE builds and launches the project itself. The resource must carry <see cref="IProjectMetadata"/>.
+/// By default, the IDE builds and launches the project itself. When <see cref="SuppressBuild"/> is
+/// <see langword="true"/>, the IDE launches output produced by an external or coordinated build.
+/// The resource must carry <see cref="IProjectMetadata"/>.
 /// </remarks>
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration(KnownLaunchConfigurationTypes.Project)
@@ -122,4 +136,46 @@ public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration
     /// </summary>
     [JsonPropertyName("project_path")]
     public required string ProjectPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the build configuration used to produce the project output.
+    /// </summary>
+    /// <remarks>
+    /// The value corresponds to the MSBuild <c>Configuration</c> property, such as <c>Debug</c> or <c>Release</c>.
+    /// </remarks>
+    [JsonPropertyName("build_configuration")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BuildConfiguration { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resolved environment variables that affected the externally produced build.
+    /// </summary>
+    /// <remarks>
+    /// IDE launchers use these authoritative values when evaluating build properties such as <c>TargetPath</c>.
+    /// Empty means no project-specific build environment. Values can contain sensitive data and must not be logged.
+    /// </remarks>
+    [JsonPropertyName("build_environment")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? BuildEnvironment { get; set; }
+
+    /// <summary>
+    /// Gets or sets the working directory used by the externally produced build.
+    /// </summary>
+    /// <remarks>
+    /// IDE launchers use this directory to select the same .NET SDK and repository configuration when
+    /// evaluating project properties or rebuilding.
+    /// </remarks>
+    [JsonPropertyName("build_working_directory")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BuildWorkingDirectory { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the IDE should suppress building the project before launch.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="true"/>, the project output was produced by an external or coordinated build and the IDE should launch it without rebuilding.
+    /// </remarks>
+    [JsonPropertyName("suppress_build")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SuppressBuild { get; set; }
 }

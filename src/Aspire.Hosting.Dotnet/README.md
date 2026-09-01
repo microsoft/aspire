@@ -54,9 +54,43 @@ const api = await builder.addDotnetProject("api", "../api/api.csproj")
 await builder.build().run();
 ```
 
-The resource is launched with `dotnet run --project <path>` (or `dotnet run --file <path>` for a
-file-based app). Endpoints, environment variables, and service discovery are configured from the
-project's `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
+Before resources start, Aspire collects projects with compatible SDK and environment contexts into
+generated AppHost-local MSBuild traversal projects. Build groups run serially, while projects within
+each traversal group can build in parallel. Launch-profile and `WithEnvironment` values are runtime
+configuration and do not prevent projects from sharing a traversal build. Each project is then launched with
+the `RunCommand` and `RunArguments` resolved from the already-built project, so runtime environment
+variables cannot change which output is selected. File-based apps compile separately with
+`dotnet run --file <path> --no-cache`, but wait for every coordinated project build in mixed
+applications so shared project references don't race.
+
+Endpoints, environment variables, and service discovery are configured from the project's
+`launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
+
+### Configure the build environment
+
+Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation. Projects
+with build-specific environment variables use serialized direct builds instead of a shared traversal
+build. Build environment variables are not added to the launched process; configure the same variable
+with `WithEnvironment` as well when it is needed at runtime.
+
+Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
+process environments. Protected temporary MSBuild response files preserve global-property semantics
+without exposing values in process command lines, but they are not a general-purpose secret transport.
+
+**C#**
+
+```csharp
+builder.AddDotnetProject("worker", "../worker/worker.csproj")
+    .WithBuildEnvironment("BUILD_FLAVOR", "custom");
+```
+
+**TypeScript**
+
+```typescript
+await builder
+    .addDotnetProject("worker", "../worker/worker.csproj")
+    .withBuildEnvironment("BUILD_FLAVOR", "custom");
+```
 
 ## Publishing
 

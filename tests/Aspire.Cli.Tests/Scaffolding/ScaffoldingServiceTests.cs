@@ -265,12 +265,12 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
-    public void MergeGitIgnoreContent_AppendsMissingEntriesWithoutOverwritingExistingContent()
+    public void GitIgnoreMerger_AppendsMissingEntriesWithoutOverwritingExistingContent()
     {
         var existingContent = "node_modules/\ncustom/\n";
         var scaffoldContent = "node_modules/\ndist/\n.aspire/\n";
 
-        var mergedContent = ScaffoldingService.MergeGitIgnoreContent(existingContent, scaffoldContent);
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
         var lines = mergedContent.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         Assert.Equal(
@@ -423,14 +423,38 @@ public class ScaffoldingServiceTests
         Assert.Equal("not json at all", merged);
     }
 
-    [Fact]
-    public void MergeGitIgnoreContent_DoesNotAddDuplicateAspireEntryWhenEquivalentEntryAlreadyExists()
+    [Theory]
+    [InlineData("node_modules/\n", "/node_modules/\n")]
+    [InlineData(".aspire\n", "/.aspire/\n")]
+    [InlineData("/.aspire\n", "/.aspire/\n")]
+    [InlineData("src/generated/\n", "/src/generated/\n")]
+    [InlineData("/src/generated/\n", "src/generated/\n")]
+    public void GitIgnoreMerger_DoesNotAddRootedEntryWhenExistingEntryCoversIt(
+        string existingContent,
+        string scaffoldContent)
     {
-        var existingContent = "/.aspire/\n";
-        var scaffoldContent = ".aspire/\n";
-
-        var mergedContent = ScaffoldingService.MergeGitIgnoreContent(existingContent, scaffoldContent);
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
 
         Assert.Equal(existingContent, mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_AddsUnrootedEntryWhenOnlyRootedEntryExists()
+    {
+        const string existingContent = "/node_modules/\n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, "node_modules/\n");
+
+        Assert.Equal("/node_modules/\nnode_modules/\n", mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_AddsSlashlessPatternWhenDirectoryOnlyPatternDoesNotCoverIt()
+    {
+        const string existingContent = ".aspire/\n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire\n");
+
+        Assert.Equal(".aspire/\n.aspire\n", mergedContent);
     }
 }

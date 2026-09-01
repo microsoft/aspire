@@ -201,7 +201,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-                contentToWrite = MergeGitIgnoreContent(existingContent, content);
+                contentToWrite = GitIgnoreMerger.Merge(existingContent, content);
             }
             else if (IsVsCodeSettingsFile(fileName) && File.Exists(filePath))
             {
@@ -562,41 +562,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         return conflicts;
     }
 
-    internal static string MergeGitIgnoreContent(string existingContent, string scaffoldContent)
-    {
-        ArgumentNullException.ThrowIfNull(existingContent);
-        ArgumentNullException.ThrowIfNull(scaffoldContent);
-
-        if (string.IsNullOrEmpty(existingContent))
-        {
-            return scaffoldContent;
-        }
-
-        var existingEntries = ReadGitIgnoreEntries(existingContent).ToHashSet(StringComparer.Ordinal);
-        var existingNormalized = existingEntries
-            .Select(NormalizeGitIgnoreEntry)
-            .ToHashSet(StringComparer.Ordinal);
-
-        var missingEntries = ReadGitIgnoreEntries(scaffoldContent)
-            .Where(entry => !existingEntries.Contains(entry)
-                && !existingNormalized.Contains(NormalizeGitIgnoreEntry(entry)))
-            .ToArray();
-
-        if (missingEntries.Length == 0)
-        {
-            return existingContent;
-        }
-
-        var newline = existingContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        var mergedContent = existingContent;
-        if (!mergedContent.EndsWith("\n", StringComparison.Ordinal))
-        {
-            mergedContent += newline;
-        }
-
-        return mergedContent + string.Join(newline, missingEntries) + newline;
-    }
-
     private static bool IsGitIgnoreFile(string fileName)
         => Path.GetFileName(fileName).Equals(".gitignore", StringComparison.Ordinal);
 
@@ -701,22 +666,4 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
     }
 
-    private static IEnumerable<string> ReadGitIgnoreEntries(string content)
-    {
-        using var reader = new StringReader(content);
-        string? line;
-
-        while ((line = reader.ReadLine()) is not null)
-        {
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                yield return line.TrimEnd();
-            }
-        }
-    }
-
-    // Normalizes a .gitignore entry so rooted (`/foo/`) and unrooted (`foo/`) forms
-    // are treated as equivalent when deciding whether to append a scaffold entry.
-    private static string NormalizeGitIgnoreEntry(string entry)
-        => entry.StartsWith('/') ? entry[1..] : entry;
 }

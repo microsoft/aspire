@@ -1544,7 +1544,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithExplicitCSharpEmptyTemplateCreatesCSharpAppHost()
+    public async Task NewCommandWithExplicitCSharpEmptyTemplateCreatesCSharpAppHostAndGitIgnore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -1556,7 +1556,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs")));
+
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        Assert.True(File.Exists(Path.Combine(outputPath, "apphost.cs")));
+        Assert.Equal([".aspire/"], await File.ReadAllLinesAsync(Path.Combine(outputPath, ".gitignore")));
     }
 
     [Fact]

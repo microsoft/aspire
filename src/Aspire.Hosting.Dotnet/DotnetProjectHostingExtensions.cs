@@ -19,6 +19,107 @@ namespace Aspire.Hosting;
 public static class DotnetProjectHostingExtensions
 {
     /// <summary>
+    /// Adds an environment variable to the build process for a .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <param name="name">The name of the environment variable.</param>
+    /// <param name="value">The value of the environment variable.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/>, <paramref name="name"/>, or <paramref name="value"/> is null.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// The variable is available while Aspire builds the project but is not added to the environment of the
+    /// launched project. Use <c>WithEnvironment</c> separately when the same variable is also needed at runtime.
+    /// </para>
+    /// <para>
+    /// Configuring a build environment causes Aspire to build this project separately from traversal groups.
+    /// </para>
+    /// <para>
+    /// Do not use this API for secrets. Aspire must carry the value in IDE launch metadata and process environments.
+    /// Protected temporary MSBuild response files preserve global-property semantics without exposing values in process
+    /// command lines, but they are not a general-purpose secret transport.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Configure an environment variable that selects a custom build output:
+    /// <code lang="csharp">
+    /// builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
+    ///     .WithBuildEnvironment("BUILD_FLAVOR", "custom");
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
+    public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        string name,
+        string value)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return builder.WithBuildEnvironment(context => context.EnvironmentVariables[name] = value);
+    }
+
+    /// <summary>
+    /// Adds a callback that configures build-only environment variables for a .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <param name="callback">The callback that configures the build environment.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
+    /// </exception>
+    /// <remarks>
+    /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
+    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
+    /// temporary MSBuild response files.
+    /// </remarks>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        Action<EnvironmentCallbackContext> callback)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithBuildEnvironment(context =>
+        {
+            callback(context);
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// Adds an asynchronous callback that configures build-only environment variables for a .NET project.
+    /// </summary>
+    /// <param name="builder">The .NET project resource builder.</param>
+    /// <param name="callback">The callback that configures the build environment.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
+    /// </exception>
+    /// <remarks>
+    /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
+    /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
+    /// temporary MSBuild response files.
+    /// </remarks>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        Func<EnvironmentCallbackContext, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+    }
+
+    /// <summary>
     /// Adds a C# project or file-based app to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
@@ -107,7 +208,12 @@ public static class DotnetProjectHostingExtensions
         configure(options);
 
         path = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, path));
-        var projectMetadata = new DotnetProjectMetadata(path);
+
+        // The app host's own build configuration (Debug/Release) is propagated to every child launch
+        // so process and IDE launchers resolve the output produced by the coordinated build.
+        var configuration = builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        var projectMetadata = new DotnetProjectMetadata(path, configuration);
+        var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
@@ -118,59 +224,89 @@ public static class DotnetProjectHostingExtensions
 
         var app = new DotnetProjectResource(name, workingDirectory);
 
-        // The app host's own build configuration (Debug/Release) is propagated to the child `dotnet run`
-        // so the service matches the app host, mirroring DistributedApplicationOptions.Configuration.
-        var configuration = builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
-
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
                               .WithIconName("CodeCsRectangle")
                               .WithProjectDefaults(options);
+        var projectLaunchConfigurationType = resource.Resource.Annotations
+            .OfType<SupportsDebuggingAnnotation>()
+            .LastOrDefault()
+            ?.LaunchConfigurationType
+            ?? KnownLaunchConfigurationTypes.Project;
 
-        // Declare the default `dotnet run` invocation separately from the program arguments so a later
-        // WithLaunchToolArgs call replaces it instead of being prepended to it:
-        //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile OR
-        //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
-        resource.WithLaunchToolArgs(ctx =>
-        {
-            if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
+        DotnetProjectBuildCoordinator.Configure(resource, buildCoordinator);
+        string? defaultRunWorkingDirectory = null;
+
+        // Declare the SDK-selected tool invocation separately from the program arguments so a later
+        // WithLaunchToolArgs call replaces it instead of being prepended to it.
+        resource.WithLaunchToolArgs(
+            async ctx =>
             {
-                return;
-            }
+                if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
+                    && debugAnnotation.LaunchConfigurationType == projectLaunchConfigurationType)
+                {
+                    return;
+                }
 
-            IProjectMetadata metadata = projectMetadata;
+                IProjectMetadata metadata = projectMetadata;
+                if (!metadata.IsFileBasedApp &&
+                    metadata.SuppressBuild &&
+                    metadata.BuildWorkingDirectory is { } buildWorkingDirectory)
+                {
+                    var runProperties = await DotnetProjectRunPropertiesResolver.ResolveAsync(
+                        metadata.ProjectPath,
+                        projectMetadata.BuildConfiguration,
+                        projectMetadata.BuildEnvironment,
+                        buildWorkingDirectory,
+                        ctx.Logger,
+                        ctx.CancellationToken).ConfigureAwait(false);
+                    var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
+                    defaultRunWorkingDirectory ??= executableAnnotation.WorkingDirectory;
+                    executableAnnotation.Command = runProperties.Command;
+                    executableAnnotation.WorkingDirectory = string.IsNullOrEmpty(runProperties.WorkingDirectory)
+                        ? defaultRunWorkingDirectory
+                        : runProperties.WorkingDirectory;
 
-            ctx.Args.Add("run");
-            ctx.Args.Add(metadata.IsFileBasedApp ? "--file" : "--project");
-            ctx.Args.Add(metadata.ProjectPath);
+                    foreach (var argument in CommandLineArgsParser.Parse(runProperties.Arguments))
+                    {
+                        ctx.Args.Add(argument);
+                    }
 
-            if (metadata.IsFileBasedApp)
-            {
-                ctx.Args.Add("--no-cache");
-            }
+                    return;
+                }
 
-            if (metadata.SuppressBuild)
-            {
-                ctx.Args.Add("--no-build");
-            }
+                ctx.Args.Add("run");
+                ctx.Args.Add(metadata.IsFileBasedApp ? "--file" : "--project");
+                ctx.Args.Add(metadata.ProjectPath);
 
-            if (!string.IsNullOrEmpty(configuration))
-            {
-                ctx.Args.Add("--configuration");
-                ctx.Args.Add(configuration);
-            }
+                if (metadata.IsFileBasedApp)
+                {
+                    ctx.Args.Add("--no-cache");
+                }
 
-            // Always suppress the normal launch profile handling: the profile's settings would otherwise
-            // override the ambient environment, but those ambient settings come from the application model
-            // and must take priority. WithProjectDefaults materializes the profile's environment manually.
-            ctx.Args.Add("--no-launch-profile");
+                if (metadata.SuppressBuild)
+                {
+                    ctx.Args.Add("--no-build");
+                }
 
-            if (GetLaunchProfileArguments(ctx.Resource).Count > 0)
-            {
-                ctx.Args.Add("--");
-            }
-        }, ownedByLaunchConfigurationType: KnownLaunchConfigurationTypes.Project);
+                if (!string.IsNullOrEmpty(projectMetadata.BuildConfiguration))
+                {
+                    ctx.Args.Add("--configuration");
+                    ctx.Args.Add(projectMetadata.BuildConfiguration);
+                }
+
+                // Always suppress the normal launch profile handling: the profile's settings would otherwise
+                // override the ambient environment, but those ambient settings come from the application model
+                // and must take priority. WithProjectDefaults materializes the profile's environment manually.
+                ctx.Args.Add("--no-launch-profile");
+
+                if (GetLaunchProfileArguments(ctx.Resource).Count > 0)
+                {
+                    ctx.Args.Add("--");
+                }
+            },
+            ownedByLaunchConfigurationType: projectLaunchConfigurationType,
+            showInCommandLine: true);
 
         // Launch-profile command-line arguments belong to the program, not the replaceable tool invocation.
         // Keeping them in the ordinary segment preserves them when a caller supplies a custom launch tool.
@@ -188,7 +324,7 @@ public static class DotnetProjectHostingExtensions
             if (!builder.ExecutionContext.IsRunMode
                 || options.ExcludeLaunchProfile
                 || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                    && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project))
+                    && debugAnnotation.LaunchConfigurationType == projectLaunchConfigurationType))
             {
                 return [];
             }

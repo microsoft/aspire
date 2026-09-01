@@ -54,6 +54,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />

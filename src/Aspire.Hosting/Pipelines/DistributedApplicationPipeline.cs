@@ -545,8 +545,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// <summary>
     /// Creates a clone of this pipeline whose built-in steps are independent
     /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
-    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
-    /// are shallow-copied — the same delegates are reused.
+    /// <see cref="PipelineStep.RequiredBySteps"/> and final action lists).
+    /// Configuration callbacks are shallow-copied — the same delegates are reused.
     /// </summary>
     /// <remarks>
     /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
@@ -623,7 +623,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        // Configuration callbacks are run on every resolution, so give them fresh built-in steps instead
+        // of retaining dependency and final-action mutations from an earlier list or execute request.
+        var allSteps = _steps.Select(step => step.Clone()).Concat(annotationSteps).ToList();
 
         // Execute configuration callbacks even if there are no steps
         // This allows callbacks to run validation or other logic
@@ -1132,6 +1134,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         try
         {
             await step.Action(stepContext).ConfigureAwait(false);
+            foreach (var finalAction in step.FinalActions)
+            {
+                await finalAction(stepContext).ConfigureAwait(false);
+            }
         }
         catch (DistributedApplicationException)
         {
