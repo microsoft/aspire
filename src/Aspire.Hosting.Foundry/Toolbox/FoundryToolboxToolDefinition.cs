@@ -78,17 +78,18 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
         // comes into play. The Read side is fine because AzureAIProjectsAgentsContext is resolved
         // from the same ALC as the SCM it talks to.
         //
-        // The OpenAI Responses "web_search" tool has a fixed wire shape: {"type":"web_search"}.
-        // See https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools.
-        var json = BinaryData.FromString("""{"type":"web_search"}""");
-        var agentTool = ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
-        var canonicalConfiguration = JsonSerializer.Serialize(new
+        // Toolbox tools support an additional "name" field that is not modeled by the current
+        // Azure.AI.Projects.Agents SDK but is preserved through its additional-properties bag:
+        //   {"type":"web_search","name":"web-search"}
+        // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#multiple-tool-types.
+        var json = BinaryData.FromObjectAsJson(new
         {
             type = "web_search",
             name = Name
         });
+        var agentTool = ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
         return new ValueTask<ResolvedFoundryToolboxTool>(
-            new ResolvedFoundryToolboxTool(Name, agentTool!, canonicalConfiguration));
+            new ResolvedFoundryToolboxTool(Name, agentTool!, json.ToString()));
     }
 }
 
@@ -120,10 +121,11 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         }
 
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
-            endpointUri.Scheme != Uri.UriSchemeHttps)
+            endpointUri.Scheme != Uri.UriSchemeHttps ||
+            endpointUri.IsLoopback)
         {
             throw new InvalidOperationException(
-                $"MCP tool '{Name}' must resolve to an absolute HTTPS endpoint.");
+                $"MCP tool '{Name}' must resolve to a publicly reachable absolute HTTPS endpoint.");
         }
 
         // Build the OpenAI Responses "mcp" tool wire JSON by hand and read it back as a
@@ -216,15 +218,30 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
             IndexName = IndexName
         };
         var options = new AzureAISearchToolOptions([index]);
-        var tool = new AzureAISearchTool(options);
-        var canonicalConfiguration = JsonSerializer.Serialize(new
+        var unnamedTool = new AzureAISearchTool(options);
+        var unnamedJson = ModelReaderWriter.Write(
+            unnamedTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        using var unnamedDocument = JsonDocument.Parse(unnamedJson);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
         {
-            type = "azure_ai_search",
-            name = Name,
-            projectConnectionId = connectionId,
-            indexName = IndexName
-        });
+            writer.WriteStartObject();
+            foreach (var property in unnamedDocument.RootElement.EnumerateObject())
+            {
+                property.WriteTo(writer);
+            }
+            writer.WriteString("name", Name);
+            writer.WriteEndObject();
+        }
 
-        return new ResolvedFoundryToolboxTool(Name, tool, canonicalConfiguration);
+        var json = BinaryData.FromBytes(stream.ToArray());
+        var tool = ModelReaderWriter.Read<ProjectsAgentTool>(
+            json,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default)!;
+
+        return new ResolvedFoundryToolboxTool(Name, tool, json.ToString());
     }
 }

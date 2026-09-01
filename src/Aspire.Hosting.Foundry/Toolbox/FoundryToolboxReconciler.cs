@@ -296,7 +296,14 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         if (existing is null)
         {
             var created = await administration.CreateVersionAsync(definition, cancellationToken).ConfigureAwait(false);
-            return new(created, FoundryToolboxReconcileAction.Created);
+            // Another deployment can create the same Toolbox between the read and create calls.
+            // Explicitly promote our immutable version so the unversioned consumer endpoint serves
+            // the configuration this deployment just reconciled.
+            await administration.PromoteVersionAsync(
+                definition.Name,
+                created,
+                cancellationToken).ConfigureAwait(false);
+            return new(created, FoundryToolboxReconcileAction.CreatedAndPromoted);
         }
 
         if (!existing.Default.Metadata.TryGetValue(
@@ -359,7 +366,6 @@ internal sealed record FoundryToolboxReconcileResult(
 
 internal enum FoundryToolboxReconcileAction
 {
-    Created,
     Reused,
     Promoted,
     CreatedAndPromoted

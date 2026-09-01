@@ -85,7 +85,7 @@ await _promptAgent.withTool(funcTool);
 const toolbox = await project.addToolbox('field-tools');
 await toolbox.withDescription('Tools for field technicians.');
 await toolbox.withWebSearchTool();
-await toolbox.withMcpTool('inventory', api.getEndpoint('http'));
+await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp');
 await toolbox.withAISearchTool('knowledge-base', search);
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');

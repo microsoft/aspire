@@ -203,11 +203,18 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureSearchResource search)
+        => builder.AddSearchConnection($"connection-{Guid.NewGuid():N}", search);
+
+    internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddSearchConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        AzureSearchResource search)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(search);
 
-        return builder.AddConnection($"connection-{Guid.NewGuid():N}", (infra) =>
+        return builder.AddConnection(name, (infra) =>
         {
             var searchService = (SearchService)search.AddAsExistingResource(infra);
             return new AadAuthTypeConnectionProperties()

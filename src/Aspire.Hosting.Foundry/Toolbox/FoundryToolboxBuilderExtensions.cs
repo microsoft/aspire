@@ -4,6 +4,8 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
+using System.IO.Hashing;
+using System.Text;
 
 namespace Aspire.Hosting;
 
@@ -135,6 +137,12 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint.</param>
+    /// <remarks>
+    /// During local development, the endpoint must resolve to a publicly reachable HTTPS URI, such
+    /// as an anonymous development tunnel. A localhost endpoint cannot be reached by the Foundry
+    /// data plane. Resource endpoints deployed with public HTTPS ingress can be referenced directly
+    /// when using <c>aspire deploy</c>.
+    /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
@@ -200,7 +208,12 @@ public static class FoundryToolboxBuilderExtensions
         ArgumentNullException.ThrowIfNull(search);
 
         var projectBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent);
-        var connection = projectBuilder.AddConnection(search);
+        var connectionName = CreateSearchConnectionName(
+            builder.Resource.Parent.Name,
+            builder.Resource.Name,
+            name,
+            search.Resource.Name);
+        var connection = projectBuilder.AddSearchConnection(connectionName, search.Resource);
         builder.Resource.AddTool(new FoundryToolboxAzureAISearchToolDefinition(
             name,
             search.Resource,
@@ -208,6 +221,17 @@ public static class FoundryToolboxBuilderExtensions
             indexName));
 
         return builder;
+    }
+
+    private static string CreateSearchConnectionName(
+        string projectName,
+        string toolboxName,
+        string toolName,
+        string searchName)
+    {
+        var identity = Encoding.UTF8.GetBytes($"{projectName}\0{toolboxName}\0{toolName}\0{searchName}");
+        var hash = XxHash3.Hash(identity);
+        return $"toolbox-search-{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
     private static IResourceBuilder<FoundryToolboxResource> WithMcpTool(

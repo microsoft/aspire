@@ -129,6 +129,68 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
+## Toolbox usage
+
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
+immutable Toolbox version and promotes new versions only when the configured tools, description,
+or metadata change.
+
+**C#**
+
+```csharp
+var foundry = builder.AddFoundry("foundry");
+var project = foundry.AddProject("my-project");
+var search = builder.AddAzureSearch("search");
+
+var toolbox = project.AddToolbox("field-tools")
+    .WithDescription("Tools for field technicians.")
+    .WithWebSearchTool()
+    .WithAISearchTool("knowledge-base", search, "docs")
+    .WithMcpTool("inventory", "https://inventory.example.com/mcp");
+
+builder.AddProject<Projects.MyService>("service")
+    .WithReference(toolbox);
+```
+
+**TypeScript**
+
+```typescript
+const foundry = await builder.addFoundry("foundry");
+const project = await foundry.addProject("my-project");
+const search = await builder.addAzureSearch("search");
+
+const toolbox = await project.addToolbox("field-tools");
+await toolbox.withDescription("Tools for field technicians.");
+await toolbox.withWebSearchTool();
+await toolbox.withAISearchTool("knowledge-base", search, "docs");
+await toolbox.withMcpTool("inventory", "https://inventory.example.com/mcp");
+
+const service = await builder.addNodeApp("service", "../service", "server.js");
+await service.withReference(toolbox);
+```
+
+MCP endpoints must be publicly reachable over HTTPS because the Foundry data plane invokes them.
+For local development, use a public development tunnel instead of a localhost endpoint. Inline
+credentials and headers are not supported; configure authenticated MCP servers through Foundry
+project connections.
+
+The default consumer endpoint always serves the promoted Toolbox version. Set
+`FoundryToolboxResource.Version` only when a consumer must target a specific immutable version.
+
+### Microsoft Foundry Toolbox
+
+The Toolbox resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Name` | The Toolbox resource name |
+| `ProjectEndpoint` | The parent Microsoft Foundry project endpoint |
+| `Uri` | The MCP consumer endpoint, or the version-specific endpoint when `Version` is set |
+| `ApiVersion` | The Toolbox data-plane API version |
+| `FoundryFeatures` | The required `Foundry-Features` request header value |
+| `AuthorizationScope` | The Microsoft Entra authorization scope for Toolbox requests |
+| `Version` | The pinned immutable version, when configured |
+
 ## Prompt agent usage
 
 Prompt agents are declarative agents defined by a model, instructions, and tools. They are always deployed to Azure Foundry — even during local development (`aspire run`) — and local services communicate with the cloud-provisioned agent.

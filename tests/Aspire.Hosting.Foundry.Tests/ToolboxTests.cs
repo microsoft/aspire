@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Pipelines APIs are experimental.
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental.
 
+using System.ClientModel.Primitives;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
@@ -206,6 +207,11 @@ public class ToolboxTests
         var projectTool = await tool.ToProjectsAgentToolAsync(CancellationToken.None);
 
         Assert.NotNull(projectTool);
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Equal("""{"type":"web_search","name":"web-search"}""", json.ToString());
     }
 
     [Fact]
@@ -230,6 +236,11 @@ public class ToolboxTests
         var index = Assert.Single(aiSearch.Options.Indexes);
         Assert.Equal("/subscriptions/sub/resourceGroups/rg/connections/search", index.ProjectConnectionId);
         Assert.Equal("docs", index.IndexName);
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Contains("\"name\":\"knowledge-base\"", json.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -277,7 +288,20 @@ public class ToolboxTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
-        Assert.Contains("absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("publicly reachable absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task McpToolDefinition_ThrowsWhenEndpointIsLoopback()
+    {
+        var def = new FoundryToolboxMcpToolDefinition(
+            "inventory",
+            ReferenceExpression.Create($"https://localhost:7443/mcp"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+
+        Assert.Contains("publicly reachable", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -292,6 +316,31 @@ public class ToolboxTests
                 .WithMcpTool("inventory", "http://inventory.example.com/mcp"));
 
         Assert.Equal("endpoint", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithAISearchTool_UsesDeterministicConnectionName()
+    {
+        using var firstBuilder = TestDistributedApplicationBuilder.Create();
+        var firstProject = firstBuilder.AddFoundry("account")
+            .AddProject("my-project");
+        var firstSearch = firstBuilder.AddAzureSearch("search");
+        var firstToolbox = firstProject.AddToolbox("field-tools")
+            .WithAISearchTool("knowledge-base", firstSearch, "docs");
+
+        using var secondBuilder = TestDistributedApplicationBuilder.Create();
+        var secondProject = secondBuilder.AddFoundry("account")
+            .AddProject("my-project");
+        var secondSearch = secondBuilder.AddAzureSearch("search");
+        var secondToolbox = secondProject.AddToolbox("field-tools")
+            .WithAISearchTool("knowledge-base", secondSearch, "docs");
+
+        var firstDefinition = Assert.IsType<FoundryToolboxAzureAISearchToolDefinition>(
+            Assert.Single(firstToolbox.Resource.Tools));
+        var secondDefinition = Assert.IsType<FoundryToolboxAzureAISearchToolDefinition>(
+            Assert.Single(secondToolbox.Resource.Tools));
+
+        Assert.Equal(firstDefinition.Connection.Name, secondDefinition.Connection.Name);
     }
 
     [Fact]

@@ -90,10 +90,12 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 """
                 var foundry = builder.AddFoundry("aif-myfoundry");
                 var foundryProject = foundry.AddProject("proj-myproject");
+                var search = builder.AddAzureSearch("search");
 
                 foundryProject.AddToolbox("field-tools")
                     .WithDescription("Tools for field technicians.")
-                    .WithWebSearchTool();
+                    .WithWebSearchTool()
+                    .WithAISearchTool("knowledge-base", search);
 
                 builder.Build().Run();
                 """);
@@ -111,7 +113,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             // immutable version rather than producing another one.
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("action Created", timeout: TimeSpan.FromMinutes(35));
+            await auto.WaitUntilTextAsync("action CreatedAndPromoted", timeout: TimeSpan.FromMinutes(35));
             await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(2));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

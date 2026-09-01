@@ -17,10 +17,10 @@ public class FoundryToolboxReconcilerTests
         var result = await new FoundryToolboxReconciler(administration)
             .ReconcileAsync(definition, CancellationToken.None);
 
-        Assert.Equal(FoundryToolboxReconcileAction.Created, result.Action);
+        Assert.Equal(FoundryToolboxReconcileAction.CreatedAndPromoted, result.Action);
         Assert.Equal("1", result.Version);
         Assert.Same(definition, Assert.Single(administration.CreatedDefinitions));
-        Assert.Empty(administration.Promotions);
+        Assert.Equal(("field-tools", "1"), Assert.Single(administration.Promotions));
     }
 
     [Fact]
