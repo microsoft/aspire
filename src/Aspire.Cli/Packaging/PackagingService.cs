@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Security;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
@@ -56,9 +57,9 @@ internal class PackagingService : IPackagingService
     //   overrideCliIdentityChannel        - forces the identity used for staging-feed decisions
     //                                       (validated against the known channel set). Set to
     //                                       `staging` to exercise the staging-identity darc path.
-    //   overrideCliInformationalVersion   - forces the AssemblyInformationalVersion that the SHA
-    //                                       derivation and version-shape (quality) checks read,
-    //                                       e.g. `13.4.0-preview.1.26280.6+<full-commit-hash>`.
+    //   overrideCliInformationalVersion   - forces the AssemblyInformationalVersion used to derive
+    //                                       the SHA-specific feed URL, e.g.
+    //                                       `13.4.0-preview.1.26280.6+<full-commit-hash>`.
     //
     // NOTE: These only route to a feed; they do not create one. They are typically useful only
     // once the darc-pub-microsoft-aspire-<sha> feed actually exists for the specific commit/version
@@ -68,16 +69,23 @@ internal class PackagingService : IPackagingService
     internal const string OverrideCliInformationalVersionConfigKey = "overrideCliInformationalVersion";
 
     private readonly CliExecutionContext _executionContext;
+
+    /// <summary>
+    /// Resolves the nuget.org service-index URL the CLI should write into the
+    /// <c>PackageMapping</c>s it generates. Returns the override supplied by
+    /// <c>ASPIRE_CLI_NUGET_SERVICE_INDEX</c> or the <c>nugetServiceIndexOverride</c>
+    /// field of <c>.aspire-install.json</c> when set, otherwise the canonical
+    /// <see cref="PackageSources.NuGetOrg"/>. This is a write-side rewrite
+    /// only; URLs read out of existing user <c>NuGet.config</c> files are not
+    /// touched. See <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </summary>
+    private string NuGetOrgUrl => _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
+
     private readonly INuGetPackageCache _nuGetPackageCache;
     private readonly IFeatures _features;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PackagingService> _logger;
     private readonly Func<string?> _processPathProvider;
-    // Predicate used by staging-channel synthesis to decide whether the running CLI is built
-    // from a stable-shaped version (no semver prerelease tag). Defaults to inspecting the
-    // current Aspire.Cli assembly's InformationalVersion; tests inject a deterministic value
-    // because the version baked into the test-host assembly varies by build configuration.
-    private readonly Func<bool> _isStableShapedCliVersion;
     // Provides the running CLI's AssemblyInformationalVersion (which carries the +<commitHash>
     // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging
     // feed). Defaults to reading the Aspire.Cli assembly; tests inject a deterministic value
@@ -99,7 +107,6 @@ internal class PackagingService : IPackagingService
         IConfiguration configuration,
         ILogger<PackagingService> logger,
         Func<string?>? processPathProvider = null,
-        Func<bool>? isStableShapedCliVersion = null,
         Func<string?>? cliInformationalVersionProvider = null)
     {
         _executionContext = executionContext;
@@ -108,7 +115,6 @@ internal class PackagingService : IPackagingService
         _configuration = configuration;
         _logger = logger;
         _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
-        _isStableShapedCliVersion = isStableShapedCliVersion ?? IsStableShapedCliVersionDefault;
         _cliInformationalVersionProvider = cliInformationalVersionProvider ?? GetCliInformationalVersionDefault;
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
     }
@@ -130,18 +136,19 @@ internal class PackagingService : IPackagingService
         // (e.g. an override that ultimately resolves to a non-staging identity still warns).
         WarnIfStagingDiagnosticOverridesActive();
 
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger);
+        var nugetOrg = NuGetOrgUrl;
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, nugetOrg)
+        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, nugetOrg)
+        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -187,26 +194,15 @@ internal class PackagingService : IPackagingService
             //     The user picked staging deliberately; they get the broadest matching window.
             //   - `stagingFeatureEnabled` only (no other staging signal): Stable. Preserves the
             //     pre-existing behavior of the staging feature flag.
-            //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging):
-            //     follows the CLI build's version shape so the eligible version window matches the
-            //     packages the build actually shipped.
-            //       * Stable-shaped (e.g. "13.4.0", produced during release stabilization when
-            //         StabilizePackageVersion=true) → Stable, so resolution prefers the stable-shaped
-            //         packages on the darc feed (the #17527 scenario).
-            //       * Prerelease-shaped (e.g. "13.4.0-preview.1.123") → Both, so prerelease-tagged
-            //         packages on the darc feed remain eligible.
+            //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging): Both.
+            //     A single official staging build can publish stable-shaped packages and deliberately
+            //     prerelease-only integrations from the same SHA-specific feed. Restricting a
+            //     stable-shaped staging CLI to Stable hides those integrations from broad discovery.
+            //     See https://github.com/microsoft/aspire/issues/19423.
             PackageChannelQuality defaultQuality;
             if (stagingIdentityChannel)
             {
-                // When the running CLI's identity itself is staging, the synthesized channel's
-                // quality MUST follow the CLI build's version shape regardless of how synthesis
-                // was triggered. `init` and many other commands pass requestedChannelName=staging
-                // when identity is staging, so checking `stagingChannelRequested` first would
-                // short-circuit this path and re-introduce the #17527 version-filtering mismatch on
-                // stabilizing builds.
-                defaultQuality = _isStableShapedCliVersion()
-                    ? PackageChannelQuality.Stable
-                    : PackageChannelQuality.Both;
+                defaultQuality = PackageChannelQuality.Both;
             }
             else if (stagingChannelConfigured || stagingChannelRequested)
             {
@@ -228,7 +224,39 @@ internal class PackagingService : IPackagingService
         channels.Add(dailyChannel);
         channels.AddRange(prPackageChannels);
 
+        if (_executionContext.IdentityPackagesDirectory is { } identityPackagesDirectory)
+        {
+            // ASPIRE_CLI_PACKAGES / the sidecar `packages` field points the CLI's Aspire* feed directly
+            // at a flat directory of freshly built .nupkg files (e.g. artifacts/packages/<Config>/Shipping)
+            // instead of a hive staged under ~/.aspire/hives, so a locally built CLI can resolve locally
+            // built packages without copying them. The synthesized channel takes the running CLI's
+            // identity-channel name and wins over ANY same-named channel synthesized above — whether a
+            // built-in (e.g. emulating `daily`/`stable` while supplying local packages), a discovered
+            // ~/.aspire/hives/<channel> hive, or a PR-install hive — because the explicit override is the
+            // most specific signal of intent. We replace it here (after the full list is built) rather
+            // than earlier so built-in channels are covered too. See docs/specs/cli-identity-sidecar.md.
+            EnsurePackagesOverrideDirectoryIsUnambiguous(identityPackagesDirectory);
+            var replacedChannelCount = channels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            _logger.LogDebug(
+                "Synthesized package channel '{Channel}' from the packages override directory '{PackagesDirectory}', replacing {ReplacedChannelCount} same-named channel(s).",
+                _executionContext.IdentityChannel,
+                identityPackagesDirectory.FullName,
+                replacedChannelCount);
+            channels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, identityPackagesDirectory));
+        }
+
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
+    }
+
+    private Action TemplatePackageMetadataPrefetchingValidation => () => ValidateTemplatePackageMetadataPrefetching();
+
+    [Conditional("DEBUG")]
+    private void ValidateTemplatePackageMetadataPrefetching()
+    {
+        if (_executionContext.Command is BaseCommand { PrefetchesTemplatePackageMetadata: false } command)
+        {
+            throw new PackageMetadataPrefetchingValidationException($"Command '{command.Name}' consumes template package metadata but does not enable {nameof(BaseCommand.PrefetchesTemplatePackageMetadata)}.");
+        }
     }
 
     private string? TryGetProcessPathForPrInstallDiscovery()
@@ -253,8 +281,8 @@ internal class PackagingService : IPackagingService
         return PackageChannel.CreateExplicitChannel(name, PackageChannelQuality.Both, new[]
         {
             new PackageMapping("Aspire*", packagesPath),
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, _features, pinnedVersion: pinnedVersion, logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
+        }, _nuGetPackageCache, _features, _logger, pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
     }
 
     internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
@@ -299,62 +327,12 @@ internal class PackagingService : IPackagingService
         return packagesDirectory.Exists ? packagesDirectory : null;
     }
 
-    // Returns true when the running CLI's version is stable-shaped (no semver prerelease tag).
-    // Used by the staging-channel synthesis to route stabilizing builds to the SHA-derived darc
-    // feed instead of the shared dotnet9 daily feed. Falls back to false on any error so we
-    // preserve the historical Both/shared-feed behavior rather than silently misrouting.
-    private static bool IsStableShapedCliVersionFromAssembly()
-    {
-        try
-        {
-            var version = VersionHelper.GetDefaultSdkVersion();
-            return !string.IsNullOrEmpty(version) && !version.Contains('-');
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    // Reads the running CLI assembly's AssemblyInformationalVersion, which carries the +<commitHash>
-    // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging feed.
-    // Returns null on any error so callers degrade gracefully (no derived feed) rather than throwing.
-    private static string? GetCliInformationalVersionFromAssembly()
-    {
-        try
-        {
-            return Assembly.GetExecutingAssembly()
-                .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
-                .OfType<AssemblyInformationalVersionAttribute>()
-                .FirstOrDefault()?.InformationalVersion;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    // Default version-shape predicate. Honors the overrideCliInformationalVersion diagnostic
-    // override (so a locally built CLI can present as stable- or prerelease-shaped for staging
-    // validation) before falling back to the real assembly version.
-    private bool IsStableShapedCliVersionDefault()
-    {
-        var overrideVersion = _configuration[OverrideCliInformationalVersionConfigKey];
-        if (!string.IsNullOrEmpty(overrideVersion))
-        {
-            // Stable-shaped == no semver prerelease tag. Strip build metadata (+<hash>) first so a
-            // commit hash that happens to contain '-' can't be misread as a prerelease tag. Example:
-            //   "13.4.0-preview.1.26280.6+abcd-ef12" -> version part "13.4.0-preview.1.26280.6" -> prerelease
-            //   "13.4.0+abcd-ef12"                   -> version part "13.4.0"                   -> stable
-            return !StripBuildMetadata(overrideVersion).Contains('-');
-        }
-
-        return IsStableShapedCliVersionFromAssembly();
-    }
-
     // Default informational-version provider. Honors the overrideCliInformationalVersion diagnostic
     // override (so the SHA-specific darc feed can be derived deterministically from a locally built
-    // CLI) before falling back to the real assembly informational version.
+    // CLI) before falling back to the resolved identity. IdentityVersion carries the version without
+    // build metadata and IdentityCommit carries the +<sha>; they are recombined here so the
+    // staging-feed SHA derivation honors ASPIRE_CLI_VERSION / ASPIRE_CLI_COMMIT / the install sidecar
+    // rather than reading the physical assembly informational version.
     private string? GetCliInformationalVersionDefault()
     {
         var overrideVersion = _configuration[OverrideCliInformationalVersionConfigKey];
@@ -363,7 +341,9 @@ internal class PackagingService : IPackagingService
             return overrideVersion;
         }
 
-        return GetCliInformationalVersionFromAssembly();
+        var version = _executionContext.IdentityVersion;
+        var commit = _executionContext.IdentityCommit;
+        return string.IsNullOrEmpty(commit) ? version : $"{version}+{commit}";
     }
 
     private static string StripBuildMetadata(string version)
@@ -467,8 +447,8 @@ internal class PackagingService : IPackagingService
         var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, stagingQuality, new[]
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, _features, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
+        }, _nuGetPackageCache, _features, _logger, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
@@ -586,13 +566,35 @@ internal class PackagingService : IPackagingService
             return "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         }
 
-        // Derive the SHA-specific staging feed from the CLI's own commit hash, carried in the
-        // AssemblyInformationalVersion build metadata after '+'. Example informational version:
-        //   13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12
+        // Derive the SHA-specific staging feed from the CLI's own commit. The commit comes from
+        // CliExecutionContext.IdentityCommit (ASPIRE_CLI_COMMIT → install sidecar → assembly build
+        // metadata), so a locally built CLI emulating an official build derives the same feed. The
+        // injectable provider is still consulted first so tests can pin a deterministic
+        // informational version (the test-host assembly version is non-deterministic). Example:
+        //   informational "13.4.0-preview.1.26280.6+abcdef12...." or IdentityCommit "abcdef12...."
         // yields the feed:
         //   https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json
-        var informationalVersion = _cliInformationalVersionProvider();
+        var commitHash = ExtractCommitFromInformationalVersion(_cliInformationalVersionProvider())
+            ?? (string.IsNullOrEmpty(_executionContext.IdentityCommit) ? null : _executionContext.IdentityCommit);
 
+        if (string.IsNullOrEmpty(commitHash))
+        {
+            return null;
+        }
+
+        // Env/sidecar commits are guaranteed >= 8 chars by IdentityResolver.ValidateCommit; only the
+        // never-validated assembly informational version could be shorter (e.g. a test or malformed
+        // build), so fall back to the raw value there rather than throwing on this resolve path.
+        var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
+
+        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
+    }
+
+    // Extracts the commit hash from the build-metadata suffix of an informational version, e.g.
+    //   "13.4.0-preview.1.26280.6+abcdef1234..." -> "abcdef1234..."
+    // Returns null when there is no usable "+<sha>" suffix.
+    private static string? ExtractCommitFromInformationalVersion(string? informationalVersion)
+    {
         if (informationalVersion is null)
         {
             return null;
@@ -604,10 +606,7 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
-        var commitHash = informationalVersion[(plusIndex + 1)..];
-        var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
-
-        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
+        return informationalVersion[(plusIndex + 1)..];
     }
 
     private PackageChannelQuality GetStagingQuality(PackageChannelQuality defaultQuality)
@@ -637,10 +636,10 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
-        // Get the CLI's own version and strip build metadata (+hash)
-        var cliVersion = Utils.VersionHelper.GetDefaultTemplateVersion();
-        var plusIndex = cliVersion.IndexOf('+');
-        return plusIndex >= 0 ? cliVersion[..plusIndex] : cliVersion;
+        // Pin to the running CLI's identity version (honors ASPIRE_CLI_VERSION / the install
+        // sidecar / the overrideCliInformationalVersion diagnostic), stripped of build metadata.
+        var informationalVersion = _cliInformationalVersionProvider();
+        return string.IsNullOrEmpty(informationalVersion) ? null : StripBuildMetadata(informationalVersion);
     }
 
     // Local hive channels point at a flat directory of .nupkg files instead of a searchable feed.
@@ -669,5 +668,98 @@ internal class PackagingService : IPackagingService
                 .OrderByDescending(version => SemVersion.Parse(version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
                 .FirstOrDefault();
         }
+    }
+
+    // The ASPIRE_CLI_PACKAGES override maps Aspire* -> a flat directory feed. A flat directory has no
+    // "latest stable vs latest prerelease" semantics: when an id appears with more than one version,
+    // NuGet resolves the highest, silently masking the version the developer meant to test. Fail fast
+    // with an actionable message instead of resolving the wrong package. Only Aspire* ids are checked
+    // because the synthesized channel only routes Aspire* to this directory (everything else goes to
+    // nuget.org), so unrelated multi-versioned packages in the same folder are harmless.
+    private static void EnsurePackagesOverrideDirectoryIsUnambiguous(DirectoryInfo packagesDirectory)
+    {
+        if (!packagesDirectory.Exists)
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                PackagingStrings.PackagesOverrideDirectoryNotFound,
+                packagesDirectory.FullName));
+        }
+
+        var versionsById = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+        // Enumerate recursively to match how the synthesized channel discovers local packages
+        // (PackageChannel.EnumerateLocalPackageFiles uses SearchOption.AllDirectories), so duplicates
+        // sitting in nested folders cannot slip past this guardrail.
+        foreach (var file in packagesDirectory.EnumerateFiles("Aspire*.nupkg", SearchOption.AllDirectories))
+        {
+            if (!TryParseNupkgFileName(file.Name, out var id, out var version))
+            {
+                continue;
+            }
+
+            if (!versionsById.TryGetValue(id, out var versions))
+            {
+                versions = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                versionsById[id] = versions;
+            }
+
+            versions.Add(version);
+        }
+
+        var duplicates = versionsById
+            .Where(static kvp => kvp.Value.Count > 1)
+            .OrderBy(static kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (duplicates.Count > 0)
+        {
+            // e.g. "Aspire.Hosting (13.4.1, 13.4.2); Aspire.Hosting.Azure (13.4.1, 13.4.2)"
+            var details = string.Join("; ", duplicates.Select(static kvp =>
+                $"{kvp.Key} ({string.Join(", ", kvp.Value)})"));
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                PackagingStrings.PackagesOverrideDirectoryHasDuplicateVersions,
+                packagesDirectory.FullName,
+                details));
+        }
+    }
+
+    // Splits a NuGet package file name into its package id and version. The file name shape is
+    // "<id>.<version>.nupkg", where <id> may itself contain dots (e.g. "Aspire.Hosting.Azure.Storage")
+    // and <version> is a strict SemVer that always begins with a numeric major component. Example:
+    //   "Aspire.Hosting.Azure.Storage.13.4.0-preview.1.25366.3.nupkg"
+    //     -> id = "Aspire.Hosting.Azure.Storage", version = "13.4.0-preview.1.25366.3"
+    // The first '.'-delimited segment that begins with a digit marks the start of the version, because
+    // package-id segments never start with a digit. Returns false (and the file is ignored by the
+    // guardrail) when no split yields a strict-SemVer version.
+    internal static bool TryParseNupkgFileName(string fileName, out string id, out string version)
+    {
+        id = string.Empty;
+        version = string.Empty;
+
+        const string suffix = ".nupkg";
+        if (!fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var stem = fileName[..^suffix.Length];
+        var parts = stem.Split('.');
+        for (var i = 1; i < parts.Length; i++)
+        {
+            if (parts[i].Length == 0 || !char.IsDigit(parts[i][0]))
+            {
+                continue;
+            }
+
+            var candidateVersion = string.Join('.', parts[i..]);
+            if (SemVersion.TryParse(candidateVersion, SemVersionStyles.Strict, out _))
+            {
+                id = string.Join('.', parts[..i]);
+                version = candidateVersion;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

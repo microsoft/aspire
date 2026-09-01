@@ -160,6 +160,236 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithServiceDelegation_AddsAnnotationWithServiceNameAsName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithExplicitName_SetsNameAndServiceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments", name: "ContainerAppsDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("ContainerAppsDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_ContainerInstancesConstant_DelegatesToContainerGroups()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation(AzureSubnetServiceDelegations.ContainerInstances);
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.ServiceName);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.Name);
+    }
+
+    [Fact]
+    public void AzureSubnetServiceDelegations_HaveExpectedServiceIdentifiers()
+    {
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", AzureSubnetServiceDelegations.ContainerInstances);
+        Assert.Equal("Microsoft.App/environments", AzureSubnetServiceDelegations.ContainerAppEnvironments);
+        Assert.Equal("Microsoft.Web/serverFarms", AzureSubnetServiceDelegations.AppServiceEnvironments);
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", AzureSubnetServiceDelegations.ApplicationGatewayForContainers);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_CalledMultipleTimes_KeepsOnlyLastDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.Sql/managedInstances")
+            .WithServiceDelegation("Microsoft.Web/serverFarms", name: "WebDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().Single();
+        Assert.Equal("WebDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_CollapsesPreexistingDelegations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("First", "Microsoft.Sql/managedInstances"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("Second", "Microsoft.NetApp/volumes"));
+
+        // Two directly-appended delegation annotations would make Replace's SingleOrDefault throw, so
+        // WithServiceDelegation must collapse them to a single delegation before applying the new one.
+        subnet.WithServiceDelegation("Microsoft.App/environments");
+
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation("Microsoft.App/environments", name: ""));
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyServiceName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation(""));
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_AddsAnnotationsToAppServiceEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        var subnetAnnotation = environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>().SingleOrDefault();
+        Assert.NotNull(subnetAnnotation);
+        Assert.Equal("{myvnet.outputs.mysubnet_Id}", subnetAnnotation.SubnetId.ValueExpression);
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_SameSubnetCanBeConfiguredMoreThanOnce()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDelegatedSubnet(subnet);
+
+        var subnetAnnotation = Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        Assert.Equal("{myvnet.outputs.app_service_subnet_Id}", subnetAnnotation.SubnetId.ValueExpression);
+
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_CaseInsensitiveServiceDelegationIsAllowed()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("AppServiceDelegation", "microsoft.web/serverfarms"));
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_LastMatchingServiceDelegationCollapsesOlderConflicts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("ContainerApps", "Microsoft.App/environments"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("AppService", "microsoft.web/serverfarms"));
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_DifferentSubnetThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var firstSubnet = vnet.AddSubnet("first-subnet", "10.0.0.0/24");
+        var secondSubnet = vnet.AddSubnet("second-subnet", "10.0.1.0/24");
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(firstSubnet);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => environment.WithDelegatedSubnet(secondSubnet));
+
+        Assert.Equal(
+            "The resource 'env' is already associated with a different delegated subnet. A resource can use only one delegated subnet.",
+            exception.Message);
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        Assert.Single(firstSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Empty(secondSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_DifferentServiceDelegationThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("shared-subnet", "10.0.0.0/24");
+        builder.AddAzureContainerAppEnvironment("container-apps")
+            .WithDelegatedSubnet(subnet);
+
+        var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("app-service");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => appServiceEnvironment.WithDelegatedSubnet(subnet));
+
+        Assert.Equal(
+            "The subnet 'shared-subnet' is already delegated to 'Microsoft.App/environments' and cannot also be delegated to 'Microsoft.Web/serverFarms'.",
+            exception.Message);
+        Assert.Empty(appServiceEnvironment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+
+        var delegation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.App/environments", delegation.ServiceName);
+    }
+
+    [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

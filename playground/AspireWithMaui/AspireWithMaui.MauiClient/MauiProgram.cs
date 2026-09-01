@@ -28,7 +28,9 @@ public static class MauiProgram
 		builder.Services.AddHttpClient<IWeatherService, WeatherService>(client =>
 		{
 			// This will be resolved via service discovery when running with Aspire
-			client.BaseAddress = new Uri("https://webapi");
+			// Use https+http:// scheme to allow fallback to HTTP when HTTPS is not available
+			// (e.g., when running on Android emulator without dev tunnels)
+			client.BaseAddress = new Uri("https+http://webapi");
 		});
 
 #if DEBUG

@@ -5,8 +5,9 @@ namespace Aspire.Templates.Tests;
 
 public enum TestSdk
 {
-    Previous,
-    Current,
-    Next,
-    NextSdkWithCurrentAndPreviousRuntime
+    Net8,
+    Net9,
+    Net10,
+    Net11,
+    Net11WithAllSupportedRuntimes
 }

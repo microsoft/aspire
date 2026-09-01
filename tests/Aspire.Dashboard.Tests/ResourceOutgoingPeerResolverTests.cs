@@ -1,13 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Struct = Google.Protobuf.WellKnownTypes.Struct;
 using Value = Google.Protobuf.WellKnownTypes.Value;
 
 namespace Aspire.Dashboard.Tests;
@@ -123,23 +130,169 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("test", value);
     }
 
+    [Theory]
+    [InlineData("db.namespace", "catalogdb")]
+    [InlineData("db.name", "CATALOGDB")]
+    public void DatabaseAttributeMatchesDatabaseResourceOverContainerResource(string databaseAttribute, string databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create(databaseAttribute, databaseName)
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributePrefersExactDatabaseNameMatchOverCaseInsensitiveMatch()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["Catalog"] = CreateResourceWithConnectionString("Catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=Catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalog"] = CreateResourceWithConnectionString("catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "50267"), KeyValuePair.Create("db.namespace", "catalog")], out var value));
+        Assert.Equal("catalog", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeMatchesDatabaseResourceAfterAddressTransformationOverExactContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=127.0.0.1;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "127.0.0.1"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create("db.namespace", "catalogdb")
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchDatabaseResource_MatchesContainerResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres")
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("postgres", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchAndNoContainerResource_MatchesFirstDatabaseResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("jobsdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeMatchesMongoDbUriResourceOverContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Theory]
+    [InlineData("DatabaseName")]
+    [InlineData("databaseName")]
+    public void DatabaseAttributeMatchesDatabaseNameConnectionProperty(string databaseNamePropertyName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "jobsdb", databaseNamePropertyName: databaseNamePropertyName),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "catalogdb", databaseNamePropertyName: databaseNamePropertyName)
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeDoesNotMatchMongoDbUriResource_MatchesContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")]),
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container)
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "unknown")], out var value));
+        Assert.Equal("mongodb", value);
+    }
+
     [Fact]
     public async Task OnPeerChanges_DataUpdates_EventRaised()
     {
         // Arrange
+        Assert.Equal(TimeSpan.FromMilliseconds(500), CallbackThrottler.DefaultMinExecuteInterval);
+
         var tcs = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sourceChannel = Channel.CreateUnbounded<ResourceViewModelChange>();
-        var resultChannel = Channel.CreateUnbounded<int>();
+        var resultChannel = Channel.CreateUnbounded<(int ChangeCount, long Timestamp)>();
         var dashboardClient = new MockDashboardClient(tcs.Task);
-        var resolver = new ResourceOutgoingPeerResolver(dashboardClient);
+        var resolver = CreateResolver(dashboardClient);
         var changeCount = 0;
         resolver.OnPeerChanges(async () =>
         {
-            await resultChannel.Writer.WriteAsync(++changeCount);
+            await resultChannel.Writer.WriteAsync((++changeCount, Stopwatch.GetTimestamp()));
         });
 
-        var readValue = 0;
-        Assert.False(resultChannel.Reader.TryRead(out readValue));
+        Assert.False(resultChannel.Reader.TryRead(out _));
 
         // Act 1
         // Initial resource causes change.
@@ -148,8 +301,9 @@ public class ResourceOutgoingPeerResolverTests
             GetChanges()));
 
         // Assert 1
-        readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(1, readValue);
+        var readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(1, readValue.ChangeCount);
+        var previousTimestamp = readValue.Timestamp;
 
         // Act 2
         // New resource causes change.
@@ -157,7 +311,9 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 2
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(2, readValue);
+        Assert.Equal(2, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
+        previousTimestamp = readValue.Timestamp;
 
         // Act 3
         // URL change causes change.
@@ -165,7 +321,8 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 3
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(3, readValue);
+        Assert.Equal(3, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
 
         // Act 4
         // Resource update doesn't cause change.
@@ -185,6 +342,91 @@ public class ResourceOutgoingPeerResolverTests
             {
                 yield return [item];
             }
+        }
+
+        static void AssertMinimumExecuteInterval(long startTimestamp, long endTimestamp)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTimestamp, endTimestamp);
+            Assert.True(elapsed >= CallbackThrottler.DefaultMinExecuteInterval - TimeSpan.FromMilliseconds(50), $"Callbacks executed too quickly: {elapsed}.");
+        }
+    }
+
+    [Fact]
+    public async Task Constructor_AmbientActivity_DoesNotFlowToResourceWatch()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dashboardClient = new MockDashboardClient(subscribeResult.Task);
+        using var activity = new Activity("request").Start();
+        var resolver = CreateResolver(dashboardClient);
+
+        Assert.Null(await dashboardClient.ActivityOnSubscribe.Task.DefaultTimeout());
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        sourceChannel.Writer.Complete();
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+        await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task OnPeerChanges_AmbientExecutionContext_DoesNotFlowToCallback()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task));
+        var ambientValue = new AsyncLocal<string?> { Value = "request" };
+        var callbackValue = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        resolver.OnPeerChanges(() =>
+        {
+            callbackValue.SetResult(ambientValue.Value);
+            return Task.CompletedTask;
+        });
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        subscribeResult.SetResult(new ResourceViewModelSubscription(
+            [CreateResource("test", serviceAddress: "localhost", servicePort: 8080)],
+            sourceChannel.Reader.ReadAllAsync()));
+
+        Assert.Null(await callbackValue.Task.DefaultTimeout());
+
+        ambientValue.Value = null;
+        sourceChannel.Writer.Complete();
+        await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceChanges_CreateActivityForEachBatch()
+    {
+        using var activitySource = new DashboardActivitySource();
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var activities = new ConcurrentQueue<Activity>();
+        var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        {
+            activities.Enqueue(activity);
+            if (activities.Count == 2)
+            {
+                activitiesReceived.TrySetResult();
+            }
+        });
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task), activitySource);
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Starting))]);
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Running))]);
+        await activitiesReceived.Task.DefaultTimeout();
+        sourceChannel.Writer.Complete();
+        await resolver.DisposeAsync().DefaultTimeout();
+
+        Assert.Collection(
+            activities,
+            AssertActivity,
+            AssertActivity);
+
+        static void AssertActivity(Activity activity)
+        {
+            Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+            Assert.Equal("Process resource subscription changes", activity.OperationName);
+            Assert.Equal(ActivityKind.Consumer, activity.Kind);
         }
     }
 
@@ -223,6 +465,14 @@ public class ResourceOutgoingPeerResolverTests
     private static bool TryResolvePeerName(IDictionary<string, ResourceViewModel> resources, KeyValuePair<string, string>[] attributes, out string? peerName)
     {
         return ResourceOutgoingPeerResolver.TryResolvePeerCore(resources, attributes, out peerName, out _);
+    }
+
+    private static ResourceOutgoingPeerResolver CreateResolver(IResourceRepository resourceRepository, DashboardActivitySource? activitySource = null)
+    {
+        return new ResourceOutgoingPeerResolver(
+            resourceRepository,
+            activitySource ?? new DashboardActivitySource(),
+            NullLogger<ResourceOutgoingPeerResolver>.Instance);
     }
 
     [Fact]
@@ -326,7 +576,7 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("key-vault", value);
     }
 
-    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString)
+    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null, string? databaseName = null, string databaseNamePropertyName = "DatabaseName")
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -335,12 +585,30 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(connectionString),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
+
+        if (databaseName is not null)
+        {
+            var connectionProperties = new Struct();
+            connectionProperties.Fields[databaseNamePropertyName] = Value.ForString(databaseName);
+            properties[KnownProperties.Resource.ConnectionProperties] = new(
+                name: KnownProperties.Resource.ConnectionProperties,
+                value: new Value { StructValue = connectionProperties },
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false);
+        }
 
         return ModelTestHelpers.CreateResource(
             resourceName: name,
-            resourceType: KnownResourceTypes.ConnectionString,
+            displayName: displayName,
+            resourceType: resourceType,
+            relationships: relationships,
             properties: properties);
     }
 
@@ -353,7 +621,9 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(value),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         return ModelTestHelpers.CreateResource(
@@ -411,17 +681,30 @@ public class ResourceOutgoingPeerResolverTests
 
     private sealed class MockDashboardClient(Task<ResourceViewModelSubscription> subscribeResult) : IDashboardClient
     {
+        public TaskCompletionSource<Activity?> ActivityOnSubscribe { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
+        public string? MinRequiredVersion => null;
+        public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+#pragma warning disable CS0067 // Event is never used - required by interface
+        public event Action<DashboardConnectionState>? ConnectionStateChanged;
+#pragma warning restore CS0067
+        public Task ReconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public ResourceViewModel? GetResource(string resourceName) => null;
         public IReadOnlyList<ResourceViewModel> GetResources() => [];
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
         public Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => subscribeResult;
+        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
+        {
+            ActivityOnSubscribe.TrySetResult(Activity.Current);
+            return subscribeResult;
+        }
     }
 }

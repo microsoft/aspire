@@ -227,7 +227,7 @@ static List<ImageEntry> ParseImageTagsFile(string content, string relativePath)
         }
 
         var isDerived = derivedFields.Contains(tagField);
-        var isLatestOrUnversioned = !isDerived && (tag == "latest" || tag == "vnext-preview");
+        var isLatestOrUnversioned = !isDerived && (tag == "latest" || tag == "vnext-latest");
 
         var entry = new ImageEntry
         {

@@ -174,7 +174,7 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ResourceEventsForContainersFireForSpecificResources()
     {
         var beforeResourceStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -198,7 +198,7 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ResourceEventsForContainersFireForAllResources()
     {
         var countdownEvent = new CountdownEvent(2);
@@ -336,7 +336,7 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task ResourceStoppedEventFiresWhenResourceStops()
     {
         var resourceStoppedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

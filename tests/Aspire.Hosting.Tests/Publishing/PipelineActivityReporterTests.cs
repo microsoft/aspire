@@ -3,8 +3,10 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
+using System.Globalization;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -16,6 +18,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class PublishingActivityReporterTests
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
+    private readonly TestInteractionFileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task CreateStepAsync_CreatesStepAndEmitsActivity()
@@ -639,6 +642,70 @@ public class PublishingActivityReporterTests
         var promptResult = await promptTask.DefaultTimeout();
         Assert.False(promptResult.Canceled);
         Assert.Equal("user-response", promptResult.Data?.Value);
+    }
+
+    [Fact]
+    public async Task CompleteInteractionAsync_MatchingFileResponse_UsesAuthoritativeMetadata()
+    {
+        var reporter = CreatePublishingReporter();
+        var input = new InteractionInput
+        {
+            Name = "artifact",
+            InputType = InputType.File,
+            Required = true
+        };
+        var promptTask = _interactionService.PromptInputAsync("Upload", "Select a file", input);
+        var activity = await reporter.ActivityItemUpdated.Reader.ReadAsync().DefaultTimeout();
+        var interactionId = int.Parse(activity.Data.Id, CultureInfo.InvariantCulture);
+        var (fileId, filePath) = _fileUploadStore.CreateEntry("artifact.zip", interactionId, input.Name);
+        _fileUploadStore.CompleteUpload(interactionId, fileId);
+
+        var responses = new[]
+        {
+            new PublishingPromptInputAnswer
+            {
+                Name = input.Name,
+                Value = $"[{{\"Id\":\"{fileId}\",\"Name\":\"spoofed.zip\"}}]"
+            }
+        };
+        await reporter.CompleteInteractionAsync(activity.Data.Id, responses, cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        var result = await promptTask.DefaultTimeout();
+        Assert.False(result.Canceled);
+        var files = result.Data!.GetFiles();
+        var file = Assert.Single(files);
+        Assert.Equal(fileId, file.Id);
+        Assert.Equal("artifact.zip", file.Name);
+        Assert.Equal(filePath, file.FilePath);
+        Assert.Equal(filePath, _fileUploadStore.GetFilePath(fileId, interactionId, input.Name));
+
+        files.Dispose();
+
+        Assert.Null(_fileUploadStore.GetFilePath(fileId, interactionId, input.Name));
+    }
+
+    [Fact]
+    public async Task CompleteInteractionAsync_OmittedFileResponse_Throws()
+    {
+        var reporter = CreatePublishingReporter();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var input = new InteractionInput
+        {
+            Name = "artifact",
+            InputType = InputType.File
+        };
+        var promptTask = _interactionService.PromptInputAsync("Upload", "Select a file", input, cancellationToken: cancellationTokenSource.Token);
+        var activity = await reporter.ActivityItemUpdated.Reader.ReadAsync().DefaultTimeout();
+        var interactionId = int.Parse(activity.Data.Id, CultureInfo.InvariantCulture);
+        var (fileId, _) = _fileUploadStore.CreateEntry("artifact.zip", interactionId, input.Name);
+        _fileUploadStore.CompleteUpload(interactionId, fileId);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reporter.CompleteInteractionAsync(activity.Data.Id, responses: null, cancellationToken: CancellationToken.None));
+
+        Assert.Equal("Submitted files for input 'artifact' do not match the completed uploads.", exception.Message);
+        await cancellationTokenSource.CancelAsync();
+        Assert.True((await promptTask).Canceled);
     }
 
     [Fact]
@@ -1322,7 +1389,7 @@ public class PublishingActivityReporterTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, _fileUploadStore, NullLogger<PipelineActivityReporter>.Instance);
     }
 
     internal static InteractionService CreateInteractionService()
@@ -1333,6 +1400,6 @@ public class PublishingActivityReporterTests
         var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<InteractionService>>();
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration);
+        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration, new TestInteractionFileUploadStore());
     }
 }

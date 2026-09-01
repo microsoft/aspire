@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -55,15 +54,14 @@ internal sealed class TerminalPsCommand : BaseCommand
     };
 
     public TerminalPsCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<TerminalPsCommand> logger,
         CommonCommandServices services)
         : base("ps", "List interactive terminal sessions in the connected AppHost.", services)
     {
         _interactionService = services.InteractionService;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);

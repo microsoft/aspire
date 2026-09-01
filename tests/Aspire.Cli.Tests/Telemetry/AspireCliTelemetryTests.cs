@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
@@ -39,7 +38,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void StartDiagnosticActivity_CreatesActivityWithCorrectNameAndDefaultTags()
+    public async Task StartDiagnosticActivity_CreatesActivityWithCorrectNameAndDefaultTags()
     {
         using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.AllData);
 
@@ -49,7 +48,7 @@ public class AspireCliTelemetryTests
         Assert.Equal("test-diagnostic", activity.OperationName);
 
         // Verify all default tags are included
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
         var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
@@ -110,7 +109,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
+    public async Task RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
     {
         using var fixture = new TelemetryFixture();
         var exception = new InvalidOperationException("Test exception");
@@ -129,12 +128,14 @@ public class AspireCliTelemetryTests
         Assert.Equal("Test exception", eventTags[TelemetryConstants.Tags.ExceptionMessage]);
         // Note: exception.stacktrace may not be present if the exception was never thrown
 
-        // Verify all default tags are included in the event
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
+        // RecordError adds default tags directly to the error event at creation time
+        // so they are available even if the enrichment processor has not run yet.
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        Assert.NotEmpty(defaultTags);
         foreach (var tag in defaultTags)
         {
-            Assert.True(eventTags.ContainsKey(tag.Key), $"Event is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value, eventTags[tag.Key]);
+            Assert.True(eventTags.ContainsKey(tag.Key), $"Error event is missing default tag '{tag.Key}'");
+            Assert.Equal(tag.Value?.ToString(), eventTags[tag.Key]?.ToString());
         }
     }
 
@@ -210,7 +211,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_AddsMachineInformationTags()
+    public async Task Initialize_AddsMachineInformationTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider
         {
@@ -219,18 +220,18 @@ public class AspireCliTelemetryTests
         };
         using var fixture = new TelemetryFixture(machineInfoProvider);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Contains(tags, t => t.Key == "machine.device_id" && (string?)t.Value == "test-device-id");
         Assert.Contains(tags, t => t.Key == "machine.mac_address_hash" && (string?)t.Value == "test-mac-hash");
     }
 
     [Fact]
-    public void InitializeAsync_AddsOsInformationTags()
+    public async Task Initialize_AddsOsInformationTags()
     {
         using var fixture = new TelemetryFixture();
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         var expectedOsName = AspireCliTelemetry.GetOsName();
         var expectedOsType = AspireCliTelemetry.GetOsType();
@@ -240,7 +241,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_AddsCodingAgentTag_WhenCodingAgentIsDetected()
+    public void Initialize_AddsCodingAgentTag_WhenCodingAgentIsDetected()
     {
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector
         {
@@ -255,21 +256,146 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_DoesNotAddCodingAgentTag_WhenCodingAgentIsNotDetected()
+    public async Task Initialize_DoesNotAddCodingAgentTag_WhenCodingAgentIsNotDetected()
     {
         using var fixture = new TelemetryFixture();
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.CodingAgent);
     }
 
+    [Fact]
+    public async Task Initialize_AddsInternalMicrosoftTag()
+    {
+        Assert.Equal("aspire.cli.microsoft_internal_source", TelemetryConstants.Tags.InternalMicrosoftSource);
+        Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
+        Assert.Equal("aspire.cli.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
+
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true,
+            Source = "test source",
+            Alias = "test.alias",
+            Domain = "TEST"
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftAlias && (string?)t.Value == "test.alias");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftDomain && (string?)t.Value == "TEST");
+    }
+
+    [Fact]
+    public async Task Initialize_DoesNotAddOptionalInternalMicrosoftTags_WhenValuesAreNotDetected()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true,
+            Source = "test source"
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Collection(
+            GetInternalMicrosoftTags(tags),
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoft, tag.Key);
+                Assert.True((bool?)tag.Value);
+            },
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoftSource, tag.Key);
+                Assert.Equal("test source", tag.Value);
+            });
+    }
+
+    [Fact]
+    public async Task Initialize_DoesNotRunInternalMicrosoftDetectorWhenReportedTelemetryIsDisabled()
+    {
+        var provider = new TelemetryFixture.TestMachineInformationProvider();
+        var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
+        var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            ciDetector,
+            codingAgentDetector,
+            internalMicrosoftDetector,
+            new TelemetryConfiguration { ReportedTelemetryEnabled = false },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+
+        Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
+        Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
+    }
+
+    [Fact]
+    public async Task Initialize_AddsDefaultTags_WhenInternalMicrosoftDetectorFails()
+    {
+        var provider = new TelemetryFixture.TestMachineInformationProvider
+        {
+            DeviceId = "test-device-id",
+            MacAddressHash = "test-mac-hash"
+        };
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            ExceptionToThrow = new NotSupportedException("Unexpected probe failure.")
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            internalMicrosoftDetector,
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+
+        var tags = await telemetry.GetDefaultTagsAsync();
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.MacAddressHash && (string?)t.Value == "test-mac-hash");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.DeviceId && (string?)t.Value == "test-device-id");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName);
+        Assert.Empty(GetInternalMicrosoftTags(tags));
+    }
+
     [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
-    public void CodingAgentDetector_DetectsKnownCodingAgents(Dictionary<string, string?> environmentVariables, string? expectedCodingAgent)
+    public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)
     {
+        var configurationValues = new Dictionary<string, string?>();
+        foreach (var environmentVariable in environmentVariables)
+        {
+            if (environmentVariable.Item1.Length > 0)
+            {
+                configurationValues.Add(environmentVariable.Item1, environmentVariable.Item2);
+            }
+        }
+
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(environmentVariables)
+            .AddInMemoryCollection(configurationValues)
             .Build();
 
         var detector = new CodingAgentDetector(configuration);
@@ -278,7 +404,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void StartReportedActivity_IncludesAllDefaultTags()
+    public async Task StartReportedActivity_IncludesAllDefaultTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider
         {
@@ -292,7 +418,7 @@ public class AspireCliTelemetryTests
         Assert.NotNull(activity);
 
         // Verify all default tags are included
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
         var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
@@ -302,92 +428,147 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void StartReportedActivity_ThrowsIfNotInitialized()
+    public async Task Initialize_IsIdempotent()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            ciDetector,
+            codingAgentDetector,
+            internalMicrosoftDetector,
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => telemetry.StartReportedActivity("test"));
-        Assert.Contains("not been initialized", exception.Message);
-    }
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+        var tagsAfterFirstInit = (await telemetry.GetDefaultTagsAsync()).Count;
+        telemetry.Initialize(); // Should not throw
 
-    [Fact]
-    public async Task InitializeAsync_IsIdempotent()
-    {
-        var provider = new TelemetryFixture.TestMachineInformationProvider();
-        var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
-        var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
-
-        await telemetry.InitializeAsync().DefaultTimeout();
-        var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
-        await telemetry.InitializeAsync(); // Should not throw
-
-        var tags = telemetry.GetDefaultTags();
+        var tags = await telemetry.GetDefaultTagsAsync();
         Assert.Equal(tagsAfterFirstInit, tags.Count); // Should have the same number of tags after second init
     }
 
-    public static TheoryData<Dictionary<string, string?>, string?> CodingAgentTelemetryTestCases => new()
+    private static IReadOnlyList<KeyValuePair<string, object?>> GetInternalMicrosoftTags(IReadOnlyList<KeyValuePair<string, object?>> tags)
     {
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE", "1" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_ENTRYPOINT", "some_value" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_IS_COWORK", "1" } }, "cowork" },
-        { new Dictionary<string, string?> { { "CURSOR_EDITOR", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_AI", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_TRACE_ID", "abc" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_AGENT", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "true" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "0" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GITHUB_COPILOT_CLI_MODE", "true" } }, "copilot" },
-        { new Dictionary<string, string?> { { "GH_COPILOT_WORKING_DIRECTORY", "/repo" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_CLI", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_AGENT", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_MODEL", "gpt" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_ALLOW_ALL", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_GITHUB_TOKEN", "token" } }, "copilot" },
-        { new Dictionary<string, string?> { { "CODEX_CLI", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_SANDBOX", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_CI", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_THREAD_ID", "thread1" } }, "codex" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Aider" } }, "aider" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "aider" } }, "aider" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "plandex" } }, "plandex" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Plandex" } }, "plandex" },
-        { new Dictionary<string, string?> { { "AMP_HOME", "/path/to/amp" } }, "amp" },
-        { new Dictionary<string, string?> { { "QWEN_CODE", "1" } }, "qwen" },
-        { new Dictionary<string, string?> { { "DROID_CLI", "true" } }, "droid" },
-        { new Dictionary<string, string?> { { "OPENCODE_AI", "1" } }, "opencode" },
-        { new Dictionary<string, string?> { { "ZED_ENVIRONMENT", "1" } }, "zed" },
-        { new Dictionary<string, string?> { { "ZED_TERM", "1" } }, "zed" },
-        { new Dictionary<string, string?> { { "KIMI_CLI", "true" } }, "kimi" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "OpenHands" } }, "openhands" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "openhands" } }, "openhands" },
-        { new Dictionary<string, string?> { { "GOOSE_TERMINAL", "1" } }, "goose" },
-        { new Dictionary<string, string?> { { "GOOSE_PROVIDER", "openai" } }, "goose" },
-        { new Dictionary<string, string?> { { "CLINE_TASK_ID", "task123" } }, "cline" },
-        { new Dictionary<string, string?> { { "ROO_CODE_TASK_ID", "task456" } }, "roo" },
-        { new Dictionary<string, string?> { { "WINDSURF_SESSION", "session789" } }, "windsurf" },
-        { new Dictionary<string, string?> { { "REPL_ID", "repl1" } }, "replit" },
-        { new Dictionary<string, string?> { { "AUGMENT_AGENT", "1" } }, "augment" },
-        { new Dictionary<string, string?> { { "ANTIGRAVITY_AGENT", "1" } }, "antigravity" },
-        { new Dictionary<string, string?> { { "AGENT_CLI", "true" } }, "generic_agent" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "CURSOR_EDITOR", "1" } }, "claude, cursor" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "true" }, { "GITHUB_COPILOT_CLI_MODE", "true" } }, "gemini, copilot" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "GEMINI_CLI", "true" }, { "AGENT_CLI", "true" } }, "claude, gemini, generic_agent" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "CURSOR_EDITOR", "1" }, { "GEMINI_CLI", "true" }, { "GITHUB_COPILOT_CLI_MODE", "true" }, { "AGENT_CLI", "true" } }, "claude, cursor, gemini, copilot, generic_agent" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Aider" }, { "CLINE_TASK_ID", "task123" } }, "aider, cline" },
-        { new Dictionary<string, string?> { { "CODEX_CLI", "1" }, { "WINDSURF_SESSION", "session789" } }, "codex, windsurf" },
-        { new Dictionary<string, string?> { { "GOOSE_TERMINAL", "1" }, { "ROO_CODE_TASK_ID", "task456" } }, "goose, roo" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "false" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GITHUB_COPILOT_CLI_MODE", "false" } }, "copilot" },
-        { new Dictionary<string, string?> { { "AGENT_CLI", "false" } }, "generic_agent" },
-        { new Dictionary<string, string?> { { "DROID_CLI", "false" } }, "droid" },
-        { new Dictionary<string, string?> { { "KIMI_CLI", "false" } }, "kimi" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_IS_COWORK", "1" }, { "CLAUDE_CODE", "1" } }, "cowork, claude" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "SomeOtherApp" } }, null },
-        { new Dictionary<string, string?>(), null },
+        return [.. tags.Where(t => t.Key == TelemetryConstants.Tags.InternalMicrosoft ||
+            t.Key.StartsWith("aspire.cli.microsoft_internal", StringComparison.Ordinal))];
+    }
+
+    [Fact]
+    public async Task Initialize_AddsIdentityTags_WhenExecutionContextProvided()
+    {
+        // The execution context only needs a valid root for path composition; telemetry init
+        // does not touch the filesystem for identity, so reuse the test base directory.
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "daily",
+            identityVersion: "13.5.0-preview.1.26310.9",
+            identityCommit: "95f0d2968",
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0-preview.1.26310.9");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityChannel && (string?)t.Value == "daily");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit && (string?)t.Value == "95f0d2968");
+
+        // The binary tags must remain distinct from the identity tags so an emulated run is
+        // distinguishable from the physical binary that produced the telemetry.
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliBuildId);
+    }
+
+    [Fact]
+    public async Task Initialize_OmitsIdentityCommitTag_WhenCommitIsEmpty()
+    {
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "stable",
+            identityVersion: "13.5.0",
+            identityCommit: null,
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0");
+        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit);
+    }
+
+    public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()
+    {
+        { [("CLAUDECODE", "1")], "claude" },
+        { [("CLAUDE_CODE", "1")], "claude" },
+        { [("CLAUDE_CODE_ENTRYPOINT", "some_value")], "claude" },
+        { [("CLAUDE_CODE_IS_COWORK", "1")], "cowork" },
+        { [("CURSOR_EDITOR", "1")], "cursor" },
+        { [("CURSOR_AI", "1")], "cursor" },
+        { [("CURSOR_TRACE_ID", "abc")], "cursor" },
+        { [("CURSOR_AGENT", "1")], "cursor" },
+        { [("GEMINI_CLI", "true")], "gemini" },
+        { [("GEMINI_CLI", "0")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "true")], "copilot-cli" },
+        { [("GH_COPILOT_WORKING_DIRECTORY", "/repo")], "copilot-cli" },
+        { [("COPILOT_CLI", "1")], "copilot-cli" },
+        { [("COPILOT_MODEL", "gpt")], "copilot-cli" },
+        { [("COPILOT_ALLOW_ALL", "1")], "copilot-cli" },
+        { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
+        { [("AI_AGENT", "github_copilot_app_agent")], "copilot-app" },
+        { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
+        { [("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("AI_AGENT", "github_copilot_vscode_agent"), ("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("CODEX_CLI", "1")], "codex" },
+        { [("CODEX_SANDBOX", "1")], "codex" },
+        { [("CODEX_CI", "1")], "codex" },
+        { [("CODEX_THREAD_ID", "thread1")], "codex" },
+        { [("OR_APP_NAME", "Aider")], "aider" },
+        { [("OR_APP_NAME", "aider")], "aider" },
+        { [("OR_APP_NAME", "plandex")], "plandex" },
+        { [("OR_APP_NAME", "Plandex")], "plandex" },
+        { [("AMP_HOME", "/path/to/amp")], "amp" },
+        { [("QWEN_CODE", "1")], "qwen" },
+        { [("DROID_CLI", "true")], "droid" },
+        { [("OPENCODE_AI", "1")], "opencode" },
+        { [("ZED_ENVIRONMENT", "1")], "zed" },
+        { [("ZED_TERM", "1")], "zed" },
+        { [("KIMI_CLI", "true")], "kimi" },
+        { [("OR_APP_NAME", "OpenHands")], "openhands" },
+        { [("OR_APP_NAME", "openhands")], "openhands" },
+        { [("GOOSE_TERMINAL", "1")], "goose" },
+        { [("GOOSE_PROVIDER", "openai")], "goose" },
+        { [("CLINE_TASK_ID", "task123")], "cline" },
+        { [("ROO_CODE_TASK_ID", "task456")], "roo" },
+        { [("WINDSURF_SESSION", "session789")], "windsurf" },
+        { [("REPL_ID", "repl1")], "replit" },
+        { [("AUGMENT_AGENT", "1")], "augment" },
+        { [("ANTIGRAVITY_AGENT", "1")], "antigravity" },
+        { [("AGENT_CLI", "true")], "generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1") ], "claude, cursor" },
+        { [("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true") ], "gemini, copilot-cli" },
+        { [("CLAUDECODE", "1"), ("GEMINI_CLI", "true"), ("AGENT_CLI", "true") ], "claude, gemini, generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1"), ("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true"), ("AGENT_CLI", "true") ], "claude, cursor, gemini, copilot-cli, generic_agent" },
+        { [("OR_APP_NAME", "Aider"), ("CLINE_TASK_ID", "task123") ], "aider, cline" },
+        { [("CODEX_CLI", "1"), ("WINDSURF_SESSION", "session789") ], "codex, windsurf" },
+        { [("GOOSE_TERMINAL", "1"), ("ROO_CODE_TASK_ID", "task456") ], "goose, roo" },
+        { [("COPILOT_CLI", "1"), ("AI_AGENT", "github_copilot_app_agent")], "copilot-cli, copilot-app" },
+        { [("GEMINI_CLI", "false")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "false")], "copilot-cli" },
+        { [("AGENT_CLI", "false")], "generic_agent" },
+        { [("DROID_CLI", "false")], "droid" },
+        { [("KIMI_CLI", "false")], "kimi" },
+        { [("CLAUDE_CODE_IS_COWORK", "1"), ("CLAUDE_CODE", "1")], "cowork, claude" },
+        { [("OR_APP_NAME", "SomeOtherApp")], null },
+        { [("", "")], null }
     };
 }

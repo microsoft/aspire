@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -36,29 +35,27 @@ internal sealed class BannerService : IBannerService
     private static readonly int[] s_letterPositions = [0, 8, 16, 24, 27, 34];
 
     private readonly IAnsiConsole _console;
+    private readonly CliExecutionContext _executionContext;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BannerService"/> class.
     /// </summary>
     /// <param name="consoleEnvironment">The console environment providing access to console output.</param>
-    public BannerService(ConsoleEnvironment consoleEnvironment)
+    /// <param name="executionContext">The CLI execution context supplying the resolved identity version.</param>
+    public BannerService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
+        ArgumentNullException.ThrowIfNull(executionContext);
         _console = consoleEnvironment.Error; // Use stderr to avoid interfering with command output
+        _executionContext = executionContext;
     }
 
     /// <inheritdoc />
     public async Task DisplayBannerAsync(CancellationToken cancellationToken = default)
     {
-        var cliVersion = VersionHelper.GetDefaultTemplateVersion();
-
-        // Strip build metadata (everything after '+') for display purposes.
-        var plusIndex = cliVersion.IndexOf('+', StringComparison.Ordinal);
-        if (plusIndex >= 0)
-        {
-            cliVersion = cliVersion[..plusIndex];
-        }
-
+        // Show the resolved identity version (already stripped of +build metadata) so the
+        // welcome banner agrees with `--version` and honors ASPIRE_CLI_VERSION / the sidecar.
+        var cliVersion = _executionContext.IdentitySdkVersion;
         var aspireWidth = s_aspireLines[0].TrimEnd().Length;
         var welcomeText = RootCommandStrings.BannerWelcomeText;
         var versionText = string.Format(CultureInfo.CurrentCulture, RootCommandStrings.BannerVersionFormat, cliVersion);

@@ -438,10 +438,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 {
                     // Ensure we use a trusted developer certificate (Kestrel selects the latest certificate, which may not be trusted after an SDK update).
                     // There can be issues referencing an exported PEM key pair on MacOS, so we the PFX version of the certificate here.
-                    ctx.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = ctx.PfxPath;
+                    ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
                     if (ctx.Password is not null)
                     {
-                        ctx.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = ctx.Password;
+                        ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
                     }
 
                     return Task.CompletedTask;
@@ -462,7 +462,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                         // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
                         // Order these before non-browser usable endpoints.
                         url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set for compatibility.
                         url.DisplayOrder = 1;
+#pragma warning restore CS0618
 
                         // Append the browser token to the URL as a query string parameter if token is configured
                         if (!string.IsNullOrEmpty(browserToken))
@@ -540,7 +542,13 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken),
             options.OtlpHttpEndpointUrl).ConfigureAwait(false);
 
-        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
+        // Withholding the token drops the login URL from the summary and the separate "Login to the dashboard at"
+        // line, leaving the dashboard and OTLP endpoints. Testing sets this because its token is a live
+        // credential for a dashboard the test already has a supported accessor for, and the AppHost logger in
+        // that mode is test and CI output.
+        var summaryToken = options.SuppressLoginUrlInStartupSummary ? null : browserToken;
+
+        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, summaryToken, isContainer: false);
     }
 
     private async ValueTask<string?> ResolveUrlAsync(Func<ValueTask<string?>> resolveCallback, string? configuredUrl)
@@ -597,8 +605,22 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var resourceServiceUrl = await dashboardEndpointProvider.GetResourceServiceUriAsync(context.CancellationToken).ConfigureAwait(false);
 
-        context.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
+        context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardApplicationName,
+            "AppHost:DashboardApplicationName",
+            transform: DashboardService.GetDashboardApplicationName);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardDataDirectoryName,
+            DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardPersistenceModeName,
+            "Aspire:Dashboard:PersistenceMode",
+            defaultValue: "Run");
 
         PopulateDashboardUrls(context);
 
@@ -709,7 +731,34 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
+    }
 
+    private void SetEnvironmentVariableWithFallback(
+        EnvironmentCallbackContext context,
+        ConfigName configName,
+        string fallbackConfigurationKey,
+        string? defaultValue = null,
+        Func<string, string>? transform = null)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration[configName.EnvVarName]))
+        {
+            return;
+        }
+
+        var value = configuration[fallbackConfigurationKey];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = defaultValue;
+        }
+        else if (transform is not null)
+        {
+            value = transform(value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            context.EnvironmentVariables[configName.EnvVarName] = value;
+        }
     }
 
     private class EndpointGenerationContext
@@ -947,13 +996,18 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         var logger = loggerCache.GetOrAdd(logMessage.Category, static (string category, ILoggerFactory loggerFactory) =>
         {
-            // Looks strange to see Aspire.Hosting.Dashboard.Aspire.Dashboard.Category,
-            // so trim the prefix and append Aspire.Hosting.Why is this important?
-            // Well there are logs emitting from categories that don't start with Aspire.Dashboard so we want to prefix all logs so that they can be controlled by config.
-            var categoryTrimmed = category.StartsWith("Aspire.Dashboard.") ?
-                category["Aspire.Dashboard.".Length..] : category;
+            // Dashboard logs arrive with their original category. Aspire's own categories start with
+            // "Aspire.Dashboard." — trim that prefix so the resulting logger category reads naturally
+            // (e.g. Aspire.Hosting.Dashboard.Model.IconResolver). Third-party categories (e.g.
+            // Microsoft.AspNetCore.Server.Kestrel) get a "ThirdParty" segment so they can be filtered
+            // with a single rule on "Aspire.Hosting.Dashboard.ThirdParty".
+            if (category.StartsWith("Aspire.Dashboard.", StringComparison.Ordinal))
+            {
+                var categoryTrimmed = category["Aspire.Dashboard.".Length..];
+                return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            }
 
-            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.ThirdParty.{category}");
         },
         loggerFactory);
 

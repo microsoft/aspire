@@ -3,11 +3,13 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -43,8 +45,9 @@ internal sealed class AppHostConnectionResolver(
     IInteractionService interactionService,
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
-    ILogger logger,
-    ProfilingTelemetry? profilingTelemetry = null)
+    ICliHostEnvironment hostEnvironment,
+    ILogger<AppHostConnectionResolver> logger,
+    ProfilingTelemetry profilingTelemetry)
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
@@ -81,13 +84,18 @@ internal sealed class AppHostConnectionResolver(
     /// <param name="selectPrompt">Prompt to display when multiple AppHosts are found.</param>
     /// <param name="notFoundMessage">Message to display when no AppHosts are found.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="restrictToCurrentWorktree">
+    /// Whether AppHosts running in a different git worktree are hidden from interactive selection.
+    /// AppHosts elsewhere in the same worktree remain selectable.
+    /// </param>
     /// <returns>The resolved connection, or null with an error message.</returns>
     public async Task<AppHostConnectionResult> ResolveConnectionAsync(
         FileInfo? projectFile,
         string scanningMessage,
         string selectPrompt,
         string notFoundMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool restrictToCurrentWorktree = false)
     {
         // Fast path: If --apphost was specified, check directly for its socket
         if (projectFile is not null)
@@ -134,9 +142,8 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = projectFile.FullName;
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                targetPath,
+                projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
@@ -147,7 +154,7 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         var result = new AppHostConnectionResult { Connection = connection };
@@ -161,7 +168,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {
@@ -199,6 +208,17 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (inScopeConnections.Count > 1)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // Can't prompt the user to pick an AppHost in non-interactive mode;
+                // fail with an actionable message instead of letting the prompt throw.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = SharedCommandStrings.MultipleAppHostsNonInteractive,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
                 inScopeConnections,
                 SharedCommandStrings.MultipleInScopeAppHosts,
@@ -208,8 +228,40 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (outOfScopeConnections.Count > 0)
         {
+            // "Out of scope" combines two independent conditions: the AppHost is not under the
+            // working directory, and/or it belongs to a different git worktree. Strict callers
+            // (aspire stop) only want the worktree half enforced - an AppHost elsewhere in the
+            // same checkout is still theirs to act on, and hiding it silently breaks running
+            // `aspire stop` from a sibling directory such as repo/tests.
+            var selectableConnections = restrictToCurrentWorktree
+                ? outOfScopeConnections.Where(c => IsInWorktreeOfWorkingDirectory(c, workingDirectory)).ToList()
+                : outOfScopeConnections;
+
+            if (selectableConnections.Count == 0)
+            {
+                // Every running AppHost lives in a different worktree. "Use 'aspire run' to start
+                // one first" would be wrong here - one is already running - so point at the two
+                // escape hatches that can reach it instead.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = SharedCommandStrings.AppHostNotRunningInCurrentWorktree,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // Treat out-of-scope AppHosts as not found when the caller cannot prompt.
+                // Explicit --apphost and --all flows bypass this path.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = notFoundMessage,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
-                outOfScopeConnections,
+                selectableConnections,
                 SharedCommandStrings.NoInScopeAppHostsShowingAll,
                 selectPrompt,
                 path => path,
@@ -224,6 +276,30 @@ internal sealed class AppHostConnectionResolver(
         var selectedResult = new AppHostConnectionResult { Connection = selectedConnection };
         StoreAppHostCliLogFilePath(selectedResult);
         return selectedResult;
+    }
+
+    /// <summary>
+    /// Whether an out-of-scope connection belongs to the same git worktree as the working
+    /// directory. This is the worktree half of
+    /// <see cref="AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory"/> without the
+    /// path-containment half, so callers can restrict selection to the current worktree
+    /// while still offering AppHosts that simply live outside the working directory.
+    /// </summary>
+    private static bool IsInWorktreeOfWorkingDirectory(IAppHostAuxiliaryBackchannel connection, string workingDirectory)
+    {
+        if (connection.AppHostInfo?.AppHostPath is not { Length: > 0 } appHostPath)
+        {
+            // A connection that never reported its path cannot be attributed to a worktree,
+            // so a caller asking for strict scope must not be offered it.
+            return false;
+        }
+
+        // Resolve symlinks on both operands for the same reason the in-scope check does: the OS
+        // reports a process working directory physically (macOS temp dirs under /var -> /private/var)
+        // while an AppHost reports its own path unresolved, and the worktree walk compares ancestors.
+        return GitWorktree.IsSameWorktreeScope(
+            PathNormalizer.ResolveSymlinks(appHostPath),
+            PathNormalizer.ResolveSymlinks(workingDirectory));
     }
 
     /// <summary>

@@ -1,20 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Certificates;
 
 /// <summary>
 /// Certificate tool runner that uses the native CertificateManager directly (no subprocess needed).
 /// </summary>
-internal sealed class NativeCertificateToolRunner(CertificateManager certificateManager, Func<bool>? isLinux = null) : ICertificateToolRunner
+internal sealed class NativeCertificateToolRunner(
+    CertificateManager certificateManager,
+    IEnvironment environment,
+    ILogger<NativeCertificateToolRunner> logger) : ICertificateToolRunner
 {
-    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
-
-    public CertificateTrustResult CheckHttpCertificate()
+    public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
         var availableCertificates = certificateManager.ListCertificates(
             StoreName.My, StoreLocation.CurrentUser, isValid: true);
@@ -24,10 +29,19 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
             var now = DateTimeOffset.Now;
             var certInfos = availableCertificates.Select(cert =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var status = certificateManager.CheckCertificateState(cert);
-                var trustLevel = status.Success
-                    ? certificateManager.GetTrustLevel(cert)
-                    : CertificateManager.TrustLevel.None;
+                CertificateManager.TrustLevel trustLevel;
+                if (!status.Success)
+                {
+                    trustLevel = CertificateManager.TrustLevel.None;
+                }
+                else
+                {
+                    trustLevel = certificateManager is UnixCertificateManager unixCertificateManager
+                        ? unixCertificateManager.GetTrustLevel(cert, cancellationToken)
+                        : certificateManager.GetTrustLevel(cert);
+                }
 
                 return new DevCertInfo
                 {
@@ -74,7 +88,7 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
 
     public EnsureCertificateResult TrustHttpCertificate()
     {
-        if (_isLinux())
+        if (environment.IsLinux())
         {
             var availableCertificates = certificateManager.ListCertificates(
                 StoreName.My, StoreLocation.CurrentUser, isValid: true);
@@ -180,6 +194,67 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         {
             return new CertificateCleanResult { Success = false, ErrorMessage = ex.Message };
         }
+    }
+
+    public string? ExportDevCertificatePublicPem(string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        logger.LogDebug("Searching for a trusted ASP.NET Core development certificate to export");
+
+        var availableCertificates = certificateManager.ListCertificates(
+            StoreName.My, StoreLocation.CurrentUser, isValid: false, requireExportable: false);
+
+        try
+        {
+            var now = DateTimeOffset.Now;
+            var validCertificates = availableCertificates
+                .Where(c => c.HasPrivateKey && c.NotBefore <= now && now <= c.NotAfter)
+                .ToList();
+
+            if (validCertificates.Any(c => c.HasSubjectKeyIdentifier()))
+            {
+                validCertificates = validCertificates.Where(c => c.HasSubjectKeyIdentifier()).ToList();
+            }
+
+            var certificate = validCertificates
+                .GroupBy(c => c.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault()?.SubjectKeyIdentifier)
+                .SelectMany(group => group.OrderByVersion().Take(1))
+                .OrderByVersion()
+                .GetTrustedCertificates(cancellationToken)
+                .FirstOrDefault();
+
+            if (certificate is null)
+            {
+                logger.LogDebug("No trusted ASP.NET Core development certificate was available to export");
+                return null;
+            }
+
+            logger.LogDebug(
+                "Selected ASP.NET Core development certificate {Thumbprint} for public PEM export",
+                certificate.Thumbprint);
+
+            return GetOrCreateCertificateCacheFile(certificate, outputDirectory);
+        }
+        finally
+        {
+            CertificateManager.DisposeCertificates(availableCertificates);
+        }
+    }
+
+    internal string GetOrCreateCertificateCacheFile(X509Certificate2 certificate, string outputDirectory)
+    {
+        var pemContents = Encoding.UTF8.GetBytes(certificate.ExportCertificatePem());
+        var hash = Convert.ToHexString(XxHash128.Hash(pemContents)).ToLowerInvariant();
+        var outputPath = Path.Combine(outputDirectory, $"aspire-dev-cert-{hash}.pem");
+
+        if (File.Exists(outputPath))
+        {
+            logger.LogDebug("Reusing cached development certificate PEM at {Path}", outputPath);
+            return outputPath;
+        }
+
+        logger.LogDebug("Writing development certificate PEM to cache at {Path}", outputPath);
+        CertificateCacheWriter.WriteFile(outputPath, pemContents, logger);
+        return outputPath;
     }
 
     private static string[]? GetSanExtension(X509Certificate2 cert)

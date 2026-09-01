@@ -3,9 +3,11 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+#pragma warning disable ASPIREUSERSECRETS001
 
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -15,7 +17,6 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
-using Json.Patch;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
@@ -58,6 +59,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     private readonly IOptions<DcpOptions> _options;
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly DcpAppResourceStore _appResources;
+    private readonly IUserSecretsManager _userSecretsManager;
 
     // Has an entry if we raised ResourceEndpointsAllocatedEvent for a resource with a given name.
     // We want to ensure we raise the event only once for each app model resource.
@@ -72,6 +74,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private readonly ExecutableCreator _executableCreator;
     private readonly ContainerCreator _containerCreator;
+    private readonly ProxylessEndpointPortAllocator _proxylessEndpointPortAllocator;
 
     // We need to preserve the container creation context from the application startup phase
     // so that container explicit start does not suffer from timing issues.
@@ -98,7 +101,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                         DcpAppResourceStore appResources,
                         ExecutableCreator executableCreator,
                         ContainerCreator containerCreator,
-                        ProfilingTelemetry profilingTelemetry)
+                        ProfilingTelemetry profilingTelemetry,
+                        ProxylessEndpointPortAllocator proxylessEndpointPortAllocator,
+                        IUserSecretsManager userSecretsManager)
     {
         _distributedApplicationLogger = distributedApplicationLogger;
         _kubernetesService = kubernetesService;
@@ -113,15 +118,20 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _options = options;
         _executionContext = executionContext;
         _appResources = appResources;
+        _userSecretsManager = userSecretsManager;
 
-        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _configuration, PublishEndpointAllocatedEventsAsync, profilingTelemetry, _shutdownCancellation.Token);
+        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, profilingTelemetry, _shutdownCancellation.Token);
 
         DeleteResourceRetryPipeline = DcpPipelineBuilder.BuildDeleteRetryPipeline(logger);
 
         _containerContextSource = new TaskCompletionSource<ContainerCreationContext>(TaskCreationOptions.RunContinuationsAsynchronously);
         _executableCreator = executableCreator;
         _containerCreator = containerCreator;
+        _proxylessEndpointPortAllocator = proxylessEndpointPortAllocator;
     }
+
+    // Internal for testing.
+    internal DcpResourceWatcher ResourceWatcher => _resourceWatcher;
 
     private string ContainerHostName => _configuration["AppHost:ContainerHostname"] ??
         (_options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : _dcpInfo?.Containers?.HostName ?? KnownHostNames.DockerDesktopHostBridge);
@@ -167,7 +177,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     containers = _containerCreator.PrepareObjects().ToArray();
                     _containerCreator.PrepareContainerExecutables();
-                    executables = _executableCreator.PrepareObjects().ToArray();
+                    executables = _executableCreator.PrepareObjects(ct).ToArray();
+                    AllocateExecutableTargetPorts(executables);
 
                     prepareResourcesActivity.SetDcpPreparedResourceCounts(containers.Length, executables.Length);
                 }
@@ -206,8 +217,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     if (DcpModelUtilities.TryAddWorkloadAllocatedEndpoints(
                         executable,
                         _options.Value.EnableAspireContainerTunnel,
-                        ContainerHostName,
-                        allowPendingDynamicProxylessContainerEndpoints: false))
+                        ContainerHostName))
                     {
                         endpointAllocatedResources.Add(executable.ModelResource);
                     }
@@ -215,20 +225,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                 foreach (var container in containers)
                 {
-                    // A dependent resource can resolve this container's proxyless endpoint during
-                    // its starting callback. Commit required fallback ports before any container
-                    // objects are submitted so the rendered container exposes the same port.
-                    await DcpModelUtilities.TryAllocateDependentDynamicProxylessContainerEndpointsAsync(
-                        container,
-                        _executionContext,
-                        _logger,
-                        ct).ConfigureAwait(false);
-
                     if (DcpModelUtilities.TryAddWorkloadAllocatedEndpoints(
                         container,
                         _options.Value.EnableAspireContainerTunnel,
-                        ContainerHostName,
-                        allowPendingDynamicProxylessContainerEndpoints: true))
+                        ContainerHostName))
                     {
                         endpointAllocatedResources.Add(container.ModelResource);
                     }
@@ -240,7 +240,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 // make a valid cross-resource callback observe an unallocated endpoint.
                 foreach (var resource in endpointAllocatedResources.Distinct())
                 {
-                    await PublishEndpointAllocatedEventsAsync(resource, ct).ConfigureAwait(false);
+                    await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false);
                 }
             }, ct);
 
@@ -377,7 +377,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return resource switch
         {
             Container => KnownResourceTypes.Container,
-            Executable => appModelResource is ProjectResource ? KnownResourceTypes.Project : KnownResourceTypes.Executable,
+            Executable => appModelResource.GetResourceType(),
             ContainerExec => KnownResourceTypes.ContainerExec,
             _ => throw new InvalidOperationException($"Unknown resource type {resource.GetType().Name}")
         };
@@ -653,8 +653,37 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         var serviceProducers = _model.Resources
             .Select(r => (ModelResource: r, Endpoints: r.Annotations.OfType<EndpointAnnotation>().ToArray()))
-            .Where(sp => sp.Endpoints.Any());
+            .Where(sp => sp.Endpoints.Any())
+            .ToArray();
 
+        // Resolve endpoint behavior and exclude known public ports before any dynamic allocation can claim them.
+        foreach (var sp in serviceProducers)
+        {
+            foreach (var endpoint in sp.Endpoints)
+            {
+                endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
+                DcpModelUtilities.ValidateEndpointPorts(sp.ModelResource, endpoint);
+
+                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
+                {
+                    _proxylessEndpointPortAllocator.ExcludePort(fixedPublicPort);
+                }
+
+                if (TryGetPersistedProxylessEndpointPort(sp.ModelResource, endpoint) is int persistedPort)
+                {
+                    _proxylessEndpointPortAllocator.ExcludePort(persistedPort);
+                }
+
+                if (sp.ModelResource is IComputeResource &&
+                    !sp.ModelResource.IsContainer() &&
+                    EndpointAnnotation.NormalizePort(endpoint.TargetPort) is int fixedTargetPort)
+                {
+                    _proxylessEndpointPortAllocator.ExcludePort(fixedTargetPort);
+                }
+            }
+        }
+
+        // Create DCP services after known ports are excluded, allocating missing proxyless public ports as needed.
         foreach (var sp in serviceProducers)
         {
             var endpoints = sp.Endpoints;
@@ -670,21 +699,13 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                 var svc = Service.Create(serviceName);
 
-                endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
+                EnsureProxylessEndpointPort(sp.ModelResource, endpoint);
 
-                int? port;
-                if (_options.Value.RandomizePorts && endpoint.IsProxied && endpoint.Port != null)
+                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
-                    port = null;
-                    _logger.LogDebug("Randomizing port for {ServiceName}. Original port: {OriginalPort}", serviceName, endpoint.Port);
+                    svc.Spec.Port = fixedPublicPort;
                 }
-                else
-                {
-                    port = sp.ModelResource.IsContainer() && !endpoint.IsProxied
-                        ? endpoint.SpecifiedPort
-                        : endpoint.Port;
-                }
-                svc.Spec.Port = port;
+
                 svc.Spec.Protocol = PortProtocol.FromProtocolType(endpoint.Protocol);
                 if (string.Equals(KnownHostNames.Localhost, endpoint.TargetHost, StringComparison.OrdinalIgnoreCase))
                 {
@@ -709,26 +730,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
         }
 
-        static bool GetEffectiveIsProxied(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
-        {
-            if (!resource.SupportsProxy())
-            {
-                return false;
-            }
-
-            if (endpoint.IsExplicitlyProxied is bool isProxied)
-            {
-                return isProxied;
-            }
-
-            if (randomizePorts)
-            {
-                return true;
-            }
-
-            return !resource.HasPersistentLifetime();
-        }
-
         var containers = _model.Resources.Where(r => r.IsContainer());
         if (!containers.Any())
         {
@@ -749,6 +750,180 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             var containerNetworkServices = _containerCreator.CreateContainerNetworkServicesForHostResource(re);
             _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
         }
+    }
+
+    private static bool GetEffectiveIsProxied(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
+    {
+        if (!resource.SupportsProxy())
+        {
+            return false;
+        }
+
+        if (endpoint.IsExplicitlyProxied is bool isProxied)
+        {
+            return isProxied;
+        }
+
+        if (randomizePorts)
+        {
+            return true;
+        }
+
+        return !resource.HasPersistentLifetime();
+    }
+
+    private void AllocateExecutableTargetPorts(IEnumerable<RenderedModelResource<Executable>> executables)
+    {
+        // Allocate per rendered executable so replicas receive distinct target ports.
+        foreach (var executable in executables)
+        {
+            if (!executable.DcpResource.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(
+                CustomResource.ServiceProducerAnnotation,
+                out var serviceProducerAnnotations))
+            {
+                continue;
+            }
+
+            var annotationsByServiceName = serviceProducerAnnotations.ToDictionary(a => a.ServiceName, StringComparer.Ordinal);
+            var annotationsChanged = false;
+
+            foreach (var serviceProducer in executable.ServicesProduced)
+            {
+                var endpoint = serviceProducer.EndpointAnnotation;
+                if (!endpoint.IsProxied ||
+                    EndpointAnnotation.NormalizePort(endpoint.TargetPort) is not null)
+                {
+                    continue;
+                }
+
+                var annotation = annotationsByServiceName[serviceProducer.Service.Metadata.Name];
+
+                // DCP's dynamic producer-port allocation probes an ephemeral port, releases it, and
+                // later passes it to the child process. Allocate from Aspire's non-ephemeral range
+                // instead so unrelated outbound connections cannot claim the port during that gap.
+                annotation.Port = _proxylessEndpointPortAllocator.AllocatePort(endpoint.Protocol);
+                annotationsChanged = true;
+            }
+
+            if (annotationsChanged)
+            {
+                // Annotation lists are deserialized copies, so persist the allocated ports back to the DCP resource.
+                executable.DcpResource.SetAnnotationAsObjectList(
+                    CustomResource.ServiceProducerAnnotation,
+                    serviceProducerAnnotations);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Determines whether an endpoint definition has a fixed public port DCP should reserve or pre-exclude.
+    /// </summary>
+    /// <remarks>
+    /// Use this when deciding whether DCP should bind a service to a known public port. Proxied endpoints
+    /// with randomized ports deliberately do not report a fixed port so DCP can allocate the public port
+    /// instead of reserving the configured value.
+    /// Port 0 requests dynamic allocation and therefore does not count as a fixed public port.
+    /// Container endpoint definitions keep the public host port separate from the target container port, so
+    /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
+    /// port value for the process and the public endpoint, so the effective public port can come from either
+    /// the endpoint port or target port.
+    /// </remarks>
+    private static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
+    {
+        var effectivePublicPort = EndpointAnnotation.NormalizePort(resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port);
+
+        // When port randomization is enabled, proxied endpoints intentionally ignore the defined public
+        // port so DCP can allocate one dynamically instead.
+        if (randomizePorts && endpoint.IsProxied && effectivePublicPort is not null)
+        {
+            publicPort = default;
+            return false;
+        }
+
+        if (effectivePublicPort is int fixedPublicPort)
+        {
+            publicPort = fixedPublicPort;
+            return true;
+        }
+
+        publicPort = default;
+        return false;
+    }
+
+    private void EnsureProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        if (!NeedsPublicPort(resource, endpoint))
+        {
+            return;
+        }
+
+        int publicPort;
+        if (TryGetPersistedProxylessEndpointPort(resource, endpoint) is int persistedPort)
+        {
+            publicPort = persistedPort;
+            _logger.LogDebug("Using persisted public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", persistedPort, endpoint.Name, resource.Name);
+        }
+        else
+        {
+            publicPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
+            _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", publicPort, endpoint.Name, resource.Name);
+
+            if (resource.HasPersistentLifetime() && !_options.Value.RandomizePorts)
+            {
+                var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
+                if (!_userSecretsManager.TrySetSecret(secretKey, publicPort.ToString(CultureInfo.InvariantCulture)))
+                {
+                    _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", publicPort, endpoint.Name, resource.Name);
+                }
+            }
+        }
+
+        endpoint.Port = publicPort;
+        if (!resource.IsContainer())
+        {
+            endpoint.TargetPort = publicPort;
+        }
+    }
+
+    private static bool NeedsPublicPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        // DCP can allocate a port only for resources it launches as workloads. This includes compute
+        // resources and annotation-backed containers; integration-owned endpoints publish their own addresses.
+        return (resource is IComputeResource || resource.IsContainer()) &&
+            !endpoint.IsProxied &&
+            !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
+    }
+
+    private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        if (_options.Value.RandomizePorts ||
+            !resource.HasPersistentLifetime() ||
+            !NeedsPublicPort(resource, endpoint))
+        {
+            return null;
+        }
+
+        var configuredPort = _configuration[GetPersistedProxylessEndpointPortKey(resource, endpoint)];
+        if (configuredPort is null)
+        {
+            return null;
+        }
+
+        if (int.TryParse(configuredPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) &&
+            PortRange.IsValidPort(port))
+        {
+            return port;
+        }
+
+        _logger.LogDebug("Ignoring invalid persisted public port value '{Port}' for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", configuredPort, endpoint.Name, resource.Name);
+        return null;
+    }
+
+    private static string GetPersistedProxylessEndpointPortKey(IResource resource, EndpointAnnotation endpoint)
+    {
+        // Schema suggested by https://github.com/microsoft/aspire/issues/13597:
+        // Resources:<resource-name>:<endpoint-name>:port
+        return $"Resources:{resource.Name}:{endpoint.Name}:port";
     }
 
     internal static void SetInitialResourceState(IResource resource, IAnnotationHolder annotationHolder)
@@ -985,7 +1160,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         var changed = JsonSerializer.SerializeToNode(copy);
 
-        var jsonPatch = current.CreatePatch(changed);
+        var jsonPatch = JsonPatch.Create(current, changed);
         return new V1Patch(jsonPatch, V1Patch.PatchType.JsonPatch);
     }
 
@@ -1132,18 +1307,17 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     throw new InvalidOperationException($"Unexpected resource type: {appResource.DcpResourceKind}");
             }
         }
-        catch (FailedToApplyEnvironmentException ex)
-        {
-            // For this exception we don't want the noise of the stack trace, we've already
-            // provided more detail where we detected the issue (e.g. envvar name). To get
-            // more diagnostic information reduce logging level for DCP log category to Debug.
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
-        }
         catch (Exception ex)
         {
             activity.SetError(ex);
-            _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+            if (ex is not FailedToApplyEnvironmentException)
+            {
+                // FailedToApplyEnvironmentException is logged with actionable details where it is detected,
+                // so avoid duplicating that entry with a generic stack trace.
+                _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
+            }
+
+            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
             throw;
         }
     }
@@ -1226,6 +1400,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
             }
         }
+
+        if (resource.TryGetAnnotationsOfType<LaunchToolArgsCallbackAnnotation>(out var launchToolArgsCallbacks))
+        {
+            foreach (var callback in launchToolArgsCallbacks)
+            {
+                ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
+            }
+        }
     }
 
     private void ForgetConnectionStringAvailableEvent(IResource resource)
@@ -1249,14 +1431,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.Services);
         await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.BlockingSequential, ct).ConfigureAwait(false);
         return true;
-    }
-
-    private async Task PublishEndpointAllocatedEventsAsync(IResource resource, CancellationToken ct)
-    {
-        if (await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false))
-        {
-            await PublishConnectionStringAvailableEventAsync(resource, ct).ConfigureAwait(false);
-        }
     }
 
     private async Task PublishConnectionStringAvailableEventAsync(IResource resource, CancellationToken ct)

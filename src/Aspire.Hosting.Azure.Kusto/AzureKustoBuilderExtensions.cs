@@ -88,7 +88,8 @@ public static class AzureKustoBuilderExtensions
         };
 
         var resource = new AzureKustoClusterResource(name, configureInfrastructure);
-        var resourceBuilder = builder.AddResource(resource);
+        var resourceBuilder = builder.AddResource(resource)
+            .WithIconName("DatabaseMultiple");
 
         AddKustoHealthChecksAndLifecycleManagement(resourceBuilder);
         AddKustoCustomCommands(resourceBuilder);
@@ -116,7 +117,8 @@ public static class AzureKustoBuilderExtensions
 
         var kustoDatabase = new AzureKustoReadWriteDatabaseResource(name, databaseName, builder.Resource);
         builder.Resource.Databases.Add(kustoDatabase);
-        var resourceBuilder = builder.ApplicationBuilder.AddResource(kustoDatabase);
+        var resourceBuilder = builder.ApplicationBuilder.AddResource(kustoDatabase)
+            .WithIconName("Database");
 
         // Register a health check that will be used to verify database is available
         KustoConnectionStringBuilder? kcsb = null;
@@ -283,6 +285,7 @@ public static class AzureKustoBuilderExtensions
         crp.SetParameter(ClientRequestProperties.OptionQueryConsistency, ClientRequestProperties.OptionQueryConsistency_Strong);
 
         var script = databaseResource.GetDatabaseCreationScript();
+        var hasCustomScript = databaseResource.Annotations.OfType<AzureKustoCreateDatabaseScriptAnnotation>().Any();
 
         var logger = serviceProvider.GetRequiredService<ResourceLoggerService>().GetLogger(databaseResource);
         var rns = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -291,7 +294,18 @@ public static class AzureKustoBuilderExtensions
 
         try
         {
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
+            }
+
             await AzureKustoEmulatorResiliencePipelines.Default.ExecuteAsync(async ct => await adminProvider.ExecuteControlCommandAsync(databaseResource.DatabaseName, script, crp).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", databaseResource.DatabaseName);
         }
         catch (Exception e)

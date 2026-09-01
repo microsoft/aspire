@@ -64,6 +64,11 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsTerminalsV1 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether resource snapshots include monotonic versions usable for ordering.
+    /// </summary>
+    bool SupportsResourceSnapshotVersionsV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

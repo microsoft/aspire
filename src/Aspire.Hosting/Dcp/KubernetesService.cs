@@ -88,10 +88,12 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private readonly SemaphoreSlim _kubeconfigReadSemaphore = new(1);
 
     private DcpKubernetesClient? _kubernetes;
+    private bool _kubernetesApiReady;
     private ResiliencePipeline? _resiliencePipeline;
     private bool _disposed;
 
     public TimeSpan MaxRetryDuration { get; set; } = TimeSpan.FromSeconds(20);
+    public TimeSpan KubernetesInitializationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
@@ -101,7 +103,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
             DcpApiOperationType.Get,
             T.ObjectKind,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
@@ -109,14 +111,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     GroupVersion.Version,
                     resourceType,
                     name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
                     GroupVersion.Group,
                     GroupVersion.Version,
                     namespaceParameter,
                     resourceType,
                     name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                 return KubernetesJson.Deserialize<T>(response.Body.ToString());
             },
@@ -134,7 +136,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
            DcpApiOperationType.Create,
            T.ObjectKind,
-           async (kubernetes) =>
+           async (kubernetes, operationCancellationToken) =>
            {
                var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
@@ -142,14 +144,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     GroupVersion.Group,
                     GroupVersion.Version,
                     resourceType,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.CreateNamespacedCustomObjectWithHttpMessagesAsync(
                     obj,
                     GroupVersion.Group,
                     GroupVersion.Version,
                     namespaceParameter,
                     resourceType,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                return KubernetesJson.Deserialize<T>(response.Body.ToString());
            },
@@ -167,7 +169,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
            DcpApiOperationType.Patch,
            T.ObjectKind,
-           async (kubernetes) =>
+           async (kubernetes, operationCancellationToken) =>
            {
                var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
@@ -176,7 +178,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     GroupVersion.Version,
                     resourceType,
                     obj.Metadata.Name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
                     patch,
                     GroupVersion.Group,
@@ -184,7 +186,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     namespaceParameter,
                     resourceType,
                     obj.Metadata.Name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                return KubernetesJson.Deserialize<T>(response.Body.ToString());
            },
@@ -201,20 +203,20 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
             DcpApiOperationType.List,
             T.ObjectKind,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                     ? await kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
                         GroupVersion.Group,
                         GroupVersion.Version,
                         resourceType,
-                        cancellationToken: cancellationToken).ConfigureAwait(false)
+                        cancellationToken: operationCancellationToken).ConfigureAwait(false)
                     : await kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
                         GroupVersion.Group,
                         GroupVersion.Version,
                         namespaceParameter,
                         resourceType,
-                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                        cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                 return KubernetesJson.Deserialize<CustomResourceList<T>>(response.Body.ToString()).Items;
             },
@@ -231,7 +233,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
             DcpApiOperationType.Delete,
             T.ObjectKind,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.DeleteClusterCustomObjectWithHttpMessagesAsync(
@@ -239,14 +241,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     GroupVersion.Version,
                     resourceType,
                     name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
                     GroupVersion.Group,
                     GroupVersion.Version,
                     namespaceParameter,
                     resourceType,
                     name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: operationCancellationToken).ConfigureAwait(false);
 
                 return KubernetesJson.Deserialize<T>(response.Body.ToString());
             },
@@ -269,7 +271,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return ExecuteWithRetry(
                 DcpApiOperationType.Watch,
                 T.ObjectKind,
-                (kubernetes) =>
+                async (kubernetes, operationCancellationToken) =>
                 {
                     var responseTask = string.IsNullOrEmpty(namespaceParameter)
                         ? kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
@@ -277,14 +279,17 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                             GroupVersion.Version,
                             resourceType,
                             watch: true,
-                            cancellationToken: restartCancellationToken)
+                            cancellationToken: operationCancellationToken)
                         : kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
                             GroupVersion.Group,
                             GroupVersion.Version,
                             namespaceParameter,
                             resourceType,
                             watch: true,
-                            cancellationToken: restartCancellationToken);
+                            cancellationToken: operationCancellationToken);
+
+                    // KubernetesClient's lazy WatchAsync does not await the HTTP response until enumeration starts.
+                    await responseTask.ConfigureAwait(false);
 
                     // TODO: KubernetesClient v18 marked WatchAsync extension method as obsolete.
                     // The new pattern uses Watcher<T> directly, but requires significant refactoring.
@@ -342,7 +347,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
             DcpApiOperationType.GetLogSubresource,
             T.ObjectKind,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 var response = await kubernetes.ReadSubResourceAsStreamAsync(
                     GroupVersion.Group,
@@ -352,7 +357,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     Logs.SubResourceName,
                     obj.Metadata.Namespace(),
                     queryParams,
-                    cancellationToken
+                    operationCancellationToken
                 ).ConfigureAwait(false);
 
                 return response.Body;
@@ -369,7 +374,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return ExecuteWithRetry(
             DcpApiOperationType.ServerStop,
             DcpExecutionResourceType,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 await kubernetes.PatchExecutionDocumentAsync(
                     new ApiServerExecution
@@ -377,7 +382,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                         ApiServerStatus = ApiServerStatus.Stopping,
                         ShutdownResourceCleanup = ResourceCleanup.Full
                     },
-                    cancellationToken
+                    operationCancellationToken
                     ).ConfigureAwait(false);
                 return (object?)null;
             },
@@ -393,7 +398,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         var executionDoc = await ExecuteWithRetry(
             DcpApiOperationType.ResourceCleanup,
             DcpExecutionResourceType,
-            async (kubernetes) =>
+            async (kubernetes, operationCancellationToken) =>
             {
                 return await kubernetes.PatchExecutionDocumentAsync(
                     new ApiServerExecution
@@ -401,7 +406,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                         ApiServerStatus = ApiServerStatus.CleaningResources,
                         ShutdownResourceCleanup = ResourceCleanup.Full
                     },
-                    cancellationToken
+                    operationCancellationToken
                     ).ConfigureAwait(false);
             },
             RetryOnConnectivityErrors,
@@ -428,7 +433,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
         await retryPipeline.ExecuteAsync(async cancellationContext =>
         {
-            return await _kubernetes!.GetExecutionDocumentAsync(cancellationToken).ConfigureAwait(false);
+            return await _kubernetes!.GetExecutionDocumentAsync(cancellationContext).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
     }
 
@@ -449,40 +454,54 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return kindWithResource.Resource;
     }
 
-    private Task<TResult> ExecuteWithRetry<TResult>(
-        DcpApiOperationType operationType,
-        string resourceType,
-        Func<DcpKubernetesClient, TResult> operation,
-        Func<Exception, bool> isRetryable,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteWithRetry<TResult>(
-            operationType,
-            resourceType,
-            (DcpKubernetesClient kubernetes) => Task.FromResult(operation(kubernetes)),
-            isRetryable,
-            cancellationToken);
-    }
-
     private async Task<TResult> ExecuteWithRetry<TResult>(
         DcpApiOperationType operationType,
         string resourceType,
-        Func<DcpKubernetesClient, Task<TResult>> operation,
+        Func<DcpKubernetesClient, CancellationToken, Task<TResult>> operation,
         Func<Exception, bool> isRetryable,
         CancellationToken cancellationToken)
     {
-        var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
         using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
-        activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
         var retryCount = 0;
-
-        var resiliencePipeline = CreateKubernetesCallResiliencePipeline(isRetryable, activity, () => retryCount++);
 
         try
         {
-            return await resiliencePipeline.ExecuteAsync<TResult>(async (cancellationToken) =>
+            async ValueTask EnsureKubernetesClientAsync(CancellationToken cancellationToken)
             {
-                return await operation(_kubernetes!).ConfigureAwait(false);
+                var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
+                if (clientReady.Initialized)
+                {
+                    activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
+                }
+            }
+
+            if (_kubernetes is null)
+            {
+                // The first DCP request must also wait for DCP to create its kubeconfig. Give that initialization
+                // its own budget so slower hosts do not consume the shorter already-running API retry budget.
+                var initializationPipeline = CreateKubernetesCallResiliencePipeline(
+                    KubernetesInitializationTimeout,
+                    RetryOnConnectivityErrors,
+                    activity,
+                    () => retryCount++);
+                await initializationPipeline.ExecuteAsync(EnsureKubernetesClientAsync, cancellationToken).ConfigureAwait(false);
+            }
+
+            // A parsed kubeconfig does not guarantee that DCP can process requests yet. Keep using the startup
+            // budget until an API operation succeeds, then fail steady-state API calls on the normal budget.
+            var retryDuration = Volatile.Read(ref _kubernetesApiReady)
+                ? MaxRetryDuration
+                : KubernetesInitializationTimeout;
+
+            var resiliencePipeline = CreateKubernetesCallResiliencePipeline(retryDuration, isRetryable, activity, () => retryCount++);
+            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
+            {
+                // Keep connection establishment inside the retry loop so kubeconfig read failures remain retryable.
+                await EnsureKubernetesClientAsync(cancellationToken).ConfigureAwait(false);
+                var result = await operation(_kubernetes!, cancellationToken).ConfigureAwait(false);
+                Volatile.Write(ref _kubernetesApiReady, true);
+
+                return result;
             }, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -497,7 +516,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         ex is KubeConfigException ||
         (ex is HttpOperationException hoe && hoe.Response.StatusCode == System.Net.HttpStatusCode.Conflict);
 
-    private ResiliencePipeline CreateKubernetesCallResiliencePipeline(
+    private static ResiliencePipeline CreateKubernetesCallResiliencePipeline(
+        TimeSpan retryDuration,
         Func<Exception, bool> isRetryable,
         ProfilingTelemetry.ActivityScope activity,
         Action recordRetry)
@@ -505,7 +525,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         var resiliencePipeline = new ResiliencePipelineBuilder()
             .AddTimeout(new TimeoutStrategyOptions
             {
-                Timeout = MaxRetryDuration,
+                Timeout = retryDuration,
                 OnTimeout = (_) =>
                 {
                     activity.AddKubernetesApiTimeout();
@@ -593,43 +613,44 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             readStopwatch.Start();
 
             var readPipeline = CreateReadKubeconfigResiliencePipeline();
-            var timeoutPipeline = new ResiliencePipelineBuilder<DcpKubernetesClient>()
-                .AddTimeout(new TimeoutStrategyOptions { Timeout = MaxRetryDuration })
-                .Build();
 
             try
             {
-                _kubernetes = await timeoutPipeline.ExecuteAsync(async (cancellationToken) =>
+                _kubernetes = await readPipeline.ExecuteAsync(async (cancellationToken) =>
                 {
-                    return await readPipeline.ExecuteAsync<DcpKubernetesClient>(async (cancellationToken) =>
+                    var fileWaitStopwatch = Stopwatch.StartNew();
+                    var fileInfo = new FileInfo(locations.DcpKubeconfigPath);
+                    while (!fileInfo.Exists)
                     {
-                        var fileWaitStopwatch = Stopwatch.StartNew();
-                        var fileInfo = new FileInfo(locations.DcpKubeconfigPath);
-                        while (!fileInfo.Exists)
-                        {
-                            await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), cancellationToken).ConfigureAwait(false);
-                            fileInfo = new FileInfo(locations.DcpKubeconfigPath);
-                        }
-                        fileWaitStopwatch.Stop();
-                        activity.SetDcpKubeconfigFileWait(fileWaitStopwatch.ElapsedMilliseconds);
-                        activity.AddKubeconfigFileDetected();
+                        await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), cancellationToken).ConfigureAwait(false);
+                        fileInfo = new FileInfo(locations.DcpKubeconfigPath);
+                    }
+                    fileWaitStopwatch.Stop();
+                    activity.SetDcpKubeconfigFileWait(fileWaitStopwatch.ElapsedMilliseconds);
+                    activity.AddKubeconfigFileDetected();
 
-                        var buildConfigStopwatch = Stopwatch.StartNew();
-                        var config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfig: fileInfo, useRelativePaths: false).ConfigureAwait(false);
-                        buildConfigStopwatch.Stop();
-                        readStopwatch.Stop();
+                    var buildConfigStopwatch = Stopwatch.StartNew();
+                    // Open the file with FileShare.ReadWrite | FileShare.Delete so we do not interfere with DCP
+                    // if we happen to open the file while DCP is still writing to it.
+                    var kubeconfigStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    KubernetesClientConfiguration config;
+                    await using (kubeconfigStream.ConfigureAwait(false))
+                    {
+                        config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfigStream).ConfigureAwait(false);
+                    }
+                    buildConfigStopwatch.Stop();
+                    readStopwatch.Stop();
 
-                        logger.LogDebug(
-                            "Successfully read Kubernetes configuration from '{DcpKubeconfigPath}' after {DurationMs} milliseconds.",
-                            locations.DcpKubeconfigPath,
-                            readStopwatch.ElapsedMilliseconds
-                            );
-                        activity.SetDcpKubeconfigBuildDuration(buildConfigStopwatch.ElapsedMilliseconds);
-                        activity.SetDcpKubeconfigReadDuration(readStopwatch.ElapsedMilliseconds);
-                        activity.AddKubeconfigReadComplete();
+                    logger.LogDebug(
+                        "Successfully read Kubernetes configuration from '{DcpKubeconfigPath}' after {DurationMs} milliseconds.",
+                        locations.DcpKubeconfigPath,
+                        readStopwatch.ElapsedMilliseconds
+                        );
+                    activity.SetDcpKubeconfigBuildDuration(buildConfigStopwatch.ElapsedMilliseconds);
+                    activity.SetDcpKubeconfigReadDuration(readStopwatch.ElapsedMilliseconds);
+                    activity.AddKubeconfigReadComplete();
 
-                        return new DcpKubernetesClient(config);
-                    }, cancellationToken).ConfigureAwait(false);
+                    return new DcpKubernetesClient(config);
                 }, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)

@@ -5,7 +5,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 
@@ -14,7 +16,7 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class AppHostAuxiliaryBackchannelTests
 {
     [Fact]
-    public async Task GetResourceSnapshotsAsync_SendsClientCapabilitiesWithV3()
+    public async Task GetResourceSnapshotsAsync_SendsClientCapabilities()
     {
         using var server = TestAppHostBackchannelServer.Start();
         using var backchannel = await server.ConnectAsync().DefaultTimeout();
@@ -25,10 +27,11 @@ public class AppHostAuxiliaryBackchannelTests
         Assert.Equal("api", snapshot.Name);
         Assert.NotNull(server.Target.GetResourcesRequest);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V3, server.Target.GetResourcesRequest.ClientCapabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1, server.Target.GetResourcesRequest.ClientCapabilities);
     }
 
     [Fact]
-    public async Task WatchResourceSnapshotsAsync_SendsClientCapabilitiesWithV3()
+    public async Task WatchResourceSnapshotsAsync_SendsClientCapabilities()
     {
         using var server = TestAppHostBackchannelServer.Start();
         using var backchannel = await server.ConnectAsync().DefaultTimeout();
@@ -43,12 +46,22 @@ public class AppHostAuxiliaryBackchannelTests
         Assert.Equal("api", resource.Name);
         Assert.NotNull(server.Target.WatchResourcesRequest);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V3, server.Target.WatchResourcesRequest.ClientCapabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1, server.Target.WatchResourcesRequest.ClientCapabilities);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenResourceSnapshotVersionsCapabilityAdvertised_SupportsVersions()
+    {
+        using var server = TestAppHostBackchannelServer.Start();
+        using var backchannel = await server.ConnectAsync().DefaultTimeout();
+
+        Assert.True(backchannel.SupportsResourceSnapshotVersionsV1);
     }
 
     [Fact]
     public async Task GetTerminalInfoAsync_WhenTerminalsCapabilityMissing_ReturnsUnavailableWithoutCallingRpc()
     {
-        // The server below advertises only [V1, V2] — no Terminals_V1. The
+        // Terminals_V1 is absent from the server capabilities. The
         // TestAppHostRpcTarget also deliberately exposes no GetTerminalInfoAsync
         // method, so if the production capability gate is ever removed the call
         // would route to JsonRpc and fail with RemoteMethodNotFoundException —
@@ -113,7 +126,7 @@ public class AppHostAuxiliaryBackchannelTests
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
-            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, clientSocket).DefaultTimeout();
+            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
         }
 
         public void Dispose()
@@ -133,7 +146,8 @@ public class AppHostAuxiliaryBackchannelTests
         private readonly string[] _capabilities =
         [
             AuxiliaryBackchannelCapabilities.V1,
-            AuxiliaryBackchannelCapabilities.V2
+            AuxiliaryBackchannelCapabilities.V2,
+            AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
         ];
 
         public GetResourcesRequest? GetResourcesRequest { get; private set; }

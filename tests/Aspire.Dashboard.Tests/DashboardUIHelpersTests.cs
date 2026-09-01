@@ -9,6 +9,14 @@ namespace Aspire.Dashboard.Tests;
 public class DashboardUIHelpersTests
 {
     [Theory]
+    [InlineData(200_000, 200_000)]
+    [InlineData(600_000, 200_000)]
+    public void GetVirtualizedItemCount_LimitsLargeResultSets(int totalItemCount, int expected)
+    {
+        Assert.Equal(expected, DashboardUIHelpers.GetVirtualizedItemCount(totalItemCount));
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(1000, 1000)]
     [InlineData(1.5, 1)]
@@ -91,5 +99,14 @@ public class DashboardUIHelpersTests
 
         // Assert
         Assert.Equal(int.MinValue, result);
+    }
+
+    [Fact]
+    public void GetMaskingText_ReturnsClassedMarkupAndPlainText()
+    {
+        var mask = DashboardUIHelpers.GetMaskingText(3);
+
+        Assert.Equal("<span class=\"masked-content\">&#x25cf;&#x25cf;&#x25cf;</span>", mask.MarkupString.Value);
+        Assert.Equal("●●●", mask.Text);
     }
 }

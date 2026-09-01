@@ -386,7 +386,7 @@ internal sealed class LayoutBuilder : IDisposable
 
     private void Log(string message)
     {
-        if (_verbose || !message.StartsWith("  "))
+        if (_verbose || !message.StartsWith("  ", StringComparison.Ordinal))
         {
             Console.WriteLine(message);
         }

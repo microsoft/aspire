@@ -18,7 +18,7 @@ public class TerminalCommandViewerOptionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ViewerOption_Help_DescribesPrimarySecondaryBehaviour()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -46,7 +46,7 @@ public class TerminalCommandViewerOptionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ViewerOption_DefaultIsFalse_WhenNotSpecified()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -61,7 +61,7 @@ public class TerminalCommandViewerOptionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ViewerOption_ParsesToTrue_WhenSpecified()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 

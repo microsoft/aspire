@@ -99,6 +99,24 @@ internal static class InteractionExports
     }
 
     /// <summary>
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    /// </summary>
+    // Progress prompts can invoke Work callbacks that re-enter the remote host through ATS, so the synchronous
+    // invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static async Task<BoolInteractionResult> PromptProgress(
+        this IInteractionService interactionService,
+        string message,
+        InteractionProgressOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(interactionService);
+
+        var result = await interactionService.PromptProgressAsync(message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        return BoolInteractionResult.From(result);
+    }
+
+    /// <summary>
     /// Prompts the user for a single input.
     /// </summary>
     // Prompts can invoke dynamic-loading and validation callbacks that re-enter the remote host through ATS, so the
@@ -188,6 +206,15 @@ internal static class InteractionExports
     }
 
     /// <summary>
+    /// Creates a file input.
+    /// </summary>
+    [AspireExport]
+    public static InteractionInputBuilder CreateFileInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
+    {
+        return InteractionInputBuilder.Create(name, InputType.File, options);
+    }
+
+    /// <summary>
     /// Creates a choice input that selects from a list of options.
     /// </summary>
     /// <param name="interactionService">The interaction service.</param>
@@ -226,7 +253,7 @@ internal static class InteractionExports
     // are sent back to the polyglot caller. The caller only consumes data fields such as Name, Value and Options.
     internal static InteractionInput ToResultInput(InteractionInput input)
     {
-        return new InteractionInput
+        var result = new InteractionInput
         {
             Name = input.Name,
             Label = input.Label,
@@ -240,8 +267,19 @@ internal static class InteractionExports
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            MaxFileSize = input.MaxFileSize,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
+
+        var files = input.GetFiles();
+        if (files.Count > 0)
+        {
+            result.SetFiles(new InteractionFileCollection(files));
+        }
+
+        return result;
     }
 }
 
@@ -280,6 +318,9 @@ internal sealed class InteractionInputBuilder
             AllowCustomChoice = options?.AllowCustomChoice ?? false,
             Disabled = options?.Disabled ?? false,
             MaxLength = options?.MaxLength,
+            MaxFileSize = options?.MaxFileSize,
+            AllowMultipleFiles = options?.AllowMultipleFiles ?? false,
+            FileFilter = options?.FileFilter,
         };
 
         return new InteractionInputBuilder(input);
@@ -309,6 +350,20 @@ internal sealed class InteractionInputBuilder
     {
         Input.Value = value;
         return this;
+    }
+
+    /// <summary>
+    /// Releases uploaded files associated with the input.
+    /// </summary>
+    /// <remarks>
+    /// Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+    /// server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+    /// deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExport]
+    public void ReleaseFiles()
+    {
+        Input.GetFiles().Dispose();
     }
 
     /// <summary>
@@ -502,6 +557,22 @@ internal sealed class CreateInteractionInputOptions
     /// Gets or sets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for file inputs.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs.
+    /// </summary>
+    public bool? AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute.
+    /// The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
+    /// </summary>
+    public string? FileFilter { get; init; }
 }
 
 /// <summary>
@@ -680,6 +751,46 @@ internal sealed class InteractionInputsDialogOptions
             ShowDismiss = ShowDismiss,
             EnableMessageMarkdown = EnableMessageMarkdown,
             ValidationCallback = ValidationCallback,
+        };
+    }
+}
+
+/// <summary>
+/// Options for progress dialog prompts.
+/// </summary>
+[AspireDto]
+internal sealed class InteractionProgressOptions
+{
+    /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// Gets or sets the primary button text (e.g. "Cancel").
+    /// </summary>
+    public string? PrimaryButtonText { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether Markdown in the message is rendered.
+    /// </summary>
+    public bool? EnableMessageMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
+    /// When provided, the progress dialog remains open while this callback executes and closes automatically
+    /// when the callback completes.
+    /// </summary>
+    public Func<ProgressContext, Task>? Work { get; init; }
+
+    internal ProgressInteractionOptions ToOptions()
+    {
+        return new ProgressInteractionOptions
+        {
+            Title = Title,
+            PrimaryButtonText = PrimaryButtonText,
+            EnableMessageMarkdown = EnableMessageMarkdown,
+            Work = Work,
         };
     }
 }

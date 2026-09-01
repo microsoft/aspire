@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -88,6 +90,17 @@ public class ParameterResource : Resource, IExpressionValue
     /// A task completion source that can be used to wait for the value of the parameter to be set.
     /// </summary>
     internal TaskCompletionSource<string>? WaitForValueTcs { get; set; }
+
+    internal ResourcePropertySnapshot CreateValueSnapshotProperty(string value)
+    {
+        return new(KnownProperties.Parameter.Value, value)
+        {
+            IsSensitive = Secret,
+            DisplayName = ResourcePropertyParameterValueDisplayName,
+            IsHighlighted = true,
+            SortOrder = 0
+        };
+    }
 
     /// <summary>
     /// Gets the value of the parameter asynchronously, waiting if necessary for the value to be set.

@@ -8,7 +8,7 @@ namespace Aspire.Hosting;
 
 internal static class CustomResourceSnapshotExtensions
 {
-    internal static ImmutableArray<ResourcePropertySnapshot> SetResourceProperty(this ImmutableArray<ResourcePropertySnapshot> properties, string name, object value, bool IsSensitive = false)
+    internal static ImmutableArray<ResourcePropertySnapshot> SetResourceProperty(this ImmutableArray<ResourcePropertySnapshot> properties, string name, object value, bool isSensitive = false, string? displayName = null, bool isHighlighted = false, int? sortOrder = null)
     {
         for (var i = 0; i < properties.Length; i++)
         {
@@ -16,19 +16,23 @@ internal static class CustomResourceSnapshotExtensions
 
             if (string.Equals(property.Name, name, StringComparisons.ResourcePropertyName))
             {
-                if (property.Value == value)
+                if (Equals(property.Value, value) &&
+                    property.IsSensitive == isSensitive &&
+                    string.Equals(property.DisplayName, displayName, StringComparison.Ordinal) &&
+                    property.IsHighlighted == isHighlighted &&
+                    property.SortOrder == sortOrder)
                 {
                     // Unchanged.
                     return properties;
                 }
 
                 // Set value.
-                return properties.SetItem(i, property with { Value = value, IsSensitive = IsSensitive });
+                return properties.SetItem(i, property with { Value = value, IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted, SortOrder = sortOrder });
             }
         }
 
         // Add property.
-        return [.. properties, new ResourcePropertySnapshot(name, value) { IsSensitive = IsSensitive }];
+        return [.. properties, new ResourcePropertySnapshot(name, value) { IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted, SortOrder = sortOrder }];
     }
 
     internal static ImmutableArray<ResourcePropertySnapshot> SetResourcePropertyRange(this ImmutableArray<ResourcePropertySnapshot> properties, IEnumerable<ResourcePropertySnapshot> newValues)
@@ -45,9 +49,9 @@ internal static class CustomResourceSnapshotExtensions
 
                 if (string.Equals(existingProperty.Name, newValue.Name, StringComparisons.ResourcePropertyName))
                 {
-                    if (existingProperty.Value != newValue.Value)
+                    if (existingProperty != newValue)
                     {
-                        existingProperties[i] = existingProperty with { Value = newValue.Value };
+                        existingProperties[i] = newValue;
                     }
 
                     found = true;

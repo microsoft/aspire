@@ -45,10 +45,10 @@ internal sealed class DcpHost
     // These environment variables should never be inherited by DCP from the app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     [
-        "ASPNETCORE_URLS",
+        KnownAspNetCoreConfigNames.Urls,
         "DOTNET_LAUNCH_PROFILE",
-        "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT",
+        KnownAspNetCoreConfigNames.Environment,
+        KnownAspNetCoreConfigNames.DotNetEnvironment,
         KnownConfigNames.AspireLogLevel,
     ];
 
@@ -427,14 +427,7 @@ internal sealed class DcpHost
         var directoryName = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrEmpty(directoryName))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(directoryName);
-            }
-            else
-            {
-                Directory.CreateDirectory(directoryName, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryName);
         }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -694,4 +687,3 @@ internal sealed class DcpHost
         return false;
     }
 }
-

@@ -3,6 +3,7 @@
   "name": "Hostitel aplikací Aspire pro jednosouborové scénáře",
   "description": "Minimální Aspire AppHost pro scénáře s jedním souborem (.NET 10 a novější).",
   "symbols/Framework/choices/net10.0/description": "Cíl net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP OTLP v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP služby prostředků v launchSettings.json projektu AppHost.",

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Acquisition;
 
-public class WingetRegistryProbeTests
+public class WingetRegistryProbeTests(ITestOutputHelper outputHelper)
 {
     private const string SidecarFileName = ".aspire-install.json";
 
@@ -17,7 +17,7 @@ public class WingetRegistryProbeTests
     [InlineData(false, false)]
     public void Run_WritesSidecarOnlyWhenRegistryClaimsAspire(bool registryClaim, bool expectSidecar)
     {
-        using var workspace = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var probe = new WingetFirstRunProbe(new FakeWindowsRegistryReader(claim: registryClaim), NullLogger<WingetFirstRunProbe>.Instance);
 
         probe.Run(workspace.Path);
@@ -40,7 +40,7 @@ public class WingetRegistryProbeTests
     [Fact]
     public void Run_IsIdempotent_OnSecondRun()
     {
-        using var workspace = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.Path, SidecarFileName);
         // Pre-seed with a distinctive payload no real producer would write.
         // The probe's contract is "do not touch an existing sidecar"; if it
@@ -62,7 +62,7 @@ public class WingetRegistryProbeTests
     [Fact]
     public async Task Run_ConcurrentInvocations_ProduceSingleValidSidecar()
     {
-        using var workspace = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var probe = new WingetFirstRunProbe(new FakeWindowsRegistryReader(claim: true), NullLogger<WingetFirstRunProbe>.Instance);
         var errors = new ConcurrentBag<Exception>();
 

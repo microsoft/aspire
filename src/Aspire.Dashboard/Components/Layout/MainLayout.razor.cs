@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -19,6 +18,13 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _runSelectionChanged;
+    private bool _isSwitchingRuns;
+
+    // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
+    // labels still available via each item's tooltip); true = expanded so each item shows its
+    // icon on the left and text label on the right. Persisted per-browser in local storage.
+    private bool _isNavMenuExpanded;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -27,11 +33,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private IDialogReference? _openPageDialog;
-    private IDisposable? _aiDisplayChangedSubscription;
+    private string? _pendingReturnFocusElementId;
+    private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
+    internal const string HelpButtonId = "dashboard-help-button";
+    internal const string SettingsButtonId = "dashboard-settings-button";
+    internal const string NavigationButtonId = "dashboard-navigation-button";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -47,9 +57,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
 
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
@@ -73,16 +80,45 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required ILocalStorage LocalStorage { get; init; }
 
     [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
+    public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
+    public required IDashboardRunStore RunStore { get; init; }
+
+    [Inject]
+    public required IDashboardRunSelection RunSelection { get; init; }
+
+    [Inject]
+    public required ILogger<MainLayout> Logger { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
+            }
+        }
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -122,9 +158,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
         }
 
-        await DisplayUnsecuredEndpointsMessageAsync();
+        // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+        var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
+        if (navExpandedResult.Success)
+        {
+            _isNavMenuExpanded = navExpandedResult.Value;
+        }
 
-        _aiDisplayChangedSubscription = AIContextProvider.OnDisplayChanged(() => InvokeAsync(StateHasChanged));
+        await DisplayUnsecuredEndpointsMessageAsync();
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -202,6 +243,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
             ShortcutManager.AddGlobalKeydownListener(this);
         }
+
+        if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)
+        {
+            _pendingReturnFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", elementId);
+        }
     }
 
     protected override void OnParametersSet()
@@ -213,7 +260,53 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task LaunchHelpAsync()
+    private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+
+    private async Task SwitchDashboardRunAsync(string? runId)
+    {
+        _runSelectionChanged = true;
+        var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
+        if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
+        {
+            await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
+            return;
+        }
+
+        _isSwitchingRuns = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            RunSelection.SelectRun(runId);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(
+                exception,
+                "Failed to switch to dashboard run '{RunId}'. Keeping dashboard run '{SelectedRunId}' selected.",
+                runId,
+                RunSelection.SelectedRun.RunId);
+        }
+        finally
+        {
+            _isSwitchingRuns = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        var persistedRunId = RunSelection.SelectedRun is { IsCurrent: false } actualSelectedRun ? actualSelectedRun.RunId : string.Empty;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, persistedRunId);
+    }
+
+    private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
+    {
+        // Dialog launchers move between the desktop header and the mobile navigation menu.
+        // Resolve the target when the dialog closes so viewport changes do not focus a removed element.
+        return returnFocusElementId is null ? null : GetDefaultReturnFocusElementId(desktopButtonId);
+    }
+
+    private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId));
+
+    private async Task LaunchHelpAsync(string? returnFocusElementId)
     {
         DialogParameters parameters = new()
         {
@@ -227,25 +320,50 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "700px",
             Height = "auto",
             Id = HelpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
         };
 
-        if (_openPageDialog is not null)
+        if (!await CloseOpenPageDialogForReplacementAsync(HelpDialogId).ConfigureAwait(true))
         {
-            if (Equals(_openPageDialog.Id, HelpDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
+            return;
         }
 
         _openPageDialog = await DialogService.ShowDialogAsync<HelpDialog>(parameters).ConfigureAwait(true);
     }
 
-    private void HandleDialogClose(DialogInstance dialogResult)
+    private void HandleDialogClose(string? returnFocusElementId = null)
     {
         _openPageDialog = null;
+        if (!_suppressNextDialogFocusRestore)
+        {
+            _pendingReturnFocusElementId = returnFocusElementId;
+        }
+    }
+
+    private async Task<bool> CloseOpenPageDialogForReplacementAsync(string dialogId)
+    {
+        if (_openPageDialog is null)
+        {
+            return true;
+        }
+
+        if (Equals(_openPageDialog.Id, dialogId) && !_openPageDialog.Result.IsCompleted)
+        {
+            return false;
+        }
+
+        _suppressNextDialogFocusRestore = true;
+        try
+        {
+            await _openPageDialog.CloseAsync();
+            _pendingReturnFocusElementId = null;
+        }
+        finally
+        {
+            _suppressNextDialogFocusRestore = false;
+        }
+
+        return true;
     }
 
     public async Task LaunchAIAgentsAsync()
@@ -262,23 +380,20 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "700px",
             Height = "auto",
             Id = AIAgentsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
         };
 
-        if (_openPageDialog is not null)
+        if (!await CloseOpenPageDialogForReplacementAsync(AIAgentsDialogId).ConfigureAwait(true))
         {
-            if (Equals(_openPageDialog.Id, AIAgentsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
+            return;
         }
 
         _openPageDialog = await DialogService.ShowDialogAsync<AIAgentsDialog>(parameters).ConfigureAwait(true);
     }
 
-    public async Task LaunchSettingsAsync()
+    public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
+
+    private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {
         var parameters = new DialogParameters
         {
@@ -291,17 +406,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "300px",
             Height = "auto",
             Id = SettingsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
         };
 
-        if (_openPageDialog is not null)
+        if (!await CloseOpenPageDialogForReplacementAsync(SettingsDialogId).ConfigureAwait(true))
         {
-            if (Equals(_openPageDialog.Id, SettingsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
+            return;
         }
 
         // Ensure the currently set theme is immediately available to display in settings dialog.
@@ -330,17 +440,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "350px",
             Height = "auto",
             Id = NotificationsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
         };
 
-        if (_openPageDialog is not null)
+        if (!await CloseOpenPageDialogForReplacementAsync(NotificationsDialogId).ConfigureAwait(true))
         {
-            if (Equals(_openPageDialog.Id, NotificationsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
+            return;
         }
 
         if (ViewportInformation.IsDesktop)
@@ -350,32 +455,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         else
         {
             _openPageDialog = await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
-        }
-    }
-
-    public async Task LaunchAssistantAsync()
-    {
-        if (AIContextProvider.AssistantChatViewModel != null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            await AIContextProvider.HideAssistantSidebarAsync();
-        }
-        else
-        {
-            var viewModel = ServiceProvider.GetRequiredService<AssistantChatViewModel>();
-            var initializeTask = AIContextProvider.ChatState is { } state
-                ? viewModel.InitializeWithPreviousStateAsync(state)
-                : viewModel.InitializeAsync();
-
-            if (ViewportInformation.IsDesktop)
-            {
-                await AIContextProvider.LaunchAssistantSidebarAsync(viewModel);
-            }
-            else
-            {
-                await AIContextProvider.LaunchAssistantModelDialogAsync(viewModel);
-            }
-
-            await initializeTask;
         }
     }
 
@@ -424,6 +503,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
+    private async Task ToggleNavMenuExpandedAsync()
+    {
+        _isNavMenuExpanded = !_isNavMenuExpanded;
+        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.NavMenuExpanded, _isNavMenuExpanded);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _shortcutManagerReference?.Dispose();
@@ -431,7 +516,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _themeChangedSubscription?.Dispose();
         _locationChangingRegistration?.Dispose();
         ShortcutManager.RemoveGlobalKeydownListener(this);
-        _aiDisplayChangedSubscription?.Dispose();
 
         try
         {

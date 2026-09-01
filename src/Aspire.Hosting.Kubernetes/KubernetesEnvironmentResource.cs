@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -28,8 +29,11 @@ namespace Aspire.Hosting.Kubernetes;
 /// Kubernetes cluster.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource
+public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
+    private const int HttpRouteHostnameLimit = 16;
+    private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
+
     /// <summary>
     /// Gets or sets the name of the Helm chart to be generated.
     /// </summary>
@@ -143,7 +147,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     /// <summary>
     /// Captured parameter-to-values.yaml mappings populated during publish, consumed during deploy
-    /// to resolve secret and unresolved parameter values into the environment values file.
+    /// to resolve parameter values and composite references into the environment values file.
     /// </summary>
     internal List<CapturedHelmValue> CapturedHelmValues { get; } = [];
 
@@ -184,6 +188,21 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// connection strings) that can't be resolved at publish time.
     /// </summary>
     internal sealed record CapturedHelmValueProvider(string Section, string ResourceKey, string ValueKey, IValueProvider ValueProvider);
+
+    /// <summary>
+    /// A TLS secret that may need a self-signed bootstrap certificate, together with the routing
+    /// resource that requested it.
+    /// </summary>
+    /// <remarks>
+    /// The owner is carried through to deploy time because eligibility is only partially known when
+    /// the pipeline steps are built. Step factories run before any step executes (see
+    /// <c>DistributedApplicationPipeline.ResolveStepsAsync</c>), so at collection time we can only
+    /// tell whether a resource is *configured* to materialize — the actual rendered object does not
+    /// exist yet. An Ingress can still drop out later when none of its backends resolve, so the
+    /// bootstrap step re-checks the owner before creating a certificate. Without this, we would
+    /// create a secret for an Ingress that never made it into the chart.
+    /// </remarks>
+    internal sealed record TlsSecretRequest(ReferenceExpression SecretName, ReferenceExpression Hostname, IResource Owner);
 
     /// <summary>
     /// Captured value provider references populated during publish, consumed during deploy
@@ -419,7 +438,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         var targetComputeEnvironment = OwningComputeEnvironment ?? this;
 
         // Create a Kubernetes resource for the dashboard if enabled
-        if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
+        if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboard &&
+            !dashboard.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == targetComputeEnvironment))
         {
             var dashboardService = await environmentContext.CreateKubernetesResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
             dashboardService.AddPrintSummaryStep();
@@ -450,6 +470,28 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 continue;
             }
 
+            // Use the resource's actual compute environment (which may be a parent
+            // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
+            // can match it correctly during publish.
+            var computeEnvForAnnotation = resourceComputeEnvironment ?? targetComputeEnvironment;
+
+            // This step is reachable from two pipeline executions: it is RequiredBy
+            // "before-start" (so it runs during AppHost startup) and it is also part of the
+            // publish/deploy DAG. Adding a second DeploymentTargetAnnotation on the second
+            // pass makes ResourceExtensions.GetDeploymentTargetAnnotation throw, so the step
+            // has to be idempotent. Skipping early also avoids re-running ConfigureOtlp,
+            // which would append duplicate environment variables. The already-created
+            // KubernetesResource is still recorded so ingress processing below sees it.
+            if (r.Annotations.OfType<DeploymentTargetAnnotation>().FirstOrDefault(a => a.ComputeEnvironment == computeEnvForAnnotation) is { } existingTarget)
+            {
+                if (existingTarget.DeploymentTarget is KubernetesResource existingServiceResource)
+                {
+                    deploymentTargets[r] = existingServiceResource;
+                }
+
+                continue;
+            }
+
             // Configure OTLP for resources if dashboard is enabled
             if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
             {
@@ -461,10 +503,6 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             serviceResource.AddPrintSummaryStep();
 
             // Add deployment target annotation to the resource.
-            // Use the resource's actual compute environment (which may be a parent
-            // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
-            // can match it correctly during publish.
-            var computeEnvForAnnotation = resourceComputeEnvironment ?? targetComputeEnvironment;
             r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
             {
                 ComputeEnvironment = computeEnvForAnnotation,
@@ -479,6 +517,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         // Process Gateway API resources
         await ProcessGatewayResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
+
+        // Process first-class persistent volume resources
+        await ProcessPersistentVolumeResources(appModel, context.CancellationToken).ConfigureAwait(false);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -536,8 +577,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// <summary>
     /// Resolves a <see cref="ReferenceExpression"/> for inclusion in a Kubernetes manifest
     /// produced by an ingress or gateway resource. When the expression wraps one or more
-    /// <see cref="ParameterResource"/> instances that have no value at publish time
-    /// (e.g., user-supplied parameters without defaults, or secrets), the expression is
+    /// <see cref="ParameterResource"/> instances that must remain deploy-time inputs
+    /// (for example, secrets or parameters without published defaults), the expression is
     /// rendered with Helm template placeholders (such as <c>{{ .Values.parameters.ingress.ingressclass }}</c>)
     /// and the parameters are captured for deploy-time resolution into a values override file.
     /// </summary>
@@ -550,31 +591,33 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// <param name="cancellationToken">The cancellation token.</param>
     private async Task<string> ResolveExpressionAsync(ReferenceExpression expression, string owningResourceName, CancellationToken cancellationToken)
     {
-        try
+        if (!expression.ValueProviders.OfType<ParameterResource>().Any(ShouldCaptureAsHelmValue))
         {
-            return (await expression.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
-        }
-        catch (MissingParameterValueException)
-        {
-            // One or more parameters in the expression have no value at publish time
-            // (e.g., a parameter created via AddParameter("ingressclass") with no default,
-            // or a secret parameter). Substitute each unresolved parameter with a Helm
-            // template reference into values.yaml so the resulting manifest is a valid
-            // Helm template and the value can be supplied at deploy time.
-            var owningResourceKey = owningResourceName.ToHelmValuesSectionName();
-            var args = new object[expression.ValueProviders.Count];
-
-            for (var i = 0; i < expression.ValueProviders.Count; i++)
+            try
             {
-                args[i] = await ResolveValueProviderAsync(
-                    expression.ValueProviders[i],
-                    owningResourceName,
-                    owningResourceKey,
-                    cancellationToken).ConfigureAwait(false);
+                return (await expression.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
             }
-
-            return string.Format(System.Globalization.CultureInfo.InvariantCulture, expression.Format, args);
+            catch (MissingParameterValueException)
+            {
+                // Fall through to Helm-reference substitution below.
+            }
         }
+
+        // Parameters without published defaults may still have runtime values, but publish must
+        // preserve them as deploy-time inputs instead of leaking those values into generated YAML.
+        var owningResourceKey = owningResourceName.ToHelmValuesSectionName();
+        var args = new object[expression.ValueProviders.Count];
+
+        for (var i = 0; i < expression.ValueProviders.Count; i++)
+        {
+            args[i] = await ResolveValueProviderAsync(
+                expression.ValueProviders[i],
+                owningResourceName,
+                owningResourceKey,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, expression.Format, args);
     }
 
     private async Task<string> ResolveValueProviderAsync(
@@ -585,19 +628,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         if (valueProvider is ParameterResource parameter)
         {
-            // Attempt to resolve this individual parameter first. The outer
-            // MissingParameterValueException from the whole-expression resolve attempt
-            // only tells us that *some* parameter in the expression was unresolved;
-            // others (e.g., those with `publishValueAsDefault: true`) may still have
-            // a value and should be inlined into the manifest rather than left as
-            // Helm placeholders. This keeps the published chart maximally self-contained.
-            try
+            if (!ShouldCaptureAsHelmValue(parameter))
             {
-                return (await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false)) ?? string.Empty;
-            }
-            catch (MissingParameterValueException)
-            {
-                // Fall through to Helm-reference substitution below.
+                try
+                {
+                    return (await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false)) ?? string.Empty;
+                }
+                catch (MissingParameterValueException)
+                {
+                    // Fall through to Helm-reference substitution below.
+                }
             }
 
             // Capture the parameter so HelmDeploymentEngine writes its resolved value to
@@ -629,6 +669,24 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         return (await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false)) ?? string.Empty;
     }
 
+    private static bool ShouldCaptureAsHelmValue(ParameterResource parameter)
+        => parameter.Secret || parameter.Default is null;
+
+    private async Task<List<string>> ResolveHostnamesAsync(
+        IEnumerable<ReferenceExpression> hostnames,
+        string owningResourceName,
+        CancellationToken cancellationToken)
+    {
+        var resolvedHostnames = new List<string>();
+
+        foreach (var hostname in hostnames)
+        {
+            resolvedHostnames.Add(await ResolveExpressionAsync(hostname, owningResourceName, cancellationToken).ConfigureAwait(false));
+        }
+
+        return resolvedHostnames;
+    }
+
     private async Task ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger, CancellationToken cancellationToken)
     {
         var ingressResources = model.Resources
@@ -637,9 +695,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var ingressResource in ingressResources)
         {
-            if (ingressResource.Paths.Count == 0 && ingressResource.DefaultBackend is null)
+            if (!ingressResource.ShouldMaterialize)
             {
-                logger.LogWarning("Ingress '{IngressName}' has no path rules or default backend configured. Skipping.", ingressResource.Name);
+                logger.LogWarning(
+                    "Ingress '{IngressName}' has no path rules or default backend configured. The Ingress and its TLS certificate will not be created.",
+                    ingressResource.Name);
                 continue;
             }
 
@@ -689,17 +749,40 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             ingress.Metadata.Annotations[key] = await ResolveExpressionAsync(value, ingressResource.Name, cancellationToken).ConfigureAwait(false);
         }
 
-        var pathsByHost = ingressResource.Paths.GroupBy(p => p.Host ?? string.Empty);
+        var resolvedHostnames = await ResolveHostnamesAsync(
+            ingressResource.Hostnames,
+            ingressResource.Name,
+            cancellationToken).ConfigureAwait(false);
+        var pathsByHost = new Dictionary<string, List<IngressPathConfig>>();
 
-        foreach (var hostGroup in pathsByHost)
+        foreach (var path in ingressResource.Paths)
+        {
+            if (path.Host is { } explicitHost)
+            {
+                AddPathForHost(explicitHost, path);
+            }
+            else if (resolvedHostnames.Count == 0)
+            {
+                AddPathForHost(string.Empty, path);
+            }
+            else
+            {
+                foreach (var hostname in resolvedHostnames)
+                {
+                    AddPathForHost(hostname, path);
+                }
+            }
+        }
+
+        foreach (var (host, paths) in pathsByHost)
         {
             var rule = new IngressRuleV1();
-            if (!string.IsNullOrEmpty(hostGroup.Key))
+            if (!string.IsNullOrEmpty(host))
             {
-                rule.Host = hostGroup.Key;
+                rule.Host = host;
             }
 
-            foreach (var pathRule in hostGroup)
+            foreach (var pathRule in paths)
             {
                 var backend = ResolveIngressBackend(pathRule.Endpoint, deploymentTargets, ingressResource.Name, logger);
                 if (backend is null)
@@ -737,16 +820,14 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 SecretName = await ResolveExpressionAsync(tls.SecretName, ingressResource.Name, cancellationToken).ConfigureAwait(false),
             };
 
-            foreach (var host in ingressResource.Hostnames)
-            {
-                tlsEntry.Hosts.Add(await ResolveExpressionAsync(host, ingressResource.Name, cancellationToken).ConfigureAwait(false));
-            }
+            tlsEntry.Hosts.AddRange(resolvedHostnames);
 
             ingress.Spec.Tls.Add(tlsEntry);
         }
 
-        // Auto-generate rules for TLS hosts that don't have explicit routes.
-        if (ingress.Spec.DefaultBackend is not null)
+        // A default backend remains catch-all even when hostnames are configured. Only synthesize
+        // host rules for TLS because some ingress controllers require each TLS host to have a rule.
+        if (ingress.Spec.DefaultBackend is not null && ingress.Spec.Tls.Count > 0)
         {
             var hostsWithRules = new HashSet<string>(
                 ingress.Spec.Rules
@@ -754,41 +835,37 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                     .Select(r => r.Host!),
                 StringComparer.OrdinalIgnoreCase);
 
-            foreach (var tls in ingressResource.TlsConfigs)
+            foreach (var resolvedHost in resolvedHostnames)
             {
-                foreach (var host in ingressResource.Hostnames)
+                if (hostsWithRules.Add(resolvedHost))
                 {
-                    var resolvedHost = await ResolveExpressionAsync(host, ingressResource.Name, cancellationToken).ConfigureAwait(false);
-                    if (!hostsWithRules.Contains(resolvedHost))
+                    ingress.Spec.Rules.Add(new IngressRuleV1
                     {
-                        ingress.Spec.Rules.Add(new IngressRuleV1
+                        Host = resolvedHost,
+                        Http = new HttpIngressRuleValueV1
                         {
-                            Host = resolvedHost,
-                            Http = new HttpIngressRuleValueV1
+                            Paths =
                             {
-                                Paths =
+                                new HttpIngressPathV1
                                 {
-                                    new HttpIngressPathV1
+                                    Path = "/",
+                                    PathType = IngressPathType.Prefix.ToKubernetesString(),
+                                    Backend = new IngressBackendV1
                                     {
-                                        Path = "/",
-                                        PathType = IngressPathType.Prefix.ToKubernetesString(),
-                                        Backend = new IngressBackendV1
+                                        Service = new IngressServiceBackendV1
                                         {
-                                            Service = new IngressServiceBackendV1
+                                            Name = ingress.Spec.DefaultBackend.Service.Name,
+                                            Port = new ServiceBackendPortV1
                                             {
-                                                Name = ingress.Spec.DefaultBackend.Service.Name,
-                                                Port = new ServiceBackendPortV1
-                                                {
-                                                    Name = ingress.Spec.DefaultBackend.Service.Port.Name,
-                                                    Number = ingress.Spec.DefaultBackend.Service.Port.Number
-                                                }
+                                                Name = ingress.Spec.DefaultBackend.Service.Port.Name,
+                                                Number = ingress.Spec.DefaultBackend.Service.Port.Number
                                             }
                                         }
                                     }
                                 }
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         }
@@ -800,6 +877,17 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
 
         return ingress;
+
+        void AddPathForHost(string host, IngressPathConfig path)
+        {
+            if (!pathsByHost.TryGetValue(host, out var paths))
+            {
+                paths = [];
+                pathsByHost.Add(host, paths);
+            }
+
+            paths.Add(path);
+        }
     }
 
     private static IngressBackendV1? ResolveIngressBackend(
@@ -848,9 +936,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var gatewayResource in gatewayResources)
         {
-            if (gatewayResource.Routes.Count == 0)
+            if (!gatewayResource.ShouldMaterialize)
             {
-                logger.LogWarning("Gateway '{GatewayName}' has no routes configured. Skipping.", gatewayResource.Name);
+                logger.LogWarning(
+                    "Gateway '{GatewayName}' has no routes configured. The Gateway, routes, TLS certificate, and load-balancer frontend will not be created.",
+                    gatewayResource.Name);
                 continue;
             }
 
@@ -863,6 +953,74 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task ProcessPersistentVolumeResources(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        var volumeResources = model.Resources
+            .OfType<KubernetesPersistentVolumeResource>()
+            .Where(v => v.Parent == this);
+
+        foreach (var volumeResource in volumeResources)
+        {
+            volumeResource.GeneratedClaim = await BuildPersistentVolumeClaim(volumeResource, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<PersistentVolumeClaim> BuildPersistentVolumeClaim(
+        KubernetesPersistentVolumeResource volumeResource,
+        CancellationToken cancellationToken)
+    {
+        var claim = new PersistentVolumeClaim
+        {
+            Metadata =
+            {
+                Name = volumeResource.GetClaimName(),
+            },
+            Spec = new PersistentVolumeClaimSpecV1
+            {
+                Resources = new VolumeResourceRequirementsV1(),
+            },
+        };
+
+        foreach (var (key, value) in volumeResource.VolumeAnnotations)
+        {
+            claim.Metadata.Annotations[key] = await ResolveExpressionAsync(value, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Resolve access modes, falling back to the env-wide policy when none configured.
+        if (volumeResource.AccessModes.Count == 0)
+        {
+            claim.Spec.AccessModes.Add(DefaultStorageReadWritePolicy);
+        }
+        else
+        {
+            foreach (var mode in volumeResource.AccessModes)
+            {
+                claim.Spec.AccessModes.Add(mode.ToKubernetesString());
+            }
+        }
+
+        // Capacity falls back to the env-wide default, matching the legacy emission path.
+        var capacity = volumeResource.Capacity is { } capacityExpression
+            ? await ResolveExpressionAsync(capacityExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false)
+            : DefaultStorageSize;
+        claim.Spec.Resources.Requests.Add("storage", capacity);
+
+        if (volumeResource.StorageClassName is { } storageClassExpression)
+        {
+            var storageClass = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(storageClass))
+            {
+                claim.Spec.StorageClassName = storageClass;
+            }
+        }
+        else if (!string.IsNullOrEmpty(DefaultStorageClassName))
+        {
+            claim.Spec.StorageClassName = DefaultStorageClassName;
+        }
+
+        return claim;
     }
 
     private async Task BuildGatewayObjects(
@@ -880,10 +1038,30 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         var gatewayName = gatewayResource.Name.ToKubernetesResourceName();
 
+        // This whole method re-runs when the deployment-target step executes a second time (once for
+        // "before-start", once in the publish/deploy DAG). GeneratedGateway is assigned so it replaces
+        // itself, but GeneratedHttpRoutes is appended to — without clearing, every route is emitted
+        // twice and the chart renders duplicate HTTPRoute objects with identical names.
+        gatewayResource.GeneratedHttpRoutes.Clear();
+
         var gateway = new GatewayV1
         {
             Metadata = { Name = gatewayName }
         };
+        var resolvedHostnames = await ResolveHostnamesAsync(
+            gatewayResource.Hostnames,
+            gatewayResource.Name,
+            cancellationToken).ConfigureAwait(false);
+
+        if (resolvedHostnames.Count > HttpRouteHostnameLimit &&
+            gatewayResource.Routes.Any(route => route.Host is null))
+        {
+            throw new InvalidOperationException(
+                $"Gateway '{gatewayResource.Name}' configures {resolvedHostnames.Count} hostnames that would be inherited by a hostless route, " +
+                $"but Kubernetes Gateway API HTTPRoute.spec.hostnames supports at most {HttpRouteHostnameLimit} entries. " +
+                $"Define explicit host-scoped routes with WithRoute(hostname, path, endpoint) so each HTTPRoute stays within the limit. " +
+                $"See the Kubernetes Gateway API documentation: {HttpRouteSpecDocumentationUrl}");
+        }
 
         gateway.Spec.GatewayClassName = await ResolveExpressionAsync(gatewayResource.GatewayClassName, gatewayResource.Name, cancellationToken).ConfigureAwait(false);
 
@@ -908,7 +1086,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             var resolvedSecretName = await ResolveExpressionAsync(tls.SecretName, gatewayResource.Name, cancellationToken).ConfigureAwait(false);
 
-            if (gatewayResource.Hostnames.Count == 0)
+            if (resolvedHostnames.Count == 0)
             {
                 // No hostnames specified — create an HTTPS listener without a hostname restriction.
                 // The hostname will be discovered from the Gateway's assigned address after deployment
@@ -934,12 +1112,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             else
             {
-                foreach (var host in gatewayResource.Hostnames)
+                foreach (var resolvedHost in resolvedHostnames)
                 {
                     var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
                     tlsListenerIndex++;
-
-                    var resolvedHost = await ResolveExpressionAsync(host, gatewayResource.Name, cancellationToken).ConfigureAwait(false);
 
                     gateway.Spec.Listeners.Add(new GatewayListenerV1
                     {
@@ -981,6 +1157,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             if (!string.IsNullOrEmpty(hostGroup.Key))
             {
                 httpRoute.Spec.Hostnames.Add(hostGroup.Key);
+            }
+            else
+            {
+                httpRoute.Spec.Hostnames.AddRange(resolvedHostnames);
             }
 
             foreach (var route in hostGroup)
@@ -1057,34 +1237,66 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         };
     }
 
-    private static HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
+    /// <summary>
+    /// Collects the TLS secrets that may need a self-signed bootstrap certificate.
+    /// </summary>
+    /// <remarks>
+    /// Only resources configured to materialize are considered. This runs while the pipeline steps
+    /// are being built, so it cannot see whether an Ingress ultimately rendered — each entry carries
+    /// its owner so <see cref="BootstrapTlsSecretsAsync"/> can re-check that at deploy time.
+    /// </remarks>
+    internal static List<TlsSecretRequest> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
     {
-        var tlsSecrets = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
+        var tlsSecrets = new List<TlsSecretRequest>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             foreach (var tls in gateway.TlsConfigs)
             {
                 foreach (var host in gateway.Hostnames)
                 {
-                    tlsSecrets.Add((tls.SecretName, host));
+                    tlsSecrets.Add(new TlsSecretRequest(tls.SecretName, host, gateway));
                 }
             }
         }
 
-        foreach (var ingress in model.Resources.OfType<KubernetesIngressResource>().Where(i => i.Parent == environment))
+        var ingresses = model.Resources
+            .OfType<KubernetesIngressResource>()
+            .Where(i => i.Parent == environment && i.ShouldMaterialize);
+
+        foreach (var ingress in ingresses)
         {
             foreach (var tls in ingress.TlsConfigs)
             {
                 foreach (var host in ingress.Hostnames)
                 {
-                    tlsSecrets.Add((tls.SecretName, host));
+                    tlsSecrets.Add(new TlsSecretRequest(tls.SecretName, host, ingress));
                 }
             }
         }
 
         return tlsSecrets;
     }
+
+    /// <summary>
+    /// Determines whether the routing resource that requested a TLS secret actually made it into
+    /// the rendered chart. Called at deploy time, once publish has populated the generated objects.
+    /// </summary>
+    internal static bool OwnerWasMaterialized(IResource owner) => owner switch
+    {
+        // BuildIngressObject returns null when every configured path and the default backend fail
+        // to resolve to a deployment target, so a configured Ingress can still be absent from the
+        // chart. GeneratedIngress is the authoritative signal for whether it rendered.
+        KubernetesIngressResource ingress => ingress.GeneratedIngress is not null,
+
+        // BuildGatewayObjects always emits the Gateway once it has routes, so ShouldMaterialize
+        // (already applied during collection) is sufficient for gateways.
+        _ => true,
+    };
 
     /// <summary>
     /// Collects gateway TLS configurations that have no hostnames specified and need
@@ -1096,7 +1308,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var results = new List<(KubernetesGatewayResource Gateway, ReferenceExpression SecretName)>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             foreach (var tls in gateway.TlsConfigs)
             {
@@ -1121,7 +1337,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var results = new List<KubernetesGatewayResource>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             if (gateway.TlsConfigs.Count > 0)
             {
@@ -1399,7 +1619,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     /// <summary>
     /// Polls for the Gateway's assigned hostname address using a Polly retry pipeline.
-    /// Retries up to 60 times with 5-second delays (5 minutes total).
+    /// Retries up to 180 times with 5-second delays (~15 minutes total); see the comment on the
+    /// retry budget below. Only call this for a Gateway that is actually materialized: kubectl
+    /// failures are indistinguishable from "no address yet" here, so a Gateway that is never
+    /// created consumes the entire budget before failing.
     /// </summary>
     private static async Task<string?> DiscoverGatewayFqdnAsync(
         string gatewayName,
@@ -1895,7 +2118,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     private static async Task BootstrapTlsSecretsAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
-        HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> tlsSecrets)
+        List<TlsSecretRequest> tlsSecrets)
     {
         var @namespace = "default";
         if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
@@ -1907,8 +2130,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
         }
 
-        foreach (var (secretNameExpr, hostnameExpr) in tlsSecrets)
+        // Re-check materialization now that publish has run. An Ingress that was configured with
+        // paths can still be dropped from the chart if none of its backends resolved, and
+        // bootstrapping a certificate for it would leave an orphaned secret in the cluster.
+        // Dedupe on (secret, hostname) so two routing resources sharing a secret only bootstrap it
+        // once, matching the behavior before owners were tracked.
+        var seen = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
+
+        foreach (var tlsSecret in tlsSecrets)
         {
+            if (!OwnerWasMaterialized(tlsSecret.Owner))
+            {
+                context.Logger.LogDebug(
+                    "Skipping TLS bootstrap for '{ResourceName}' because it was not included in the generated chart.",
+                    tlsSecret.Owner.Name);
+                continue;
+            }
+
+            if (!seen.Add((tlsSecret.SecretName, tlsSecret.Hostname)))
+            {
+                continue;
+            }
+
+            var (secretNameExpr, hostnameExpr) = (tlsSecret.SecretName, tlsSecret.Hostname);
             var secretName = await ResolveExpressionAtDeployTimeAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
             var hostname = await ResolveExpressionAtDeployTimeAsync(hostnameExpr, context.CancellationToken).ConfigureAwait(false);
 

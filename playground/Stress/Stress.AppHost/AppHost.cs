@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("large-telemetry", client => client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
 {
     await Task.Delay(5_000, ct);
@@ -84,6 +86,11 @@ var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("str
        .WithUrl("https://someotherplace.com/some-path", "Some other place")
        .WithUrl("https://extremely-long-url.com/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz//abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmno");
 
+for (var i = 0; i < 500; i++)
+{
+    telemetryBuilder.WithUrl($"https://example.com/service-{i.ToString(CultureInfo.InvariantCulture)}", $"Service {i}");
+}
+
 builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 
 #if !SKIP_DASHBOARD_REFERENCE
@@ -93,7 +100,28 @@ builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+if (string.Equals(builder.Configuration["STRESS_REMOVE_DASHBOARD_LIMITS"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
+{
+    var unlimited = int.MaxValue.ToString(CultureInfo.InvariantCulture);
+    dashboardBuilder
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxLogCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxTraceCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxMetricsCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxAttributeCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxAttributeLength", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxSpanEventCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxResourceCount", unlimited);
+}
+if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
+{
+    // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured
+    // external endpoint for dashboard self-telemetry so its activities can be inspected separately.
+    dashboardBuilder
+        .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", dashboardOtlpEndpoint)
+        .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc")
+        .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"] ?? string.Empty);
+}
 #endif
 
 builder.AddExecutable("executableWithSingleArg", "dotnet", Environment.CurrentDirectory, "--version");
@@ -122,5 +150,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
+builder.AddPropertyStressResource("property-stress-resource");
 
 builder.Build().Run();

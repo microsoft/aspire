@@ -7,9 +7,11 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -188,20 +190,36 @@ internal sealed class AuxiliaryBackchannelMonitor(
             .ToList();
     }
 
-    private static bool IsAppHostInScopeOfDirectory(string? appHostPath, string workingDirectory)
+    /// <summary>
+    /// Determines whether <paramref name="appHostPath"/> lives within <paramref name="workingDirectory"/>
+    /// and in the same git worktree. Nested linked worktrees are out of scope of the primary checkout.
+    /// This is the single in-scope implementation shared by <see cref="IsAppHostInScope"/>.
+    /// </summary>
+    internal static bool IsAppHostInScopeOfDirectory(string? appHostPath, string workingDirectory)
     {
         if (string.IsNullOrEmpty(appHostPath))
         {
             return false;
         }
 
-        // Normalize the paths for comparison
-        var normalizedWorkingDirectory = Path.GetFullPath(workingDirectory);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
+        // Resolve symlinks (not just Path.GetFullPath) on both operands. The OS reports a process's current
+        // directory in physical form (for example macOS temp dirs under /var -> /private/var), while a
+        // file-based AppHost reports its path unresolved, so comparing without resolving symlinks would treat
+        // an in-scope AppHost as out of scope. 
+        var normalizedWorkingDirectory = PathNormalizer.ResolveSymlinks(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
-        return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
+        if (relativePath.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativePath))
+        {
+            return false;
+        }
+
+        // Path containment alone treats a nested linked worktree (for example
+        // repo/.worktrees/feature) as in-scope of the primary checkout. Stop and ps
+        // should stay inside the current worktree unless --apphost/--all is used.
+        return GitWorktree.IsSameWorktreeScope(normalizedAppHostPath, normalizedWorkingDirectory);
     }
 
     /// <summary>
@@ -484,7 +502,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Use the centralized factory to create the connection
             // This ensures capabilities are always fetched
-            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, socket, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, profilingTelemetry, socket, cancellationToken).ConfigureAwait(false);
 
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
@@ -545,21 +563,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     }
 
     private bool IsAppHostInScope(string? appHostPath)
-    {
-        if (string.IsNullOrEmpty(appHostPath))
-        {
-            return false;
-        }
-
-        // Normalize the paths for comparison
-        var workingDirectory = Path.GetFullPath(executionContext.WorkingDirectory.FullName);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
-
-        // Check if the AppHost path is within the working directory using a robust, cross-platform method
-        var relativePath = Path.GetRelativePath(workingDirectory, normalizedAppHostPath);
-        // If the relative path starts with ".." or is equal to "..", then it's outside the working directory
-        return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
-    }
+        => IsAppHostInScopeOfDirectory(appHostPath, executionContext.WorkingDirectory.FullName);
 
     private static async Task DisconnectAsync(IAppHostAuxiliaryBackchannel connection)
     {

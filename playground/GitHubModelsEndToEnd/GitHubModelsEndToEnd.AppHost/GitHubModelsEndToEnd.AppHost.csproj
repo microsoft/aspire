@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <IsAspireHost>true</IsAspireHost>
     <UserSecretsId>b8e8b8c7-4a45-4b2e-8c7d-9e8f7a6b5c4d</UserSecretsId>
+    <!-- This playground intentionally demonstrates the deprecated GitHub Models integration (https://github.com/microsoft/aspire/issues/18402). -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
