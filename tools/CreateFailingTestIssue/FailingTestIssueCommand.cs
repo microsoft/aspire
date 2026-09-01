@@ -217,11 +217,6 @@ internal static class FailingTestIssueCommand
                 {
                     Log(input.ForceNew ? "--force-new flag set. Creating new issue on GitHub..." : "No existing issue found. Creating new issue on GitHub...");
                     createdIssue = new CreatedIssueInfo(result.Number, result.Url);
-                    if (!input.ForceNew)
-                    {
-                        Log($"Recorded run {resolutionSection.RunId} on issue #{result.Number}.");
-                    }
-                    Log($"Created issue #{result.Number}: {result.Url}");
                 }
                 else
                 {
@@ -234,18 +229,25 @@ internal static class FailingTestIssueCommand
                     {
                         Log($"Found open issue #{result.Number}. Adding comment...");
                     }
-                    foreach (var duplicateNumber in result.DuplicatesClosed)
-                    {
-                        Log($"Closing newer duplicate issue #{duplicateNumber} in favor of #{result.Number}...");
-                    }
-                    if (result.Skipped)
-                    {
-                        Log($"Run {resolutionSection.RunId} is already recorded on issue #{result.Number}; skipping duplicate comment.");
-                    }
-                    else
-                    {
-                        Log($"Recorded run {resolutionSection.RunId} on issue #{result.Number}.");
-                    }
+                }
+                foreach (var duplicateNumber in result.DuplicatesClosed)
+                {
+                    Log($"Closing newer duplicate issue #{duplicateNumber} in favor of #{result.Number}...");
+                }
+                if (result.Skipped)
+                {
+                    Log($"Run {resolutionSection.RunId} is already recorded on issue #{result.Number}; skipping duplicate comment.");
+                }
+                else if (!input.ForceNew)
+                {
+                    Log($"Recorded run {resolutionSection.RunId} on issue #{result.Number}.");
+                }
+                if (result.Created)
+                {
+                    Log($"Created issue #{result.Number}: {result.Url}");
+                }
+                else
+                {
                     Log($"Updated existing issue #{result.Number}: {result.Url}");
                 }
             }

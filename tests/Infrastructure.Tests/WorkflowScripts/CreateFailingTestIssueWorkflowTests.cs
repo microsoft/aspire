@@ -265,15 +265,31 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     }
 
     [Fact]
-    public void WorkflowSerializesIssueReconciliation()
+    public void WorkflowQueuesOnlyAuthorizedIssueReconciliation()
     {
         var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue.yml");
-        var workflow = File.ReadAllText(workflowPath);
+        var workflow = File.ReadAllText(workflowPath).ReplaceLineEndings("\n");
+        var authorizationJob = ExtractJob(workflow, "authorize_failing_test_issue");
+        var reconciliationJob = ExtractJob(workflow, "create_failing_test_issue");
 
         Assert.DoesNotContain("github.run_id", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("\nconcurrency:\n", $"\n{workflow}", StringComparison.Ordinal);
+        Assert.Contains(
+            """
+                if: >-
+                  github.repository == 'microsoft/aspire' &&
+                  (github.event_name == 'workflow_dispatch' ||
+                   startsWith(github.event.comment.body, '/create-issue'))
+            """,
+            authorizationJob,
+            StringComparison.Ordinal);
+        Assert.Equal("contents=read;issues=write", ExtractJobMapping(authorizationJob, "permissions"));
+        Assert.DoesNotContain("\n    concurrency:\n", $"\n{authorizationJob}", StringComparison.Ordinal);
+        Assert.Equal(1, workflow.Split("getCollaboratorPermissionLevel", StringSplitOptions.None).Length - 1);
+        Assert.Contains("    needs: authorize_failing_test_issue\n", reconciliationJob, StringComparison.Ordinal);
         Assert.Equal(
             "cancel-in-progress=false;group=create-failing-test-issue;queue=max",
-            AnalyzeCiFailureWorkflowTests.ExtractTopLevelMapping(workflow, "concurrency"));
+            ExtractJobMapping(reconciliationJob, "concurrency"));
     }
 
     [Fact]
@@ -489,4 +505,22 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     private sealed record GhTransportResponse(bool Available, GhInvocation[]? Calls);
 
     private sealed record GhInvocation(string[] Args, string? Input);
+
+    private static string ExtractJob(string workflow, string jobName)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            workflow,
+            $@"(?ms)^  {System.Text.RegularExpressions.Regex.Escape(jobName)}:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\z)");
+        Assert.True(match.Success, $"Could not find workflow job: {jobName}");
+
+        return match.Value;
+    }
+
+    private static string ExtractJobMapping(string job, string key)
+    {
+        var unindentedJob = string.Join(
+            '\n',
+            job.Split('\n').Select(line => line.StartsWith("    ", StringComparison.Ordinal) ? line[4..] : line));
+        return AnalyzeCiFailureWorkflowTests.ExtractTopLevelMapping(unindentedJob, key);
+    }
 }

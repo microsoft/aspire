@@ -43,15 +43,23 @@ function createFixtureTransport(repository, fixtureDirectory) {
     const readFixture = name => JSON.parse(
         fs.readFileSync(path.join(fixtureDirectory, `${name}.json`), 'utf8'));
     const listIssuesPath = path.join(fixtureDirectory, 'list-issues.json');
+    const concurrentIssuePath = path.join(fixtureDirectory, 'concurrent-issue.json');
     const issues = (fs.existsSync(listIssuesPath)
         ? parsePaginatedJson(JSON.stringify(readFixture('list-issues')))
         : [])
         .filter(issue => !issue.pull_request)
         .map(issue => ({ comments: [], ...issue }));
+    let listCount = 0;
 
     return {
         ensureLabel: async () => {},
-        listIssues: async () => issues,
+        listIssues: async () => {
+            listCount++;
+            if (listCount === 2 && fs.existsSync(concurrentIssuePath)) {
+                issues.push({ comments: [], ...readFixture('concurrent-issue') });
+            }
+            return issues;
+        },
         createIssue: async request => {
             const response = readFixture('create-issue');
             const issue = {

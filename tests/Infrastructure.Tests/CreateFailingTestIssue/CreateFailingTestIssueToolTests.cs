@@ -121,6 +121,57 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task CreateFlagLogsCreatedCanonicalActionsWhenOccurrenceAlreadyRecordedOnNewerDuplicate()
+    {
+        var fixtureDirectory = CreateFixtureDirectory();
+
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-issues.json"), "[]");
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "create-issue.json"),
+            """
+            {
+              "number": 44444,
+              "url": "https://github.com/microsoft/aspire/issues/44444"
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "concurrent-issue.json"),
+            $$"""
+            {
+              "number": 55555,
+              "html_url": "https://github.com/microsoft/aspire/issues/55555",
+              "state": "open",
+              "body": "{{StableMetadataMarker}}",
+              "comments": [
+                "Earlier failure.\n\n<!-- run:123 -->"
+              ]
+            }
+            """);
+        File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "close-issue.json"), "{}");
+
+        var result = await RunToolAsync(
+            fixtureDirectory,
+            "--test", "Tests.Namespace.Type.Method",
+            "--url", "https://github.com/microsoft/aspire/actions/runs/123",
+            "--workflow", "ci",
+            "--repo", "microsoft/aspire",
+            "--create");
+
+        Assert.Equal(0, result.ExitCode);
+        var response = JsonSerializer.Deserialize<CreateFailingTestIssueResponse>(result.Output, JsonOptions);
+        Assert.Equal(44444, response!.Issue!.CreatedIssue!.Number);
+        Assert.Null(response.Issue.ExistingIssue);
+
+        var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
+        const string DuplicateCloseLog = "Closing newer duplicate issue #55555 in favor of #44444...";
+        Assert.Equal(1, diagnosticsLog.Split(DuplicateCloseLog, StringSplitOptions.None).Length - 1);
+        Assert.Contains("Run 123 is already recorded on issue #44444; skipping duplicate comment.", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recorded run 123", diagnosticsLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagReusesOpenExistingIssue()
     {
         var fixtureDirectory = CreateFixtureDirectory();

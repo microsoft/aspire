@@ -30,26 +30,18 @@ on:
 
 permissions: {}
 
-concurrency:
-  # Issue comments cannot atomically reserve occurrence markers, so serialize writers.
-  group: create-failing-test-issue
-  cancel-in-progress: false
-  queue: max
-
 jobs:
-  create_failing_test_issue:
-    name: Create failing-test issue
+  authorize_failing_test_issue:
+    name: Authorize failing-test issue
     if: >-
       github.repository == 'microsoft/aspire' &&
       (github.event_name == 'workflow_dispatch' ||
        startsWith(github.event.comment.body, '/create-issue'))
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
-      contents: read # checkout repository
-      issues: write # create/reopen/comment on issues
-      pull-requests: write # comment on PRs
-      actions: read # list workflow runs and download artifacts
+      contents: read
+      issues: write
     steps:
     - name: Verify user has write access
       if: github.event_name == 'issue_comment'
@@ -78,6 +70,22 @@ jobs:
             return;
           }
 
+  create_failing_test_issue:
+    name: Create failing-test issue
+    needs: authorize_failing_test_issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout repository
+      issues: write # create/reopen/comment on issues
+      pull-requests: write # comment on PRs
+      actions: read # list workflow runs and download artifacts
+    concurrency:
+      # Issue comments cannot atomically reserve occurrence markers, so serialize writers.
+      group: create-failing-test-issue
+      cancel-in-progress: false
+      queue: max
+    steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       if: success()
       with:
@@ -295,7 +303,7 @@ jobs:
           }
 
     - name: Post failure comment on unexpected error
-      if: failure() && steps.extract-command.outcome == 'success' && (steps.verify-permission.outcome == 'success' || steps.verify-permission.outcome == 'skipped')
+      if: failure() && steps.extract-command.outcome == 'success'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         PR_NUMBER: ${{ steps.extract-command.outputs.pr_number }}
