@@ -30,6 +30,8 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
         var mcpApplicator = Assert.Single(context.Applicators, static applicator => applicator.AssetKind is AgentAssetKind.Mcp);
+        Assert.Same(AgentAssetDefinition.AspireMcpServer, mcpApplicator.Asset);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, ".copilot", "mcp-config.json"), mcpApplicator.TargetId);
         Assert.Equal(CopilotAgentEnvironmentScannerStrings.ApplicatorDescription, mcpApplicator.Description);
     }
 
