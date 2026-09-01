@@ -30,7 +30,7 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
             TimeSpan.FromMinutes(5));
 
         await auto.TypeAsync(
-            "ASPIRE_CLI_SHOW_ALL_TEMPLATES=true aspire new aspire-test " +
+            "aspire new aspire-test " +
             "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
             "--name IntegrationTestApp.Tests --output IntegrationTestApp/IntegrationTestApp.Tests --suppress-agent-init");
         await auto.EnterAsync();
