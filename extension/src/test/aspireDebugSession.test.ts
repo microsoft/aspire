@@ -4042,7 +4042,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         await aspireDebugSession.startAppHost(
             appHostPath,
-            ['deno', 'run', '-A', '--sloppy-imports', appHostPath],
+            ['deno', 'run', '-A', '--unstable-sloppy-imports', appHostPath],
             [],
             true,
             { forceBuild: false });
@@ -4057,7 +4057,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             type: 'node',
             runtime_executable: 'deno',
         });
-        assert.deepStrictEqual(appHostArgs, ['run', '-A', '--sloppy-imports', appHostPath]);
+        assert.deepStrictEqual(appHostArgs, ['run', '-A', '--unstable-sloppy-imports', appHostPath]);
         assert.strictEqual(debuggerExtension.resourceType, 'node');
     });
 

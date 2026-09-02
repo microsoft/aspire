@@ -426,11 +426,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("deno", preExecute.Command);
-        Assert.Equal(["check", "--sloppy-imports", "{appHostFile}"], preExecute.Args);
+        Assert.Equal(["check", "--unstable-sloppy-imports", "{appHostFile}"], preExecute.Args);
         Assert.Equal("deno", runtimeSpec.Execute.Command);
-        Assert.Equal(["run", "-A", "--sloppy-imports", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("deno", runtimeSpec.WatchExecute?.Command);
-        Assert.Equal(["run", "-A", "--sloppy-imports", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
         Assert.Equal("deno.v1", runtimeSpec.ExtensionLaunchCapability);
     }
 

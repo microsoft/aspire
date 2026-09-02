@@ -90,7 +90,7 @@ suite('Node Debugger Tests', () => {
 
         await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
-            ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts'],
+            ['run', '-A', '--unstable-sloppy-imports', '/workspace/app/apphost.mts'],
             [],
             { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
             debugConfig);
@@ -98,7 +98,7 @@ suite('Node Debugger Tests', () => {
         const inspectorPort = debugConfig.attachSimplePort;
         assert.ok(typeof inspectorPort === 'number' && inspectorPort > 0);
         assert.strictEqual(debugConfig.runtimeExecutable, 'deno');
-        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${inspectorPort}`, '-A', '--sloppy-imports', '/workspace/app/apphost.mts']);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${inspectorPort}`, '-A', '--unstable-sloppy-imports', '/workspace/app/apphost.mts']);
     });
 
     test('does not open the Deno inspector when running an AppHost without debugging', async () => {
@@ -111,12 +111,12 @@ suite('Node Debugger Tests', () => {
 
         await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
-            ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts'],
+            ['run', '-A', '--unstable-sloppy-imports', '/workspace/app/apphost.mts'],
             [],
             { debug: false, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
             debugConfig);
 
-        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts']);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', '-A', '--unstable-sloppy-imports', '/workspace/app/apphost.mts']);
         assert.strictEqual(debugConfig.attachSimplePort, undefined);
     });
 });

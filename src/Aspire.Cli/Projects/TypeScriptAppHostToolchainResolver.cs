@@ -223,11 +223,12 @@ internal static class TypeScriptAppHostToolchainResolver
                     Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
                 },
                 // Deno type-checks with its own compiler and config (deno.json), so there is no
-                // tsc/tsconfig step. `deno check` is the native no-emit type-check over the AppHost graph.
+                // tsc/tsconfig step. Use the unstable spelling because the shorter alias was not
+                // added until Deno 2.4: https://github.com/denoland/deno/releases/tag/v2.4.0.
                 TypeScriptAppHostToolchain.Deno => new CommandSpec
                 {
                     Command = "deno",
-                    Args = ["check", "--sloppy-imports", "{appHostFile}"]
+                    Args = ["check", "--unstable-sloppy-imports", "{appHostFile}"]
                 },
                 _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
             }
@@ -260,7 +261,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Deno => new CommandSpec
             {
                 Command = "deno",
-                Args = ["run", "-A", "--sloppy-imports", "{appHostFile}"]
+                Args = ["run", "-A", "--unstable-sloppy-imports", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
@@ -321,7 +322,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Deno => new CommandSpec
             {
                 Command = "deno",
-                Args = ["run", "-A", "--sloppy-imports", "--check", "--watch", "{appHostFile}"]
+                Args = ["run", "-A", "--unstable-sloppy-imports", "--check", "--watch", "{appHostFile}"]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };

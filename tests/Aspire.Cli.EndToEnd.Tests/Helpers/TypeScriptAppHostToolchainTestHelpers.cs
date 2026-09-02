@@ -81,7 +81,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
             "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
             // Deno type-checks with its own compiler over the AppHost graph; there is no tsc/tsconfig step.
-            "deno" => "deno check --sloppy-imports apphost.mts",
+            "deno" => "deno check --unstable-sloppy-imports apphost.mts",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 

@@ -13,7 +13,7 @@ public sealed class TypeScriptAppHostToolchainTestHelpersTests
     {
         var typeCheckCommand = TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand("deno", "tsconfig.apphost.json");
 
-        Assert.Equal("deno check --sloppy-imports apphost.mts", typeCheckCommand);
+        Assert.Equal("deno check --unstable-sloppy-imports apphost.mts", typeCheckCommand);
     }
 
     [Fact]
