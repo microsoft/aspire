@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREAGENTS001 // Generic reference annotations are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
@@ -932,8 +933,21 @@ public static class ResourceBuilderExtensions
         };
     }
 
-    // Preserve the historical dispatcher signature for internal reflection-based tests.
-    internal static IResourceBuilder<TDestination> WithReference<TDestination>(
+    /// <summary>
+    /// Adds a reference to a resource using its supported connection string, service discovery, external service,
+    /// or resource-specific reference annotations.
+    /// </summary>
+    /// <typeparam name="TDestination">The destination resource type.</typeparam>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="source">The source resource builder.</param>
+    /// <param name="connectionName">An optional connection string or service discovery name.</param>
+    /// <param name="optional">Whether a connection string reference is optional.</param>
+    /// <param name="name">An optional service discovery or resource-specific reference name.</param>
+    /// <returns>The destination resource builder.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the source does not support references or the supplied options are incompatible with the source.</exception>
+    [Experimental("ASPIREAGENTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the object-based generic withReference dispatcher export.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
         IResourceBuilder<IResource> source,
         string? connectionName = null,
@@ -966,13 +980,15 @@ public static class ResourceBuilderExtensions
         var hasConnectionString = source.Resource is IResourceWithConnectionString && connectionStringSource is not null;
         var hasServiceDiscovery = source.Resource is IResourceWithServiceDiscovery && serviceDiscoverySource is not null;
         var hasExternalService = source.Resource is ExternalServiceResource && externalServiceSource is not null;
+        var referenceAnnotations = source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)).ToArray();
+        var hasReferenceAnnotation = referenceAnnotations.Length > 0;
 
         if (hasExternalService && (connectionName is not null || name is not null))
         {
             throw new InvalidOperationException("Reference names are not supported for external services.");
         }
 
-        if (name is not null && !hasServiceDiscovery)
+        if (name is not null && !hasServiceDiscovery && !hasReferenceAnnotation)
         {
             throw new InvalidOperationException("Named service references are only supported for resources with service discovery.");
         }
@@ -1007,6 +1023,22 @@ public static class ResourceBuilderExtensions
         if (hasExternalService)
         {
             builder = WithReference(builder, externalServiceSource!);
+            appliedReference = true;
+        }
+
+        if (hasReferenceAnnotation && !hasServiceDiscovery)
+        {
+            var referenceName = name ?? connectionName ?? source.Resource.Name;
+            foreach (var referenceAnnotation in referenceAnnotations)
+            {
+                builder = referenceAnnotation.WithReference(builder, source.Resource, referenceName);
+            }
+
+            if (!appliedReference)
+            {
+                builder.WithReferenceRelationship(source.Resource);
+            }
+
             appliedReference = true;
         }
 
@@ -1207,6 +1239,11 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource);
+        foreach (var referenceAnnotation in source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)))
+        {
+            builder = referenceAnnotation.WithReference(builder, source.Resource, source.Resource.Name);
+        }
+
         return builder;
     }
 
@@ -1239,6 +1276,11 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource, endpointName: null, name);
+        foreach (var referenceAnnotation in source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)))
+        {
+            builder = referenceAnnotation.WithReference(builder, source.Resource, name);
+        }
+
         return builder;
     }
 
@@ -3680,20 +3722,17 @@ public static class ResourceBuilderExtensions
     {
         endpointSelector ??= DefaultEndpointSelector(builder);
 
-        var endpoint = endpointSelector()
-            ?? throw new DistributedApplicationException($"Could not create HTTP command for resource '{builder.Resource.Name}' as the endpoint selector returned null.");
-
-        if (endpoint.Scheme != "http" && endpoint.Scheme != "https")
-        {
-            throw new DistributedApplicationException($"Could not create HTTP command for resource '{builder.Resource.Name}' as the endpoint with name '{endpoint.EndpointName}' and scheme '{endpoint.Scheme}' is not an HTTP endpoint.");
-        }
-
         builder.ApplicationBuilder.Services.AddHttpClient();
 
         commandOptions ??= HttpCommandOptions.Default;
         commandOptions.Method ??= HttpMethod.Post;
 
-        commandName ??= $"{endpoint.Resource.Name}-{endpoint.EndpointName}-http-{commandOptions.Method.Method.ToLowerInvariant()}-{path}";
+        EndpointReference? endpoint = null;
+        if (commandName is null)
+        {
+            endpoint = GetEndpoint();
+            commandName = $"{endpoint.Resource.Name}-{endpoint.EndpointName}-http-{commandOptions.Method.Method.ToLowerInvariant()}-{path}";
+        }
 
         if (commandOptions.UpdateState is null)
         {
@@ -3708,11 +3747,12 @@ public static class ResourceBuilderExtensions
         builder.WithCommand(commandName, displayName,
             async context =>
             {
-                if (!endpoint.IsAllocated)
+                var commandEndpoint = endpoint ?? GetEndpoint();
+                if (!commandEndpoint.IsAllocated)
                 {
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
-                var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
+                var uri = new UriBuilder(commandEndpoint.Url) { Path = path }.Uri;
                 var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 if (commandOptions.HttpClientName is null)
                 {
@@ -3728,7 +3768,7 @@ public static class ResourceBuilderExtensions
                     {
                         Services = context.Services,
                         ResourceName = context.ResourceName,
-                        Endpoint = endpoint,
+                        Endpoint = commandEndpoint,
                         CancellationToken = context.CancellationToken,
                         HttpClient = httpClient,
                         Arguments = context.Arguments,
@@ -3746,7 +3786,7 @@ public static class ResourceBuilderExtensions
                         {
                             Services = context.Services,
                             ResourceName = context.ResourceName,
-                            Endpoint = endpoint,
+                            Endpoint = commandEndpoint,
                             CancellationToken = context.CancellationToken,
                             HttpClient = httpClient,
                             Arguments = context.Arguments,
@@ -3773,6 +3813,19 @@ public static class ResourceBuilderExtensions
             commandOptions);
 
         return builder;
+
+        EndpointReference GetEndpoint()
+        {
+            var selectedEndpoint = endpointSelector()
+                ?? throw new DistributedApplicationException($"Could not create HTTP command for resource '{builder.Resource.Name}' as the endpoint selector returned null.");
+
+            if (selectedEndpoint.Scheme != "http" && selectedEndpoint.Scheme != "https")
+            {
+                throw new DistributedApplicationException($"Could not create HTTP command for resource '{builder.Resource.Name}' as the endpoint with name '{selectedEndpoint.EndpointName}' and scheme '{selectedEndpoint.Scheme}' is not an HTTP endpoint.");
+            }
+
+            return selectedEndpoint;
+        }
     }
 
     /// <summary>

@@ -501,6 +501,26 @@ type IServiceProviderHandle = Handle<'System.ComponentModel/System.IServiceProvi
 // Enum Types
 // ============================================================================
 
+/** Specifies how dashboard commands invoke an A2A agent. */
+export enum A2AInvocationMode {
+    /** Sends a non-streaming A2A message. */
+    NonStreaming = "NonStreaming",
+    /** Streams the A2A response when the agent advertises streaming support. */
+    Streaming = "Streaming",
+}
+
+/** Specifies the protocols supported by an agent resource. */
+export enum AgentProtocol {
+    /** The Agent2Agent protocol. */
+    A2A = "A2A",
+    /** The OpenAI Responses API protocol. */
+    Responses = "Responses",
+    /** The AG-UI protocol. */
+    AgUi = "AgUi",
+    /** The Agent Communication Protocol. */
+    Acp = "Acp",
+}
+
 /** Defines the scope of custom certificate authorities for a resource. The default scope for most resources is `Append`, but some resources may choose to override this default behavior. */
 export enum CertificateTrustScope {
     /** Disable all custom certificate authority configuration for a resource. This indicates that the resource should use its default certificate authority trust behavior without modification. */
@@ -1553,6 +1573,16 @@ export interface AppendValueProviderOptions {
 
 export interface ArgOptions {
     defaultValue?: string;
+}
+
+export interface AsAgentOptions {
+    /** The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it. */
+    agentName?: string;
+}
+
+export interface AsAgentWithPathOptions {
+    /** The registered agent name for Responses or ACP. When omitted, the dashboard command prompts for it. */
+    agentName?: string;
 }
 
 export interface BuildOptions {
@@ -16895,7 +16925,7 @@ export interface ContainerResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -17414,6 +17444,45 @@ export interface ContainerResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -17704,7 +17773,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -18223,6 +18292,45 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -18863,7 +18971,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -20611,6 +20719,101 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise {
+        const agentName = options?.agentName;
+        return new ContainerResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise {
+        const agentName = options?.agentName;
+        return new ContainerResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -21401,6 +21604,22 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -21536,7 +21755,7 @@ export interface CSharpAppResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -22075,6 +22294,45 @@ export interface CSharpAppResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22169,7 +22427,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -22708,6 +22966,45 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22853,7 +23150,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -24679,6 +24976,101 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise {
+        const agentName = options?.agentName;
+        return new CSharpAppResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise {
+        const agentName = options?.agentName;
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -25405,6 +25797,22 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -25595,7 +26003,7 @@ export interface DotnetToolResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -26101,6 +26509,45 @@ export interface DotnetToolResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -26250,7 +26697,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -26756,6 +27203,45 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -27078,7 +27564,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -28798,6 +29284,101 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise {
+        const agentName = options?.agentName;
+        return new DotnetToolResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise {
+        const agentName = options?.agentName;
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -29540,6 +30121,22 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -29704,7 +30301,7 @@ export interface ExecutableResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30210,6 +30807,45 @@ export interface ExecutableResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -30326,7 +30962,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30832,6 +31468,45 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -31050,7 +31725,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -32770,6 +33445,101 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise {
+        const agentName = options?.agentName;
+        return new ExecutableResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise {
+        const agentName = options?.agentName;
+        return new ExecutableResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -33486,6 +34256,22 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
@@ -38055,7 +38841,7 @@ export interface ProjectResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -38594,6 +39380,45 @@ export interface ProjectResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -38688,7 +39513,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -39227,6 +40052,45 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -39373,7 +40237,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -41199,6 +42063,101 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise {
+        const agentName = options?.agentName;
+        return new ProjectResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise {
+        const agentName = options?.agentName;
+        return new ProjectResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -41925,6 +42884,22 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -42256,7 +43231,7 @@ export interface TestDatabaseResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -42775,6 +43750,45 @@ export interface TestDatabaseResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -43065,7 +44079,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -43584,6 +44598,45 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -44223,7 +45276,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -45971,6 +47024,101 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise {
+        const agentName = options?.agentName;
+        return new TestDatabaseResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise {
+        const agentName = options?.agentName;
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -46761,6 +47909,22 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -47092,7 +48256,7 @@ export interface TestRedisResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -47633,6 +48797,45 @@ export interface TestRedisResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures a Redis resource with parameter-only resources whose generated names collide.
      * @param resource The resource whose unused Promise wrapper would collide.
@@ -47985,7 +49188,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -48526,6 +49729,45 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise;
     /**
      * Configures a Redis resource with parameter-only resources whose generated names collide.
      * @param resource The resource whose unused Promise wrapper would collide.
@@ -49227,7 +50469,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -51035,6 +52277,101 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise {
+        const agentName = options?.agentName;
+        return new TestRedisResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise {
+        const agentName = options?.agentName;
+        return new TestRedisResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withPromiseCollisionResourcesInternal(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): Promise<TestRedisResource> {
         resource = isPromiseLike(resource) ? await resource : resource;
         resourcePromise = isPromiseLike(resourcePromise) ? await resourcePromise : resourcePromise;
@@ -52088,6 +53425,22 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
+    }
+
     withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPromiseCollisionResources(resource, resourcePromise)), this._client);
     }
@@ -52479,7 +53832,7 @@ export interface TestVaultResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -52998,6 +54351,45 @@ export interface TestVaultResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -53290,7 +54682,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -53809,6 +55201,45 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -54450,7 +55881,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -56198,6 +57629,101 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise {
+        const agentName = options?.agentName;
+        return new TestVaultResourcePromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise {
+        const agentName = options?.agentName;
+        return new TestVaultResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -57001,6 +58527,22 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
@@ -60026,7 +61568,7 @@ export interface ResourceWithEndpoints {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -60119,6 +61661,45 @@ export interface ResourceWithEndpoints {
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
 }
 
 export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {
@@ -60126,7 +61707,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -60219,6 +61800,45 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise;
 }
 
 // ============================================================================
@@ -60247,7 +61867,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -60649,6 +62269,101 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
         return new ResourceWithEndpointsPromiseImpl(this._onResourceEndpointsAllocatedInternal(callback), this._client);
     }
 
+    /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol, agentName?: string): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     *
+     * Call this method once for each protocol exposed by the resource. Responses and ACP agent names are protocol
+     * identifiers and do not need to match the Aspire resource name.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise {
+        const agentName = options?.agentName;
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentInternal(protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithInvocationModeInternal(protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol, invocationMode };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithInvocationMode',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using the specified dashboard invocation mode.
+     *
+     * Streaming must be explicitly requested and is available only when the A2A agent card advertises support.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithInvocationModeInternal(protocol, invocationMode), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol, agentName?: string): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        if (agentName !== undefined) rpcArgs.agentName = agentName;
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     *
+     * Configure each protocol independently when a resource exposes multiple protocols or non-default paths.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param options Additional options.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise {
+        const agentName = options?.agentName;
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol, agentName), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathAndInvocationModeInternal(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol, invocationMode };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+     *
+     * Use this overload when an A2A agent has both a non-default agent-card path and streaming invocation enabled.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @param invocationMode The invocation mode used by dashboard commands.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathAndInvocationModeInternal(agentCustomPath, protocol, invocationMode), this._client);
+    }
+
 }
 
 /**
@@ -60726,6 +62441,22 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
 
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.onResourceEndpointsAllocated(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol, options?: AsAgentOptions): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgent(protocol, options)), this._client);
+    }
+
+    asAgentWithInvocationMode(protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithInvocationMode(protocol, invocationMode)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol, options?: AsAgentWithPathOptions): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol, options)), this._client);
+    }
+
+    asAgentWithPathAndInvocationMode(agentCustomPath: string, protocol: AgentProtocol, invocationMode: A2AInvocationMode): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPathAndInvocationMode(agentCustomPath, protocol, invocationMode)), this._client);
     }
 
 }

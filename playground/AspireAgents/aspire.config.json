@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AspireAgents.AppHost/AspireAgents.AppHost.csproj"
+  }
+}

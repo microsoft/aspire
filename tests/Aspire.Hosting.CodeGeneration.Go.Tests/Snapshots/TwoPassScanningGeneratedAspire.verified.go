@@ -255,6 +255,24 @@ const (
 	UrlDisplayLocationDetailsOnly UrlDisplayLocation = "DetailsOnly"
 )
 
+// AgentProtocol represents AgentProtocol.
+type AgentProtocol string
+
+const (
+	AgentProtocolA2A AgentProtocol = "A2A"
+	AgentProtocolResponses AgentProtocol = "Responses"
+	AgentProtocolAgUi AgentProtocol = "AgUi"
+	AgentProtocolAcp AgentProtocol = "Acp"
+)
+
+// A2AInvocationMode represents A2AInvocationMode.
+type A2AInvocationMode string
+
+const (
+	A2AInvocationModeNonStreaming A2AInvocationMode = "NonStreaming"
+	A2AInvocationModeStreaming A2AInvocationMode = "Streaming"
+)
+
 // TestPersistenceMode represents TestPersistenceMode.
 type TestPersistenceMode string
 
@@ -1434,6 +1452,10 @@ func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFile
 // Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1561,6 +1583,72 @@ type aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource struct {
 // newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle wraps an existing handle as Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *handle, c *client) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -3661,6 +3749,10 @@ func (s *beforeStartEvent) Services() ServiceProvider {
 // CSharpAppResource is the public interface for handle type CSharpAppResource.
 type CSharpAppResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) CSharpAppResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) CSharpAppResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) CSharpAppResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) CSharpAppResource
 	AsHttp2Service() CSharpAppResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() CSharpAppResource
@@ -3771,6 +3863,72 @@ type cSharpAppResource struct {
 // newCSharpAppResourceFromHandle wraps an existing handle as CSharpAppResource.
 func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *cSharpAppResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *cSharpAppResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *cSharpAppResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *cSharpAppResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -7560,6 +7718,10 @@ func (s *containerRegistryResource) WithValidator(validator func(arg TestResourc
 // ContainerResource is the public interface for handle type ContainerResource.
 type ContainerResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ContainerResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ContainerResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ContainerResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ContainerResource
 	AsHttp2Service() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ContainerResource
@@ -7686,6 +7848,72 @@ type containerResource struct {
 // newContainerResourceFromHandle wraps an existing handle as ContainerResource.
 func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *containerResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *containerResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *containerResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *containerResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -11228,6 +11456,10 @@ func (s *dockerfileStage) WorkDir(path string) DockerfileStage {
 // DotnetToolResource is the public interface for handle type DotnetToolResource.
 type DotnetToolResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) DotnetToolResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) DotnetToolResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) DotnetToolResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) DotnetToolResource
 	AsHttp2Service() DotnetToolResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() DotnetToolResource
@@ -11342,6 +11574,72 @@ type dotnetToolResource struct {
 // newDotnetToolResourceFromHandle wraps an existing handle as DotnetToolResource.
 func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *dotnetToolResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *dotnetToolResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *dotnetToolResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *dotnetToolResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -14052,6 +14350,10 @@ func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg 
 // ExecutableResource is the public interface for handle type ExecutableResource.
 type ExecutableResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ExecutableResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ExecutableResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ExecutableResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ExecutableResource
 	AsHttp2Service() ExecutableResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ExecutableResource
@@ -14160,6 +14462,72 @@ type executableResource struct {
 // newExecutableResourceFromHandle wraps an existing handle as ExecutableResource.
 func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *executableResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *executableResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *executableResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *executableResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -20474,6 +20842,10 @@ func (s *progressContext) CancellationToken() (*CancellationToken, error) {
 // ProjectResource is the public interface for handle type ProjectResource.
 type ProjectResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ProjectResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ProjectResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ProjectResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ProjectResource
 	AsHttp2Service() ProjectResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() ProjectResource
@@ -20584,6 +20956,72 @@ type projectResource struct {
 // newProjectResourceFromHandle wraps an existing handle as ProjectResource.
 func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *projectResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *projectResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *projectResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *projectResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -23866,6 +24304,10 @@ func (s *testCollectionContext) Metadata() *Dict[string, string] {
 // TestDatabaseResource is the public interface for handle type TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) TestDatabaseResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) TestDatabaseResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) TestDatabaseResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) TestDatabaseResource
 	AsHttp2Service() TestDatabaseResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestDatabaseResource
@@ -23992,6 +24434,72 @@ type testDatabaseResource struct {
 // newTestDatabaseResourceFromHandle wraps an existing handle as TestDatabaseResource.
 func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResource {
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *testDatabaseResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *testDatabaseResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *testDatabaseResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *testDatabaseResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -26125,6 +26633,10 @@ func (s *testMutablePromiseCollisionResource) Value() (string, error) {
 type TestRedisResource interface {
 	handleReference
 	AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource
+	AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) TestRedisResource
+	AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) TestRedisResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) TestRedisResource
+	AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) TestRedisResource
 	AsHttp2Service() TestRedisResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestRedisResource
@@ -26297,6 +26809,72 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 		return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *testRedisResource) AsAgent(protocol AgentProtocol, options ...*AsAgentOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithInvocationMode configures the resource as an A2A agent using the specified dashboard invocation mode.
+func (s *testRedisResource) AsAgentWithInvocationMode(protocol AgentProtocol, invocationMode A2AInvocationMode) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *testRedisResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol, options ...*AsAgentWithPathOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if len(options) > 0 {
+		merged := &AsAgentWithPathOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPathAndInvocationMode configures the resource as an A2A agent using a custom protocol path and dashboard invocation mode.
+func (s *testRedisResource) AsAgentWithPathAndInvocationMode(agentCustomPath string, protocol AgentProtocol, invocationMode A2AInvocationMode) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	reqArgs["invocationMode"] = serializeValue(invocationMode)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -29882,6 +30460,30 @@ func (o *AddForEndpointOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.DisplayText != nil { m["displayText"] = serializeValue(o.DisplayText) }
+	return m
+}
+
+// AsAgentOptions carries optional parameters for AsAgent.
+type AsAgentOptions struct {
+	AgentName *string `json:"agentName,omitempty"`
+}
+
+func (o *AsAgentOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.AgentName != nil { m["agentName"] = serializeValue(o.AgentName) }
+	return m
+}
+
+// AsAgentWithPathOptions carries optional parameters for AsAgentWithPath.
+type AsAgentWithPathOptions struct {
+	AgentName *string `json:"agentName,omitempty"`
+}
+
+func (o *AsAgentWithPathOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.AgentName != nil { m["agentName"] = serializeValue(o.AgentName) }
 	return m
 }
 
