@@ -6,6 +6,8 @@
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental.
 
 using System.ClientModel.Primitives;
+using System.Net;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
@@ -360,6 +362,56 @@ public class ToolboxTests
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default);
         Assert.Contains("\"name\":\"knowledge-base\"", json.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadinessProbe_RetriesAndFollowsToolsListPagination()
+    {
+        var initialize = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26"}}""",
+                Encoding.UTF8,
+                "application/json")
+        };
+        initialize.Headers.Add("Mcp-Session-Id", "session-1");
+        using var handler = new SequenceHttpMessageHandler(
+            initialize,
+            new HttpResponseMessage(HttpStatusCode.Accepted),
+            CreateJsonResponse("""{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"""),
+            CreateJsonResponse("""{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"other"}],"nextCursor":"page-2"}}"""),
+            CreateJsonResponse("""{"jsonrpc":"2.0","id":4,"result":{"tools":[{"name":"knowledge-base"}]}}"""));
+        using var client = new HttpClient(handler);
+
+        var tools = await new FoundryToolboxReadinessProbe(
+            client,
+            timeout: TimeSpan.FromSeconds(1),
+            retryDelay: TimeSpan.Zero)
+            .WaitForToolsAsync(
+                new Uri("https://project.example.com/toolboxes/field-tools/mcp?api-version=v1"),
+                "token",
+                ["knowledge-base"],
+                CancellationToken.None);
+
+        Assert.Equal(2, tools.Count);
+        Assert.Contains("knowledge-base", tools);
+        Assert.Collection(
+            handler.Requests,
+            request =>
+            {
+                Assert.Contains("\"method\":\"initialize\"", request.Content, StringComparison.Ordinal);
+                Assert.Null(request.SessionId);
+                Assert.Null(request.ProtocolVersion);
+            },
+            request =>
+            {
+                Assert.Contains("\"method\":\"notifications/initialized\"", request.Content, StringComparison.Ordinal);
+                Assert.Equal("session-1", request.SessionId);
+                Assert.Equal("2025-03-26", request.ProtocolVersion);
+            },
+            request => Assert.Equal("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""", request.Content),
+            request => Assert.Equal("""{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}""", request.Content),
+            request => Assert.Equal("""{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"cursor":"page-2"}}""", request.Content));
     }
 
     [Fact]
@@ -814,4 +866,10 @@ public class ToolboxTests
         var execContext = new DistributedApplicationExecutionContext(operation);
         return new PipelineContext(model, execContext, app.Services, NullLogger.Instance, CancellationToken.None);
     }
+
+    private static HttpResponseMessage CreateJsonResponse(string json) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
 }

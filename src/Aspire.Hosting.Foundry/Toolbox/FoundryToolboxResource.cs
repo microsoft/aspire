@@ -6,6 +6,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Azure.AI.Projects;
+using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -352,6 +353,12 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
                 message => logger.LogWarning("{Message}", message),
                 cancellationToken).ConfigureAwait(false);
 
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
+            {
+                State = new("Waiting for Toolbox tools", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
+            await WaitForToolDiscoveryAsync(context, cancellationToken).ConfigureAwait(false);
+
             if (IsExisting)
             {
                 logger.LogInformation(
@@ -397,6 +404,34 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
                 State = new(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
         }
+    }
+
+    private async Task WaitForToolDiscoveryAsync(
+        PipelineStepContext context,
+        CancellationToken cancellationToken)
+    {
+        var endpointValue = await UriExpression.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                $"Toolbox '{Name}' did not resolve to an absolute HTTPS endpoint.");
+        }
+
+        var credential = context.Services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
+        var accessToken = await credential.GetTokenAsync(
+            new TokenRequestContext([AuthorizationScopeValue]),
+            cancellationToken).ConfigureAwait(false);
+        var requiredToolNames = _tools
+            .Where(tool => tool is not FoundryToolboxMcpToolDefinition)
+            .Select(tool => tool.Name)
+            .ToArray();
+        using var client = new HttpClient();
+        await new FoundryToolboxReadinessProbe(client).WaitForToolsAsync(
+            endpoint,
+            accessToken.Token,
+            requiredToolNames,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task WaitForProjectAndToolsAsync(
