@@ -433,7 +433,7 @@ public class TemporaryNuGetConfigTests
 
         var globalPackagesFolder = Assert.Single(Assert.Single(configuration.Elements("config")).Elements("add"));
         Assert.Equal(
-            Path.Combine(configDirectory.FullName, "packages"),
+            Path.Combine(workspace.WorkspaceRoot.FullName, "unused"),
             globalPackagesFolder.Attribute("value")?.Value);
     }
 

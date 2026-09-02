@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -2283,6 +2284,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         const string privateSource = "https://packages.example.com/v3/index.json";
         var noRestoreValues = new List<bool>();
+        var processOptions = new List<ProcessInvocationOptions>();
         XDocument? generatedProject = null;
         XDocument? generatedRestoreConfig = null;
         DirectoryInfo? nugetConfigDiscoveryDirectory = null;
@@ -2314,9 +2316,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFilePath, noRestore, _, _) =>
+            BuildAsyncCallback = (projectFilePath, noRestore, options, _) =>
             {
                 noRestoreValues.Add(noRestore);
+                processOptions.Add(options);
                 generatedProject = XDocument.Load(projectFilePath.FullName);
                 var ns = generatedProject.Root!.GetDefaultNamespace();
                 var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").Single().Value;
@@ -2336,7 +2339,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures(), NullLogger.Instance);
+            features: new TestFeatures(),
+            logger: NullLogger.Instance,
+            configureGlobalPackagesFolder: true);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
@@ -2366,6 +2371,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(firstResult.Success);
             Assert.True(secondResult.Success);
             Assert.Equal([false, false], noRestoreValues);
+            Assert.All(processOptions, options =>
+            {
+                Assert.True(options.SuppressLogging);
+                Assert.NotNull(options.EnvironmentVariableFilter);
+                Assert.True(options.EnvironmentVariableFilter(CliPathHelper.NuGetPackagesEnvironmentVariable));
+                Assert.False(options.EnvironmentVariableFilter("PATH"));
+            });
             Assert.NotNull(generatedProject);
             Assert.Equal(workspace.WorkspaceRoot.FullName, nugetConfigDiscoveryDirectory?.FullName);
 
@@ -2789,8 +2801,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         string? intermediateOutputPath = null;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
             {
+                Assert.True(options.SuppressLogging);
+                options.StandardOutputCallback?.Invoke($"Restoring from {channelSource}");
+                options.StandardErrorCallback?.Invoke($"Failed to load {channelSource}");
                 intermediateOutputPath = GetIntermediateOutputPath(projectFilePath.Directory!);
                 var objDirectory = Directory.CreateDirectory(intermediateOutputPath);
                 File.WriteAllText(Path.Combine(objDirectory.FullName, "project.assets.json"), channelSource);
@@ -2826,6 +2841,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 ]);
 
             Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+            var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
+            Assert.DoesNotContain(channelSource, output);
+            Assert.Contains("https://feed.blob.core.windows.net/packages/index.json", output);
             Assert.False(Directory.Exists(objDirectory));
             Assert.NotNull(intermediateOutputPath);
             Assert.StartsWith(
@@ -2984,16 +3003,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             identityChannel: PackageChannelNames.Stable);
 
         string[]? restoreInvocation = null;
+        IDictionary<string, string>? restoreEnvironment = null;
         string? temporaryNuGetConfigContent = null;
+        var inheritedPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "inherited-packages");
         var executionFactory = new TestProcessExecutionFactory
         {
-            AssertionCallback = (args, _, _, _) =>
+            AssertionCallback = (args, environment, _, _) =>
             {
                 if (args.Length > 1 &&
                     args[0] == "nuget" &&
                     args[1] == "restore")
                 {
                     restoreInvocation = args.ToArray();
+                    restoreEnvironment = environment;
                     temporaryNuGetConfigContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
                 }
             }
@@ -3007,7 +3029,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            new TestEnvironment(),
+            new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliPathHelper.NuGetPackagesEnvironmentVariable] = inheritedPackagesFolder
+            }),
             NullLogger<BundleNuGetService>.Instance);
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -3019,7 +3044,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             ],
             new FakeNuGetPackageCache(),
             new TestFeatures(),
-            NullLogger.Instance);
+            NullLogger.Instance,
+            configureGlobalPackagesFolder: true);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])
@@ -3046,9 +3072,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(restoreInvocation);
             Assert.Contains(stagingFeed, restoreInvocation!);
             Assert.Contains(projectDirectory.FullName, restoreInvocation!);
+            Assert.NotNull(restoreEnvironment);
             Assert.NotNull(temporaryNuGetConfigContent);
             Assert.Contains(stagingFeed, temporaryNuGetConfigContent!);
             Assert.Contains("Aspire*", temporaryNuGetConfigContent!);
+            var globalPackagesFolder = XDocument.Parse(temporaryNuGetConfigContent!)
+                .Descendants("config")
+                .Elements("add")
+                .Single(element => element.Attribute("key")?.Value == "globalPackagesFolder")
+                .Attribute("value")?.Value;
+            Assert.NotEqual(inheritedPackagesFolder, globalPackagesFolder);
+            Assert.Equal(globalPackagesFolder, restoreEnvironment![CliPathHelper.NuGetPackagesEnvironmentVariable]);
         }
         finally
         {

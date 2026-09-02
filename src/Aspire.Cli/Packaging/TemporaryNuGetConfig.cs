@@ -11,15 +11,21 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     private readonly FileInfo _configFile;
     private bool _disposed;
 
-    private TemporaryNuGetConfig(FileInfo configFile, bool containsCredentialMaterial)
+    private TemporaryNuGetConfig(
+        FileInfo configFile,
+        bool containsCredentialMaterial,
+        IReadOnlyList<string> credentialBearingSources)
     {
         _configFile = configFile;
         ContainsCredentialMaterial = containsCredentialMaterial;
+        CredentialBearingSources = credentialBearingSources;
     }
 
     public FileInfo ConfigFile => _configFile;
 
     public bool ContainsCredentialMaterial { get; }
+
+    public IReadOnlyList<string> CredentialBearingSources { get; }
 
     public static async Task<TemporaryNuGetConfig> CreateAsync(
         PackageMapping[] mappings,
@@ -38,7 +44,12 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             }
             return new TemporaryNuGetConfig(
                 configFile,
-                mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)));
+                mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)),
+                mappings
+                    .Select(static mapping => mapping.Source)
+                    .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray());
         }
         catch
         {
@@ -81,7 +92,10 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             document = await LoadAsync(configFile, cancellationToken).ConfigureAwait(false);
             EnableMappedSources(document, mappings);
             await SaveAsync(document, configFile, cancellationToken).ConfigureAwait(false);
-            return new TemporaryNuGetConfig(configFile, DocumentContainsCredentialMaterial(document));
+            return new TemporaryNuGetConfig(
+                configFile,
+                DocumentContainsCredentialMaterial(document),
+                GetCredentialBearingSources(document));
         }
         catch
         {
@@ -255,6 +269,19 @@ internal sealed class TemporaryNuGetConfig : IDisposable
                 .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))
                 ?.Value)
             .Any(static source => source is not null && PackageSourceOverrideMappings.HasCredentialMaterial(source)) == true;
+    }
+
+    internal static string[] GetCredentialBearingSources(XDocument document)
+    {
+        return document
+            .Descendants()
+            .SelectMany(static element => element.Attributes())
+            .Where(static attribute =>
+                string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))
+            .Select(static attribute => attribute.Value)
+            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static void EnableMappedSources(XDocument document, PackageMapping[] mappings)

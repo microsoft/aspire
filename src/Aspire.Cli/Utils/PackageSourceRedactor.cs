@@ -69,4 +69,18 @@ internal static class PackageSourceRedactor
 
         return builder.Uri.ToString();
     }
+
+    /// <summary>
+    /// Replaces credential-bearing package source occurrences in captured process output with
+    /// display-safe forms.
+    /// </summary>
+    public static string RedactOccurrences(string value, IReadOnlyList<string> sensitiveSources)
+    {
+        foreach (var source in sensitiveSources.OrderByDescending(static source => source.Length))
+        {
+            value = value.Replace(source, RedactForDisplay(source), StringComparison.Ordinal);
+        }
+
+        return value;
+    }
 }

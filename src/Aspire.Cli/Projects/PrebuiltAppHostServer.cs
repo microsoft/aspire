@@ -324,6 +324,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
+            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources),
             ct: cancellationToken).ConfigureAwait(false);
         if (restoreResult.IsTemporary)
         {
@@ -754,6 +755,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private async Task<(int ExitCode, OutputCollector Output)> BuildIntegrationProjectAsync(
         string projectFilePath,
         bool noRestore,
+        bool configureGlobalPackagesFolder,
+        bool suppressLogging,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
@@ -762,8 +766,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             noRestore,
             new ProcessInvocationOptions
             {
-                StandardOutputCallback = buildOutput.AppendOutput,
-                StandardErrorCallback = buildOutput.AppendError
+                StandardOutputCallback = line => buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                StandardErrorCallback = line => buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                EnvironmentVariableFilter = configureGlobalPackagesFolder
+                    ? static name => string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)
+                    : null,
+                SuppressLogging = suppressLogging
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -818,6 +826,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             hasCredentialBearingMappedSource ||
             hasCredentialBearingAdditionalSource ||
             temporaryRestoreConfig?.ContainsCredentialMaterial == true;
+        var sensitiveRestoreSources = restoreSources.AdditionalSources
+            .Concat(restoreSources.PackageSourceMappings?.Select(static mapping => mapping.Source) ?? [])
+            .Concat(temporaryRestoreConfig?.CredentialBearingSources ?? [])
+            .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         // NuGet serializes effective sources into project.assets.json and the restore graph under obj/.
         // Credential-bearing intermediates therefore use the same leased, owner-only temporary cache
         // pattern as package-only restores. If cleanup is interrupted, a later restore reclaims the
@@ -915,7 +929,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 packageRefs,
                 projectRefs,
                 restoreConfigContent,
-                CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                GetIntegrationRestoreGlobalPackagesFolder(restoreSources) ??
+                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
                 cancellationToken).ConfigureAwait(false);
             restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
         }
@@ -936,12 +951,24 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
             packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
 
-        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: skipRestore, cancellationToken).ConfigureAwait(false);
+        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+            projectFilePath,
+            noRestore: skipRestore,
+            restoreSources.ConfigureGlobalPackagesFolder,
+            suppressLogging: hasCredentialBearingRestoreSource,
+            sensitiveRestoreSources,
+            cancellationToken).ConfigureAwait(false);
         if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
         {
             _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
                 string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
-            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: false, cancellationToken).ConfigureAwait(false);
+            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+                projectFilePath,
+                noRestore: false,
+                restoreSources.ConfigureGlobalPackagesFolder,
+                suppressLogging: hasCredentialBearingRestoreSource,
+                sensitiveRestoreSources,
+                cancellationToken).ConfigureAwait(false);
         }
 
         if (exitCode != 0)
@@ -1129,6 +1156,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
         => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
+
+    private string? GetIntegrationRestoreGlobalPackagesFolder(IntegrationRestoreSources restoreSources)
+        => restoreSources.ConfigureGlobalPackagesFolder
+            ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(
+                _executionContext.AspireHomeDirectory,
+                restoreSources.GlobalPackagesFolderSource)
+            : null;
 
     private async Task<TemporaryNuGetConfig?> CreateTemporaryNuGetConfigAsync(IntegrationRestoreSources restoreSources)
     {
