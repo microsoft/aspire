@@ -209,6 +209,10 @@ await service.withReference(toolbox);
 await service.waitFor(toolbox);
 ```
 
+Azure AI Search tools reference an index that must already exist and contain the data the tool should
+search. `AddAzureSearch` provisions the Search service, but neither it nor `WithAISearchTool` creates
+or populates the named index.
+
 The identity running `aspire run` or `aspire deploy` must have the
 [Foundry User role](https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry) on the Foundry
 project so Aspire can manage Toolbox versions. Deployed compute resources that reference the Toolbox
