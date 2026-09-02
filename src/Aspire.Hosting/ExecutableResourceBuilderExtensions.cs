@@ -125,9 +125,14 @@ public static class ExecutableResourceBuilderExtensions
         where T : ExecutableResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var hasProjection = builder.Resource.TrySelectProjection(
-            builder.ApplicationBuilder.ExecutionContext,
-            out _);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        var resource = builder.Resource;
+        var hasProjection = resource.HasContainerProjection();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -135,21 +140,10 @@ public static class ExecutableResourceBuilderExtensions
             {
                 if (!hasProjection)
                 {
-                    container.WithImage(builder.Resource.Name);
-                    container.WithDockerfile(contextPath: builder.Resource.WorkingDirectory);
+                    container.WithImage(resource.Name);
+                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
                 }
-            });
 
-        if (!builder.Resource.TrySelectProjection(builder.ApplicationBuilder.ExecutionContext, out var projection) ||
-            projection is not ContainerResource containerProjection)
-        {
-            return builder;
-        }
-
-        builder.WithContainerProjection(
-            DistributedApplicationOperation.Publish,
-            container =>
-            {
                 // The image entrypoint replaces the host executable, so arguments configured before
                 // this conversion often contain host-only paths and must not reach the container.
                 container.WithArgs(context => context.Args.Clear());
@@ -157,7 +151,7 @@ public static class ExecutableResourceBuilderExtensions
             });
 
         return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(containerProjection));
+            context => context.WriteProjectedContainerAsync(resource));
     }
 
     /// <summary>

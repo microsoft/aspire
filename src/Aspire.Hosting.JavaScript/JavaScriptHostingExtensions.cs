@@ -1501,12 +1501,7 @@ public static partial class JavaScriptHostingExtensions
     private static void MarkDockerfileAsExecutable<TResource>(IResourceBuilder<TResource> builder)
         where TResource : JavaScriptAppResource
     {
-        // Avoid re-entering PublishAsDockerFile here because its argument normalization intentionally
-        // removes callbacks that precede the initial projection registration.
-        if (builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(
-            builder.Resource.Name,
-            out var container) &&
-            container.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
             dockerfileBuildAnnotation.HasEntrypoint = true;
         }
@@ -2277,6 +2272,7 @@ public static partial class JavaScriptHostingExtensions
                 }
             }
         ]);
+        resourceBuilder.WithAnnotation(standaloneValidation);
 
         if (builder.ExecutionContext.IsPublishMode)
         {
@@ -2286,11 +2282,7 @@ public static partial class JavaScriptHostingExtensions
                 .WithEnvironment("HOSTNAME", "0.0.0.0");
 
             MarkDockerfileAsExecutable(resourceBuilder);
-            resourceBuilder.PublishAsDockerFile(container => container.WithAnnotation(standaloneValidation));
-        }
-        else
-        {
-            resourceBuilder.WithAnnotation(standaloneValidation);
+            resourceBuilder.PublishAsDockerFile();
         }
 
         return resourceBuilder;

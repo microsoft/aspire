@@ -981,9 +981,8 @@ public static class ProjectResourceBuilderExtensions
 
         var projectFilePath = builder.Resource.GetProjectMetadata().ProjectPath;
         var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
-        var hasProjection = builder.Resource.TrySelectProjection(
-            builder.ApplicationBuilder.ExecutionContext,
-            out _);
+        var resource = builder.Resource;
+        var hasProjection = resource.HasContainerProjection();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -991,25 +990,14 @@ public static class ProjectResourceBuilderExtensions
             {
                 if (!hasProjection)
                 {
-                    container.WithImage(builder.Resource.Name);
+                    container.WithImage(resource.Name);
                     container.WithDockerfile(contextPath: projectDirectoryPath);
 
                     // ASP.NET container images listen on port 8080 by default.
                     container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
                     container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
                 }
-            });
 
-        if (!builder.Resource.TrySelectProjection(builder.ApplicationBuilder.ExecutionContext, out var projection) ||
-            projection is not ContainerResource containerProjection)
-        {
-            return builder;
-        }
-
-        builder.WithContainerProjection(
-            DistributedApplicationOperation.Publish,
-            container =>
-            {
                 if (!hasProjection)
                 {
                     // The image entrypoint replaces dotnet run, so arguments configured before the
@@ -1021,7 +1009,7 @@ public static class ProjectResourceBuilderExtensions
             });
 
         return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(containerProjection));
+            context => context.WriteProjectedContainerAsync(resource));
     }
 
     private static IConfiguration GetConfiguration(IResource projectResource)

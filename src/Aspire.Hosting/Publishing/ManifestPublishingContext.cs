@@ -365,6 +365,17 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         WriteBindings(container);
     }
 
+    internal Task WriteProjectedContainerAsync(IResource owner)
+    {
+        if (owner.GetEffectiveResource(ExecutionContext) is not ContainerResource container)
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{owner.Name}' does not have a container projection for the '{ExecutionContext.Operation}' operation.");
+        }
+
+        return WriteContainerAsync(container);
+    }
+
     private async Task WriteBuildContextAsync(ContainerResource container)
     {
         if (container.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out var annotations) && annotations.Single() is { } annotation)

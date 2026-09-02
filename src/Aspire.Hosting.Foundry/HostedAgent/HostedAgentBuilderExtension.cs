@@ -438,11 +438,6 @@ public static class HostedAgentResourceBuilderExtensions
         Action<HostedAgentConfiguration>? configure)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        /*
-         * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
-         *
-         * That is, in Publish mode, we swap the original resource with a hosted agent resource.
-         */
         var resource = builder.Resource;
         var projectResource = project.Resource;
 
@@ -463,7 +458,6 @@ public static class HostedAgentResourceBuilderExtensions
             return;
         }
 
-        // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
         IResourceWithEnvironment target;
         if (resource is ContainerResource containerResource)
         {
@@ -471,7 +465,7 @@ public static class HostedAgentResourceBuilderExtensions
         }
         else if (resource is ExecutableResource executableResource)
         {
-            if (!builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out _))
+            if (!resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>())
             {
                 // Ensure container APIs configure the executable's publish annotations.
                 builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
