@@ -59,6 +59,7 @@ internal sealed class FoundryToolboxReadinessProbe(
             {
                 var discoveredToolNames = new HashSet<string>(StringComparer.Ordinal);
                 string? cursor = null;
+                var retryDiscovery = false;
                 do
                 {
                     var response = await SendRequestAsync(
@@ -67,7 +68,14 @@ internal sealed class FoundryToolboxReadinessProbe(
                         initialize.SessionId,
                         negotiatedProtocol,
                         CreateToolsListPayload(requestId++, cursor),
-                        discoveryCancellation.Token).ConfigureAwait(false);
+                        discoveryCancellation.Token,
+                        retryInternalServerError: true).ConfigureAwait(false);
+                    if (response.IsRetryableFailure)
+                    {
+                        retryDiscovery = true;
+                        break;
+                    }
+
                     foreach (var tool in response.Result.GetProperty("tools").EnumerateArray())
                     {
                         discoveredToolNames.Add(tool.GetProperty("name").GetString()
@@ -82,9 +90,9 @@ internal sealed class FoundryToolboxReadinessProbe(
                 }
                 while (!string.IsNullOrEmpty(cursor));
 
-                if (requiredToolNames.Count == 0
+                if (!retryDiscovery && (requiredToolNames.Count == 0
                     ? discoveredToolNames.Count > 0
-                    : requiredToolNames.All(discoveredToolNames.Contains))
+                    : requiredToolNames.All(discoveredToolNames.Contains)))
                 {
                     return discoveredToolNames.ToArray();
                 }
@@ -130,7 +138,8 @@ internal sealed class FoundryToolboxReadinessProbe(
         string? sessionId,
         string? protocolVersion,
         string payload,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retryInternalServerError = false)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -152,11 +161,17 @@ internal sealed class FoundryToolboxReadinessProbe(
             : (int?)null;
 
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var responsePayload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         var responseSessionId = response.Headers.TryGetValues("Mcp-Session-Id", out var values)
             ? values.Single()
             : sessionId;
+        if (retryInternalServerError &&
+            response.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+        {
+            return new(default, responseSessionId, IsRetryableFailure: true);
+        }
+
+        response.EnsureSuccessStatusCode();
+        var responsePayload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(responsePayload) || expectedId is null)
         {
             return new(default, responseSessionId);
@@ -200,5 +215,8 @@ internal sealed class FoundryToolboxReadinessProbe(
         return new(result, responseSessionId);
     }
 
-    private sealed record McpResponse(JsonElement Result, string? SessionId);
+    private sealed record McpResponse(
+        JsonElement Result,
+        string? SessionId,
+        bool IsRetryableFailure = false);
 }

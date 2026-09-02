@@ -25,9 +25,6 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    // The "Foundry User" built-in role (data-plane access to Foundry agents/inference). Granted to
-    // the agent's own instance identity below, and to consumers that reference the agent (see
-    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
     internal const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>

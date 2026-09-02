@@ -28,6 +28,18 @@ public static class FoundryToolboxBuilderExtensions
     /// by the most recent reconciliation is exposed via
     /// <see cref="FoundryToolboxResource.DeployedVersion"/>.
     /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// var foundry = builder.AddFoundry("foundry");
+    /// var project = foundry.AddProject("project");
+    /// var toolbox = project.AddToolbox("field-tools")
+    ///     .WithWebSearchTool();
+    ///
+    /// builder.AddProject&lt;Projects.Worker&gt;("worker")
+    ///     .WithReference(toolbox)
+    ///     .WaitFor(toolbox);
+    /// </code>
+    /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the FoundryToolboxOptions overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> AddToolbox(
@@ -47,7 +59,7 @@ public static class FoundryToolboxBuilderExtensions
         };
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-        toolbox.Annotations.Add(new ReferenceRoleAssignmentAnnotation(builder.Resource.Parent, roles));
+        toolbox.Annotations.Add(new ReferenceRoleAssignmentAnnotation(builder.Resource, roles));
 #pragma warning restore ASPIREAZURE003
 
         return builder.ApplicationBuilder.AddResource(toolbox)

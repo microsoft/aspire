@@ -42,7 +42,7 @@ public class ToolboxTests
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var consumerRole = Assert.Single(
             toolbox.Resource.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
-        Assert.Same(project.Resource.Parent, consumerRole.Target);
+        Assert.Same(project.Resource, consumerRole.Target);
         var role = Assert.Single(consumerRole.Roles);
         Assert.Equal(FoundryResource.FoundryUserRoleDefinitionId, role.Id, ignoreCase: true);
 #pragma warning restore ASPIREAZURE003
@@ -378,7 +378,7 @@ public class ToolboxTests
         using var handler = new SequenceHttpMessageHandler(
             initialize,
             new HttpResponseMessage(HttpStatusCode.Accepted),
-            CreateJsonResponse("""{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"""),
+            new HttpResponseMessage(HttpStatusCode.InternalServerError),
             CreateJsonResponse("""{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"other"}],"nextCursor":"page-2"}}"""),
             CreateJsonResponse("""{"jsonrpc":"2.0","id":4,"result":{"tools":[{"name":"knowledge-base"}]}}"""));
         using var client = new HttpClient(handler);
