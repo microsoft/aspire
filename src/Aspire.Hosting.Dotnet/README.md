@@ -61,7 +61,8 @@ each traversal group can build in parallel. File-based apps use serialized direc
 values are runtime configuration and do not prevent projects from sharing a traversal build. Each
 traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
 already-built project, so runtime environment variables cannot change which output is selected.
-File-based apps launch with `dotnet run --file <path> --no-cache --no-build` after their direct build.
+File-based apps launch with `dotnet run --file <path> --no-build` after their direct build; uncoordinated
+file-based launches use `--no-cache` instead.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.

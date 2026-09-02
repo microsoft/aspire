@@ -63,7 +63,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        var expected = new List<string> { "run", "--file", appPath, "--no-cache", "--no-build" };
+        var expected = new List<string> { "run", "--file", appPath, "--no-build" };
         AddExpectedConfiguration(builder, expected);
         expected.Add("--no-launch-profile");
         Assert.Equal(expected, args);

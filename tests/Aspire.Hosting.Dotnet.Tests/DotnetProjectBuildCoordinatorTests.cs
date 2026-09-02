@@ -245,7 +245,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedBuildArgs, buildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
-        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache", "--no-build" };
+        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
@@ -308,7 +308,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(file.Resource, finalBuild);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
-        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache", "--no-build" };
+        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
@@ -322,25 +322,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
-        var sharedProject = CreateProjectFile(workspace.Path, "Shared", """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
-              </PropertyGroup>
-            </Project>
-            """);
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(sharedProject)!, "SharedValue.cs"), """
-            namespace Shared;
-
-            public static class SharedValue
-            {
-                public static string Value => "shared";
-            }
-            """);
+        var sharedProject = CreateSharedProject(workspace.Path);
         var firstPath = CreateFileApp(workspace.Path, "First", sharedProject);
         var secondPath = CreateFileApp(workspace.Path, "Second", sharedProject);
-        var first = builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true);
-        var second = builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true);
+        var firstSentinel = Path.Combine(workspace.Path, "first-ran.txt");
+        var secondSentinel = Path.Combine(workspace.Path, "second-ran.txt");
+        var first = builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(firstSentinel);
+        var second = builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(secondSentinel);
         await using var app = builder.Build();
 
         using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
@@ -350,9 +340,20 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
         {
-            await Task.WhenAll(
-                app.ResourceNotifications.WaitForResourceAsync("first", KnownResourceStates.Finished, completionCts.Token),
-                app.ResourceNotifications.WaitForResourceAsync("second", KnownResourceStates.Finished, completionCts.Token));
+            var completionEvents = await Task.WhenAll(
+                app.ResourceNotifications.WaitForResourceAsync(
+                    "first",
+                    resourceEvent =>
+                        resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished &&
+                        resourceEvent.Snapshot.ExitCode is not null,
+                    completionCts.Token),
+                app.ResourceNotifications.WaitForResourceAsync(
+                    "second",
+                    resourceEvent =>
+                        resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished &&
+                        resourceEvent.Snapshot.ExitCode is not null,
+                    completionCts.Token));
+            Assert.All(completionEvents, resourceEvent => Assert.Equal(0, resourceEvent.Snapshot.ExitCode));
         }
 
         var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
@@ -370,14 +371,19 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         foreach (var (resource, path) in new[] { (first.Resource, firstPath), (second.Resource, secondPath) })
         {
             var args = await ArgumentEvaluator.GetArgumentListAsync(resource, app.Services);
-            var expected = new List<string> { "run", "--file", path, "--no-cache", "--no-build" };
+            var expected = new List<string> { "run", "--file", path, "--no-build" };
             AddExpectedConfiguration(builder, expected);
             expected.Add("--no-launch-profile");
+            expected.Add(resource == first.Resource ? firstSentinel : secondSentinel);
             Assert.Equal(expected, args);
         }
 
         using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         await app.StopAsync(stopCts.Token);
+
+        Assert.Equal("shared", File.ReadAllText(firstSentinel));
+        Assert.Equal("shared", File.ReadAllText(secondSentinel));
+        Assert.Equal(2, File.ReadAllLines(GetBuildCountPath(sharedProject)).Length);
     }
 
     [Fact]
@@ -2456,7 +2462,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appPath, $$"""
             #:project {{relativeSharedProject}}
 
-            System.Console.WriteLine(Shared.SharedValue.Value);
+            System.IO.File.WriteAllText(args[0], Shared.SharedValue.Value);
             """);
         return appPath;
     }

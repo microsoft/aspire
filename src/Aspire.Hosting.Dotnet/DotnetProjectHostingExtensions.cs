@@ -282,10 +282,9 @@ public static class DotnetProjectHostingExtensions
 
                 if (metadata.IsFileBasedApp)
                 {
-                    ctx.Args.Add("--no-cache");
+                    ctx.Args.Add(metadata.SuppressBuild ? "--no-build" : "--no-cache");
                 }
-
-                if (metadata.SuppressBuild)
+                else if (metadata.SuppressBuild)
                 {
                     ctx.Args.Add("--no-build");
                 }
