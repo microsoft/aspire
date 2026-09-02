@@ -163,7 +163,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 resources.ProjectEndpoint,
                 credential,
                 cancellationToken);
-            Assert.NotEmpty(discoveredTools);
+            Assert.Contains("knowledge-base", discoveredTools);
 
             // The first pipeline banner remains visible, so clear it before waiting for the redeploy.
             await auto.TypeAsync("clear");
@@ -483,7 +483,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     .Select(tool => tool.GetProperty("name").GetString()
                         ?? throw new InvalidOperationException("A discovered MCP tool did not have a name."))
                     .ToArray();
-                if (toolNames.Length > 0)
+                if (toolNames.Contains("knowledge-base", StringComparer.Ordinal))
                 {
                     return toolNames;
                 }
@@ -494,7 +494,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("Foundry Toolbox tool discovery remained empty for two minutes.");
+            throw new TimeoutException(
+                "Foundry Toolbox did not discover the 'knowledge-base' Azure AI Search tool within two minutes.");
         }
     }
 

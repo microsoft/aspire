@@ -205,6 +205,11 @@ await service.withReference(toolbox);
 await service.waitFor(toolbox);
 ```
 
+The identity running `aspire run` or `aspire deploy` must have the
+[Foundry User role](https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry) on the Foundry
+account or project so Aspire can manage Toolbox versions. Deployed compute resources that reference
+the Toolbox receive this role automatically on the owning Foundry account.
+
 MCP endpoints must be reachable from the Foundry data plane over HTTPS. For local development, use
 a development tunnel instead of a localhost endpoint. Inline credentials and headers are not
 supported. Connection-authenticated MCP servers are not currently supported by this integration.

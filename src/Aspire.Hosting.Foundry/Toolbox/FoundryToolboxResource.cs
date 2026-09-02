@@ -22,7 +22,7 @@ namespace Aspire.Hosting.Foundry;
 /// when the configuration changes.
 /// </remarks>
 [AspireExport]
-public sealed class FoundryToolboxResource : Resource, IResourceWithParent<AzureCognitiveServicesProjectResource>, IResourceWithConnectionString
+public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionString
 {
     internal const string DefaultApiVersion = "v1";
     internal const string PreviewFeatureHeaderValue = "Toolboxes=V1Preview";

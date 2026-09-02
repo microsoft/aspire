@@ -41,8 +41,18 @@ public static class FoundryToolboxBuilderExtensions
         var toolbox = new FoundryToolboxResource(name, builder.Resource);
         configure?.Invoke(toolbox);
 
+        var roles = new HashSet<RoleDefinition>
+        {
+            new(FoundryResource.FoundryUserRoleDefinitionId, "Foundry User")
+        };
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        toolbox.Annotations.Add(new ReferenceRoleAssignmentAnnotation(builder.Resource.Parent, roles));
+#pragma warning restore ASPIREAZURE003
+
         return builder.ApplicationBuilder.AddResource(toolbox)
-            .WithIconName("Toolbox");
+            .WithIconName("Toolbox")
+            .WithParentRelationship(builder);
     }
 
     /// <summary>

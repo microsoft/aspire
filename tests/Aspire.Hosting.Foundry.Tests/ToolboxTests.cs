@@ -31,6 +31,19 @@ public class ToolboxTests
         Assert.Equal("field-tools", toolbox.Resource.Name);
         Assert.Equal("7", toolbox.Resource.Version);
         Assert.Same(project.Resource, toolbox.Resource.Parent);
+        Assert.IsNotAssignableFrom<IResourceWithParent>(toolbox.Resource);
+        var parentRelationship = Assert.Single(
+            toolbox.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
+        Assert.Equal("Parent", parentRelationship.Type);
+        Assert.Same(project.Resource, parentRelationship.Resource);
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var consumerRole = Assert.Single(
+            toolbox.Resource.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
+        Assert.Same(project.Resource.Parent, consumerRole.Target);
+        var role = Assert.Single(consumerRole.Roles);
+        Assert.Equal(FoundryResource.FoundryUserRoleDefinitionId, role.Id, ignoreCase: true);
+#pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
