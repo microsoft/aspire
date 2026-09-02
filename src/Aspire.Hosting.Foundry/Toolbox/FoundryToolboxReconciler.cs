@@ -310,7 +310,11 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         if (existing is null)
         {
             var created = await administration.CreateVersionAsync(definition, cancellationToken).ConfigureAwait(false);
-            await PromoteOwnedVersionAsync(definition, created, cancellationToken).ConfigureAwait(false);
+            await PromoteOwnedVersionAsync(
+                definition,
+                created,
+                observedDefaultVersion: null,
+                cancellationToken).ConfigureAwait(false);
             return new(created, FoundryToolboxReconcileAction.CreatedAndPromoted);
         }
 
@@ -341,6 +345,7 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
             await PromoteOwnedVersionAsync(
                 definition,
                 reusableVersion.Version,
+                existing.DefaultVersion,
                 cancellationToken).ConfigureAwait(false);
             return new(reusableVersion.Version, FoundryToolboxReconcileAction.Promoted);
         }
@@ -348,7 +353,11 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         var updated = await administration.CreateVersionAsync(definition, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(existing.DefaultVersion, updated, StringComparison.Ordinal))
         {
-            await PromoteOwnedVersionAsync(definition, updated, cancellationToken).ConfigureAwait(false);
+            await PromoteOwnedVersionAsync(
+                definition,
+                updated,
+                existing.DefaultVersion,
+                cancellationToken).ConfigureAwait(false);
         }
 
         return new(updated, FoundryToolboxReconcileAction.CreatedAndPromoted);
@@ -357,12 +366,14 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
     private async Task PromoteOwnedVersionAsync(
         FoundryToolboxDeploymentDefinition definition,
         string version,
+        string? observedDefaultVersion,
         CancellationToken cancellationToken)
     {
         // Toolbox administration has no conditional update or ETag support. Re-read immediately
-        // before promotion so a concurrent writer cannot silently replace a foreign default, then
-        // verify the write before reporting success. This is coordination, not an atomic lock:
-        // another writer can still update the Toolbox after the final read.
+        // before promotion and require the exact default observed while reconciling. Otherwise one
+        // Aspire deployment could overwrite another Aspire deployment's newer default. This is
+        // coordination, not an atomic lock: another writer can still update the Toolbox after the
+        // final read.
         var before = await administration.GetAsync(definition.Name, cancellationToken).ConfigureAwait(false)
             ?? throw CreateConcurrentChangeException(
                 definition.Name,
@@ -370,6 +381,21 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
 
         ValidateOwnedDefault(definition.Name, before, concurrentChange: true);
         ValidatePromotionTarget(definition, before, version);
+        if (string.Equals(before.DefaultVersion, version, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (observedDefaultVersion is null ||
+            !string.Equals(before.DefaultVersion, observedDefaultVersion, StringComparison.Ordinal))
+        {
+            var expectedDefault = observedDefaultVersion is null
+                ? "no default version"
+                : $"default version '{observedDefaultVersion}'";
+            throw CreateConcurrentChangeException(
+                definition.Name,
+                $"expected {expectedDefault}, but version '{before.DefaultVersion}' is now the default");
+        }
 
         await administration.PromoteVersionAsync(
             definition.Name,

@@ -22,7 +22,7 @@ public class FoundryToolboxReconcilerTests
         Assert.Equal(FoundryToolboxReconcileAction.CreatedAndPromoted, result.Action);
         Assert.Equal("1", result.Version);
         Assert.Same(definition, Assert.Single(administration.CreatedDefinitions));
-        Assert.Equal(("field-tools", "1"), Assert.Single(administration.Promotions));
+        Assert.Empty(administration.Promotions);
     }
 
     [Fact]
@@ -165,6 +165,65 @@ public class FoundryToolboxReconcilerTests
                 .ReconcileAsync(definition, CancellationToken.None));
 
         Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(administration.Promotions);
+    }
+
+    [Fact]
+    public async Task ReconcileAsync_RejectsManagedDefaultChangedBeforePromotion()
+    {
+        var definition = await CreateDefinitionAsync();
+        var initial = new FoundryToolboxState(
+            "3",
+            [
+                CreateVersionState("3", "outdated"),
+                CreateVersionState("2", definition.ConfigurationHash)
+            ]);
+        var concurrentlyChanged = new FoundryToolboxState(
+            "5",
+            [
+                .. initial.Versions,
+                CreateVersionState("5", "other-deployment")
+            ]);
+        var administration = new RecordingToolboxAdministration();
+        administration.GetResults.Enqueue(initial);
+        administration.GetResults.Enqueue(concurrentlyChanged);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new FoundryToolboxReconciler(administration)
+                .ReconcileAsync(definition, CancellationToken.None));
+
+        Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "expected default version '3', but version '5' is now the default",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.Empty(administration.Promotions);
+    }
+
+    [Fact]
+    public async Task ReconcileAsync_RejectsManagedToolboxCreatedConcurrently()
+    {
+        var definition = await CreateDefinitionAsync();
+        var administration = new RecordingToolboxAdministration
+        {
+            VersionToCreate = "2",
+            StateAfterCreate = created => new FoundryToolboxState(
+                "1",
+                [
+                    CreateVersionState("1", "other-deployment"),
+                    CreateVersionState(created, definition.ConfigurationHash)
+                ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new FoundryToolboxReconciler(administration)
+                .ReconcileAsync(definition, CancellationToken.None));
+
+        Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "expected no default version, but version '1' is now the default",
+            exception.Message,
+            StringComparison.Ordinal);
         Assert.Empty(administration.Promotions);
     }
 
