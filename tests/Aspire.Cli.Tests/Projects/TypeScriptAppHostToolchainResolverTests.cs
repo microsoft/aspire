@@ -34,6 +34,21 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenPackageManagerIsDenoV1_Throws()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
+        File.WriteAllText(packageJsonPath, "{ \"packageManager\": \"deno@1.46.3\" }");
+
+        var exception = Assert.Throws<DenoVersionNotSupportedException>(
+            () => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+
+        Assert.Equal(
+            $"Deno 1 is not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. Upgrade 'deno@1.46.3' in {packageJsonPath} to Deno 2 or later.",
+            exception.Message);
+    }
+
+    [Fact]
     public void Resolve_WhenDenoLockExists_ReturnsDeno()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

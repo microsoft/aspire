@@ -370,6 +370,13 @@ internal static class TypeScriptAppHostToolchainResolver
                     throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }
 
+                if (toolchain == TypeScriptAppHostToolchain.Deno && IsDenoV1PackageManager(packageManager))
+                {
+                    throw new DenoVersionNotSupportedException(
+                        $"Deno 1 is not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. " +
+                        $"Upgrade '{packageManager}' in {packageJsonPath} to Deno 2 or later.");
+                }
+
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
                 return true;
             }
@@ -410,6 +417,21 @@ internal static class TypeScriptAppHostToolchainResolver
         }
 
         var version = packageManager[yarnPackageManagerPrefix.Length..];
+        return version.Length > 0 &&
+            version[0] == '1' &&
+            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+    }
+
+    private static bool IsDenoV1PackageManager(string packageManager)
+    {
+        const string denoPackageManagerPrefix = "deno@";
+
+        if (!packageManager.StartsWith(denoPackageManagerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var version = packageManager[denoPackageManagerPrefix.Length..];
         return version.Length > 0 &&
             version[0] == '1' &&
             (version.Length == 1 || !char.IsAsciiDigit(version[1]));

@@ -196,6 +196,16 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
 
+        if (toolchain == "deno")
+        {
+            await auto.TypeAsync("aspire doctor");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(
+                "TypeScript AppHost tooling found (deno).",
+                timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForAnyPromptAsync(counter);
+        }
+
         await auto.TypeAsync("""mkdir -p ./doctor-path && ln -sf "$(command -v aspire)" ./doctor-path/aspire && ln -sf "$(command -v dotnet)" ./doctor-path/dotnet && if command -v docker >/dev/null 2>&1; then ln -sf "$(command -v docker)" ./doctor-path/docker; fi && export PATH="$PWD/doctor-path" """);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
