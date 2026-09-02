@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Projects;
 
@@ -137,7 +136,7 @@ public class CommonAgentApplicatorsTests
         Assert.Equal(AgentAssetKind.Skill, AgentAssetCatalog.PlaywrightCli.AssetKind);
         Assert.Empty(AgentAssetCatalog.PlaywrightCli.Files);
         Assert.Equal(AgentFileAssetSourceKind.ExternalInstaller, AgentAssetCatalog.PlaywrightCli.SourceKind);
-        Assert.False(AgentAssetCatalog.PlaywrightCli.HasInstallableFiles);
+        Assert.Equal(AgentExternalInstallerId.PlaywrightCli, AgentAssetCatalog.PlaywrightCli.ExternalInstallerId);
     }
 
     [Fact]
@@ -154,7 +153,7 @@ public class CommonAgentApplicatorsTests
                 Assert.Equal(AgentAssetKind.Skill, skill.AssetKind);
                 Assert.Empty(skill.Files);
                 Assert.Equal(AgentFileAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
-                Assert.True(skill.HasInstallableFiles);
+                Assert.Null(skill.ExternalInstallerId);
             });
     }
 
@@ -197,7 +196,7 @@ public class CommonAgentApplicatorsTests
         var skillFile = Assert.Single(AgentAssetCatalog.DotnetInspect.Files);
 
         Assert.Equal(AgentFileAssetSourceKind.Static, AgentAssetCatalog.DotnetInspect.SourceKind);
-        Assert.True(AgentAssetCatalog.DotnetInspect.HasInstallableFiles);
+        Assert.Null(AgentAssetCatalog.DotnetInspect.ExternalInstallerId);
         Assert.Contains("# dotnet-inspect", skillFile.Content);
     }
 
@@ -217,68 +216,34 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void AgentFileAssetDefinition_RejectsMcpKind()
+    public void AgentFileAssetDefinition_ExternalInstallerRequiresInstallerId()
     {
         var exception = Assert.Throws<ArgumentException>(() => new AgentFileAssetDefinition(
-            AgentAssetKind.Mcp,
+            AgentAssetKind.Skill,
             "invalid",
-            "Invalid file-backed MCP asset",
-            AgentFileAssetSourceKind.Static,
+            "Invalid external installer asset",
+            AgentFileAssetSourceKind.ExternalInstaller,
             files: [],
             installExcludedRelativePaths: [],
             isDefault: false));
 
-        Assert.Equal("assetKind", exception.ParamName);
+        Assert.Equal("externalInstallerId", exception.ParamName);
     }
 
     [Fact]
-    public void AgentActionAssetDefinition_RejectsSkillKind()
+    public void AgentFileAssetDefinition_StaticAssetRejectsInstallerId()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new AgentActionAssetDefinition(
+        var exception = Assert.Throws<ArgumentException>(() => new AgentFileAssetDefinition(
             AgentAssetKind.Skill,
             "invalid",
-            "Invalid action-backed Skill asset",
+            "Invalid static asset",
+            AgentFileAssetSourceKind.Static,
+            files: [],
+            installExcludedRelativePaths: [],
+            externalInstallerId: AgentExternalInstallerId.PlaywrightCli,
             isDefault: false));
 
-        Assert.Equal("assetKind", exception.ParamName);
-    }
-
-    [Fact]
-    public void AgentAssetKind_GetBackingKind_ReturnsExpectedBacking()
-    {
-        Assert.Equal(AgentAssetBackingKind.File, AgentAssetKind.Skill.GetBackingKind());
-        Assert.Equal(AgentAssetBackingKind.Action, AgentAssetKind.Mcp.GetBackingKind());
-    }
-
-    [Fact]
-    public void AgentAssetFile_NormalizedTextComparison_IgnoresBomAndLineEndings()
-    {
-        var file = new AgentAssetFile("SKILL.md", "first\nsecond\n");
-        var existingContent = Encoding.UTF8.GetPreamble()
-            .Concat(Encoding.UTF8.GetBytes("first\r\nsecond\r\n"))
-            .ToArray();
-
-        Assert.True(file.ContentEquals(existingContent));
-    }
-
-    [Fact]
-    public void AgentAssetFile_NormalizedTextComparison_RejectsInvalidUtf8()
-    {
-        var file = new AgentAssetFile("SKILL.md", "valid");
-
-        Assert.False(file.ContentEquals([0xFF]));
-    }
-
-    [Fact]
-    public void AgentAssetFile_ExactByteComparison_RequiresIdenticalBytes()
-    {
-        var file = new AgentAssetFile(
-            "extension.bin",
-            [0x00, 0x01, 0xFF],
-            AgentAssetFileComparison.ExactBytes);
-
-        Assert.True(file.ContentEquals([0x00, 0x01, 0xFF]));
-        Assert.False(file.ContentEquals([0x00, 0x01, 0xFE]));
+        Assert.Equal("externalInstallerId", exception.ParamName);
     }
 
     private static void AssertDefaultLocations(

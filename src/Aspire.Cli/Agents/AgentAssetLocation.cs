@@ -12,8 +12,6 @@ namespace Aspire.Cli.Agents;
 [DebuggerDisplay("AssetKind = {AssetKind}, Scopes = {Scopes}, Id = {Id}, DisplayName = {DisplayName}, Description = {Description}, IsDefault = {IsDefault}")]
 internal sealed class AgentAssetLocation
 {
-    private readonly Func<DirectoryInfo, IEnvironment, AgentAssetInstallTarget>? _userInstallTargetResolver;
-
     /// <summary>
     /// Standard <c>.agents/skills/</c> location supported by VS Code, GitHub Copilot, and OpenCode.
     /// </summary>
@@ -80,8 +78,7 @@ internal sealed class AgentAssetLocation
         string relativeAssetDirectory,
         bool isDefault,
         AgentAssetLocationScope scopes,
-        IEnumerable<AgentClientKind> defaultForClients,
-        Func<DirectoryInfo, IEnvironment, AgentAssetInstallTarget>? userInstallTargetResolver = null)
+        IEnumerable<AgentClientKind> defaultForClients)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -100,7 +97,6 @@ internal sealed class AgentAssetLocation
         IsDefault = isDefault;
         Scopes = scopes;
         DefaultForClients = defaultForClients.ToHashSet();
-        _userInstallTargetResolver = userInstallTargetResolver;
     }
 
     /// <summary>
@@ -175,15 +171,14 @@ internal sealed class AgentAssetLocation
     /// <summary>
     /// Resolves the user-scoped installation target.
     /// </summary>
-    internal AgentAssetInstallTarget ResolveUserInstallTarget(DirectoryInfo homeDirectory, IEnvironment environment)
+    internal AgentAssetInstallTarget ResolveUserInstallTarget(DirectoryInfo homeDirectory)
     {
         if (!Scopes.HasFlag(AgentAssetLocationScope.User))
         {
             throw new InvalidOperationException($"Agent asset location '{Id}' does not support user-level installation.");
         }
 
-        return _userInstallTargetResolver?.Invoke(homeDirectory, environment)
-            ?? new(homeDirectory, RelativeAssetDirectory, GetUserDisplayDirectory(RelativeAssetDirectory));
+        return new(homeDirectory, RelativeAssetDirectory, GetUserDisplayDirectory(RelativeAssetDirectory));
     }
 
     /// <inheritdoc />

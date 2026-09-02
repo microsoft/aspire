@@ -105,9 +105,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
-        Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_mcpsOption);
+        AgentAssetCommandOptions.AddTo(this);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -160,9 +158,7 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
-        var mcpsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_mcpsOption);
+        var assetBindings = AgentAssetCommandOptions.Bind(parseResult);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill).
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
@@ -170,9 +166,7 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
-            mcpsBinding,
+            assetBindings,
             null,
             cancellationToken);
 

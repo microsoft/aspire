@@ -175,7 +175,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        List<ValidatedAspireSkillsBundleAsset> validatedSkills = [];
+        List<ValidatedAspireSkill> validatedSkills = [];
         foreach (var skill in skills)
         {
             if (skill is null)
@@ -250,10 +250,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must contain SKILL.md.", skillName));
             }
 
-            validatedSkills.Add(new ValidatedAspireSkillsBundleAsset(definition, files));
+            validatedSkills.Add(new ValidatedAspireSkill(definition, files));
         }
 
-        return new AspireSkillsBundle(version, AgentAssetKind.Skill, validatedSkills);
+        return new AspireSkillsBundle(version, validatedSkills);
     }
 
     private static void ValidateSkillName(string skillName)

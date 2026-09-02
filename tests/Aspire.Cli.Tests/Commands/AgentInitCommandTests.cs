@@ -57,9 +57,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             selectByDefault: null,
             TestContext.Current.CancellationToken).DefaultTimeout();
 
@@ -182,15 +180,71 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             selectByDefault: null,
             TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal([1, 0, 1, 1, 1], applyCounts);
         Assert.Equal([AgentAssetCatalog.AspireMcpServer], result.GetAssets(AgentAssetKind.Mcp));
+    }
+
+    [Fact]
+    public async Task PromptAndChainAsync_SelectsEveryAssetKindBeforeApplyingActions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var promptCount = 0;
+        var promptCountWhenApplied = 0;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionsCallback = (_, choices, _, _) =>
+            {
+                promptCount++;
+                var items = choices.Cast<object>().ToList();
+                return items.FirstOrDefault() switch
+                {
+                    AgentAssetLocation => [AgentAssetLocation.Standard],
+                    AgentFileAssetDefinition => [],
+                    AgentActionAssetDefinition => [AgentAssetCatalog.AspireMcpServer],
+                    _ => throw new InvalidOperationException("Unexpected agent asset selection type."),
+                };
+            }
+        };
+        var detector = new FakeAgentEnvironmentDetector(AgentClientKind.VsCode)
+        {
+            Applicators =
+            [
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetCatalog.AspireMcpServer,
+                    "vscode",
+                    "VS Code MCP",
+                    _ =>
+                    {
+                        promptCountWhenApplied = promptCount;
+                        return Task.CompletedTask;
+                    }),
+            ]
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AgentEnvironmentDetectorFactory = _ => detector;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<AgentInitCommand>();
+
+        var result = await command.PromptAndChainAsync(
+            interactionService,
+            CliExitCodes.Success,
+            workspace.WorkspaceRoot,
+            PromptBinding.CreateDefault(true),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
+            selectByDefault: null,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(3, promptCount);
+        Assert.Equal(promptCount, promptCountWhenApplied);
     }
 
     [Fact]
@@ -241,9 +295,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             selectByDefault: null,
             TestContext.Current.CancellationToken).DefaultTimeout();
 
@@ -408,6 +460,45 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 AssertSkillFileExists(workspace.WorkspaceRoot, relativeSkillDirectory, skillName);
             }
         }
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_PlaywrightExternalInstallerRunsOnceForMultipleLocations()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionsCallback = (_, choices, _, _) =>
+            {
+                var items = choices.Cast<object>().ToList();
+                return items.FirstOrDefault() switch
+                {
+                    AgentAssetLocation => AgentAssetLocation.GetLocations(AgentAssetKind.Skill).Cast<object>().ToList(),
+                    AgentFileAssetDefinition => [AgentAssetCatalog.PlaywrightCli],
+                    AgentActionAssetDefinition => [],
+                    _ => throw new InvalidOperationException("Unexpected agent asset selection type."),
+                };
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<AgentInitCommand>();
+
+        var result = await command.PromptAndChainAsync(
+            interactionService,
+            CliExitCodes.Success,
+            workspace.WorkspaceRoot,
+            PromptBinding.CreateDefault(true),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
+            selectByDefault: null,
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result.ExitCode);
+        Assert.Single(interactionService.DisplayedErrors);
     }
 
     [Fact]
@@ -782,7 +873,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
         var installResult = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
         Assert.NotNull(installResult.Bundle);
-        var bundleSkillNames = installResult.Bundle.GetAssetDefinitions().Select(static asset => asset.Name).ToList();
+        var bundleSkillNames = installResult.Bundle.GetSkillDefinitions().Select(static skill => skill.Name).ToList();
         Assert.NotEmpty(bundleSkillNames);
 
         // Explicit names instead of `all` keeps the assertion focused on bundle skills and
@@ -919,9 +1010,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             null,
             CancellationToken.None).DefaultTimeout();
 
@@ -957,9 +1046,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             null,
             CancellationToken.None).DefaultTimeout();
 
@@ -991,9 +1078,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
-            PromptBinding.CreateDefault<string?>(null),
+            AgentAssetCommandOptions.CreateDefaultBindings(),
             AgentInitCommand.ExcludeOneTimeSetupAssetsFromDefaults,
             CancellationToken.None).DefaultTimeout();
 
