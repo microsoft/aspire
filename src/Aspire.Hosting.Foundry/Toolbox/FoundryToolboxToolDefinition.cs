@@ -45,10 +45,13 @@ internal abstract class FoundryToolboxToolDefinition
 /// </summary>
 internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxToolDefinition
 {
-    internal FoundryToolboxWebSearchToolDefinition(string name)
+    internal FoundryToolboxWebSearchToolDefinition(string name, string? description = null)
         : base(name)
     {
+        Description = description;
     }
+
+    public string? Description { get; }
 
     internal override ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken)
     {
@@ -82,11 +85,20 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
         // Azure.AI.Projects.Agents SDK but is preserved through its additional-properties bag:
         //   {"type":"web_search","name":"web-search"}
         // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#multiple-tool-types.
-        var json = BinaryData.FromObjectAsJson(new
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
         {
-            type = "web_search",
-            name = Name
-        });
+            writer.WriteStartObject();
+            writer.WriteString("type", "web_search");
+            writer.WriteString("name", Name);
+            if (Description is not null)
+            {
+                writer.WriteString("description", Description);
+            }
+            writer.WriteEndObject();
+        }
+
+        var json = BinaryData.FromBytes(stream.ToArray());
         var agentTool = ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
         return new ValueTask<ResolvedFoundryToolboxTool>(
             new ResolvedFoundryToolboxTool(Name, agentTool!, json.ToString()));
@@ -98,7 +110,7 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
 /// </summary>
 internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefinition
 {
-    internal static bool IsPublicHttpsEndpoint(Uri endpointUri)
+    internal static bool IsFoundryReachableHttpsEndpoint(Uri endpointUri)
     {
         var host = endpointUri.Host.TrimEnd('.');
 
@@ -109,18 +121,36 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
             !host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal FoundryToolboxMcpToolDefinition(string name, ReferenceExpression endpointExpression)
+    internal FoundryToolboxMcpToolDefinition(
+        string name,
+        ReferenceExpression endpointExpression,
+        FoundryToolboxMcpToolOptions? options = null)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(endpointExpression);
 
         EndpointExpression = endpointExpression;
+        ServerLabel = options?.ServerLabel ?? name;
+        ServerDescription = options?.ServerDescription;
+        ApprovalPolicy = ResolvedFoundryToolboxMcpApprovalPolicy.Create(options?.ApprovalPolicy);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(ServerLabel);
+        if (ServerDescription is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(ServerDescription);
+        }
     }
 
     /// <summary>
     /// Gets the MCP endpoint expression for the tool.
     /// </summary>
     public ReferenceExpression EndpointExpression { get; }
+
+    public string ServerLabel { get; }
+
+    public string? ServerDescription { get; }
+
+    internal ResolvedFoundryToolboxMcpApprovalPolicy? ApprovalPolicy { get; }
 
     internal override async ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken)
     {
@@ -132,10 +162,10 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         }
 
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
-            !IsPublicHttpsEndpoint(endpointUri))
+            !IsFoundryReachableHttpsEndpoint(endpointUri))
         {
             throw new InvalidOperationException(
-                $"MCP tool '{Name}' must resolve to a publicly reachable absolute HTTPS endpoint.");
+                $"MCP tool '{Name}' must resolve to a Foundry-reachable absolute HTTPS endpoint.");
         }
 
         // Build the OpenAI Responses "mcp" tool wire JSON by hand and read it back as a
@@ -159,8 +189,17 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         {
             writer.WriteStartObject();
             writer.WriteString("type", "mcp");
-            writer.WriteString("server_label", Name);
+            writer.WriteString("server_label", ServerLabel);
             writer.WriteString("server_url", endpointUri.AbsoluteUri);
+            if (ServerDescription is not null)
+            {
+                writer.WriteString("server_description", ServerDescription);
+            }
+            if (ApprovalPolicy is not null)
+            {
+                writer.WritePropertyName("require_approval");
+                ApprovalPolicy.WriteTo(writer);
+            }
             writer.WriteEndObject();
         }
 
@@ -170,7 +209,124 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default)!;
 
-        return new ResolvedFoundryToolboxTool(Name, tool, json.ToString());
+        return new ResolvedFoundryToolboxTool(Name, tool, json.ToString(), ServerLabel);
+    }
+}
+
+internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
+    FoundryToolboxMcpGlobalApprovalMode? Global,
+    IReadOnlyList<string> AlwaysRequireApprovalFor,
+    IReadOnlyList<string> NeverRequireApprovalFor)
+{
+    public static ResolvedFoundryToolboxMcpApprovalPolicy? Create(
+        FoundryToolboxMcpApprovalPolicy? policy)
+    {
+        if (policy is null)
+        {
+            return null;
+        }
+
+        var always = NormalizeToolNames(
+            policy.AlwaysRequireApprovalFor,
+            nameof(policy.AlwaysRequireApprovalFor));
+        var never = NormalizeToolNames(
+            policy.NeverRequireApprovalFor,
+            nameof(policy.NeverRequireApprovalFor));
+
+        if (policy.Global is not null && (always.Count > 0 || never.Count > 0))
+        {
+            throw new ArgumentException(
+                "A global MCP approval policy cannot be combined with custom tool-name filters.",
+                nameof(policy));
+        }
+
+        if (policy.Global is null && always.Count == 0 && never.Count == 0)
+        {
+            throw new ArgumentException(
+                "An MCP approval policy must specify a global mode or at least one custom tool-name filter.",
+                nameof(policy));
+        }
+
+        if (policy.Global is not null &&
+            policy.Global is not FoundryToolboxMcpGlobalApprovalMode.Never &&
+            policy.Global is not FoundryToolboxMcpGlobalApprovalMode.Always)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(policy),
+                policy.Global,
+                "The global MCP approval mode is not supported.");
+        }
+
+        var overlap = always.Intersect(never, StringComparer.Ordinal).FirstOrDefault();
+        if (overlap is not null)
+        {
+            throw new ArgumentException(
+                $"MCP tool '{overlap}' cannot both always and never require approval.",
+                nameof(policy));
+        }
+
+        return new(policy.Global, always, never);
+    }
+
+    public void WriteTo(Utf8JsonWriter writer)
+    {
+        if (Global is { } global)
+        {
+            writer.WriteStringValue(global switch
+            {
+                FoundryToolboxMcpGlobalApprovalMode.Never => "never",
+                FoundryToolboxMcpGlobalApprovalMode.Always => "always",
+                _ => throw new InvalidOperationException($"Unsupported MCP approval mode '{global}'.")
+            });
+            return;
+        }
+
+        writer.WriteStartObject();
+        WriteToolFilter(writer, "always", AlwaysRequireApprovalFor);
+        WriteToolFilter(writer, "never", NeverRequireApprovalFor);
+        writer.WriteEndObject();
+    }
+
+    private static IReadOnlyList<string> NormalizeToolNames(
+        IEnumerable<string>? names,
+        string parameterName)
+    {
+        if (names is null)
+        {
+            return [];
+        }
+
+        var normalized = names
+            .Select(name =>
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(name, parameterName);
+                return name;
+            })
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return normalized;
+    }
+
+    private static void WriteToolFilter(
+        Utf8JsonWriter writer,
+        string propertyName,
+        IReadOnlyList<string> toolNames)
+    {
+        if (toolNames.Count == 0)
+        {
+            return;
+        }
+
+        writer.WriteStartObject(propertyName);
+        writer.WriteStartArray("tool_names");
+        foreach (var toolName in toolNames)
+        {
+            writer.WriteStringValue(toolName);
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
     }
 }
 

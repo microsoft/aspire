@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, FoundryRole, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, FoundryToolboxMcpGlobalApprovalMode, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -84,9 +84,31 @@ await _promptAgent.withTool(funcTool);
 // Foundry Toolbox
 const toolbox = await project.addToolbox('field-tools', { version: '7' });
 await toolbox.withDescription('Tools for field technicians.');
-await toolbox.withWebSearchTool();
-await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp');
+await toolbox.withWebSearchTool({
+    name: 'web-search',
+    description: 'Search the public web.'
+});
+await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp', {
+    serverLabel: 'inventory-server',
+    serverDescription: 'Inventory MCP server.',
+    approvalPolicy: {
+        global: FoundryToolboxMcpGlobalApprovalMode.Always
+    }
+});
+await toolbox.withMcpTool('inventory-custom', 'https://inventory.example.com/mcp', {
+    approvalPolicy: {
+        alwaysRequireApprovalFor: ['delete-item'],
+        neverRequireApprovalFor: ['get-item']
+    }
+});
 await toolbox.withAISearchTool('knowledge-base', search, 'docs');
+
+const existingInRun = await project.addToolbox('existing-in-run');
+await existingInRun.runAsExisting();
+const existingInPublish = await project.addToolbox('existing-in-publish');
+await existingInPublish.publishAsExisting();
+const alwaysExisting = await project.addToolbox('always-existing', { version: '3' });
+await alwaysExisting.asExisting();
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');

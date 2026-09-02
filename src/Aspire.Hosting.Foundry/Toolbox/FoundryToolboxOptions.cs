@@ -15,3 +15,71 @@ internal sealed class FoundryToolboxOptions
     /// </summary>
     public string? Version { get; set; }
 }
+
+/// <summary>
+/// Options for an MCP tool in a Microsoft Foundry Toolbox.
+/// </summary>
+[AspireDto]
+public sealed class FoundryToolboxMcpToolOptions
+{
+    /// <summary>
+    /// Gets or sets the label sent to the MCP server. The Toolbox tool name is used when unset.
+    /// </summary>
+    public string? ServerLabel { get; set; }
+
+    /// <summary>
+    /// Gets or sets a description of the MCP server.
+    /// </summary>
+    public string? ServerDescription { get; set; }
+
+    /// <summary>
+    /// Gets or sets the declared approval policy for tools discovered from the MCP server.
+    /// </summary>
+    /// <remarks>
+    /// The Toolbox publishes this policy as MCP discovery metadata. Applications consuming the
+    /// Toolbox remain responsible for enforcing approval before invoking a discovered tool.
+    /// </remarks>
+    public FoundryToolboxMcpApprovalPolicy? ApprovalPolicy { get; set; }
+}
+
+/// <summary>
+/// Declares which tools discovered from an MCP server require approval.
+/// </summary>
+[AspireDto]
+public sealed class FoundryToolboxMcpApprovalPolicy
+{
+    /// <summary>
+    /// Gets or sets a policy that applies to every tool exposed by the MCP server.
+    /// </summary>
+    /// <remarks>
+    /// This cannot be combined with <see cref="AlwaysRequireApprovalFor"/> or
+    /// <see cref="NeverRequireApprovalFor"/>.
+    /// </remarks>
+    public FoundryToolboxMcpGlobalApprovalMode? Global { get; set; }
+
+    /// <summary>
+    /// Gets or sets the MCP tool names that always require approval.
+    /// </summary>
+    public string[]? AlwaysRequireApprovalFor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the MCP tool names that never require approval.
+    /// </summary>
+    public string[]? NeverRequireApprovalFor { get; set; }
+}
+
+/// <summary>
+/// Declares a global approval requirement for tools discovered from an MCP server.
+/// </summary>
+public enum FoundryToolboxMcpGlobalApprovalMode
+{
+    /// <summary>
+    /// No discovered tool requires approval.
+    /// </summary>
+    Never,
+
+    /// <summary>
+    /// Every discovered tool requires approval.
+    /// </summary>
+    Always
+}

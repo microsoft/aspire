@@ -34,6 +34,59 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void RunAsExisting_UsesExistingToolboxOnlyInRunMode()
+    {
+        using var runBuilder = TestDistributedApplicationBuilder.Create();
+        var runToolbox = runBuilder.AddFoundry("run-account")
+            .AddProject("run-project")
+            .AddToolbox("run-tools")
+            .RunAsExisting();
+
+        using var publishBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var publishToolbox = publishBuilder.AddFoundry("publish-account")
+            .AddProject("publish-project")
+            .AddToolbox("publish-tools")
+            .RunAsExisting();
+
+        Assert.True(runToolbox.Resource.IsExisting);
+        Assert.False(publishToolbox.Resource.IsExisting);
+    }
+
+    [Fact]
+    public void PublishAsExisting_UsesExistingToolboxOnlyInPublishMode()
+    {
+        using var runBuilder = TestDistributedApplicationBuilder.Create();
+        var runToolbox = runBuilder.AddFoundry("run-account")
+            .AddProject("run-project")
+            .AddToolbox("run-tools")
+            .PublishAsExisting();
+
+        using var publishBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var publishToolbox = publishBuilder.AddFoundry("publish-account")
+            .AddProject("publish-project")
+            .AddToolbox("publish-tools")
+            .PublishAsExisting();
+
+        Assert.False(runToolbox.Resource.IsExisting);
+        Assert.True(publishToolbox.Resource.IsExisting);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void AsExisting_UsesExistingToolboxInBothModes(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var toolbox = builder.AddFoundry("account")
+            .AddProject("project")
+            .AddToolbox("field-tools")
+            .AsExisting();
+
+        Assert.True(toolbox.Resource.IsExisting);
+        Assert.Empty(toolbox.Resource.Tools);
+    }
+
+    [Fact]
     public void WithToolMethods_AddToolDefinitions()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -215,6 +268,24 @@ public class ToolboxTests
     }
 
     [Fact]
+    public async Task WebSearchToolDefinition_IncludesDescriptionWhenConfigured()
+    {
+        var tool = new FoundryToolboxWebSearchToolDefinition(
+            "web-search",
+            "Search the public web.");
+
+        var projectTool = await tool.ToProjectsAgentToolAsync(CancellationToken.None);
+
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Equal(
+            """{"type":"web_search","name":"web-search","description":"Search the public web."}""",
+            json.ToString());
+    }
+
+    [Fact]
     public async Task AzureAISearchToolDefinition_ConvertsToAzureAISearchTool()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -267,6 +338,98 @@ public class ToolboxTests
     }
 
     [Fact]
+    public async Task McpToolDefinition_IncludesServerMetadataAndGlobalApproval()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool(
+                "inventory",
+                "https://inventory.example.com/mcp",
+                new FoundryToolboxMcpToolOptions
+                {
+                    ServerLabel = "inventory-server",
+                    ServerDescription = "Inventory MCP server.",
+                    ApprovalPolicy = new()
+                    {
+                        Global = FoundryToolboxMcpGlobalApprovalMode.Always
+                    }
+                });
+        var definition = Assert.IsType<FoundryToolboxMcpToolDefinition>(
+            Assert.Single(toolbox.Resource.Tools));
+
+        var projectTool = await definition.ToProjectsAgentToolAsync(CancellationToken.None);
+
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Equal(
+            """{"type":"mcp","server_label":"inventory-server","server_url":"https://inventory.example.com/mcp","server_description":"Inventory MCP server.","require_approval":"always"}""",
+            json.ToString());
+    }
+
+    [Fact]
+    public async Task McpToolDefinition_IncludesCanonicalCustomApproval()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool(
+                "inventory",
+                "https://inventory.example.com/mcp",
+                new FoundryToolboxMcpToolOptions
+                {
+                    ApprovalPolicy = new()
+                    {
+                        AlwaysRequireApprovalFor = ["write", "delete", "write"],
+                        NeverRequireApprovalFor = ["read"]
+                    }
+                });
+        var definition = Assert.IsType<FoundryToolboxMcpToolDefinition>(
+            Assert.Single(toolbox.Resource.Tools));
+
+        var projectTool = await definition.ToProjectsAgentToolAsync(CancellationToken.None);
+
+        var json = ModelReaderWriter.Write(
+            projectTool,
+            ModelReaderWriterOptions.Json,
+            AzureAIProjectsAgentsContext.Default);
+        Assert.Equal(
+            """{"type":"mcp","server_label":"inventory","server_url":"https://inventory.example.com/mcp","require_approval":{"always":{"tool_names":["delete","write"]},"never":{"tool_names":["read"]}}}""",
+            json.ToString());
+    }
+
+    [Fact]
+    public void WithMcpTool_RejectsMixedGlobalAndCustomApproval()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithMcpTool(
+                    "inventory",
+                    "https://inventory.example.com/mcp",
+                    new FoundryToolboxMcpToolOptions
+                    {
+                        ApprovalPolicy = new()
+                        {
+                            Global = FoundryToolboxMcpGlobalApprovalMode.Always,
+                            NeverRequireApprovalFor = ["read"]
+                        }
+                    }));
+
+        Assert.Contains(
+            "cannot be combined with custom tool-name filters",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task McpToolDefinition_ThrowsWhenEndpointUnresolved()
     {
         // Construct an MCP tool definition directly with a reference expression that resolves to
@@ -294,7 +457,7 @@ public class ToolboxTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
-        Assert.Contains("publicly reachable absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Foundry-reachable absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -307,7 +470,7 @@ public class ToolboxTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
 
-        Assert.Contains("publicly reachable", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Foundry-reachable", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -322,7 +485,7 @@ public class ToolboxTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
 
-        Assert.Contains("publicly reachable", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Foundry-reachable", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -497,6 +660,48 @@ public class ToolboxTests
         // A literal-URI MCP tool has no resource references to walk, so the configuration pass
         // should leave the existing dependency list untouched.
         Assert.Equal(dependsOnBefore, toolboxDeploy.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task AsExisting_PublishConfigurationAnnotation_AddsNoToolDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var mcp = builder.AddContainer("mcp", "ghcr.io/example/mcp")
+            .WithHttpEndpoint(targetPort: 8080, name: "http");
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool("inventory", mcp.GetEndpoint("http"))
+            .AsExisting();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolboxStepAnnotation = Assert.Single(toolbox.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        var toolboxSteps = (await toolboxStepAnnotation.CreateStepsAsync(new PipelineStepFactoryContext
+        {
+            PipelineContext = CreatePipelineContext(app, DistributedApplicationOperation.Publish),
+            Resource = toolbox.Resource
+        })).ToList();
+        var toolboxDeploy = Assert.Single(toolboxSteps, step => step.Name == "deploy-field-tools");
+        var mcpDeploy = new PipelineStep
+        {
+            Name = "deploy-mcp",
+            Action = _ => Task.CompletedTask,
+            Resource = mcp.Resource,
+            Tags = { WellKnownPipelineTags.DeployCompute },
+        };
+        var dependenciesBefore = toolboxDeploy.DependsOnSteps.ToArray();
+
+        var configurationAnnotation = Assert.Single(
+            toolbox.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
+        await configurationAnnotation.Callback(new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Model = model,
+            Steps = [toolboxDeploy, mcpDeploy]
+        });
+
+        Assert.Equal(dependenciesBefore, toolboxDeploy.DependsOnSteps);
     }
 
     private static PipelineContext CreatePipelineContext(DistributedApplication app, DistributedApplicationOperation operation)

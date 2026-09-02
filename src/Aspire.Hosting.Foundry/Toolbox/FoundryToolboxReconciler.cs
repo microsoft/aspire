@@ -77,6 +77,19 @@ internal sealed class FoundryToolboxDeploymentDefinition
                 $"Toolbox '{name}' contains duplicate tool names: {string.Join(", ", duplicateToolNames)}.");
         }
 
+        var duplicateMcpServerLabels = tools
+            .Where(tool => tool.McpServerLabel is not null)
+            .GroupBy(tool => tool.McpServerLabel!, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (duplicateMcpServerLabels.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Toolbox '{name}' contains duplicate MCP server labels: {string.Join(", ", duplicateMcpServerLabels)}.");
+        }
+
         var maximumUserMetadataEntries = MaximumMetadataEntries - s_reservedMetadataKeys.Length;
         if (metadata.Count > maximumUserMetadataEntries)
         {
@@ -142,7 +155,8 @@ internal sealed class FoundryToolboxDeploymentDefinition
 internal sealed record ResolvedFoundryToolboxTool(
     string Name,
     ProjectsAgentTool Tool,
-    string CanonicalConfiguration);
+    string CanonicalConfiguration,
+    string? McpServerLabel = null);
 
 internal sealed record FoundryToolboxState(
     string DefaultVersion,
@@ -296,27 +310,11 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         if (existing is null)
         {
             var created = await administration.CreateVersionAsync(definition, cancellationToken).ConfigureAwait(false);
-            // Another deployment can create the same Toolbox between the read and create calls.
-            // Explicitly promote our immutable version so the unversioned consumer endpoint serves
-            // the configuration this deployment just reconciled.
-            await administration.PromoteVersionAsync(
-                definition.Name,
-                created,
-                cancellationToken).ConfigureAwait(false);
+            await PromoteOwnedVersionAsync(definition, created, cancellationToken).ConfigureAwait(false);
             return new(created, FoundryToolboxReconcileAction.CreatedAndPromoted);
         }
 
-        if (!existing.Default.Metadata.TryGetValue(
-                FoundryToolboxDeploymentDefinition.ManagedByMetadataKey,
-                out var managedBy) ||
-            !string.Equals(
-                managedBy,
-                FoundryToolboxDeploymentDefinition.ManagedByMetadataValue,
-                StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Toolbox '{definition.Name}' already exists but is not managed by Aspire. No changes were made.");
-        }
+        ValidateOwnedDefault(definition.Name, existing);
 
         if (existing.Default.Metadata.TryGetValue(
                 FoundryToolboxDeploymentDefinition.ConfigurationHashMetadataKey,
@@ -340,8 +338,8 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
             string.Equals(versionHash, definition.ConfigurationHash, StringComparison.Ordinal));
         if (reusableVersion is not null)
         {
-            await administration.PromoteVersionAsync(
-                definition.Name,
+            await PromoteOwnedVersionAsync(
+                definition,
                 reusableVersion.Version,
                 cancellationToken).ConfigureAwait(false);
             return new(reusableVersion.Version, FoundryToolboxReconcileAction.Promoted);
@@ -350,13 +348,140 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         var updated = await administration.CreateVersionAsync(definition, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(existing.DefaultVersion, updated, StringComparison.Ordinal))
         {
-            await administration.PromoteVersionAsync(
-                definition.Name,
-                updated,
-                cancellationToken).ConfigureAwait(false);
+            await PromoteOwnedVersionAsync(definition, updated, cancellationToken).ConfigureAwait(false);
         }
 
         return new(updated, FoundryToolboxReconcileAction.CreatedAndPromoted);
+    }
+
+    private async Task PromoteOwnedVersionAsync(
+        FoundryToolboxDeploymentDefinition definition,
+        string version,
+        CancellationToken cancellationToken)
+    {
+        // Toolbox administration has no conditional update or ETag support. Re-read immediately
+        // before promotion so a concurrent writer cannot silently replace a foreign default, then
+        // verify the write before reporting success. This is coordination, not an atomic lock:
+        // another writer can still update the Toolbox after the final read.
+        var before = await administration.GetAsync(definition.Name, cancellationToken).ConfigureAwait(false)
+            ?? throw CreateConcurrentChangeException(
+                definition.Name,
+                $"version '{version}' was created or selected, but the Toolbox is no longer visible");
+
+        ValidateOwnedDefault(definition.Name, before, concurrentChange: true);
+        ValidatePromotionTarget(definition, before, version);
+
+        await administration.PromoteVersionAsync(
+            definition.Name,
+            version,
+            cancellationToken).ConfigureAwait(false);
+
+        var after = await administration.GetAsync(definition.Name, cancellationToken).ConfigureAwait(false)
+            ?? throw CreateConcurrentChangeException(
+                definition.Name,
+                "the Toolbox was no longer visible after promotion");
+
+        ValidateOwnedDefault(definition.Name, after, concurrentChange: true);
+        ValidatePromotionTarget(definition, after, version);
+        if (!string.Equals(after.DefaultVersion, version, StringComparison.Ordinal))
+        {
+            throw CreateConcurrentChangeException(
+                definition.Name,
+                $"version '{version}' was promoted, but version '{after.DefaultVersion}' is now the default");
+        }
+    }
+
+    private static void ValidateOwnedDefault(
+        string name,
+        FoundryToolboxState state,
+        bool concurrentChange = false)
+    {
+        if (IsAspireManaged(state.Default))
+        {
+            return;
+        }
+
+        if (concurrentChange)
+        {
+            throw CreateConcurrentChangeException(
+                name,
+                $"default version '{state.DefaultVersion}' is not managed by Aspire");
+        }
+
+        throw new InvalidOperationException(
+            $"Toolbox '{name}' already exists but is not managed by Aspire. No changes were made.");
+    }
+
+    private static void ValidatePromotionTarget(
+        FoundryToolboxDeploymentDefinition definition,
+        FoundryToolboxState state,
+        string version)
+    {
+        var target = state.Versions.FirstOrDefault(candidate =>
+            string.Equals(candidate.Version, version, StringComparison.Ordinal));
+        if (target is null)
+        {
+            throw CreateConcurrentChangeException(
+                definition.Name,
+                $"target version '{version}' is no longer visible");
+        }
+
+        if (!IsAspireManaged(target) ||
+            !target.Metadata.TryGetValue(
+                FoundryToolboxDeploymentDefinition.ConfigurationHashMetadataKey,
+                out var configurationHash) ||
+            !string.Equals(configurationHash, definition.ConfigurationHash, StringComparison.Ordinal))
+        {
+            throw CreateConcurrentChangeException(
+                definition.Name,
+                $"target version '{version}' no longer has the expected Aspire ownership and configuration");
+        }
+    }
+
+    private static bool IsAspireManaged(FoundryToolboxVersionState version) =>
+        version.Metadata.TryGetValue(
+            FoundryToolboxDeploymentDefinition.ManagedByMetadataKey,
+            out var managedBy) &&
+        string.Equals(
+            managedBy,
+            FoundryToolboxDeploymentDefinition.ManagedByMetadataValue,
+            StringComparison.Ordinal);
+
+    private static InvalidOperationException CreateConcurrentChangeException(
+        string name,
+        string detail) =>
+        new(
+            $"Toolbox '{name}' changed concurrently: {detail}. No further changes were made.");
+}
+
+internal sealed class FoundryToolboxExistingResourceValidator(IFoundryToolboxAdministration administration)
+{
+    public async Task<string> ValidateAsync(
+        string name,
+        string? version,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var existing = await administration.GetAsync(name, cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            throw new InvalidOperationException($"Toolbox '{name}' does not exist.");
+        }
+
+        if (string.IsNullOrEmpty(version))
+        {
+            return existing.DefaultVersion;
+        }
+
+        if (!existing.Versions.Any(candidate =>
+            string.Equals(candidate.Version, version, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                $"Toolbox '{name}' does not contain version '{version}'.");
+        }
+
+        return version;
     }
 }
 
@@ -368,5 +493,6 @@ internal enum FoundryToolboxReconcileAction
 {
     Reused,
     Promoted,
-    CreatedAndPromoted
+    CreatedAndPromoted,
+    ValidatedExisting
 }

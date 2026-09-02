@@ -57,7 +57,9 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 steps.Add(new PipelineStep
                 {
                     Name = $"deploy-{Name}-before-start",
-                    Description = $"Reconciles Toolbox {Name} after the application starts.",
+                    Description = IsExisting
+                        ? $"Validates existing Toolbox {Name} after the application starts."
+                        : $"Reconciles Toolbox {Name} after the application starts.",
                     Action = DeployBeforeStartAsync,
                     RequiredBySteps = [BeforeStartStepName],
                     Resource = this,
@@ -68,17 +70,21 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
             steps.Add(new PipelineStep
             {
                 Name = $"deploy-{Name}",
-                Description = $"Reconciles Toolbox {Name}.",
+                Description = IsExisting
+                    ? $"Validates existing Toolbox {Name}."
+                    : $"Reconciles Toolbox {Name}.",
                 Action = async stepContext =>
                 {
-                    var result = await ReconcileAsync(
+                    var result = await DeployAsync(
                         stepContext,
                         message => stepContext.Logger.LogWarning("{Message}", message),
                         stepContext.CancellationToken).ConfigureAwait(false);
                     stepContext.ReportingStep.Log(
                         LogLevel.Information,
                         new MarkdownString(
-                            $"Successfully reconciled **{Name}** as Foundry Toolbox (version {result.Version}, action {result.Action})"));
+                            IsExisting
+                                ? $"Successfully validated **{Name}** as an existing Foundry Toolbox (version {result.Version})"
+                                : $"Successfully reconciled **{Name}** as Foundry Toolbox (version {result.Version}, action {result.Action})"));
                 },
                 Tags = [WellKnownPipelineTags.DeployCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
@@ -97,6 +103,11 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         // by an MCP endpoint before the Toolbox version is created.
         Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
+            if (IsExisting)
+            {
+                return Task.CompletedTask;
+            }
+
             var toolboxDeploySteps = context.GetSteps(this, WellKnownPipelineTags.DeployCompute);
 
             foreach (var referencedResource in GetMcpReferencedResources(context.Model))
@@ -154,6 +165,9 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     /// </summary>
     internal IReadOnlyList<FoundryToolboxToolDefinition> Tools => _tools;
 
+    internal bool IsExisting =>
+        Annotations.OfType<FoundryToolboxExistingResourceAnnotation>().LastOrDefault() is not null;
+
     /// <summary>
     /// Gets the Toolbox MCP endpoint URI expression.
     /// </summary>
@@ -210,7 +224,34 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
     }
 
-    private async Task<FoundryToolboxReconcileResult> ReconcileAsync(
+    private async Task<FoundryToolboxReconcileResult> DeployAsync(
+        PipelineStepContext context,
+        Action<string> logRetry,
+        CancellationToken cancellationToken)
+    {
+        var administration = await CreateAdministrationAsync(
+            context,
+            logRetry,
+            cancellationToken).ConfigureAwait(false);
+
+        if (IsExisting)
+        {
+            var version = await new FoundryToolboxExistingResourceValidator(administration)
+                .ValidateAsync(Name, Version, cancellationToken).ConfigureAwait(false);
+            DeployedVersion.Set(version);
+
+            return new(version, FoundryToolboxReconcileAction.ValidatedExisting);
+        }
+
+        var definition = await CreateDeploymentDefinitionAsync(cancellationToken).ConfigureAwait(false);
+        var result = await new FoundryToolboxReconciler(administration)
+            .ReconcileAsync(definition, cancellationToken).ConfigureAwait(false);
+        DeployedVersion.Set(result.Version);
+
+        return result;
+    }
+
+    private async Task<IFoundryToolboxAdministration> CreateAdministrationAsync(
         PipelineStepContext context,
         Action<string> logRetry,
         CancellationToken cancellationToken)
@@ -237,12 +278,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 logRetry);
         }
 
-        var definition = await CreateDeploymentDefinitionAsync(cancellationToken).ConfigureAwait(false);
-        var result = await new FoundryToolboxReconciler(administration)
-            .ReconcileAsync(definition, cancellationToken).ConfigureAwait(false);
-        DeployedVersion.Set(result.Version);
-
-        return result;
+        return administration;
     }
 
     private Task DeployBeforeStartAsync(PipelineStepContext context)
@@ -299,27 +335,39 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
             await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Reconciling Toolbox", KnownResourceStateStyles.Info)
+                State = new(
+                    IsExisting ? "Validating existing Toolbox" : "Reconciling Toolbox",
+                    KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
 
-            var result = await ReconcileAsync(
+            var result = await DeployAsync(
                 context,
                 message => logger.LogWarning("{Message}", message),
                 cancellationToken).ConfigureAwait(false);
 
-            logger.LogInformation(
-                "Reconciled Toolbox '{ToolboxName}' at version {Version} with action {Action}.",
-                Name,
-                result.Version,
-                result.Action);
+            if (IsExisting)
+            {
+                logger.LogInformation(
+                    "Validated existing Toolbox '{ToolboxName}' at version {Version}.",
+                    Name,
+                    result.Version);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Reconciled Toolbox '{ToolboxName}' at version {Version} with action {Action}.",
+                    Name,
+                    result.Version,
+                    result.Action);
+            }
 
             await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Running", KnownResourceStateStyles.Success),
+                State = new(KnownResourceStates.Running, KnownResourceStateStyles.Success),
                 Properties =
                 [
                     new("Toolbox version", result.Version),
-                    new("Reconciliation action", result.Action.ToString())
+                    new(IsExisting ? "Validation action" : "Reconciliation action", result.Action.ToString())
                 ]
             }).ConfigureAwait(false);
         }
@@ -328,11 +376,18 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to reconcile Toolbox '{ToolboxName}'.", Name);
+            if (IsExisting)
+            {
+                logger.LogError(ex, "Failed to validate existing Toolbox '{ToolboxName}'.", Name);
+            }
+            else
+            {
+                logger.LogError(ex, "Failed to reconcile Toolbox '{ToolboxName}'.", Name);
+            }
 
             await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
             {
-                State = new("Failed to reconcile", KnownResourceStateStyles.Error)
+                State = new(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
         }
     }
@@ -352,6 +407,11 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 Parent.Name,
                 KnownResourceStates.Running,
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        if (IsExisting)
+        {
+            return;
         }
 
         var connectionProvisioningTasks = _tools
@@ -423,6 +483,8 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
     }
 }
+
+internal sealed class FoundryToolboxExistingResourceAnnotation : IResourceAnnotation;
 
 internal sealed class FoundryToolboxFeaturesPolicy : PipelinePolicy
 {

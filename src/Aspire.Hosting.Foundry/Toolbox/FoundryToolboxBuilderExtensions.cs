@@ -67,21 +67,97 @@ public static class FoundryToolboxBuilderExtensions
     }
 
     /// <summary>
+    /// Uses an existing Microsoft Foundry Toolbox during local runs and reconciles it during deployment.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Toolbox.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Existing mode validates that the remote Toolbox and optional pinned
+    /// <see cref="FoundryToolboxResource.Version"/> exist without resolving locally modeled tools or
+    /// mutating the Toolbox.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<FoundryToolboxResource> RunAsExisting(
+        this IResourceBuilder<FoundryToolboxResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Reconciles a Microsoft Foundry Toolbox during local runs and uses an existing Toolbox during deployment.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Toolbox.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Existing mode validates that the remote Toolbox and optional pinned
+    /// <see cref="FoundryToolboxResource.Version"/> exist without resolving locally modeled tools or
+    /// mutating the Toolbox.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<FoundryToolboxResource> PublishAsExisting(
+        this IResourceBuilder<FoundryToolboxResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Uses an existing Microsoft Foundry Toolbox during local runs and deployment.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Toolbox.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Existing mode validates that the remote Toolbox and optional pinned
+    /// <see cref="FoundryToolboxResource.Version"/> exist without resolving locally modeled tools or
+    /// mutating the Toolbox.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<FoundryToolboxResource> AsExisting(
+        this IResourceBuilder<FoundryToolboxResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+    }
+
+    /// <summary>
     /// Adds a web search tool definition to the Toolbox.
     /// </summary>
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
+    /// <param name="description">An optional description of the web search tool.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<FoundryToolboxResource> WithWebSearchTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
-        string name = "web-search")
+        string name = "web-search",
+        string? description = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (description is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        }
 
-        builder.Resource.AddTool(new FoundryToolboxWebSearchToolDefinition(name));
+        builder.Resource.AddTool(new FoundryToolboxWebSearchToolDefinition(name, description));
 
         return builder;
     }
@@ -112,24 +188,26 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint URI.</param>
+    /// <param name="options">Optional MCP server metadata and approval policy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        string endpoint)
+        string endpoint,
+        FoundryToolboxMcpToolOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(endpoint);
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
-            !FoundryToolboxMcpToolDefinition.IsPublicHttpsEndpoint(endpointUri))
+            !FoundryToolboxMcpToolDefinition.IsFoundryReachableHttpsEndpoint(endpointUri))
         {
             throw new ArgumentException(
-                "The MCP endpoint must be a publicly reachable absolute HTTPS URI.",
+                "The MCP endpoint must be a Foundry-reachable absolute HTTPS URI.",
                 nameof(endpoint));
         }
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpointUri.AbsoluteUri}"));
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpointUri.AbsoluteUri}"), options);
     }
 
     /// <summary>
@@ -138,8 +216,9 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint.</param>
+    /// <param name="options">Optional MCP server metadata and approval policy.</param>
     /// <remarks>
-    /// During local development, the endpoint must resolve to a publicly reachable HTTPS URI, such
+    /// During local development, the endpoint must resolve to a Foundry-reachable HTTPS URI, such
     /// as an anonymous development tunnel. A localhost endpoint cannot be reached by the Foundry
     /// data plane. Resource endpoints deployed with public HTTPS ingress can be referenced directly
     /// when using <c>aspire deploy</c>.
@@ -150,11 +229,12 @@ public static class FoundryToolboxBuilderExtensions
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        EndpointReference endpoint)
+        EndpointReference endpoint,
+        FoundryToolboxMcpToolOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"));
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"), options);
     }
 
     /// <summary>
@@ -166,24 +246,26 @@ public static class FoundryToolboxBuilderExtensions
     /// pointing at a resource endpoint, or a <see cref="ReferenceExpression"/> for cases where the
     /// endpoint URL needs to be composed (for example, appending the MCP server's mount path or
     /// chaining through a public ingress like a dev tunnel).</param>
+    /// <param name="options">Optional MCP server metadata and approval policy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withMcpTool")]
     internal static IResourceBuilder<FoundryToolboxResource> WithMcpToolForPolyglot(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        [AspireUnion(typeof(string), typeof(EndpointReference), typeof(ReferenceExpression))] object endpoint)
+        [AspireUnion(typeof(string), typeof(EndpointReference), typeof(ReferenceExpression))] object endpoint,
+        FoundryToolboxMcpToolOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
         return endpoint switch
         {
-            string endpointString => builder.WithMcpTool(name, endpointString),
-            EndpointReference endpointReference => builder.WithMcpTool(name, endpointReference),
+            string endpointString => builder.WithMcpTool(name, endpointString, options),
+            EndpointReference endpointReference => builder.WithMcpTool(name, endpointReference, options),
             // ReferenceExpression lets polyglot callers compose URLs (e.g. `refExpr\`${endpoint}/mcp\``)
             // because the polyglot type system can't express a templated string built from a typed
             // endpoint reference any other way.
-            ReferenceExpression endpointExpression => builder.WithMcpTool(name, endpointExpression),
+            ReferenceExpression endpointExpression => builder.WithMcpTool(name, endpointExpression, options),
             _ => throw new ArgumentException("Endpoint must be a string, endpoint reference, or reference expression.", nameof(endpoint))
         };
     }
@@ -243,13 +325,14 @@ public static class FoundryToolboxBuilderExtensions
     private static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        ReferenceExpression endpointExpression)
+        ReferenceExpression endpointExpression,
+        FoundryToolboxMcpToolOptions? options)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(endpointExpression);
 
-        builder.Resource.AddTool(new FoundryToolboxMcpToolDefinition(name, endpointExpression));
+        builder.Resource.AddTool(new FoundryToolboxMcpToolDefinition(name, endpointExpression, options));
 
         return builder;
     }
