@@ -150,19 +150,21 @@ internal static class NuGetConfigComposer
             return string.Equals(GetAttributeValue(first, "pattern"), GetAttributeValue(second, "pattern"), StringComparison.OrdinalIgnoreCase);
         }
 
-        var identityAttribute =
-            string.Equals(itemName, "author", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(itemName, "repository", StringComparison.OrdinalIgnoreCase)
-                ? "name"
-                : string.Equals(itemName, "certificate", StringComparison.OrdinalIgnoreCase)
-                    ? "fingerprint"
-                    : string.Equals(itemName, "fileCert", StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(itemName, "storeCert", StringComparison.OrdinalIgnoreCase)
-                        ? "packageSource"
-                        : null;
+        // Keep item identities aligned with NuGet.Configuration's SettingItem.Equals implementations.
+        // In particular, repository identity is its service index rather than its display name.
+        // https://github.com/NuGet/NuGet.Client/tree/dev/src/NuGet.Core/NuGet.Configuration/Settings/Items
+        var identityAttribute = itemName switch
+        {
+            _ when string.Equals(itemName, "repository", StringComparison.OrdinalIgnoreCase) => "serviceIndex",
+            _ when string.Equals(itemName, "author", StringComparison.OrdinalIgnoreCase) => "name",
+            _ when string.Equals(itemName, "certificate", StringComparison.OrdinalIgnoreCase) => "fingerprint",
+            _ when string.Equals(itemName, "fileCert", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(itemName, "storeCert", StringComparison.OrdinalIgnoreCase) => "packageSource",
+            _ => null
+        };
 
         return identityAttribute is null ||
-            string.Equals(GetAttributeValue(first, identityAttribute), GetAttributeValue(second, identityAttribute), StringComparison.OrdinalIgnoreCase);
+            string.Equals(GetAttributeValue(first, identityAttribute), GetAttributeValue(second, identityAttribute), StringComparison.Ordinal);
     }
 
     private static bool IsUnknownItem(string sectionName, XElement item)
