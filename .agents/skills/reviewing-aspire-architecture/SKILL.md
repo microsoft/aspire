@@ -18,7 +18,9 @@ Changed file location is routing information after this skill is selected, not a
 
 Outside the post-review escalation path, the user's primary requested action must be architectural review. Asking to understand, explain, compare, or design something does not qualify, even when the request references a PR or diff.
 
-**Don't use** this skill for implementation, debugging, testing, routine code changes, post-change validation, design questions or brainstorming, explanatory investigation, generic PR review, doc/config-only PRs, CI failures, flaky tests, or API surface review. Use `code-review`, `ci-test-failures`, `fix-flaky-test`, or `api-review` where appropriate.
+**Don't use** this skill for implementation, debugging, testing, routine code changes, post-change validation, design questions or brainstorming, explanatory investigation, generic PR review, CI failures, flaky tests, or API surface review. Use `code-review`, `ci-test-failures`, `fix-flaky-test`, or `api-review` where appropriate.
+
+For ordinary review routing, use `code-review` for doc/config-only PRs. This does not prevent a direct invocation when the user explicitly requests a deep architectural or pattern review of such a diff.
 
 ## Invocation Guard
 
