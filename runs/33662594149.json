@@ -1,0 +1,29 @@
+{
+  "run_id": 33662594149,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33662594149",
+  "analyzed_at": "2026-09-02T18:13:54Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19865,
+    "title": "Limit Aspire architecture review over-invocation",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-limit-architecture-review-invocation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19865"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 100360439728,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33662594149/job/100360439728",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 on the 'Run extension E2E tests' step; no TRX test failures were extracted and job logs were unavailable. The PR only modifies .agents/skills/*.md, .github/agents/*.md, and AGENTS.md files unrelated to the VS Code extension or its E2E tests. This matches a known recurring flaky shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}

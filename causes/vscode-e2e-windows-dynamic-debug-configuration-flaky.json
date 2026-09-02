@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (Windows, dynamic-debug-configuration) shard fails with generic exit code 1, unrelated to PR changes",
   "test_name": "VS Code extension E2E (Windows, dynamic-debug-configuration)",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Windows, dynamic-debug-configuration)' shard.",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Windows, dynamic-debug-configuration)' shard, unrelated to PR changes which only touch .agents/skills and .github/agents files.",
   "occurrences": [
     {
       "run_id": 32505042756,
@@ -25,6 +25,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
       "pr_number": 19820,
       "observed_at": "2026-09-02T16:59:04Z"
+    },
+    {
+      "run_id": 33662594149,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33662594149",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19865,
+      "observed_at": "2026-09-02T18:13:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"
