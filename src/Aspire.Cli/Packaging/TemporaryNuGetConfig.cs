@@ -81,7 +81,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             document = await LoadAsync(configFile, cancellationToken).ConfigureAwait(false);
             EnableMappedSources(document, mappings);
             await SaveAsync(document, configFile, cancellationToken).ConfigureAwait(false);
-            return new TemporaryNuGetConfig(configFile, ContainsCredentials(document));
+            return new TemporaryNuGetConfig(configFile, DocumentContainsCredentialMaterial(document));
         }
         catch
         {
@@ -219,7 +219,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         await document.SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
     }
 
-    private static bool ContainsCredentials(XDocument document)
+    internal static bool DocumentContainsCredentialMaterial(XDocument document)
     {
         var configuration = document.Root;
         if (configuration?.Elements().Any(static element =>
@@ -236,9 +236,12 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             ?.Elements()
             .Any(static element =>
                 string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase) &&
-                element.Attributes().Any(attribute =>
-                    string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase) &&
-                    attribute.Value.Contains("password", StringComparison.OrdinalIgnoreCase))) == true)
+                (element.Attributes().Any(attribute =>
+                     string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase) &&
+                     attribute.Value.Contains("password", StringComparison.OrdinalIgnoreCase)) ||
+                 element.Attributes().Any(attribute =>
+                     string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase) &&
+                     PackageSourceOverrideMappings.HasCredentialMaterial(attribute.Value)))) == true)
         {
             return true;
         }

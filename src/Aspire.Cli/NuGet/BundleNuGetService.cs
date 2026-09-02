@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -99,8 +102,9 @@ internal sealed class BundleNuGetService : INuGetService
             throw new ArgumentException("At least one package is required", nameof(packages));
         }
 
-        // Compute a hash for the package set to create a unique restore location.
-        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath, sources);
+        // Compute a hash for the package set and all effective restore inputs to create a unique restore location.
+        var nugetConfigCacheIdentity = await GetNuGetConfigCacheIdentityAsync(nugetConfigPath, ct).ConfigureAwait(false);
+        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath, sources, nugetConfigCacheIdentity);
         var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
         var restoreDir = Path.Combine(restoreCacheDirectory, packageHash);
         var objDir = Path.Combine(restoreDir, "obj");
@@ -300,7 +304,8 @@ internal sealed class BundleNuGetService : INuGetService
         string tfm,
         string? runtimeIdentifier,
         string? managedPath = null,
-        IEnumerable<string>? sources = null)
+        IEnumerable<string>? sources = null,
+        string? nugetConfigCacheIdentity = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
@@ -310,10 +315,43 @@ internal sealed class BundleNuGetService : INuGetService
         {
             content += $";sources:{string.Join("|", sources.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}";
         }
+        if (nugetConfigCacheIdentity is not null)
+        {
+            content += $";config:{nugetConfigCacheIdentity}";
+        }
 
         // Use SHA256 for stable hash across processes/runtimes
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+    }
+
+    private static async Task<string?> GetNuGetConfigCacheIdentityAsync(string? nugetConfigPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(nugetConfigPath))
+        {
+            return null;
+        }
+
+        await using var stream = new FileStream(
+            nugetConfigPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            useAsync: true);
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        {
+            Async = true,
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null
+        });
+        var document = await XDocument.LoadAsync(reader, LoadOptions.None, cancellationToken).ConfigureAwait(false);
+
+        // Never derive a persistent cache key from credentials. A fresh opaque identity keeps the
+        // resulting manifest available to this invocation without making it reusable by a later one.
+        return TemporaryNuGetConfig.DocumentContainsCredentialMaterial(document)
+            ? $"credentialed:{Guid.NewGuid():N}"
+            : document.ToString(SaveOptions.DisableFormatting);
     }
 
     private static string GetManagedToolFingerprint(string? managedPath)
