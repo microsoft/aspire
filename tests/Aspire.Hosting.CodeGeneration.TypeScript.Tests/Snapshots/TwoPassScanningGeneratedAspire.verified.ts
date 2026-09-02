@@ -26,7 +26,7 @@ import {
     refExpr,
     AspireDict,
     AspireList,
-    createFluentPromiseClass,
+    createFluentPromiseClass as $aspireCreateFluentPromiseClass,
     InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
@@ -43,7 +43,7 @@ export type {
 
 import type {
     Awaitable,
-    FluentPromiseTransitions,
+    FluentPromiseTransitions as $aspireFluentPromiseTransitions,
     InteractionInput,
     InteractionInputCollection,
     InteractionInputCollectionPromise,
@@ -1997,7 +1997,7 @@ class AfterPublishEventImpl implements AfterPublishEvent {
 }
 
 /** @internal */
-const AfterPublishEventPromiseImpl = createFluentPromiseClass<AfterPublishEvent, AfterPublishEventPromise>((): FluentPromiseTransitions => ({
+const AfterPublishEventPromiseImpl = $aspireCreateFluentPromiseClass<AfterPublishEvent, AfterPublishEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
 }));
@@ -2072,7 +2072,7 @@ class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
 }
 
 /** @internal */
-const AfterResourcesCreatedEventPromiseImpl = createFluentPromiseClass<AfterResourcesCreatedEvent, AfterResourcesCreatedEventPromise>((): FluentPromiseTransitions => ({
+const AfterResourcesCreatedEventPromiseImpl = $aspireCreateFluentPromiseClass<AfterResourcesCreatedEvent, AfterResourcesCreatedEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
 }));
@@ -2133,7 +2133,7 @@ class BeforePublishEventImpl implements BeforePublishEvent {
 }
 
 /** @internal */
-const BeforePublishEventPromiseImpl = createFluentPromiseClass<BeforePublishEvent, BeforePublishEventPromise>((): FluentPromiseTransitions => ({
+const BeforePublishEventPromiseImpl = $aspireCreateFluentPromiseClass<BeforePublishEvent, BeforePublishEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
 }));
@@ -2202,7 +2202,7 @@ class BeforeResourceStartedEventImpl implements BeforeResourceStartedEvent {
 }
 
 /** @internal */
-const BeforeResourceStartedEventPromiseImpl = createFluentPromiseClass<BeforeResourceStartedEvent, BeforeResourceStartedEventPromise>((): FluentPromiseTransitions => ({
+const BeforeResourceStartedEventPromiseImpl = $aspireCreateFluentPromiseClass<BeforeResourceStartedEvent, BeforeResourceStartedEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -2277,7 +2277,7 @@ class BeforeStartEventImpl implements BeforeStartEvent {
 }
 
 /** @internal */
-const BeforeStartEventPromiseImpl = createFluentPromiseClass<BeforeStartEvent, BeforeStartEventPromise>((): FluentPromiseTransitions => ({
+const BeforeStartEventPromiseImpl = $aspireCreateFluentPromiseClass<BeforeStartEvent, BeforeStartEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
 }));
@@ -2376,7 +2376,7 @@ class CommandLineArgsCallbackContextImpl implements CommandLineArgsCallbackConte
 }
 
 /** @internal */
-const CommandLineArgsCallbackContextPromiseImpl = createFluentPromiseClass<CommandLineArgsCallbackContext, CommandLineArgsCallbackContextPromise>((): FluentPromiseTransitions => ({
+const CommandLineArgsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<CommandLineArgsCallbackContext, CommandLineArgsCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["args"]: [() => CommandLineArgsEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
@@ -2438,7 +2438,7 @@ class CommandLineArgsEditorImpl implements CommandLineArgsEditor {
 }
 
 /** @internal */
-const CommandLineArgsEditorPromiseImpl = createFluentPromiseClass<CommandLineArgsEditor, CommandLineArgsEditorPromise>((): FluentPromiseTransitions => ({
+const CommandLineArgsEditorPromiseImpl = $aspireCreateFluentPromiseClass<CommandLineArgsEditor, CommandLineArgsEditorPromise>((): $aspireFluentPromiseTransitions => ({
     ["add"]: () => CommandLineArgsEditorPromiseImpl,
 }));
 
@@ -2498,7 +2498,7 @@ class ConnectionStringAvailableEventImpl implements ConnectionStringAvailableEve
 }
 
 /** @internal */
-const ConnectionStringAvailableEventPromiseImpl = createFluentPromiseClass<ConnectionStringAvailableEvent, ConnectionStringAvailableEventPromise>((): FluentPromiseTransitions => ({
+const ConnectionStringAvailableEventPromiseImpl = $aspireCreateFluentPromiseClass<ConnectionStringAvailableEvent, ConnectionStringAvailableEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -2733,7 +2733,7 @@ class ContainerBuildOptionsCallbackContextImpl implements ContainerBuildOptionsC
 }
 
 /** @internal */
-const ContainerBuildOptionsCallbackContextPromiseImpl = createFluentPromiseClass<ContainerBuildOptionsCallbackContext, ContainerBuildOptionsCallbackContextPromise>((): FluentPromiseTransitions => ({
+const ContainerBuildOptionsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<ContainerBuildOptionsCallbackContext, ContainerBuildOptionsCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["logger"]: [() => LoggerPromiseImpl, false] as const,
@@ -2914,7 +2914,7 @@ class ContainerFileSystemCallbackContextImpl implements ContainerFileSystemCallb
 }
 
 /** @internal */
-const ContainerFileSystemCallbackContextPromiseImpl = createFluentPromiseClass<ContainerFileSystemCallbackContext, ContainerFileSystemCallbackContextPromise>((): FluentPromiseTransitions => ({
+const ContainerFileSystemCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<ContainerFileSystemCallbackContext, ContainerFileSystemCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["model"]: [() => ResourcePromiseImpl, false] as const,
     ["createFile"]: null,
@@ -3063,7 +3063,7 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
 }
 
 /** @internal */
-const ContainerImagePushOptionsCallbackContextPromiseImpl = createFluentPromiseClass<ContainerImagePushOptionsCallbackContext, ContainerImagePushOptionsCallbackContextPromise>((): FluentPromiseTransitions => ({
+const ContainerImagePushOptionsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<ContainerImagePushOptionsCallbackContext, ContainerImagePushOptionsCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["cancellationToken"]: null,
     ["options"]: null,
@@ -3121,7 +3121,7 @@ class ContainerImageReferenceImpl implements ContainerImageReference {
 }
 
 /** @internal */
-const ContainerImageReferencePromiseImpl = createFluentPromiseClass<ContainerImageReference, ContainerImageReferencePromise>((): FluentPromiseTransitions => ({
+const ContainerImageReferencePromiseImpl = $aspireCreateFluentPromiseClass<ContainerImageReference, ContainerImageReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["valueExpression"]: null,
 }));
@@ -3196,7 +3196,7 @@ class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
 }
 
 /** @internal */
-const ContainerMountAnnotationPromiseImpl = createFluentPromiseClass<ContainerMountAnnotation, ContainerMountAnnotationPromise>((): FluentPromiseTransitions => ({
+const ContainerMountAnnotationPromiseImpl = $aspireCreateFluentPromiseClass<ContainerMountAnnotation, ContainerMountAnnotationPromise>((): $aspireFluentPromiseTransitions => ({
     ["source"]: null,
     ["target"]: null,
     ["type"]: null,
@@ -3255,7 +3255,7 @@ class ContainerPortReferenceImpl implements ContainerPortReference {
 }
 
 /** @internal */
-const ContainerPortReferencePromiseImpl = createFluentPromiseClass<ContainerPortReference, ContainerPortReferencePromise>((): FluentPromiseTransitions => ({
+const ContainerPortReferencePromiseImpl = $aspireCreateFluentPromiseClass<ContainerPortReference, ContainerPortReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["valueExpression"]: null,
 }));
@@ -3343,7 +3343,7 @@ class DistributedApplicationImpl implements DistributedApplication {
 }
 
 /** @internal */
-const DistributedApplicationPromiseImpl = createFluentPromiseClass<DistributedApplication, DistributedApplicationPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplication, DistributedApplicationPromise>((): $aspireFluentPromiseTransitions => ({
     ["run"]: () => DistributedApplicationPromiseImpl,
 }));
 
@@ -3467,7 +3467,7 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
 }
 
 /** @internal */
-const DistributedApplicationExecutionContextPromiseImpl = createFluentPromiseClass<DistributedApplicationExecutionContext, DistributedApplicationExecutionContextPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationExecutionContextPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationExecutionContext, DistributedApplicationExecutionContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["operation"]: null,
     ["runConfiguration"]: null,
     ["serviceProvider"]: [() => ServiceProviderPromiseImpl, false] as const,
@@ -3555,7 +3555,7 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
 }
 
 /** @internal */
-const DistributedApplicationModelPromiseImpl = createFluentPromiseClass<DistributedApplicationModel, DistributedApplicationModelPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationModelPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationModel, DistributedApplicationModelPromise>((): $aspireFluentPromiseTransitions => ({
     ["getResources"]: null,
     ["findResourceByName"]: () => ResourcePromiseImpl,
 }));
@@ -3678,7 +3678,7 @@ class DockerfileBuilderImpl implements DockerfileBuilder {
 }
 
 /** @internal */
-const DockerfileBuilderPromiseImpl = createFluentPromiseClass<DockerfileBuilder, DockerfileBuilderPromise>((): FluentPromiseTransitions => ({
+const DockerfileBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileBuilder, DockerfileBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["arg"]: () => DockerfileBuilderPromiseImpl,
     ["from"]: () => DockerfileStagePromiseImpl,
     ["addContainerFilesStages"]: () => DockerfileBuilderPromiseImpl,
@@ -3767,7 +3767,7 @@ class DockerfileBuilderCallbackContextImpl implements DockerfileBuilderCallbackC
 }
 
 /** @internal */
-const DockerfileBuilderCallbackContextPromiseImpl = createFluentPromiseClass<DockerfileBuilderCallbackContext, DockerfileBuilderCallbackContextPromise>((): FluentPromiseTransitions => ({
+const DockerfileBuilderCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileBuilderCallbackContext, DockerfileBuilderCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["builder"]: [() => DockerfileBuilderPromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
@@ -3815,7 +3815,7 @@ class DockerfileFactoryContextImpl implements DockerfileFactoryContext {
 }
 
 /** @internal */
-const DockerfileFactoryContextPromiseImpl = createFluentPromiseClass<DockerfileFactoryContext, DockerfileFactoryContextPromise>((): FluentPromiseTransitions => ({
+const DockerfileFactoryContextPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileFactoryContext, DockerfileFactoryContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
 }));
 
@@ -4157,7 +4157,7 @@ class DockerfileStageImpl implements DockerfileStage {
 }
 
 /** @internal */
-const DockerfileStagePromiseImpl = createFluentPromiseClass<DockerfileStage, DockerfileStagePromise>((): FluentPromiseTransitions => ({
+const DockerfileStagePromiseImpl = $aspireCreateFluentPromiseClass<DockerfileStage, DockerfileStagePromise>((): $aspireFluentPromiseTransitions => ({
     ["arg"]: () => DockerfileStagePromiseImpl,
     ["workDir"]: () => DockerfileStagePromiseImpl,
     ["run"]: () => DockerfileStagePromiseImpl,
@@ -4490,7 +4490,7 @@ class EndpointReferenceImpl implements EndpointReference {
 }
 
 /** @internal */
-const EndpointReferencePromiseImpl = createFluentPromiseClass<EndpointReference, EndpointReferencePromise>((): FluentPromiseTransitions => ({
+const EndpointReferencePromiseImpl = $aspireCreateFluentPromiseClass<EndpointReference, EndpointReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourceWithEndpointsPromiseImpl, false] as const,
     ["endpointName"]: null,
     ["errorMessage"]: null,
@@ -4574,7 +4574,7 @@ class EndpointReferenceExpressionImpl implements EndpointReferenceExpression {
 }
 
 /** @internal */
-const EndpointReferenceExpressionPromiseImpl = createFluentPromiseClass<EndpointReferenceExpression, EndpointReferenceExpressionPromise>((): FluentPromiseTransitions => ({
+const EndpointReferenceExpressionPromiseImpl = $aspireCreateFluentPromiseClass<EndpointReferenceExpression, EndpointReferenceExpressionPromise>((): $aspireFluentPromiseTransitions => ({
     ["endpoint"]: [() => EndpointReferencePromiseImpl, false] as const,
     ["property"]: null,
     ["valueExpression"]: null,
@@ -4817,7 +4817,7 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
 }
 
 /** @internal */
-const EndpointUpdateContextPromiseImpl = createFluentPromiseClass<EndpointUpdateContext, EndpointUpdateContextPromise>((): FluentPromiseTransitions => ({
+const EndpointUpdateContextPromiseImpl = $aspireCreateFluentPromiseClass<EndpointUpdateContext, EndpointUpdateContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["name"]: null,
 }));
 
@@ -4915,7 +4915,7 @@ class EnvironmentCallbackContextImpl implements EnvironmentCallbackContext {
 }
 
 /** @internal */
-const EnvironmentCallbackContextPromiseImpl = createFluentPromiseClass<EnvironmentCallbackContext, EnvironmentCallbackContextPromise>((): FluentPromiseTransitions => ({
+const EnvironmentCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<EnvironmentCallbackContext, EnvironmentCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["environment"]: [() => EnvironmentEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
@@ -4980,7 +4980,7 @@ class EnvironmentEditorImpl implements EnvironmentEditor {
 }
 
 /** @internal */
-const EnvironmentEditorPromiseImpl = createFluentPromiseClass<EnvironmentEditor, EnvironmentEditorPromise>((): FluentPromiseTransitions => ({
+const EnvironmentEditorPromiseImpl = $aspireCreateFluentPromiseClass<EnvironmentEditor, EnvironmentEditorPromise>((): $aspireFluentPromiseTransitions => ({
     ["set"]: () => EnvironmentEditorPromiseImpl,
 }));
 
@@ -5157,7 +5157,7 @@ class EventingSubscriberRegistrationContextImpl implements EventingSubscriberReg
 }
 
 /** @internal */
-const EventingSubscriberRegistrationContextPromiseImpl = createFluentPromiseClass<EventingSubscriberRegistrationContext, EventingSubscriberRegistrationContextPromise>((): FluentPromiseTransitions => ({
+const EventingSubscriberRegistrationContextPromiseImpl = $aspireCreateFluentPromiseClass<EventingSubscriberRegistrationContext, EventingSubscriberRegistrationContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["cancellationToken"]: null,
     ["onBeforeStart"]: null,
@@ -5268,7 +5268,7 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 }
 
 /** @internal */
-const ExecuteCommandContextPromiseImpl = createFluentPromiseClass<ExecuteCommandContext, ExecuteCommandContextPromise>((): FluentPromiseTransitions => ({
+const ExecuteCommandContextPromiseImpl = $aspireCreateFluentPromiseClass<ExecuteCommandContext, ExecuteCommandContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["resourceName"]: null,
     ["cancellationToken"]: null,
@@ -5351,7 +5351,7 @@ class HttpCommandPrepareRequestContextImpl implements HttpCommandPrepareRequestC
 }
 
 /** @internal */
-const HttpCommandPrepareRequestContextPromiseImpl = createFluentPromiseClass<HttpCommandPrepareRequestContext, HttpCommandPrepareRequestContextPromise>((): FluentPromiseTransitions => ({
+const HttpCommandPrepareRequestContextPromiseImpl = $aspireCreateFluentPromiseClass<HttpCommandPrepareRequestContext, HttpCommandPrepareRequestContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resourceName"]: null,
     ["endpoint"]: [() => EndpointReferencePromiseImpl, false] as const,
     ["cancellationToken"]: null,
@@ -5500,7 +5500,7 @@ class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements Http
 }
 
 /** @internal */
-const HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl = createFluentPromiseClass<HttpsCertificateConfigurationCallbackAnnotationContext, HttpsCertificateConfigurationCallbackAnnotationContextPromise>((): FluentPromiseTransitions => ({
+const HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl = $aspireCreateFluentPromiseClass<HttpsCertificateConfigurationCallbackAnnotationContext, HttpsCertificateConfigurationCallbackAnnotationContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["certificatePath"]: null,
@@ -5595,7 +5595,7 @@ class HttpsEndpointUpdateCallbackContextImpl implements HttpsEndpointUpdateCallb
 }
 
 /** @internal */
-const HttpsEndpointUpdateCallbackContextPromiseImpl = createFluentPromiseClass<HttpsEndpointUpdateCallbackContext, HttpsEndpointUpdateCallbackContextPromise>((): FluentPromiseTransitions => ({
+const HttpsEndpointUpdateCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<HttpsEndpointUpdateCallbackContext, HttpsEndpointUpdateCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
@@ -5713,7 +5713,7 @@ class InitializeResourceEventImpl implements InitializeResourceEvent {
 }
 
 /** @internal */
-const InitializeResourceEventPromiseImpl = createFluentPromiseClass<InitializeResourceEvent, InitializeResourceEventPromise>((): FluentPromiseTransitions => ({
+const InitializeResourceEventPromiseImpl = $aspireCreateFluentPromiseClass<InitializeResourceEvent, InitializeResourceEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["eventing"]: [() => DistributedApplicationEventingPromiseImpl, false] as const,
     ["logger"]: [() => LoggerPromiseImpl, false] as const,
@@ -5816,7 +5816,7 @@ class InputsDialogValidationContextImpl implements InputsDialogValidationContext
 }
 
 /** @internal */
-const InputsDialogValidationContextPromiseImpl = createFluentPromiseClass<InputsDialogValidationContext, InputsDialogValidationContextPromise>((): FluentPromiseTransitions => ({
+const InputsDialogValidationContextPromiseImpl = $aspireCreateFluentPromiseClass<InputsDialogValidationContext, InputsDialogValidationContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["inputs"]: [() => InteractionInputCollectionPromiseImpl, false] as const,
     ["cancellationToken"]: null,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
@@ -5885,7 +5885,7 @@ class InputsInteractionResultImpl implements InputsInteractionResult {
 }
 
 /** @internal */
-const InputsInteractionResultPromiseImpl = createFluentPromiseClass<InputsInteractionResult, InputsInteractionResultPromise>((): FluentPromiseTransitions => ({
+const InputsInteractionResultPromiseImpl = $aspireCreateFluentPromiseClass<InputsInteractionResult, InputsInteractionResultPromise>((): $aspireFluentPromiseTransitions => ({
     ["canceled"]: null,
     ["inputs"]: [() => InteractionInputCollectionPromiseImpl, false] as const,
 }));
@@ -6067,7 +6067,7 @@ class InteractionInputBuilderImpl implements InteractionInputBuilder {
 }
 
 /** @internal */
-const InteractionInputBuilderPromiseImpl = createFluentPromiseClass<InteractionInputBuilder, InteractionInputBuilderPromise>((): FluentPromiseTransitions => ({
+const InteractionInputBuilderPromiseImpl = $aspireCreateFluentPromiseClass<InteractionInputBuilder, InteractionInputBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["withChoiceOptions"]: () => InteractionInputBuilderPromiseImpl,
     ["withValue"]: () => InteractionInputBuilderPromiseImpl,
     ["releaseFiles"]: () => InteractionInputBuilderPromiseImpl,
@@ -6169,7 +6169,7 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
 }
 
 /** @internal */
-const InteractionInputLoadContextPromiseImpl = createFluentPromiseClass<InteractionInputLoadContext, InteractionInputLoadContextPromise>((): FluentPromiseTransitions => ({
+const InteractionInputLoadContextPromiseImpl = $aspireCreateFluentPromiseClass<InteractionInputLoadContext, InteractionInputLoadContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["inputs"]: [() => InteractionInputCollectionPromiseImpl, false] as const,
     ["input"]: () => InteractionLoadingInputPromiseImpl,
 }));
@@ -6290,7 +6290,7 @@ class InteractionLoadingInputImpl implements InteractionLoadingInput {
 }
 
 /** @internal */
-const InteractionLoadingInputPromiseImpl = createFluentPromiseClass<InteractionLoadingInput, InteractionLoadingInputPromise>((): FluentPromiseTransitions => ({
+const InteractionLoadingInputPromiseImpl = $aspireCreateFluentPromiseClass<InteractionLoadingInput, InteractionLoadingInputPromise>((): $aspireFluentPromiseTransitions => ({
     ["getName"]: null,
     ["setChoiceOptions"]: () => InteractionLoadingInputPromiseImpl,
     ["setValue"]: () => InteractionLoadingInputPromiseImpl,
@@ -6434,7 +6434,7 @@ class LogFacadeImpl implements LogFacade {
 }
 
 /** @internal */
-const LogFacadePromiseImpl = createFluentPromiseClass<LogFacade, LogFacadePromise>((): FluentPromiseTransitions => ({
+const LogFacadePromiseImpl = $aspireCreateFluentPromiseClass<LogFacade, LogFacadePromise>((): $aspireFluentPromiseTransitions => ({
     ["info"]: () => LogFacadePromiseImpl,
     ["warning"]: () => LogFacadePromiseImpl,
     ["error"]: () => LogFacadePromiseImpl,
@@ -6522,7 +6522,7 @@ class PipelineConfigurationContextImpl implements PipelineConfigurationContext {
 }
 
 /** @internal */
-const PipelineConfigurationContextPromiseImpl = createFluentPromiseClass<PipelineConfigurationContext, PipelineConfigurationContextPromise>((): FluentPromiseTransitions => ({
+const PipelineConfigurationContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineConfigurationContext, PipelineConfigurationContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["pipeline"]: [() => PipelineEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
     ["getSteps"]: null,
@@ -6660,7 +6660,7 @@ class PipelineContextImpl implements PipelineContext {
 }
 
 /** @internal */
-const PipelineContextPromiseImpl = createFluentPromiseClass<PipelineContext, PipelineContextPromise>((): FluentPromiseTransitions => ({
+const PipelineContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineContext, PipelineContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
@@ -6741,7 +6741,7 @@ class PipelineEditorImpl implements PipelineEditor {
 }
 
 /** @internal */
-const PipelineEditorPromiseImpl = createFluentPromiseClass<PipelineEditor, PipelineEditorPromise>((): FluentPromiseTransitions => ({
+const PipelineEditorPromiseImpl = $aspireCreateFluentPromiseClass<PipelineEditor, PipelineEditorPromise>((): $aspireFluentPromiseTransitions => ({
     ["steps"]: null,
     ["stepsByTag"]: null,
 }));
@@ -6939,7 +6939,7 @@ class PipelineStepImpl implements PipelineStep {
 }
 
 /** @internal */
-const PipelineStepPromiseImpl = createFluentPromiseClass<PipelineStep, PipelineStepPromise>((): FluentPromiseTransitions => ({
+const PipelineStepPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStep, PipelineStepPromise>((): $aspireFluentPromiseTransitions => ({
     ["name"]: null,
     ["description"]: null,
     ["dependsOnSteps"]: null,
@@ -7113,7 +7113,7 @@ class PipelineStepContextImpl implements PipelineStepContext {
 }
 
 /** @internal */
-const PipelineStepContextPromiseImpl = createFluentPromiseClass<PipelineStepContext, PipelineStepContextPromise>((): FluentPromiseTransitions => ({
+const PipelineStepContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStepContext, PipelineStepContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["pipelineContext"]: [() => PipelineContextPromiseImpl, false] as const,
     ["reportingStep"]: [() => ReportingStepPromiseImpl, false] as const,
     ["model"]: [() => DistributedApplicationModelPromiseImpl, false] as const,
@@ -7180,7 +7180,7 @@ class PipelineStepFactoryContextImpl implements PipelineStepFactoryContext {
 }
 
 /** @internal */
-const PipelineStepFactoryContextPromiseImpl = createFluentPromiseClass<PipelineStepFactoryContext, PipelineStepFactoryContextPromise>((): FluentPromiseTransitions => ({
+const PipelineStepFactoryContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStepFactoryContext, PipelineStepFactoryContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["pipelineContext"]: [() => PipelineContextPromiseImpl, false] as const,
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
 }));
@@ -7295,7 +7295,7 @@ class PipelineSummaryImpl implements PipelineSummary {
 }
 
 /** @internal */
-const PipelineSummaryPromiseImpl = createFluentPromiseClass<PipelineSummary, PipelineSummaryPromise>((): FluentPromiseTransitions => ({
+const PipelineSummaryPromiseImpl = $aspireCreateFluentPromiseClass<PipelineSummary, PipelineSummaryPromise>((): $aspireFluentPromiseTransitions => ({
     ["add"]: () => PipelineSummaryPromiseImpl,
     ["addMarkdown"]: () => PipelineSummaryPromiseImpl,
 }));
@@ -7338,7 +7338,7 @@ class ProgressContextImpl implements ProgressContext {
 }
 
 /** @internal */
-const ProgressContextPromiseImpl = createFluentPromiseClass<ProgressContext, ProgressContextPromise>((): FluentPromiseTransitions => ({
+const ProgressContextPromiseImpl = $aspireCreateFluentPromiseClass<ProgressContext, ProgressContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["cancellationToken"]: null,
 }));
 
@@ -7568,7 +7568,7 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
 }
 
 /** @internal */
-const ReferenceExpressionBuilderPromiseImpl = createFluentPromiseClass<ReferenceExpressionBuilder, ReferenceExpressionBuilderPromise>((): FluentPromiseTransitions => ({
+const ReferenceExpressionBuilderPromiseImpl = $aspireCreateFluentPromiseClass<ReferenceExpressionBuilder, ReferenceExpressionBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["isEmpty"]: null,
     ["appendLiteral"]: () => ReferenceExpressionBuilderPromiseImpl,
     ["appendFormatted"]: () => ReferenceExpressionBuilderPromiseImpl,
@@ -7699,7 +7699,7 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
 }
 
 /** @internal */
-const RequiredCommandValidationContextPromiseImpl = createFluentPromiseClass<RequiredCommandValidationContext, RequiredCommandValidationContextPromise>((): FluentPromiseTransitions => ({
+const RequiredCommandValidationContextPromiseImpl = $aspireCreateFluentPromiseClass<RequiredCommandValidationContext, RequiredCommandValidationContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resolvedPath"]: null,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
     ["cancellationToken"]: null,
@@ -7755,7 +7755,7 @@ class RequiredCommandValidationResultImpl implements RequiredCommandValidationRe
 }
 
 /** @internal */
-const RequiredCommandValidationResultPromiseImpl = createFluentPromiseClass<RequiredCommandValidationResult, RequiredCommandValidationResultPromise>((): FluentPromiseTransitions => ({
+const RequiredCommandValidationResultPromiseImpl = $aspireCreateFluentPromiseClass<RequiredCommandValidationResult, RequiredCommandValidationResultPromise>((): $aspireFluentPromiseTransitions => ({
     ["isValid"]: null,
     ["validationMessage"]: null,
 }));
@@ -7822,7 +7822,7 @@ class ResourceCommandServiceImpl implements ResourceCommandService {
 }
 
 /** @internal */
-const ResourceCommandServicePromiseImpl = createFluentPromiseClass<ResourceCommandService, ResourceCommandServicePromise>((): FluentPromiseTransitions => ({
+const ResourceCommandServicePromiseImpl = $aspireCreateFluentPromiseClass<ResourceCommandService, ResourceCommandServicePromise>((): $aspireFluentPromiseTransitions => ({
     ["executeCommandAsync"]: null,
 }));
 
@@ -7890,7 +7890,7 @@ class ResourceEndpointsAllocatedEventImpl implements ResourceEndpointsAllocatedE
 }
 
 /** @internal */
-const ResourceEndpointsAllocatedEventPromiseImpl = createFluentPromiseClass<ResourceEndpointsAllocatedEvent, ResourceEndpointsAllocatedEventPromise>((): FluentPromiseTransitions => ({
+const ResourceEndpointsAllocatedEventPromiseImpl = $aspireCreateFluentPromiseClass<ResourceEndpointsAllocatedEvent, ResourceEndpointsAllocatedEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -7960,7 +7960,7 @@ class ResourceLoggerServiceImpl implements ResourceLoggerService {
 }
 
 /** @internal */
-const ResourceLoggerServicePromiseImpl = createFluentPromiseClass<ResourceLoggerService, ResourceLoggerServicePromise>((): FluentPromiseTransitions => ({
+const ResourceLoggerServicePromiseImpl = $aspireCreateFluentPromiseClass<ResourceLoggerService, ResourceLoggerServicePromise>((): $aspireFluentPromiseTransitions => ({
     ["completeLog"]: () => ResourceLoggerServicePromiseImpl,
     ["completeLogByName"]: () => ResourceLoggerServicePromiseImpl,
 }));
@@ -8113,7 +8113,7 @@ class ResourceNotificationServiceImpl implements ResourceNotificationService {
 }
 
 /** @internal */
-const ResourceNotificationServicePromiseImpl = createFluentPromiseClass<ResourceNotificationService, ResourceNotificationServicePromise>((): FluentPromiseTransitions => ({
+const ResourceNotificationServicePromiseImpl = $aspireCreateFluentPromiseClass<ResourceNotificationService, ResourceNotificationServicePromise>((): $aspireFluentPromiseTransitions => ({
     ["waitForResourceState"]: () => ResourceNotificationServicePromiseImpl,
     ["waitForResourceStates"]: null,
     ["waitForResourceHealthy"]: null,
@@ -8186,7 +8186,7 @@ class ResourceReadyEventImpl implements ResourceReadyEvent {
 }
 
 /** @internal */
-const ResourceReadyEventPromiseImpl = createFluentPromiseClass<ResourceReadyEvent, ResourceReadyEventPromise>((): FluentPromiseTransitions => ({
+const ResourceReadyEventPromiseImpl = $aspireCreateFluentPromiseClass<ResourceReadyEvent, ResourceReadyEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -8255,7 +8255,7 @@ class ResourceStoppedEventImpl implements ResourceStoppedEvent {
 }
 
 /** @internal */
-const ResourceStoppedEventPromiseImpl = createFluentPromiseClass<ResourceStoppedEvent, ResourceStoppedEventPromise>((): FluentPromiseTransitions => ({
+const ResourceStoppedEventPromiseImpl = $aspireCreateFluentPromiseClass<ResourceStoppedEvent, ResourceStoppedEventPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -8374,7 +8374,7 @@ class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
 }
 
 /** @internal */
-const ResourceUrlsCallbackContextPromiseImpl = createFluentPromiseClass<ResourceUrlsCallbackContext, ResourceUrlsCallbackContextPromise>((): FluentPromiseTransitions => ({
+const ResourceUrlsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<ResourceUrlsCallbackContext, ResourceUrlsCallbackContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourcePromiseImpl, false] as const,
     ["urls"]: [() => ResourceUrlsEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
@@ -8493,7 +8493,7 @@ class ResourceUrlsEditorImpl implements ResourceUrlsEditor {
 }
 
 /** @internal */
-const ResourceUrlsEditorPromiseImpl = createFluentPromiseClass<ResourceUrlsEditor, ResourceUrlsEditorPromise>((): FluentPromiseTransitions => ({
+const ResourceUrlsEditorPromiseImpl = $aspireCreateFluentPromiseClass<ResourceUrlsEditor, ResourceUrlsEditorPromise>((): $aspireFluentPromiseTransitions => ({
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["add"]: () => ResourceUrlsEditorPromiseImpl,
     ["addForEndpoint"]: () => ResourceUrlsEditorPromiseImpl,
@@ -8642,7 +8642,7 @@ class TestCollectionContextImpl implements TestCollectionContext {
 }
 
 /** @internal */
-const TestCollectionContextPromiseImpl = createFluentPromiseClass<TestCollectionContext, TestCollectionContextPromise>((): FluentPromiseTransitions => ({
+const TestCollectionContextPromiseImpl = $aspireCreateFluentPromiseClass<TestCollectionContext, TestCollectionContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["items"]: null,
     ["metadata"]: null,
 }));
@@ -8891,7 +8891,7 @@ class TestResourceContextImpl implements TestResourceContext {
 }
 
 /** @internal */
-const TestResourceContextPromiseImpl = createFluentPromiseClass<TestResourceContext, TestResourceContextPromise>((): FluentPromiseTransitions => ({
+const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResourceContext, TestResourceContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["getValueAsync"]: null,
     ["setValueAsync"]: () => TestResourceContextPromiseImpl,
     ["validateAsync"]: null,
@@ -8949,7 +8949,7 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
 }
 
 /** @internal */
-const UpdateCommandStateContextPromiseImpl = createFluentPromiseClass<UpdateCommandStateContext, UpdateCommandStateContextPromise>((): FluentPromiseTransitions => ({
+const UpdateCommandStateContextPromiseImpl = $aspireCreateFluentPromiseClass<UpdateCommandStateContext, UpdateCommandStateContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["resourceSnapshot"]: null,
     ["services"]: [() => ServiceProviderPromiseImpl, false] as const,
 }));
@@ -9031,7 +9031,7 @@ class AspireStoreImpl implements AspireStore {
 }
 
 /** @internal */
-const AspireStorePromiseImpl = createFluentPromiseClass<AspireStore, AspireStorePromise>((): FluentPromiseTransitions => ({
+const AspireStorePromiseImpl = $aspireCreateFluentPromiseClass<AspireStore, AspireStorePromise>((): $aspireFluentPromiseTransitions => ({
     ["basePath"]: null,
     ["getFileNameWithContent"]: null,
 }));
@@ -9189,7 +9189,7 @@ class ConfigurationImpl implements Configuration {
 }
 
 /** @internal */
-const ConfigurationPromiseImpl = createFluentPromiseClass<Configuration, ConfigurationPromise>((): FluentPromiseTransitions => ({
+const ConfigurationPromiseImpl = $aspireCreateFluentPromiseClass<Configuration, ConfigurationPromise>((): $aspireFluentPromiseTransitions => ({
     ["getConfigValue"]: null,
     ["getConnectionString"]: null,
     ["getSection"]: () => ConfigurationSectionPromiseImpl,
@@ -9264,7 +9264,7 @@ class ConfigurationSectionImpl implements ConfigurationSection {
 }
 
 /** @internal */
-const ConfigurationSectionPromiseImpl = createFluentPromiseClass<ConfigurationSection, ConfigurationSectionPromise>((): FluentPromiseTransitions => ({
+const ConfigurationSectionPromiseImpl = $aspireCreateFluentPromiseClass<ConfigurationSection, ConfigurationSectionPromise>((): $aspireFluentPromiseTransitions => ({
     ["key"]: null,
     ["path"]: null,
 }));
@@ -10395,7 +10395,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
 }
 
 /** @internal */
-const DistributedApplicationBuilderPromiseImpl = createFluentPromiseClass<DistributedApplicationBuilder, DistributedApplicationBuilderPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationBuilder, DistributedApplicationBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["appHostDirectory"]: null,
     ["environment"]: [() => HostEnvironmentPromiseImpl, false] as const,
     ["eventing"]: [() => DistributedApplicationEventingPromiseImpl, false] as const,
@@ -10484,7 +10484,7 @@ class DistributedApplicationEventingImpl implements DistributedApplicationEventi
 }
 
 /** @internal */
-const DistributedApplicationEventingPromiseImpl = createFluentPromiseClass<DistributedApplicationEventing, DistributedApplicationEventingPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationEventingPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationEventing, DistributedApplicationEventingPromise>((): $aspireFluentPromiseTransitions => ({
     ["unsubscribe"]: () => DistributedApplicationEventingPromiseImpl,
 }));
 
@@ -10630,7 +10630,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
 }
 
 /** @internal */
-const DistributedApplicationPipelinePromiseImpl = createFluentPromiseClass<DistributedApplicationPipeline, DistributedApplicationPipelinePromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationPipelinePromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationPipeline, DistributedApplicationPipelinePromise>((): $aspireFluentPromiseTransitions => ({
     ["disableBuildOnlyContainerValidation"]: () => DistributedApplicationPipelinePromiseImpl,
     ["addStep"]: () => DistributedApplicationPipelinePromiseImpl,
     ["configure"]: () => DistributedApplicationPipelinePromiseImpl,
@@ -10829,7 +10829,7 @@ class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder
 }
 
 /** @internal */
-const ExecutionConfigurationBuilderPromiseImpl = createFluentPromiseClass<ExecutionConfigurationBuilder, ExecutionConfigurationBuilderPromise>((): FluentPromiseTransitions => ({
+const ExecutionConfigurationBuilderPromiseImpl = $aspireCreateFluentPromiseClass<ExecutionConfigurationBuilder, ExecutionConfigurationBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["build"]: [() => ExecutionConfigurationResultPromiseImpl, false, false] as const,
     ["withHttpsCertificateConfig"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withArgumentsConfig"]: () => ExecutionConfigurationBuilderPromiseImpl,
@@ -10907,7 +10907,7 @@ class ExecutionConfigurationResultImpl implements ExecutionConfigurationResult {
 }
 
 /** @internal */
-const ExecutionConfigurationResultPromiseImpl = createFluentPromiseClass<ExecutionConfigurationResult, ExecutionConfigurationResultPromise>((): FluentPromiseTransitions => ({
+const ExecutionConfigurationResultPromiseImpl = $aspireCreateFluentPromiseClass<ExecutionConfigurationResult, ExecutionConfigurationResultPromise>((): $aspireFluentPromiseTransitions => ({
     ["getCertificateTrustData"]: null,
     ["getHttpsCertificateData"]: null,
 }));
@@ -11088,7 +11088,7 @@ class HostEnvironmentImpl implements HostEnvironment {
 }
 
 /** @internal */
-const HostEnvironmentPromiseImpl = createFluentPromiseClass<HostEnvironment, HostEnvironmentPromise>((): FluentPromiseTransitions => ({
+const HostEnvironmentPromiseImpl = $aspireCreateFluentPromiseClass<HostEnvironment, HostEnvironmentPromise>((): $aspireFluentPromiseTransitions => ({
     ["isDevelopment"]: null,
     ["isProduction"]: null,
     ["isStaging"]: null,
@@ -11513,7 +11513,7 @@ class InteractionServiceImpl implements InteractionService {
 }
 
 /** @internal */
-const InteractionServicePromiseImpl = createFluentPromiseClass<InteractionService, InteractionServicePromise>((): FluentPromiseTransitions => ({
+const InteractionServicePromiseImpl = $aspireCreateFluentPromiseClass<InteractionService, InteractionServicePromise>((): $aspireFluentPromiseTransitions => ({
     ["isAvailable"]: null,
     ["promptConfirmation"]: null,
     ["promptMessageBox"]: null,
@@ -11649,7 +11649,7 @@ class LoggerImpl implements Logger {
 }
 
 /** @internal */
-const LoggerPromiseImpl = createFluentPromiseClass<Logger, LoggerPromise>((): FluentPromiseTransitions => ({
+const LoggerPromiseImpl = $aspireCreateFluentPromiseClass<Logger, LoggerPromise>((): $aspireFluentPromiseTransitions => ({
     ["logInformation"]: () => LoggerPromiseImpl,
     ["logWarning"]: () => LoggerPromiseImpl,
     ["logError"]: () => LoggerPromiseImpl,
@@ -11713,7 +11713,7 @@ class LoggerFactoryImpl implements LoggerFactory {
 }
 
 /** @internal */
-const LoggerFactoryPromiseImpl = createFluentPromiseClass<LoggerFactory, LoggerFactoryPromise>((): FluentPromiseTransitions => ({
+const LoggerFactoryPromiseImpl = $aspireCreateFluentPromiseClass<LoggerFactory, LoggerFactoryPromise>((): $aspireFluentPromiseTransitions => ({
     ["createLogger"]: () => LoggerPromiseImpl,
 }));
 
@@ -11905,7 +11905,7 @@ class ReportingStepImpl implements ReportingStep {
 }
 
 /** @internal */
-const ReportingStepPromiseImpl = createFluentPromiseClass<ReportingStep, ReportingStepPromise>((): FluentPromiseTransitions => ({
+const ReportingStepPromiseImpl = $aspireCreateFluentPromiseClass<ReportingStep, ReportingStepPromise>((): $aspireFluentPromiseTransitions => ({
     ["createTask"]: () => ReportingTaskPromiseImpl,
     ["createMarkdownTask"]: () => ReportingTaskPromiseImpl,
     ["logStep"]: () => ReportingStepPromiseImpl,
@@ -12066,7 +12066,7 @@ class ReportingTaskImpl implements ReportingTask {
 }
 
 /** @internal */
-const ReportingTaskPromiseImpl = createFluentPromiseClass<ReportingTask, ReportingTaskPromise>((): FluentPromiseTransitions => ({
+const ReportingTaskPromiseImpl = $aspireCreateFluentPromiseClass<ReportingTask, ReportingTaskPromise>((): $aspireFluentPromiseTransitions => ({
     ["updateTask"]: () => ReportingTaskPromiseImpl,
     ["updateTaskMarkdown"]: () => ReportingTaskPromiseImpl,
     ["completeTask"]: () => ReportingTaskPromiseImpl,
@@ -12350,7 +12350,7 @@ class ServiceProviderImpl implements ServiceProvider {
 }
 
 /** @internal */
-const ServiceProviderPromiseImpl = createFluentPromiseClass<ServiceProvider, ServiceProviderPromise>((): FluentPromiseTransitions => ({
+const ServiceProviderPromiseImpl = $aspireCreateFluentPromiseClass<ServiceProvider, ServiceProviderPromise>((): $aspireFluentPromiseTransitions => ({
     ["getAspireStore"]: () => AspireStorePromiseImpl,
     ["getEventing"]: () => DistributedApplicationEventingPromiseImpl,
     ["getInteractionService"]: () => InteractionServicePromiseImpl,
@@ -12545,7 +12545,7 @@ class UserSecretsManagerImpl implements UserSecretsManager {
 }
 
 /** @internal */
-const UserSecretsManagerPromiseImpl = createFluentPromiseClass<UserSecretsManager, UserSecretsManagerPromise>((): FluentPromiseTransitions => ({
+const UserSecretsManagerPromiseImpl = $aspireCreateFluentPromiseClass<UserSecretsManager, UserSecretsManagerPromise>((): $aspireFluentPromiseTransitions => ({
     ["isAvailable"]: null,
     ["filePath"]: null,
     ["trySetSecret"]: null,
@@ -14466,7 +14466,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 }
 
 /** @internal */
-const ContainerRegistryResourcePromiseImpl = createFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): FluentPromiseTransitions => ({
+const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
@@ -18886,7 +18886,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 }
 
 /** @internal */
-const ContainerResourcePromiseImpl = createFluentPromiseClass<ContainerResource, ContainerResourcePromise>((): FluentPromiseTransitions => ({
+const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerResource, ContainerResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ContainerResourcePromiseImpl,
     ["withBindMount"]: () => ContainerResourcePromiseImpl,
     ["withEntrypoint"]: () => ContainerResourcePromiseImpl,
@@ -22594,7 +22594,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 }
 
 /** @internal */
-const CSharpAppResourcePromiseImpl = createFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): FluentPromiseTransitions => ({
+const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => CSharpAppResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
@@ -26401,7 +26401,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 }
 
 /** @internal */
-const DotnetToolResourcePromiseImpl = createFluentPromiseClass<DotnetToolResource, DotnetToolResourcePromise>((): FluentPromiseTransitions => ({
+const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetToolResource, DotnetToolResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => DotnetToolResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => DotnetToolResourcePromiseImpl,
     ["withToolPackage"]: () => DotnetToolResourcePromiseImpl,
@@ -30049,7 +30049,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 }
 
 /** @internal */
-const ExecutableResourcePromiseImpl = createFluentPromiseClass<ExecutableResource, ExecutableResourcePromise>((): FluentPromiseTransitions => ({
+const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExecutableResource, ExecutableResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ExecutableResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExecutableResourcePromiseImpl,
     ["publishAsDockerFile"]: () => ExecutableResourcePromiseImpl,
@@ -32095,7 +32095,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
 }
 
 /** @internal */
-const ExternalServiceResourcePromiseImpl = createFluentPromiseClass<ExternalServiceResource, ExternalServiceResourcePromise>((): FluentPromiseTransitions => ({
+const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExternalServiceResource, ExternalServiceResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ExternalServiceResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExternalServiceResourcePromiseImpl,
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
@@ -34137,7 +34137,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 }
 
 /** @internal */
-const ParameterResourcePromiseImpl = createFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): FluentPromiseTransitions => ({
+const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
@@ -37791,7 +37791,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 }
 
 /** @internal */
-const ProjectResourcePromiseImpl = createFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): FluentPromiseTransitions => ({
+const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ProjectResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
@@ -42251,7 +42251,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 }
 
 /** @internal */
-const TestDatabaseResourcePromiseImpl = createFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): FluentPromiseTransitions => ({
+const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => TestDatabaseResourcePromiseImpl,
     ["withBindMount"]: () => TestDatabaseResourcePromiseImpl,
     ["withEntrypoint"]: () => TestDatabaseResourcePromiseImpl,
@@ -47206,7 +47206,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 }
 
 /** @internal */
-const TestRedisResourcePromiseImpl = createFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): FluentPromiseTransitions => ({
+const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => TestRedisResourcePromiseImpl,
     ["withBindMount"]: () => TestRedisResourcePromiseImpl,
     ["withEntrypoint"]: () => TestRedisResourcePromiseImpl,
@@ -51719,7 +51719,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 }
 
 /** @internal */
-const TestVaultResourcePromiseImpl = createFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): FluentPromiseTransitions => ({
+const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => TestVaultResourcePromiseImpl,
     ["withBindMount"]: () => TestVaultResourcePromiseImpl,
     ["withEntrypoint"]: () => TestVaultResourcePromiseImpl,
@@ -52046,7 +52046,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
 }
 
 /** @internal */
-const ComputeResourcePromiseImpl = createFluentPromiseClass<ComputeResource, ComputeResourcePromise>((): FluentPromiseTransitions => ({
+const ComputeResourcePromiseImpl = $aspireCreateFluentPromiseClass<ComputeResource, ComputeResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withComputeEnvironment"]: () => ComputeResourcePromiseImpl,
     ["withImagePushOptions"]: () => ComputeResourcePromiseImpl,
     ["withRemoteImageName"]: () => ComputeResourcePromiseImpl,
@@ -52108,7 +52108,7 @@ class ContainerFilesDestinationResourceImpl extends ResourceBuilderBase<IContain
 }
 
 /** @internal */
-const ContainerFilesDestinationResourcePromiseImpl = createFluentPromiseClass<ContainerFilesDestinationResource, ContainerFilesDestinationResourcePromise>((): FluentPromiseTransitions => ({
+const ContainerFilesDestinationResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerFilesDestinationResource, ContainerFilesDestinationResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["publishWithContainerFiles"]: () => ContainerFilesDestinationResourcePromiseImpl,
 }));
 
@@ -54026,7 +54026,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 }
 
 /** @internal */
-const ResourcePromiseImpl = createFluentPromiseClass<Resource, ResourcePromise>((): FluentPromiseTransitions => ({
+const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,
@@ -54178,7 +54178,7 @@ class ResourceWithArgsImpl extends ResourceBuilderBase<IResourceWithArgsHandle> 
 }
 
 /** @internal */
-const ResourceWithArgsPromiseImpl = createFluentPromiseClass<ResourceWithArgs, ResourceWithArgsPromise>((): FluentPromiseTransitions => ({
+const ResourceWithArgsPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithArgs, ResourceWithArgsPromise>((): $aspireFluentPromiseTransitions => ({
     ["withArgs"]: () => ResourceWithArgsPromiseImpl,
     ["withArgsCallback"]: () => ResourceWithArgsPromiseImpl,
 }));
@@ -54350,7 +54350,7 @@ class ResourceWithConnectionStringImpl extends ResourceBuilderBase<IResourceWith
 }
 
 /** @internal */
-const ResourceWithConnectionStringPromiseImpl = createFluentPromiseClass<ResourceWithConnectionString, ResourceWithConnectionStringPromise>((): FluentPromiseTransitions => ({
+const ResourceWithConnectionStringPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithConnectionString, ResourceWithConnectionStringPromise>((): $aspireFluentPromiseTransitions => ({
     ["withConnectionProperty"]: () => ResourceWithConnectionStringPromiseImpl,
     ["getConnectionProperty"]: null,
     ["onConnectionStringAvailable"]: () => ResourceWithConnectionStringPromiseImpl,
@@ -54440,7 +54440,7 @@ class ResourceWithContainerFilesImpl extends ResourceBuilderBase<IResourceWithCo
 }
 
 /** @internal */
-const ResourceWithContainerFilesPromiseImpl = createFluentPromiseClass<ResourceWithContainerFiles, ResourceWithContainerFilesPromise>((): FluentPromiseTransitions => ({
+const ResourceWithContainerFilesPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithContainerFiles, ResourceWithContainerFilesPromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerFilesSource"]: () => ResourceWithContainerFilesPromiseImpl,
     ["clearContainerFilesSources"]: () => ResourceWithContainerFilesPromiseImpl,
 }));
@@ -55082,7 +55082,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 }
 
 /** @internal */
-const ResourceWithEndpointsPromiseImpl = createFluentPromiseClass<ResourceWithEndpoints, ResourceWithEndpointsPromise>((): FluentPromiseTransitions => ({
+const ResourceWithEndpointsPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithEndpoints, ResourceWithEndpointsPromise>((): $aspireFluentPromiseTransitions => ({
     ["withMcpServer"]: () => ResourceWithEndpointsPromiseImpl,
     ["withEndpointCallback"]: () => ResourceWithEndpointsPromiseImpl,
     ["withHttpEndpointCallback"]: () => ResourceWithEndpointsPromiseImpl,
@@ -55645,7 +55645,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
 }
 
 /** @internal */
-const ResourceWithEnvironmentPromiseImpl = createFluentPromiseClass<ResourceWithEnvironment, ResourceWithEnvironmentPromise>((): FluentPromiseTransitions => ({
+const ResourceWithEnvironmentPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithEnvironment, ResourceWithEnvironmentPromise>((): $aspireFluentPromiseTransitions => ({
     ["withOtlpExporter"]: () => ResourceWithEnvironmentPromiseImpl,
     ["withEnvironment"]: () => ResourceWithEnvironmentPromiseImpl,
     ["withEnvironmentCallback"]: () => ResourceWithEnvironmentPromiseImpl,
@@ -55784,7 +55784,7 @@ class ResourceWithWaitSupportImpl extends ResourceBuilderBase<IResourceWithWaitS
 }
 
 /** @internal */
-const ResourceWithWaitSupportPromiseImpl = createFluentPromiseClass<ResourceWithWaitSupport, ResourceWithWaitSupportPromise>((): FluentPromiseTransitions => ({
+const ResourceWithWaitSupportPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithWaitSupport, ResourceWithWaitSupportPromise>((): $aspireFluentPromiseTransitions => ({
     ["waitFor"]: () => ResourceWithWaitSupportPromiseImpl,
     ["waitForStart"]: () => ResourceWithWaitSupportPromiseImpl,
     ["waitForCompletion"]: () => ResourceWithWaitSupportPromiseImpl,
@@ -55813,7 +55813,7 @@ class TestMarkerResourceImpl extends ResourceBuilderBase<ITestMarkerResourceHand
 }
 
 /** @internal */
-const TestMarkerResourcePromiseImpl = createFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>((): FluentPromiseTransitions => ({
+const TestMarkerResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>((): $aspireFluentPromiseTransitions => ({
 }));
 
 // ============================================================================

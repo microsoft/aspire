@@ -473,7 +473,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 refExpr,
                 AspireDict,
                 AspireList,
-                createFluentPromiseClass,
+                createFluentPromiseClass as $aspireCreateFluentPromiseClass,
                 InteractionInputCollectionPromiseImpl
             } from './base.mjs';
 
@@ -490,7 +490,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             import type {
                 Awaitable,
-                FluentPromiseTransitions,
+                FluentPromiseTransitions as $aspireFluentPromiseTransitions,
                 InteractionInput,
                 InteractionInputCollection,
                 InteractionInputCollectionPromise,
@@ -1539,7 +1539,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// transition table identifies members whose results need another fluent wrapper.</para>
     /// <para>Generated TypeScript (example for <c>RedisResource</c>):</para>
     /// <code>
-    /// const RedisResourcePromiseImpl = createFluentPromiseClass&lt;RedisResource, RedisResourcePromise&gt;(() =&gt; ({
+    /// const RedisResourcePromiseImpl = $aspireCreateFluentPromiseClass&lt;RedisResource, RedisResourcePromise&gt;(() =&gt; ({
     ///     withEnvironment: () =&gt; RedisResourcePromiseImpl,
     /// }));
     /// </code>
@@ -1621,7 +1621,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         IReadOnlyDictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)> transitions)
     {
         WriteLine("/** @internal */");
-        WriteLine($"const {promiseImplementationClass} = createFluentPromiseClass<{className}, {promiseClass}>((): FluentPromiseTransitions => ({{");
+        WriteLine($"const {promiseImplementationClass} = $aspireCreateFluentPromiseClass<{className}, {promiseClass}>((): $aspireFluentPromiseTransitions => ({{");
         foreach (var (methodName, transition) in transitions)
         {
             var methodNameLiteral = $"\"{JsonEncodedText.Encode(methodName)}\"";
@@ -3026,7 +3026,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <para>Generated TypeScript (example for <c>PostgresResource</c>):</para>
     /// <code>
     /// const PostgresResourcePromiseImpl =
-    ///     createFluentPromiseClass&lt;PostgresResource, PostgresResourcePromise&gt;(...);
+    ///     $aspireCreateFluentPromiseClass&lt;PostgresResource, PostgresResourcePromise&gt;(...);
     /// </code>
     /// </remarks>
     private void GenerateTypeClassThenableWrapper(BuilderModel model, List<AtsCapabilityInfo> methods)

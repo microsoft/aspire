@@ -1082,7 +1082,7 @@ public class AtsTypeScriptCodeGeneratorTests
             "export interface TestMarkerResourcePromise extends PromiseLike<TestMarkerResource>",
             aspireTs);
         Assert.Contains(
-            "const TestMarkerResourcePromiseImpl = createFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>",
+            "const TestMarkerResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>",
             aspireTs);
     }
 
@@ -1153,7 +1153,7 @@ public class AtsTypeScriptCodeGeneratorTests
             "export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>"));
         Assert.Equal(1, CountOccurrences(
             aspireTs,
-            "const TestVaultResourcePromiseImpl = createFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>"));
+            "const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>"));
         var returnedAliasTypeId = fixtureCapabilities
             .Single(capability => capability.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault")
             .ReturnType!.TypeId;
@@ -1280,7 +1280,7 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     // Declarations: "export interface FooPromise extends ..." and
-    // "const FooPromiseImpl = createFluentPromiseClass(...)".
+    // "const FooPromiseImpl = $aspireCreateFluentPromiseClass(...)".
     private static readonly Regex s_promiseDeclarationPattern =
         new(@"\b(?:interface|class|type|const)\s+(\w*Promise(?:Impl)?)\b", RegexOptions.Compiled);
 
@@ -1913,7 +1913,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // TestResourceContext has ExposeMethods=true - gets Promise wrapper
         Assert.Contains(
-            "const TestResourceContextPromiseImpl = createFluentPromiseClass<TestResourceContext, TestResourceContextPromise>",
+            "const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResourceContext, TestResourceContextPromise>",
             code);
     }
 

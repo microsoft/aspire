@@ -26,7 +26,7 @@ import {
     refExpr,
     AspireDict,
     AspireList,
-    createFluentPromiseClass,
+    createFluentPromiseClass as $aspireCreateFluentPromiseClass,
     InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
@@ -43,7 +43,7 @@ export type {
 
 import type {
     Awaitable,
-    FluentPromiseTransitions,
+    FluentPromiseTransitions as $aspireFluentPromiseTransitions,
     InteractionInput,
     InteractionInputCollection,
     InteractionInputCollectionPromise,
@@ -376,7 +376,7 @@ class TestCollectionContextImpl implements TestCollectionContext {
 }
 
 /** @internal */
-const TestCollectionContextPromiseImpl = createFluentPromiseClass<TestCollectionContext, TestCollectionContextPromise>((): FluentPromiseTransitions => ({
+const TestCollectionContextPromiseImpl = $aspireCreateFluentPromiseClass<TestCollectionContext, TestCollectionContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["items"]: null,
     ["metadata"]: null,
 }));
@@ -625,7 +625,7 @@ class TestResourceContextImpl implements TestResourceContext {
 }
 
 /** @internal */
-const TestResourceContextPromiseImpl = createFluentPromiseClass<TestResourceContext, TestResourceContextPromise>((): FluentPromiseTransitions => ({
+const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResourceContext, TestResourceContextPromise>((): $aspireFluentPromiseTransitions => ({
     ["getValueAsync"]: null,
     ["setValueAsync"]: () => TestResourceContextPromiseImpl,
     ["validateAsync"]: null,
@@ -742,7 +742,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
 }
 
 /** @internal */
-const DistributedApplicationBuilderPromiseImpl = createFluentPromiseClass<DistributedApplicationBuilder, DistributedApplicationBuilderPromise>((): FluentPromiseTransitions => ({
+const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationBuilder, DistributedApplicationBuilderPromise>((): $aspireFluentPromiseTransitions => ({
     ["addTestRedis"]: () => TestRedisResourcePromiseImpl,
     ["addTestMarker"]: () => TestMarkerResourcePromiseImpl,
     ["addTestVault"]: () => TestVaultResourcePromiseImpl,
@@ -1329,7 +1329,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 }
 
 /** @internal */
-const TestDatabaseResourcePromiseImpl = createFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): FluentPromiseTransitions => ({
+const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withOptionalString"]: () => TestDatabaseResourcePromiseImpl,
     ["withConfig"]: () => TestDatabaseResourcePromiseImpl,
     ["testWithEnvironmentCallback"]: () => TestDatabaseResourcePromiseImpl,
@@ -2283,7 +2283,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 }
 
 /** @internal */
-const TestRedisResourcePromiseImpl = createFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): FluentPromiseTransitions => ({
+const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withPromiseCollisionResources"]: () => TestRedisResourcePromiseImpl,
     ["withMutablePromiseCollisionResources"]: () => TestRedisResourcePromiseImpl,
     ["addTestChildDatabase"]: () => TestDatabaseResourcePromiseImpl,
@@ -2895,7 +2895,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 }
 
 /** @internal */
-const TestVaultResourcePromiseImpl = createFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): FluentPromiseTransitions => ({
+const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withOptionalString"]: () => TestVaultResourcePromiseImpl,
     ["withConfig"]: () => TestVaultResourcePromiseImpl,
     ["testWithEnvironmentCallback"]: () => TestVaultResourcePromiseImpl,
@@ -3431,7 +3431,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 }
 
 /** @internal */
-const ResourcePromiseImpl = createFluentPromiseClass<Resource, ResourcePromise>((): FluentPromiseTransitions => ({
+const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withOptionalString"]: () => ResourcePromiseImpl,
     ["withConfig"]: () => ResourcePromiseImpl,
     ["withCreatedAt"]: () => ResourcePromiseImpl,
@@ -3517,7 +3517,7 @@ class ResourceWithConnectionStringImpl extends ResourceBuilderBase<IResourceWith
 }
 
 /** @internal */
-const ResourceWithConnectionStringPromiseImpl = createFluentPromiseClass<ResourceWithConnectionString, ResourceWithConnectionStringPromise>((): FluentPromiseTransitions => ({
+const ResourceWithConnectionStringPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithConnectionString, ResourceWithConnectionStringPromise>((): $aspireFluentPromiseTransitions => ({
     ["withConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
     ["withConnectionStringDirect"]: () => ResourceWithConnectionStringPromiseImpl,
 }));
@@ -3588,7 +3588,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
 }
 
 /** @internal */
-const ResourceWithEnvironmentPromiseImpl = createFluentPromiseClass<ResourceWithEnvironment, ResourceWithEnvironmentPromise>((): FluentPromiseTransitions => ({
+const ResourceWithEnvironmentPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithEnvironment, ResourceWithEnvironmentPromise>((): $aspireFluentPromiseTransitions => ({
     ["testWithEnvironmentCallback"]: () => ResourceWithEnvironmentPromiseImpl,
     ["withEnvironmentVariables"]: () => ResourceWithEnvironmentPromiseImpl,
 }));
@@ -3616,7 +3616,7 @@ class TestMarkerResourceImpl extends ResourceBuilderBase<ITestMarkerResourceHand
 }
 
 /** @internal */
-const TestMarkerResourcePromiseImpl = createFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>((): FluentPromiseTransitions => ({
+const TestMarkerResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>((): $aspireFluentPromiseTransitions => ({
 }));
 
 // ============================================================================
