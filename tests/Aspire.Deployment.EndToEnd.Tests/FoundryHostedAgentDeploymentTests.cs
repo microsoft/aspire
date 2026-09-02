@@ -472,37 +472,51 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         discoveryCancellation.CancelAfter(TimeSpan.FromMinutes(2));
         try
         {
-            for (var requestId = 2; ; requestId++)
+            var requestId = 2;
+            while (true)
             {
-                McpResponse tools;
-                try
+                var toolNames = new HashSet<string>(StringComparer.Ordinal);
+                string? cursor = null;
+                var retryDiscovery = false;
+                do
                 {
-                    tools = await SendMcpRequestAsync(
-                        client,
-                        endpoint,
-                        accessToken.Token,
-                        initialize.SessionId,
-                        negotiatedProtocol,
-                        $$$"""{"jsonrpc":"2.0","id":{{{requestId}}},"method":"tools/list","params":{}}""",
-                        discoveryCancellation.Token);
+                    McpResponse tools;
+                    try
+                    {
+                        tools = await SendMcpRequestAsync(
+                            client,
+                            endpoint,
+                            accessToken.Token,
+                            initialize.SessionId,
+                            negotiatedProtocol,
+                            CreateToolsListPayload(requestId++, cursor),
+                            discoveryCancellation.Token);
+                    }
+                    catch (HttpRequestException ex)
+                        when (ex.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        // Foundry documents HTTP 500 from tools/list as transient while tool
+                        // discovery converges immediately after Toolbox provisioning.
+                        // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#troubleshooting.
+                        retryDiscovery = true;
+                        break;
+                    }
+
+                    foreach (var tool in tools.Result.GetProperty("tools").EnumerateArray())
+                    {
+                        toolNames.Add(tool.GetProperty("name").GetString()
+                            ?? throw new InvalidOperationException("A discovered MCP tool did not have a name."));
+                    }
+
+                    cursor = tools.Result.TryGetProperty("nextCursor", out var nextCursor)
+                        ? nextCursor.GetString()
+                        : null;
                 }
-                catch (HttpRequestException ex)
-                    when (ex.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+                while (!string.IsNullOrEmpty(cursor));
+
+                if (!retryDiscovery && toolNames.Contains("knowledge-base"))
                 {
-                    // Foundry documents HTTP 500 from tools/list as transient while tool
-                    // discovery converges immediately after Toolbox provisioning.
-                    // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#troubleshooting.
-                    await Task.Delay(TimeSpan.FromSeconds(5), discoveryCancellation.Token);
-                    continue;
-                }
-                var toolNames = tools.Result.GetProperty("tools")
-                    .EnumerateArray()
-                    .Select(tool => tool.GetProperty("name").GetString()
-                        ?? throw new InvalidOperationException("A discovered MCP tool did not have a name."))
-                    .ToArray();
-                if (toolNames.Contains("knowledge-base", StringComparer.Ordinal))
-                {
-                    return toolNames;
+                    return toolNames.ToArray();
                 }
 
                 // Toolbox tool discovery is eventually consistent immediately after provisioning.
@@ -514,6 +528,29 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             throw new TimeoutException(
                 "Foundry Toolbox did not discover the 'knowledge-base' Azure AI Search tool within two minutes.");
         }
+    }
+
+    private static string CreateToolsListPayload(int requestId, string? cursor)
+    {
+        // MCP tools/list pagination sends an opaque cursor in the next request:
+        //   {"jsonrpc":"2.0","id":3,"method":"tools/list","params":{"cursor":"opaque"}}
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("jsonrpc", "2.0");
+            writer.WriteNumber("id", requestId);
+            writer.WriteString("method", "tools/list");
+            writer.WriteStartObject("params");
+            if (cursor is not null)
+            {
+                writer.WriteString("cursor", cursor);
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     private static async Task<McpResponse> SendMcpRequestAsync(
