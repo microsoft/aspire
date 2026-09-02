@@ -310,7 +310,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .ToList();
         var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
         var usesAmbientNuGetConfiguration = string.IsNullOrWhiteSpace(packageSourceOverride);
-        using var temporaryNuGetConfig = usesAmbientNuGetConfiguration && restoreSources.PackageSourceMappings is not null
+        using var temporaryNuGetConfig = usesAmbientNuGetConfiguration
             ? await CreateComposedBundleNuGetConfigAsync(restoreSources, cancellationToken).ConfigureAwait(false)
             : await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
@@ -770,7 +770,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         using var temporaryRestoreConfig = useComposedRestoreConfig
-            ? await CreateComposedNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false)
+            ? await CreateComposedNuGetConfigAsync(restoreSources, cancellationToken).ConfigureAwait(false)
             : hasCredentialBearingMappedSource
                 ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
                 : null;
@@ -1044,7 +1044,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var configPaths = await _nugetService.GetNuGetConfigPathsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
         return await TemporaryNuGetConfig.CreateComposedAsync(
             configPaths,
-            restoreSources.PackageSourceMappings!,
+            restoreSources.PackageSourceMappings ?? [],
             restoreSources.ConfigureGlobalPackagesFolder,
             restoreSources.ConfigureGlobalPackagesFolder
                 ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
@@ -1053,17 +1053,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     private async Task<TemporaryNuGetConfig> CreateComposedNuGetConfigAsync(
-        string restoreDir,
         IntegrationRestoreSources restoreSources,
         CancellationToken cancellationToken)
     {
         var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
-            new DirectoryInfo(restoreDir),
+            new DirectoryInfo(_appDirectoryPath),
             new ProcessInvocationOptions { SuppressLogging = true },
             cancellationToken).ConfigureAwait(false);
         if (exitCode != 0)
         {
-            throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{restoreDir}'.");
+            throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{_appDirectoryPath}'.");
         }
 
         return await TemporaryNuGetConfig.CreateComposedAsync(
