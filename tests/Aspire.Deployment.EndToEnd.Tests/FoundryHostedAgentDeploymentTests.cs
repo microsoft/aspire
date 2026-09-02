@@ -324,19 +324,35 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 new SearchableField("content")
             }
         };
-        for (var attempt = 0; ; attempt++)
+        using var rbacPropagationCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        rbacPropagationCancellation.CancelAfter(TimeSpan.FromMinutes(10));
+        try
         {
-            try
+            while (true)
             {
-                await indexClient.CreateOrUpdateIndexAsync(index, cancellationToken: cancellationToken);
-                break;
+                try
+                {
+                    await indexClient.CreateOrUpdateIndexAsync(
+                        index,
+                        cancellationToken: rbacPropagationCancellation.Token);
+                    break;
+                }
+                catch (RequestFailedException ex) when (ex.Status == 403)
+                {
+                    // Azure RBAC propagation can take up to ten minutes after the test principal
+                    // receives Search Service Contributor on the newly provisioned service.
+                    // See https://learn.microsoft.com/azure/role-based-access-control/troubleshooting#role-assignment-changes-are-not-being-detected.
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(5),
+                        rbacPropagationCancellation.Token);
+                }
             }
-            catch (RequestFailedException ex) when (ex.Status == 403 && attempt < 11)
-            {
-                // Azure RBAC propagation is eventually consistent after the test principal receives
-                // Search Service Contributor on the newly provisioned service.
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                "Search Service Contributor did not propagate within ten minutes.");
         }
     }
 
