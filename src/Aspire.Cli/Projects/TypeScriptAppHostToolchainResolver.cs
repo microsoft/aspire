@@ -179,7 +179,12 @@ internal static class TypeScriptAppHostToolchainResolver
             ExtensionLaunchCapability = toolchain == TypeScriptAppHostToolchain.Deno
                 ? KnownCapabilities.Deno
                 : baseRuntimeSpec.ExtensionLaunchCapability,
-            CertificateBundleEnvironmentVariable = baseRuntimeSpec.CertificateBundleEnvironmentVariable,
+            // DENO_CERT is supported across the Deno 2 range. NODE_EXTRA_CA_CERTS, inherited from
+            // the Node runtime spec, is only available in Deno 2.8 and later.
+            // https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
+            CertificateBundleEnvironmentVariable = toolchain == TypeScriptAppHostToolchain.Deno
+                ? "DENO_CERT"
+                : baseRuntimeSpec.CertificateBundleEnvironmentVariable,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
     }
