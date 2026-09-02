@@ -343,15 +343,6 @@ public static class ContainerResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(entrypoint);
 
         builder.Resource.Entrypoint = entrypoint;
-        if (builder.Resource is IResourceProjection projection)
-        {
-            // The projection is only a typed configuration view. Persist property-backed container
-            // configuration beside the owner's annotations so realization never needs the facade.
-            projection.Owner.Annotations
-                .OfType<ContainerResourceProjectionAnnotation>()
-                .Single()
-                .Entrypoint = entrypoint;
-        }
 
         return builder;
     }

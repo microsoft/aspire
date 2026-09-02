@@ -64,6 +64,26 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void DirectProjectionPropertyChangesRemainVisibleFromOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile();
+
+        Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
+        projectionBuilder.Resource.Entrypoint = "/app/worker";
+#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+        projectionBuilder.Resource.ShellExecution = true;
+#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
+
+        var projection = Assert.Single(
+            executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        Assert.Equal("/app/worker", projection.Entrypoint);
+        Assert.True(projection.ShellExecution);
+    }
+
+    [Fact]
     public void ManifestCallbackAddedAfterProjectionUsesOwnerAnnotations()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

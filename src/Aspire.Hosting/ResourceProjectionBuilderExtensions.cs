@@ -33,12 +33,8 @@ internal static class ResourceProjectionBuilderExtensions
                     $"Resource '{builder.Resource.Name}' already has a non-container projection selected for the '{operation}' operation.");
             }
 
-            var existingProjectionAnnotation = builder.Resource.Annotations
-                .OfType<ContainerResourceProjectionAnnotation>()
-                .Single();
             var existingProjectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(containerProjection);
             configure(existingProjectionBuilder);
-            SynchronizeProperties(containerProjection, existingProjectionAnnotation);
             return builder;
         }
 
@@ -47,7 +43,7 @@ internal static class ResourceProjectionBuilderExtensions
         // using the canonical object identity established before projection registration.
         var projection = new ContainerResourceProjection<T>(builder.Resource);
         var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder<ContainerResource>(projection);
-        var projectionAnnotation = new ContainerResourceProjectionAnnotation();
+        var projectionAnnotation = new ContainerResourceProjectionAnnotation(projection);
         var sourceAnnotation = new ResourceProjectionAnnotation(
             new OperationResourceProjectionSource(operation, projection));
 
@@ -56,20 +52,7 @@ internal static class ResourceProjectionBuilderExtensions
         builder.Resource.Annotations.Add(projectionAnnotation);
         builder.Resource.Annotations.Add(sourceAnnotation);
         configure(projectionBuilder);
-        SynchronizeProperties(projection, projectionAnnotation);
 
         return builder;
-    }
-
-    private static void SynchronizeProperties(
-        ContainerResource projection,
-        ContainerResourceProjectionAnnotation annotation)
-    {
-        // Most container configuration is annotation-based and therefore writes directly to the
-        // owner. Preserve the two legacy ContainerResource properties in the same owner-side model.
-        annotation.Entrypoint = projection.Entrypoint;
-#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
-        annotation.ShellExecution = projection.ShellExecution;
-#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
     }
 }

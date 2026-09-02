@@ -12,17 +12,22 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 public sealed class ContainerResourceProjectionAnnotation : IResourceAnnotation
 {
-    internal ContainerResourceProjectionAnnotation()
+    private readonly ContainerResource _projection;
+
+    internal ContainerResourceProjectionAnnotation(ContainerResource projection)
     {
+        _projection = projection;
     }
 
     /// <summary>
     /// Gets the container entrypoint configured through the projection.
     /// </summary>
-    public string? Entrypoint { get; internal set; }
+    public string? Entrypoint => _projection.Entrypoint;
 
     /// <summary>
     /// Gets whether projected container arguments should be executed through a shell.
     /// </summary>
-    public bool? ShellExecution { get; internal set; }
+#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+    public bool? ShellExecution => _projection.ShellExecution;
+#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
 }
