@@ -31,8 +31,8 @@ internal interface INuGetService
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Path to the package probe manifest.</returns>
-    Task<string> RestorePackagesAsync(
+    /// <returns>The package probe manifest and ownership of any temporary restore artifacts.</returns>
+    Task<PackageRestoreResult> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -47,6 +47,9 @@ internal interface INuGetService
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
+    internal const string TemporaryCredentialRestoreDirectoryName = "temporary";
+    internal const string TemporaryCredentialRestoreDirectoryPrefix = "credential";
+
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
@@ -70,7 +73,7 @@ internal sealed class BundleNuGetService : INuGetService
         _bundleService = bundleService;
     }
 
-    public async Task<string> RestorePackagesAsync(
+    public async Task<PackageRestoreResult> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -113,27 +116,24 @@ internal sealed class BundleNuGetService : INuGetService
             nugetConfigInspection.ContainsCredentialMaterial ||
             sensitiveSources.Length > 0;
 
-        // Compute a hash for the package set and all effective restore inputs to create a unique restore location.
-        // A credential-backed restore gets a fresh opaque identity, and neither its config nor source
-        // values enter the persistent hash. This prevents both reuse and secret-derived cache names.
-        var nugetConfigCacheIdentity = containsCredentialMaterial
-            ? $"credentialed:{Guid.NewGuid():N}"
-            : nugetConfigInspection.CacheIdentity;
-        var packageHash = ComputePackageHash(
-            packageList,
-            targetFramework,
-            runtimeIdentifier,
-            managedPath,
-            containsCredentialMaterial ? null : sourceList,
-            nugetConfigCacheIdentity);
-        var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
-        var restoreDir = Path.Combine(restoreCacheDirectory, packageHash);
+        TemporaryCacheDirectory? temporaryRestoreDirectory = null;
+        var restoreDir = containsCredentialMaterial
+            ? CreateTemporaryCredentialRestoreDirectory(workingDirectory, out temporaryRestoreDirectory)
+            : Path.Combine(
+                GetPackageRestoreCacheDirectory(workingDirectory),
+                ComputePackageHash(
+                    packageList,
+                    targetFramework,
+                    runtimeIdentifier,
+                    managedPath,
+                    sourceList,
+                    nugetConfigInspection.CacheIdentity,
+                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment)));
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
         var lockPath = Path.Combine(restoreDir, "restore.lock");
 
-        var restoreCompleted = false;
         try
         {
             // Credential-backed restores have a unique directory and do not need cross-process
@@ -149,8 +149,9 @@ internal sealed class BundleNuGetService : INuGetService
             if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
             {
                 _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
-                restoreCompleted = true;
-                return manifestPath;
+                var cachedResult = new PackageRestoreResult(manifestPath, temporaryRestoreDirectory);
+                temporaryRestoreDirectory = null;
+                return cachedResult;
             }
 
             Directory.CreateDirectory(objDir);
@@ -296,15 +297,13 @@ internal sealed class BundleNuGetService : INuGetService
             }
 
             _logger.LogDebug("Package manifest created at {Path}", manifestPath);
-            restoreCompleted = true;
-            return manifestPath;
+            var restoreResult = new PackageRestoreResult(manifestPath, temporaryRestoreDirectory);
+            temporaryRestoreDirectory = null;
+            return restoreResult;
         }
         finally
         {
-            if (containsCredentialMaterial && !restoreCompleted)
-            {
-                TryDeleteDirectory(restoreDir, _logger);
-            }
+            temporaryRestoreDirectory?.Dispose();
         }
     }
 
@@ -391,7 +390,8 @@ internal sealed class BundleNuGetService : INuGetService
         string? runtimeIdentifier,
         string? managedPath = null,
         IEnumerable<string>? sources = null,
-        string? nugetConfigCacheIdentity = null)
+        string? nugetConfigCacheIdentity = null,
+        string? nugetPackagesPath = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
@@ -405,10 +405,54 @@ internal sealed class BundleNuGetService : INuGetService
         {
             content += $";config:{nugetConfigCacheIdentity}";
         }
+        if (nugetPackagesPath is not null)
+        {
+            content += $";global-packages:{nugetPackagesPath}";
+        }
 
         // Use SHA256 for stable hash across processes/runtimes
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+    }
+
+    private string CreateTemporaryCredentialRestoreDirectory(
+        string workingDirectory,
+        out TemporaryCacheDirectory temporaryRestoreDirectory)
+    {
+        var temporaryRoot = Path.Combine(
+            GetPackageRestoreCacheDirectory(workingDirectory),
+            TemporaryCredentialRestoreDirectoryName);
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(temporaryRoot);
+        CleanupAbandonedTemporaryCredentialRestoreDirectories(temporaryRoot);
+        temporaryRestoreDirectory = TemporaryCacheDirectory.Create(
+            temporaryRoot,
+            TemporaryCredentialRestoreDirectoryPrefix,
+            path => TryDeleteDirectory(path, _logger),
+            path => TryDeleteFile(path, _logger));
+        return temporaryRestoreDirectory.FullName;
+    }
+
+    private void CleanupAbandonedTemporaryCredentialRestoreDirectories(string temporaryRoot)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(
+            temporaryRoot,
+            $".{TemporaryCredentialRestoreDirectoryPrefix}-*"))
+        {
+            try
+            {
+                var leasePath = TemporaryCacheDirectory.GetLeasePath(directory);
+                using (TemporaryCacheDirectory.OpenLease(directory))
+                {
+                    TryDeleteDirectory(directory, _logger);
+                }
+
+                TryDeleteFile(leasePath, _logger);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogDebug(ex, "Unable to clean temporary package restore directory {Path}; it may still be in use.", directory);
+            }
+        }
     }
 
     private static async Task<NuGetConfigInspection> InspectNuGetConfigAsync(string? nugetConfigPath, CancellationToken cancellationToken)
@@ -470,7 +514,19 @@ internal sealed class BundleNuGetService : INuGetService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Unable to remove non-reusable package restore directory {Path}.", path);
+            logger.LogDebug(ex, "Unable to remove temporary package restore directory {Path}.", path);
+        }
+    }
+
+    private static void TryDeleteFile(string path, ILogger logger)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Unable to remove temporary package restore lease {Path}.", path);
         }
     }
 
@@ -518,5 +574,19 @@ internal sealed class BundleNuGetService : INuGetService
         string[] CredentialBearingSources)
     {
         public static NuGetConfigInspection Empty { get; } = new(null, false, []);
+    }
+}
+
+internal sealed class PackageRestoreResult(string manifestPath, TemporaryCacheDirectory? temporaryDirectory) : IDisposable
+{
+    private TemporaryCacheDirectory? _temporaryDirectory = temporaryDirectory;
+
+    public string ManifestPath { get; } = manifestPath;
+
+    public bool IsTemporary => _temporaryDirectory is not null;
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _temporaryDirectory, null)?.Dispose();
     }
 }

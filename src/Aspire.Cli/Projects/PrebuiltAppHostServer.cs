@@ -60,7 +60,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private string? _integrationLibsPath;
     private string? _integrationProbeManifestPath;
     private AppHostServerProjectLayout? _selectedProjectLayout;
-    private readonly HashSet<string> _nonReusablePackageRestoreDirectories = new(StringComparers.FileSystemPath);
+    private readonly List<PackageRestoreResult> _temporaryPackageRestores = [];
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -152,7 +152,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         try
         {
-            CleanupNonReusablePackageRestoreDirectories();
+            CleanupTemporaryPackageRestoreDirectories();
             _selectedProjectLayout = null;
             _contentRootPath = _workingDirectory;
             _integrationLibsPath = null;
@@ -226,12 +226,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         catch (OperationCanceledException)
         {
-            CleanupNonReusablePackageRestoreDirectories();
+            CleanupTemporaryPackageRestoreDirectories();
             throw;
         }
         catch (AppHostServerPrepareFailedException ex)
         {
-            CleanupNonReusablePackageRestoreDirectories();
+            CleanupTemporaryPackageRestoreDirectories();
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             AppendRestoreContextOnFailure(ex.Output, requestedChannel, effectivePackageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
@@ -242,7 +242,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         catch (Exception ex)
         {
-            CleanupNonReusablePackageRestoreDirectories();
+            CleanupTemporaryPackageRestoreDirectories();
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             var output = new OutputCollector();
             output.AppendError($"Failed to prepare: {ex.Message}");
@@ -315,7 +315,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             : await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
 
-        var manifestPath = await _nugetService.RestorePackagesAsync(
+        var restoreResult = await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
@@ -323,13 +323,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             ct: cancellationToken).ConfigureAwait(false);
-        if (temporaryNuGetConfig?.ContainsCredentialMaterial == true ||
-            sources?.Any(PackageSourceOverrideMappings.HasCredentialMaterial) == true)
+        if (restoreResult.IsTemporary)
         {
-            TrackNonReusablePackageRestoreDirectory(manifestPath);
+            _temporaryPackageRestores.Add(restoreResult);
+        }
+        else
+        {
+            restoreResult.Dispose();
         }
 
-        return manifestPath;
+        return restoreResult.ManifestPath;
     }
 
     /// <summary>
@@ -371,9 +374,41 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
         CancellationToken cancellationToken)
+        => await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent: null, cancellationToken).ConfigureAwait(false);
+
+    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
+        string projectContent,
+        IReadOnlyList<IntegrationReference> packageRefs,
+        IReadOnlyList<IntegrationReference> projectRefs,
+        string? restoreConfigContent,
+        CancellationToken cancellationToken)
+        => await ComputeRestoreInputsAsync(
+            projectContent,
+            packageRefs,
+            projectRefs,
+            restoreConfigContent,
+            nugetPackagesPath: null,
+            cancellationToken).ConfigureAwait(false);
+
+    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
+        string projectContent,
+        IReadOnlyList<IntegrationReference> packageRefs,
+        IReadOnlyList<IntegrationReference> projectRefs,
+        string? restoreConfigContent,
+        string? nugetPackagesPath,
+        CancellationToken cancellationToken)
     {
         var hash = new XxHash3();
         hash.Append(Encoding.UTF8.GetBytes(projectContent));
+        if (restoreConfigContent is not null)
+        {
+            hash.Append(Encoding.UTF8.GetBytes(restoreConfigContent));
+        }
+        if (nugetPackagesPath is not null)
+        {
+            hash.Append("\0NUGET_PACKAGES\0"u8);
+            hash.Append(Encoding.UTF8.GetBytes(nugetPackagesPath));
+        }
 
         var isFloating = HasFloatingPackageVersion(packageRefs);
 
@@ -876,6 +911,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 packageRefs,
                 projectRefs,
                 restoreConfigContent,
+                CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
                 cancellationToken).ConfigureAwait(false);
             restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
         }
@@ -1356,41 +1392,18 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// <inheritdoc />
     public void Dispose()
     {
-        CleanupNonReusablePackageRestoreDirectories();
+        CleanupTemporaryPackageRestoreDirectories();
         _layoutLease?.Dispose();
     }
 
-    private void TrackNonReusablePackageRestoreDirectory(string manifestPath)
+    private void CleanupTemporaryPackageRestoreDirectories()
     {
-        var restoreDirectory = Directory.GetParent(Path.GetFullPath(manifestPath));
-        var expectedRestoreRoot = Path.Combine(
-            ConfigurationHelper.GetIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath)).FullName,
-            "package-restore");
-        if (restoreDirectory?.Parent is not null &&
-            string.Equals(restoreDirectory.Parent.FullName, expectedRestoreRoot, StringComparisons.FileSystemPath))
+        foreach (var restore in _temporaryPackageRestores)
         {
-            _nonReusablePackageRestoreDirectories.Add(restoreDirectory.FullName);
-        }
-    }
-
-    private void CleanupNonReusablePackageRestoreDirectories()
-    {
-        foreach (var restoreDirectory in _nonReusablePackageRestoreDirectories)
-        {
-            try
-            {
-                if (Directory.Exists(restoreDirectory))
-                {
-                    Directory.Delete(restoreDirectory, recursive: true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogDebug(ex, "Unable to remove non-reusable package restore directory {Path}.", restoreDirectory);
-            }
+            restore.Dispose();
         }
 
-        _nonReusablePackageRestoreDirectories.Clear();
+        _temporaryPackageRestores.Clear();
     }
 
     private static string CreateAppSettingsContent(

@@ -134,6 +134,48 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenRestoreConfigContentChanges()
+    {
+        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project><PropertyGroup><RestoreConfigFile>nuget.config</RestoreConfigFile></PropertyGroup></Project>",
+            [],
+            [],
+            "<configuration><packageSources><add key=\"a\" value=\"https://example.invalid/a\" /></packageSources></configuration>",
+            CancellationToken.None);
+
+        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project><PropertyGroup><RestoreConfigFile>nuget.config</RestoreConfigFile></PropertyGroup></Project>",
+            [],
+            [],
+            "<configuration><packageSources><add key=\"b\" value=\"https://example.invalid/b\" /></packageSources></configuration>",
+            CancellationToken.None);
+
+        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenGlobalPackagesFolderChanges()
+    {
+        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            restoreConfigContent: null,
+            nugetPackagesPath: Path.GetFullPath("packages-a"),
+            CancellationToken.None);
+
+        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            restoreConfigContent: null,
+            nugetPackagesPath: Path.GetFullPath("packages-b"),
+            CancellationToken.None);
+
+        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
+    }
+
+    [Fact]
     public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2364,7 +2406,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             return Task.FromResult((0, (string?)null));
         };
 
-        string? nonReusableRestoreDirectory = null;
+        string? temporaryRestoreDirectory = null;
         try
         {
             var result = await server.PrepareAsync(
@@ -2382,12 +2424,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 restoreConfig.Descendants("packageSourceMapping").Elements("packageSource"),
                 source => source.Attribute("key")?.Value == "private");
 
-            nonReusableRestoreDirectory = Directory.GetParent(server.IntegrationProbeManifestPath!)!.FullName;
-            Assert.True(Directory.Exists(nonReusableRestoreDirectory));
+            temporaryRestoreDirectory = Directory.GetParent(server.IntegrationProbeManifestPath!)!.FullName;
+            Assert.True(Directory.Exists(temporaryRestoreDirectory));
+            Assert.StartsWith(
+                Path.Combine(
+                    workspace.WorkspaceRoot.FullName,
+                    ".aspire",
+                    "integrations",
+                    "package-restore",
+                    BundleNuGetService.TemporaryCredentialRestoreDirectoryName),
+                temporaryRestoreDirectory,
+                StringComparisons.FileSystemPath);
 
             server.Dispose();
 
-            Assert.False(Directory.Exists(nonReusableRestoreDirectory));
+            Assert.False(Directory.Exists(temporaryRestoreDirectory));
+            Assert.False(File.Exists(TemporaryCacheDirectory.GetLeasePath(temporaryRestoreDirectory)));
         }
         finally
         {

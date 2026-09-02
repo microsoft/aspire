@@ -13,6 +13,7 @@ namespace Aspire.Cli.Utils;
 internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
+    internal const string NuGetPackagesEnvironmentVariable = "NUGET_PACKAGES";
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -74,6 +75,46 @@ internal static class CliPathHelper
         => Path.EndsInDirectorySeparator(path)
             ? path
             : path + Path.DirectorySeparatorChar;
+
+    /// <summary>
+    /// Returns the normalized global packages folder selected by <c>NUGET_PACKAGES</c>, or
+    /// <see langword="null" /> when the environment variable is not set.
+    /// </summary>
+    /// <remarks>
+    /// NuGet gives this environment variable precedence over <c>globalPackagesFolder</c> from its
+    /// configuration. It requires an absolute path, normalizes directory separators, and then calls
+    /// <see cref="Path.GetFullPath(string)" />. Matching that normalization keeps cache identities
+    /// aligned with the package paths NuGet writes into <c>project.assets.json</c>.
+    /// See https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Configuration/Utility/SettingsUtility.cs.
+    /// </remarks>
+    internal static string? GetNuGetPackagesEnvironmentPath(IEnvironment environment)
+    {
+        var path = environment.GetEnvironmentVariable(NuGetPackagesEnvironmentVariable);
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
+    }
+
+    /// <summary>
+    /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
+    /// </summary>
+    /// <remarks>
+    /// The default NuGet <c>globalPackagesFolder</c> used by <c>TemporaryNuGetConfig</c> is relative to
+    /// the config file, which is unsafe for generated configs that may be copied from or disposed with a
+    /// temporary directory. Anchoring staging restores under <c>ASPIRE_HOME</c> keeps package paths alive
+    /// for manifests that reference them and keys the cache by feed URL to avoid sharing the same
+    /// stable-shaped package versions across different staging feeds.
+    /// </remarks>
+    internal static string GetStagingNuGetPackagesFeedDirectory(DirectoryInfo aspireHomeDirectory, string? feedUrl)
+    {
+        ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
+
+        var cacheKey = ComputeStagingFeedCacheKey(feedUrl) ?? "default";
+        return Path.Combine(GetStagingNuGetPackagesDirectory(aspireHomeDirectory), cacheKey);
+    }
 
     /// <summary>
     /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,

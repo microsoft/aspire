@@ -6,6 +6,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -40,9 +41,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var manifestPath = await service.RestorePackagesAsync(
+        using var restoreResult = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
+        var manifestPath = restoreResult.ManifestPath;
 
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
         var restoreDirectory = Directory.GetParent(manifestPath)!.FullName;
@@ -76,17 +78,51 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var resultA = await service.RestorePackagesAsync(
+        using var resultA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/feed-a/index.json"],
             workingDirectory: appHostDirectory.FullName);
 
-        var resultB = await service.RestorePackagesAsync(
+        using var resultB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/feed-b/index.json"],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(resultA, resultB);
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentGlobalPackagesFolders()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var environmentVariables = new Dictionary<string, string?>
+        {
+            [CliPathHelper.NuGetPackagesEnvironmentVariable] = Path.Combine(workspace.WorkspaceRoot.FullName, "packages-a")
+        };
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(environmentVariables),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var resultA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+        environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] =
+            Path.Combine(workspace.WorkspaceRoot.FullName, "packages-b");
+        using var resultB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
     }
 
     [Fact]
@@ -124,18 +160,18 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var resultA = await service.RestorePackagesAsync(
+        using var resultA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/shared/index.json"],
             nugetConfigPath: firstConfigPath,
             workingDirectory: appHostDirectory.FullName);
-        var resultB = await service.RestorePackagesAsync(
+        using var resultB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/shared/index.json"],
             nugetConfigPath: secondConfigPath,
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(resultA, resultB);
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
     }
 
     [Fact]
@@ -165,16 +201,34 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var firstResult = await service.RestorePackagesAsync(
+        using var firstResult = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPath: configPath,
             workingDirectory: appHostDirectory.FullName);
-        var secondResult = await service.RestorePackagesAsync(
+        using var secondResult = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             nugetConfigPath: configPath,
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(firstResult, secondResult);
+        var temporaryRoot = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            BundleNuGetService.TemporaryCredentialRestoreDirectoryName);
+        Assert.NotEqual(firstResult.ManifestPath, secondResult.ManifestPath);
+        Assert.True(firstResult.IsTemporary);
+        Assert.True(secondResult.IsTemporary);
+        Assert.StartsWith(temporaryRoot, firstResult.ManifestPath, StringComparisons.FileSystemPath);
+        Assert.StartsWith(temporaryRoot, secondResult.ManifestPath, StringComparisons.FileSystemPath);
+        Assert.True(Directory.Exists(Directory.GetParent(firstResult.ManifestPath)!.FullName));
+        Assert.True(Directory.Exists(Directory.GetParent(secondResult.ManifestPath)!.FullName));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(temporaryRoot));
+        }
     }
 
     [Fact]
@@ -197,16 +251,58 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var firstResult = await service.RestorePackagesAsync(
+        using var firstResult = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: [credentialBearingSource],
             workingDirectory: appHostDirectory.FullName);
-        var secondResult = await service.RestorePackagesAsync(
+        using var secondResult = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: [credentialBearingSource],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(firstResult, secondResult);
+        Assert.NotEqual(firstResult.ManifestPath, secondResult.ManifestPath);
+        Assert.True(firstResult.IsTemporary);
+        Assert.True(secondResult.IsTemporary);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RemovesAbandonedCredentialRestoreDirectories()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var temporaryRoot = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            BundleNuGetService.TemporaryCredentialRestoreDirectoryName);
+        var abandonedDirectory = Path.Combine(
+            temporaryRoot,
+            $".{BundleNuGetService.TemporaryCredentialRestoreDirectoryPrefix}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(abandonedDirectory);
+        File.WriteAllText(Path.Combine(abandonedDirectory, "project.assets.json"), "credential-bearing restore metadata");
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var result = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: ["https://packages.example.com/v3/index.json?sig=secret"],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.False(Directory.Exists(abandonedDirectory));
+        Assert.False(File.Exists(TemporaryCacheDirectory.GetLeasePath(abandonedDirectory)));
+        Assert.True(Directory.Exists(Directory.GetParent(result.ManifestPath)!.FullName));
     }
 
     [Fact]
@@ -221,21 +317,26 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             string.Empty);
         const string credentialBearingSource = "https://user:password@packages.example.com/v3/index.json?sig=secret";
+        string? restoreOutputPath = null;
         var executionFactory = new TestProcessExecutionFactory
         {
-            CreateExecutionCallback = (args, environment, _, options) => new TestProcessExecution(
-                "aspire-managed",
-                args,
-                environment,
-                options,
-                (_, _, _) => Task.FromResult((0, (string?)null)),
-                () => 1)
+            CreateExecutionCallback = (args, environment, _, options) =>
             {
-                WaitForExitAsyncCallback = (invocationOptions, _) =>
+                restoreOutputPath = GetArgumentValue(args, "--output");
+                return new TestProcessExecution(
+                    "aspire-managed",
+                    args,
+                    environment,
+                    options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)),
+                    () => 1)
                 {
-                    invocationOptions.StandardErrorCallback?.Invoke($"Unable to load the service index for source {credentialBearingSource}.");
-                    return Task.FromResult(1);
-                }
+                    WaitForExitAsyncCallback = (invocationOptions, _) =>
+                    {
+                        invocationOptions.StandardErrorCallback?.Invoke($"Unable to load the service index for source {credentialBearingSource}.");
+                        return Task.FromResult(1);
+                    }
+                };
             }
         };
         var sink = new TestSink();
@@ -255,8 +356,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(credentialBearingSource, exception.Message);
         Assert.Contains("packages.example.com", exception.Message);
         Assert.DoesNotContain(sink.Writes, write => write.Message?.Contains(credentialBearingSource, StringComparison.Ordinal) == true);
-        Assert.Empty(Directory.EnumerateDirectories(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore")));
+        Assert.NotNull(restoreOutputPath);
+        Assert.False(Directory.Exists(Directory.GetParent(restoreOutputPath)!.FullName));
     }
 
     [Fact]
@@ -319,7 +420,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        await service.RestorePackagesAsync(
+        using var result = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName,
             nugetConfigPath: nugetConfigPath);
@@ -365,9 +466,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+        using var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(manifestPath, result);
+        Assert.Equal(manifestPath, result.ManifestPath);
         Assert.Empty(invocations);
     }
 
@@ -416,9 +517,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+        using var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(manifestPath, result);
+        Assert.Equal(manifestPath, result.ManifestPath);
         Assert.Equal(2, invocations.Count);
         Assert.Equal("restore", invocations[0][1]);
         Assert.Equal("manifest", invocations[1][1]);
@@ -445,17 +546,17 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var resultA = await service.RestorePackagesAsync(
+        using var resultA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
 
         File.WriteAllText(managedPath, "v2-changed");
 
-        var resultB = await service.RestorePackagesAsync(
+        using var resultB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(resultA, resultB);
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
     }
 
     [Fact]
@@ -483,24 +584,24 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
 
         // Same packages + sources across two apphosts in one workspace should share the cache.
-        var sharedManifestFirst = await service.RestorePackagesAsync(
+        using var sharedManifestFirst = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: firstAppHost.FullName);
-        var sharedManifestSecond = await service.RestorePackagesAsync(
+        using var sharedManifestSecond = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, sharedManifestFirst, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith(restoreRoot, sharedManifestSecond, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(sharedManifestFirst, sharedManifestSecond);
+        Assert.StartsWith(restoreRoot, sharedManifestFirst.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, sharedManifestSecond.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(sharedManifestFirst.ManifestPath, sharedManifestSecond.ManifestPath);
 
         // Different package sets must NOT collide even when workspace is shared.
-        var divergedManifest = await service.RestorePackagesAsync(
+        using var divergedManifest = await service.RestorePackagesAsync(
             [("Aspire.Hosting.Python", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, divergedManifest, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual(sharedManifestSecond, divergedManifest);
+        Assert.StartsWith(restoreRoot, divergedManifest.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(sharedManifestSecond.ManifestPath, divergedManifest.ManifestPath);
     }
 
     [Fact]
@@ -567,8 +668,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         allowFirstRestoreToComplete.SetResult();
 
         var manifests = await Task.WhenAll(firstRestoreTask, secondRestoreTask);
+        using var firstManifest = manifests[0];
+        using var secondManifest = manifests[1];
 
-        Assert.Equal(manifests[0], manifests[1]);
+        Assert.Equal(firstManifest.ManifestPath, secondManifest.ManifestPath);
         Assert.Equal(1, restoreAttemptCount);
         Assert.Equal(1, manifestAttemptCount);
         Assert.Equal(2, invocations.Count);
@@ -610,9 +713,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+        using var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(Path.Combine(restoreDirectory, "integration-package-probe-manifest.json"), result);
+        Assert.Equal(Path.Combine(restoreDirectory, "integration-package-probe-manifest.json"), result.ManifestPath);
         Assert.Equal(2, invocations.Count);
         Assert.DoesNotContain(invocations, args => args.Contains("layout"));
         Assert.Equal("manifest", invocations[1][1]);
