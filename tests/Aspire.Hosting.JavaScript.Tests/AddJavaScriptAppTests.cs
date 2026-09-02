@@ -245,6 +245,24 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishWithExistingDockerfileStillThrowsAfterRepeatedPublishConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
+        var app = builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun()
+            .PublishAsDockerFile(container => container.WithBuildArg("BUILD_CONFIGURATION", "Release"));
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenRunScriptNameIsExplicit()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

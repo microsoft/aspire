@@ -150,6 +150,13 @@ public static class ExecutableResourceBuilderExtensions
                 configure?.Invoke(container);
             });
 
+        // Repeated conversion only reconfigures the existing projection. Preserve any specialized
+        // manifest callback that an integration installed after the first conversion.
+        if (hasProjection)
+        {
+            return builder;
+        }
+
         return builder.WithManifestPublishingCallback(
             context => context.WriteProjectedContainerAsync(resource));
     }
