@@ -4,7 +4,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
-import { FileSystemOutdatedCliSuppressionStore } from '../utils/outdatedCliSuppressionStore';
+import {
+    FileSystemOutdatedCliSuppressionStore,
+    OutdatedCliNotificationClaim,
+} from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliSuppressionStore', () => {
     let directory: string;
@@ -37,10 +40,11 @@ suite('outdatedCliSuppressionStore', () => {
         nowStub.returns(1_001);
         const first = new FileSystemOutdatedCliSuppressionStore(directory);
         const second = new FileSystemOutdatedCliSuppressionStore(directory);
-        const claim = await first.tryClaimNotification('/cli/a\u000013.5.0');
-        assert.ok(claim);
+        let claim: OutdatedCliNotificationClaim | undefined;
 
         try {
+            claim = await first.tryClaimNotification('/cli/a\u000013.5.0');
+            assert.ok(claim);
             const storageDirectory = path.join(directory, 'outdated-cli-suppressions');
             const claimMarker = fs.readdirSync(storageDirectory)
                 .find(entry => entry.startsWith('notification-claim-'));
@@ -50,7 +54,7 @@ suite('outdatedCliSuppressionStore', () => {
             assert.deepStrictEqual(await second.readAll(), ['/cli/b\u000013.5.0']);
         }
         finally {
-            await claim.release();
+            await claim?.release();
             nowStub.restore();
         }
     });
