@@ -292,6 +292,61 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_PreservesFallbackFolderPrecedence()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var machineConfigDirectory = workspace.CreateDirectory("machine");
+        var machineConfigPath = Path.Combine(machineConfigDirectory.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(machineConfigPath, """
+            <configuration>
+              <fallbackPackageFolders>
+                <clear />
+                <add key="shared" value="./shared-machine" />
+                <add key="machine" value="./machine-packages" />
+              </fallbackPackageFolders>
+            </configuration>
+            """);
+        var userConfigDirectory = workspace.CreateDirectory("user");
+        var userConfigPath = Path.Combine(userConfigDirectory.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(userConfigPath, """
+            <configuration>
+              <fallbackPackageFolders>
+                <add key="user" value="./user-packages" />
+                <add key="shared" value="./shared-user" />
+              </fallbackPackageFolders>
+            </configuration>
+            """);
+        var workspaceConfigDirectory = workspace.CreateDirectory("repo");
+        var workspaceConfigPath = Path.Combine(workspaceConfigDirectory.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(workspaceConfigPath, """
+            <configuration>
+              <fallbackPackageFolders>
+                <add key="workspace" value="./workspace-packages" />
+              </fallbackPackageFolders>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [workspaceConfigPath, userConfigPath, machineConfigPath],
+            []);
+
+        var fallbackPackageFolders = XDocument.Load(config.ConfigFile.FullName)
+            .Descendants("fallbackPackageFolders")
+            .Single();
+        Assert.Equal("clear", fallbackPackageFolders.Elements().First().Name.LocalName);
+        Assert.Equal(
+            [
+                ("workspace", Path.Combine(workspaceConfigDirectory.FullName, "workspace-packages")),
+                ("user", Path.Combine(userConfigDirectory.FullName, "user-packages")),
+                ("shared", Path.Combine(userConfigDirectory.FullName, "shared-user")),
+                ("machine", Path.Combine(machineConfigDirectory.FullName, "machine-packages"))
+            ],
+            fallbackPackageFolders.Elements("add")
+                .Select(element => (element.Attribute("key")!.Value, element.Attribute("value")!.Value))
+                .ToArray());
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MoreLocalClearRemovesInheritedSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

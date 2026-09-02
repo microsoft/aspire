@@ -97,6 +97,12 @@ internal static class NuGetConfigComposer
             section.SetAttributeValue(attribute.Name, attribute.Value);
         }
 
+        if (string.Equals(sectionName, "fallbackPackageFolders", StringComparison.OrdinalIgnoreCase))
+        {
+            MergeFallbackPackageFolders(section, incomingSection, originDirectory);
+            return;
+        }
+
         if (string.Equals(incomingSection.Name.LocalName, "minPublishAgeExceptions", StringComparison.OrdinalIgnoreCase) &&
             !incomingSection.Elements().Any(element => string.Equals(element.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase)))
         {
@@ -131,6 +137,61 @@ internal static class NuGetConfigComposer
             {
                 existingItem.ReplaceWith(item);
             }
+        }
+    }
+
+    private static void MergeFallbackPackageFolders(
+        XElement section,
+        XElement incomingSection,
+        string originDirectory)
+    {
+        // NuGet searches fallback folders from the highest-precedence config to the lowest. Once the
+        // hierarchy is flattened every item has the same origin, so physical order must encode those
+        // precedence groups. Accumulate this config's items and insert them ahead of inherited items.
+        // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Configuration/Utility/SettingsUtility.cs
+        var higherPrecedenceItems = new List<XElement>();
+        foreach (var incomingItem in incomingSection.Elements())
+        {
+            if (string.Equals(incomingItem.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase))
+            {
+                section.RemoveNodes();
+                section.Add(new XElement(incomingItem.Name));
+                higherPrecedenceItems.Clear();
+                continue;
+            }
+
+            var item = new XElement(incomingItem);
+            ApplyEnvironmentTransforms(item);
+            ResolveRelativePaths(incomingSection.Name.LocalName, item, originDirectory);
+
+            section.Elements()
+                .FirstOrDefault(candidate => AreEquivalentItems(incomingSection.Name.LocalName, candidate, item))
+                ?.Remove();
+
+            var duplicate = higherPrecedenceItems
+                .FirstOrDefault(candidate => AreEquivalentItems(incomingSection.Name.LocalName, candidate, item));
+            if (duplicate is not null)
+            {
+                higherPrecedenceItems.Remove(duplicate);
+            }
+
+            higherPrecedenceItems.Add(item);
+        }
+
+        if (higherPrecedenceItems.Count == 0)
+        {
+            return;
+        }
+
+        var firstInheritedItem = section.Elements()
+            .FirstOrDefault(element => !string.Equals(element.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase));
+        if (firstInheritedItem is null)
+        {
+            section.Add(higherPrecedenceItems);
+        }
+        else
+        {
+            firstInheritedItem.AddBeforeSelf(higherPrecedenceItems);
         }
     }
 
