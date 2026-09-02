@@ -26,7 +26,7 @@
 
 | Key | Description | Provided By | Notes |
 | --- | --- | --- | --- |
-| Uri | Service specific URI built from host, port, credentials, and scheme. | PostgreSQL, PostgresDatabase, MySQL, MySqlDatabase, Redis, Garnet, Valkey, RabbitMQ, NATS, Seq, MongoDBDatabase, Milvus, Qdrant (gRPC), GitHubModel, OpenAI. | Formatting rules per resource are listed in [URI Construction](#uri-construction). |
+| Uri | Service specific URI built from host, port, credentials, and scheme. | PostgreSQL, PostgresDatabase, MySQL, MySqlDatabase, Redis, Garnet, Valkey, RabbitMQ, NATS, Seq, MongoDBDatabase, Milvus, Qdrant (gRPC), OpenAI. | Formatting rules per resource are listed in [URI Construction](#uri-construction). |
 
 ### Credentials and Secrets
 
@@ -34,7 +34,7 @@
 | --- | --- | --- | --- |
 | Username | Login user for the primary endpoint. | PostgreSQL, MySQL, SQL Server, Oracle, RabbitMQ, NATS, MongoDB. | Defaults align with respective containers (`postgres`, `root`, `sa`, etc.). |
 | Password | Login password. | PostgreSQL, MySQL, SQL Server, Oracle, Redis (when configured), Garnet (when configured), Valkey (when configured), RabbitMQ, NATS (when configured). | Omitted when the resource does not manage credentials. |
-| Key | API key or token parameter. | OpenAI, GitHubModel, Qdrant. | For GitHub Models the key is a PAT or minted token. |
+| Key | API key or token parameter. | OpenAI, Qdrant. | |
 
 ### Database Specific Metadata
 

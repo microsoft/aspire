@@ -51,7 +51,6 @@
     <Project Path="../../src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj" />
     <Project Path="../../src/Aspire.Hosting.Docker/Aspire.Hosting.Docker.csproj" />
     <Project Path="../../src/Aspire.Hosting.Garnet/Aspire.Hosting.Garnet.csproj" />
-    <Project Path="../../src/Aspire.Hosting.GitHub.Models/Aspire.Hosting.GitHub.Models.csproj" />
     <Project Path="../../src/Aspire.Hosting.Kafka/Aspire.Hosting.Kafka.csproj" />
     <Project Path="../../src/Aspire.Hosting.Keycloak/Aspire.Hosting.Keycloak.csproj" />
     <Project Path="../../src/Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.csproj" />
@@ -199,10 +198,6 @@
   </Folder>
   <Folder Name="/playground/FoundryAgentEnterprise/">
     <Project Path="../FoundryAgentEnterprise/FoundryAgentEnterprise.AppHost/FoundryAgentEnterprise.AppHost.csproj" />
-  </Folder>
-  <Folder Name="/playground/GitHubModelsEndToEnd/">
-    <Project Path="../GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
-    <Project Path="../GitHubModelsEndToEnd/GitHubModelsEndToEnd.WebStory/GitHubModelsEndToEnd.WebStory.csproj" />
   </Folder>
   <Folder Name="/playground/ExternalServices/">
     <Project Path="../ExternalServices/ExternalServices.AppHost/ExternalServices.AppHost.csproj" />
@@ -423,7 +418,6 @@
     <Project Path="../../tests/Aspire.Hosting.DevTunnels.Tests/Aspire.Hosting.DevTunnels.Tests.csproj" />
     <Project Path="../../tests/Aspire.Hosting.Docker.Tests/Aspire.Hosting.Docker.Tests.csproj" />
     <Project Path="../../tests/Aspire.Hosting.Garnet.Tests/Aspire.Hosting.Garnet.Tests.csproj" />
-    <Project Path="../../tests/Aspire.Hosting.GitHub.Models.Tests/Aspire.Hosting.GitHub.Models.Tests.csproj" />
     <Project Path="../../tests/Aspire.Hosting.Kafka.Tests/Aspire.Hosting.Kafka.Tests.csproj" />
     <Project Path="../../tests/Aspire.Hosting.Keycloak.Tests/Aspire.Hosting.Keycloak.Tests.csproj" />
     <Project Path="../../tests/Aspire.Hosting.Kubernetes.Tests/Aspire.Hosting.Kubernetes.Tests.csproj" />

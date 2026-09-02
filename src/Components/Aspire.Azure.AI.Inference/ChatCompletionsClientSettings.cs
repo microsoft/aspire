@@ -87,7 +87,7 @@ public sealed class ChatCompletionsClientSettings : IConnectionStringSettings
     /// The connection string can contain the following keys:
     /// - Deployment: The deployment name (preferred)
     /// - DeploymentId: The deployment ID (legacy, for backward compatibility)
-    /// - Model: The model name (used by GitHub Models)
+    /// - Model: The model name
     /// - Endpoint: The service endpoint URI
     /// - Key: The API key for authentication
     /// Note: Only one of Deployment, DeploymentId, or Model should be specified.
