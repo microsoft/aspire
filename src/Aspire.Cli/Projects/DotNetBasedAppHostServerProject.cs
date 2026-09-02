@@ -161,7 +161,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         projectFile.PackageReferences.Add(new CSharpPackageReference("Google.Protobuf"));
 
         // Add project references for Aspire.Hosting.* packages, NuGet for others
-        var addedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var addedProjects = new HashSet<string>(StringComparers.FileSystemPath);
         var addedProjectNames = projectFile.AddIntegrationReferences(
             integrations,
             _repoRoot,

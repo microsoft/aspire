@@ -254,6 +254,24 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingFileSystemPathRules()
+    {
+        var upperCasePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Case", "Integration.csproj");
+        var lowerCasePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "case", "Integration.csproj");
+        var project = CreateProject();
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(
+        [
+            IntegrationReference.FromProject("FirstIntegration", upperCasePath),
+            IntegrationReference.FromProject("SecondIntegration", lowerCasePath)
+        ]).DefaultTimeout();
+
+        var projectReferences = XDocument.Load(projectPath).Descendants("ProjectReference").ToArray();
+        var expectedCount = StringComparers.FileSystemPath.Equals(upperCasePath, lowerCasePath) ? 1 : 2;
+        Assert.Equal(expectedCount, projectReferences.Length);
+    }
+
+    [Fact]
     public void ProjectModelPath_IsStableForSameAppPath()
     {
         // Arrange

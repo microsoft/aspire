@@ -781,6 +781,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             hasCredentialBearingMappedSource ||
             hasCredentialBearingAdditionalSource ||
             temporaryRestoreConfig?.ContainsCredentialMaterial == true;
+        // NuGet serializes effective sources into project.assets.json and the restore graph under obj/.
+        // The closure reader consumes those files before this method returns, so remove the directory
+        // on every exit rather than leaving credential-bearing URLs in the persistent integration cache.
+        using var restoreMetadataCleanup = hasCredentialBearingRestoreSource
+            ? new CredentialRestoreMetadataCleanup(restoreDir, _logger)
+            : null;
 
         FileInfo? restoreConfigFile;
         string? restoreConfigContent;
@@ -1449,4 +1455,77 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         public OutputCollector Output { get; } = output;
     }
 
+    private sealed class TemporaryRestoreSourcesProps : IDisposable
+    {
+        private readonly DirectoryInfo _directory;
+
+        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile)
+        {
+            _directory = directory;
+            PropsFile = propsFile;
+        }
+
+        public FileInfo PropsFile { get; }
+
+        public static async Task<TemporaryRestoreSourcesProps> CreateAsync(
+            IReadOnlyList<string> sources,
+            CancellationToken cancellationToken)
+        {
+            var directory = Directory.CreateTempSubdirectory("aspire-restore-sources");
+            try
+            {
+                var propsFile = new FileInfo(Path.Combine(directory.FullName, "IntegrationRestoreSources.props"));
+                var document = new XDocument(
+                    new XElement("Project",
+                        new XElement("PropertyGroup",
+                            new XElement("RestoreAdditionalProjectSources", string.Join(";", sources)))));
+                await File.WriteAllTextAsync(propsFile.FullName, document.ToString(), cancellationToken).ConfigureAwait(false);
+                return new TemporaryRestoreSourcesProps(directory, propsFile);
+            }
+            catch
+            {
+                try
+                {
+                    directory.Delete(recursive: true);
+                }
+                catch
+                {
+                    // Ignore cleanup failures; surface the original exception instead.
+                }
+                throw;
+            }
+            }
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                _directory.Delete(recursive: true);
+            }
+            catch
+            {
+                // Temporary source properties are best-effort cleanup after the build completes.
+            }
+        }
+    }
+
+    private sealed class CredentialRestoreMetadataCleanup(string restoreDirectory, ILogger logger) : IDisposable
+    {
+        public void Dispose()
+        {
+            var objDirectory = Path.Combine(restoreDirectory, "obj");
+            try
+            {
+                if (Directory.Exists(objDirectory))
+                {
+                    Directory.Delete(objDirectory, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogDebug(ex, "Unable to remove credential-bearing integration restore metadata at {Path}.", objDirectory);
+            }
+        }
+    }
 }

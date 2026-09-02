@@ -2584,7 +2584,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             dotNetCliRunner: dotNetCliRunner,
             packagingService: packagingService);
         var workingDirectory = GetWorkingDirectory(server);
-        var restoreStampFile = Path.Combine(workingDirectory, "integration-restore", "obj", "aspire-restore.stamp");
+        var objDirectory = Path.Combine(workingDirectory, "integration-restore", "obj");
+        var restoreStampFile = Path.Combine(objDirectory, "aspire-restore.stamp");
 
         try
         {
@@ -2605,10 +2606,62 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.False(File.Exists(restoreSourcesPropsFile));
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
             Assert.False(File.Exists(restoreStampFile));
+            Assert.False(Directory.Exists(objDirectory));
 
             var persistedProjectContent = await File.ReadAllTextAsync(
                 Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
             Assert.DoesNotContain(channelSource, persistedProjectContent);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WhenCredentialBearingProjectRestoreFails_RemovesRestoreMetadata()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                var objDirectory = projectFilePath.Directory!.CreateSubdirectory("obj");
+                File.WriteAllText(Path.Combine(objDirectory.FullName, "project.assets.json"), channelSource);
+                File.WriteAllText(Path.Combine(objDirectory.FullName, "IntegrationRestore.csproj.nuget.dgspec.json"), channelSource);
+                return 1;
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
+        var workingDirectory = GetWorkingDirectory(server);
+        var objDirectory = Path.Combine(workingDirectory, "integration-restore", "obj");
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.False(result.Success);
+            Assert.False(Directory.Exists(objDirectory));
         }
         finally
         {
