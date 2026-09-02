@@ -73,7 +73,15 @@ public class AzureConnectorNamespaceTests
                         Description = "Reads recent emails."
                     }
                 ]
-            });
+            })
+            .WithAccessPolicy(
+                "developer-access",
+                new AzureConnectorNamespaceMcpAccessPolicyOptions
+                {
+                    ObjectId = "33333333-3333-3333-3333-333333333333",
+                    TenantId = "22222222-2222-2222-2222-222222222222",
+                    PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+                });
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -161,6 +169,33 @@ public class AzureConnectorNamespaceTests
     }
 
     [Fact]
+    public async Task ManagedMcpServerRequiresAccessPolicyBeforeGeneratingBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        gateway.AddMcpServerConfig("outlook-mcp")
+            .WithConnector(
+                "office365",
+                connection,
+                new AzureConnectorNamespaceMcpConnectorOptions
+                {
+                    Operations = [new AzureConnectorNamespaceMcpOperationOptions { Name = "GetEmailsV3" }]
+                });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource));
+
+        Assert.Equal(
+            "MCP server configuration 'outlook-mcp' requires an access policy. " +
+            "Call 'WithAccessPolicy' before generating the Azure deployment.",
+            exception.Message);
+    }
+
+    [Fact]
     public void ConnectorConnectionsRejectDuplicateAzureNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -217,7 +252,15 @@ public class AzureConnectorNamespaceTests
             new AzureConnectorNamespaceMcpConnectorOptions
             {
                 Operations = [new AzureConnectorNamespaceMcpOperationOptions { Name = "GetEmailsV3" }]
-            });
+            })
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceMcpAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222",
+                    PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+                });
 
         var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.Gateway;
         Assert.NotEqual(firstConnection.Resource.BicepIdentifier, secondConnection.Resource.BicepIdentifier);
@@ -286,6 +329,136 @@ public class AzureConnectorNamespaceTests
             "The current Connector Namespace preview supports one connector per MCP server configuration.",
             exception.Message);
         Assert.Single(mcp.Resource.Connectors);
+    }
+
+    [Fact]
+    public void ExistingMcpServerConfigRejectsAccessPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mcp = builder.AddAzureConnectorNamespace("gateway")
+            .AddMcpServerConfig("mcp")
+            .AsExisting();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => mcp.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = "22222222-2222-2222-2222-222222222222",
+                PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+            }));
+
+        Assert.Equal(
+            "Existing MCP server configuration 'mcp' is read-only and cannot create an access policy.",
+            exception.Message);
+        Assert.Empty(mcp.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void McpServerConfigCannotBecomeExistingAfterAccessPolicyRegistered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mcp = builder.AddAzureConnectorNamespace("gateway")
+            .AddMcpServerConfig("mcp")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceMcpAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222",
+                    PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+                });
+
+        var exception = Assert.Throws<InvalidOperationException>(mcp.AsExisting);
+
+        Assert.Equal(
+            "MCP server configuration 'mcp' configures access policies and cannot be marked as existing.",
+            exception.Message);
+        Assert.False(mcp.Resource.IsExisting);
+    }
+
+    [Theory]
+    [InlineData(
+        "not-a-guid",
+        "22222222-2222-2222-2222-222222222222",
+        AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User,
+        "The MCP access policy object ID must be a valid GUID. (Parameter 'options')")]
+    [InlineData(
+        "11111111-1111-1111-1111-111111111111",
+        "not-a-guid",
+        AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User,
+        "The MCP access policy tenant ID must be a valid GUID. (Parameter 'options')")]
+    [InlineData(
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+        (AzureConnectorNamespaceMcpAccessPolicyPrincipalType)0,
+        "'0' is not a supported MCP access policy principal type. (Parameter 'options')")]
+    public void McpAccessPolicyRejectsInvalidOptions(
+        string objectId,
+        string tenantId,
+        AzureConnectorNamespaceMcpAccessPolicyPrincipalType principalType,
+        string expectedMessage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mcp = builder.AddAzureConnectorNamespace("gateway")
+            .AddMcpServerConfig("mcp");
+
+        var exception = Assert.Throws<ArgumentException>(() => mcp.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = objectId,
+                TenantId = tenantId,
+                PrincipalType = principalType
+            }));
+
+        Assert.Equal(expectedMessage, exception.Message);
+        Assert.Empty(mcp.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void McpAccessPoliciesRejectDuplicateResourceNamesAndPrincipals()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mcp = builder.AddAzureConnectorNamespace("gateway")
+            .AddMcpServerConfig("mcp")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorNamespaceMcpAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222",
+                    PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+                });
+
+        var duplicateResourceException = Assert.Throws<InvalidOperationException>(() => mcp.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = "33333333-3333-3333-3333-333333333333",
+                TenantId = "22222222-2222-2222-2222-222222222222",
+                PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.Group
+            }));
+        var duplicatePrincipalException = Assert.Throws<InvalidOperationException>(() => mcp.WithAccessPolicy(
+            "other-reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = "22222222-2222-2222-2222-222222222222",
+                PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+            }));
+
+        Assert.Equal(
+            "Access policy resource 'reader' is already registered on MCP server configuration 'mcp'.",
+            duplicateResourceException.Message);
+        Assert.Equal(
+            "An access policy for principal '11111111-1111-1111-1111-111111111111' is already registered on MCP server configuration 'mcp'.",
+            duplicatePrincipalException.Message);
+        Assert.Single(mcp.Resource.AccessPolicies);
     }
 
     [Fact]
@@ -491,13 +664,22 @@ public class AzureConnectorNamespaceTests
                     TenantId = "22222222-2222-2222-2222-222222222222"
                 });
         var mcp = gateway.AddMcpServerConfig("mail-config");
+        mcp.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = "22222222-2222-2222-2222-222222222222",
+                PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.Group
+            });
 
         var identifiers = new[]
         {
             ConnectorNamespaceBicepIdentifiers.Gateway,
             connection.Resource.BicepIdentifier,
             Assert.Single(connection.Resource.AccessPolicies).BicepIdentifier,
-            mcp.Resource.BicepIdentifier
+            mcp.Resource.BicepIdentifier,
+            Assert.Single(mcp.Resource.AccessPolicies).BicepIdentifier
         };
 
         Assert.Equal(identifiers.Length, identifiers.Distinct(StringComparer.OrdinalIgnoreCase).Count());

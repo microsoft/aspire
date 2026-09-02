@@ -1,6 +1,7 @@
 // Aspire TypeScript AppHost - Validation for Aspire.Hosting.Azure.Sandboxes
 
 import {
+    AzureConnectorNamespaceMcpAccessPolicyPrincipalType,
     AzureSandboxAutoDeleteTrigger,
     AzureSandboxAutoSuspendMode,
     AzureSandboxTier,
@@ -33,6 +34,11 @@ await outlookMcp.withConnector("office365", outlook, {
             name: "GetEmailsV3"
         }
     ]
+});
+await outlookMcp.withAccessPolicy("developer-access", {
+    objectId: "33333333-3333-3333-3333-333333333333",
+    tenantId: "22222222-2222-2222-2222-222222222222",
+    principalType: AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
 });
 
 const sandboxes = await builder.addAzureSandboxGroup("sandboxes");

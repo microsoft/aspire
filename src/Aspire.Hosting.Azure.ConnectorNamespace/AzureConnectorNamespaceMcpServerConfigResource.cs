@@ -47,5 +47,7 @@ public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, I
 
     internal List<AzureConnectorNamespaceMcpConnectorDefinition> Connectors { get; } = [];
 
+    internal List<AzureConnectorNamespaceMcpAccessPolicyResource> AccessPolicies { get; } = [];
+
     internal bool IsExisting { get; set; }
 }

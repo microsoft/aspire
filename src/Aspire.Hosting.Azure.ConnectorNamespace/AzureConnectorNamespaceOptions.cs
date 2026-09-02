@@ -43,6 +43,44 @@ public sealed class AzureConnectorNamespaceAccessPolicyOptions
 }
 
 /// <summary>
+/// Specifies the Microsoft Entra principal type authorized to call a managed MCP server.
+/// </summary>
+public enum AzureConnectorNamespaceMcpAccessPolicyPrincipalType
+{
+    /// <summary>
+    /// Authorizes an individual Microsoft Entra user.
+    /// </summary>
+    User = 1,
+
+    /// <summary>
+    /// Authorizes a Microsoft Entra group.
+    /// </summary>
+    Group = 2
+}
+
+/// <summary>
+/// Configures a Microsoft Entra access policy for a managed MCP server configuration.
+/// </summary>
+[AspireDto]
+public sealed class AzureConnectorNamespaceMcpAccessPolicyOptions
+{
+    /// <summary>
+    /// Gets or sets the Microsoft Entra object ID authorized to call the MCP server.
+    /// </summary>
+    public required string ObjectId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Microsoft Entra tenant ID for <see cref="ObjectId"/>.
+    /// </summary>
+    public required string TenantId { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether <see cref="ObjectId"/> identifies a user or group.
+    /// </summary>
+    public required AzureConnectorNamespaceMcpAccessPolicyPrincipalType PrincipalType { get; set; }
+}
+
+/// <summary>
 /// Configures a managed MCP server in a Connector Namespace.
 /// </summary>
 [AspireDto]

@@ -39,6 +39,12 @@ public static class AzureConnectorNamespaceExtensions
     ///         [
     ///             new AzureConnectorNamespaceMcpOperationOptions { Name = "SendEmailV2" }
     ///         ]
+    ///     })
+    ///     .WithAccessPolicy("developer-access", new AzureConnectorNamespaceMcpAccessPolicyOptions
+    ///     {
+    ///         ObjectId = "11111111-1111-1111-1111-111111111111",
+    ///         TenantId = "22222222-2222-2222-2222-222222222222",
+    ///         PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
     ///     });
     /// </code>
     /// </example>
@@ -142,6 +148,13 @@ public static class AzureConnectorNamespaceExtensions
                         $"Call '{nameof(WithConnector)}' before generating the Azure deployment.");
                 }
 
+                if (!configResource.IsExisting && configResource.AccessPolicies.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"MCP server configuration '{configResource.Name}' requires an access policy. " +
+                        $"Call '{nameof(WithAccessPolicy)}' before generating the Azure deployment.");
+                }
+
                 var config = configResource.IsExisting
                     ? ConnectorGatewayMcpServerConfig.FromExisting(configResource.BicepIdentifier)
                     : new ConnectorGatewayMcpServerConfig(configResource.BicepIdentifier);
@@ -196,6 +209,27 @@ public static class AzureConnectorNamespaceExtensions
                 }
 
                 infrastructure.Add(config);
+
+                foreach (var accessPolicyResource in configResource.AccessPolicies)
+                {
+                    var accessPolicy = new ConnectorGatewayMcpServerConfigAccessPolicy(
+                        accessPolicyResource.BicepIdentifier)
+                    {
+                        Parent = config,
+                        // The service requires the access-policy resource name to match the principal object ID.
+                        Name = accessPolicyResource.ObjectId,
+                        PrincipalType = accessPolicyResource.PrincipalType.ToString()
+                    };
+
+                    // Preview Connector Namespace types do not have Bicep type metadata, so parent
+                    // location references are runtime values that cannot populate this property.
+                    // Leaving it unset uses the infrastructure's early-bound location parameter.
+
+                    accessPolicy.Principal.Type = "ActiveDirectory";
+                    accessPolicy.Principal.Identity.ObjectId = accessPolicyResource.ObjectId;
+                    accessPolicy.Principal.Identity.TenantId = accessPolicyResource.TenantId;
+                    infrastructure.Add(accessPolicy);
+                }
             }
 
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = gateway.Id.ToBicepExpression() });
@@ -430,7 +464,52 @@ public static class AzureConnectorNamespaceExtensions
                 $"MCP server configuration '{builder.Resource.Name}' configures a description and cannot be marked as existing.");
         }
 
+        if (builder.Resource.AccessPolicies.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"MCP server configuration '{builder.Resource.Name}' configures access policies and cannot be marked as existing.");
+        }
+
         builder.Resource.IsExisting = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a Microsoft Entra user or group access policy to a managed MCP server configuration.
+    /// </summary>
+    /// <param name="builder">The MCP server configuration resource builder.</param>
+    /// <param name="name">The Aspire resource name for the policy.</param>
+    /// <param name="options">The authorized user or group.</param>
+    /// <returns>The MCP server configuration resource builder.</returns>
+    /// <remarks>
+    /// Managed MCP endpoints reject callers that do not have a config-scoped access policy.
+    /// Connector Namespace currently supports Microsoft Entra users and groups for these policies.
+    /// The Azure child resource name is set to the principal object ID as required by the service.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withMcpServerConfigAccessPolicy", MethodName = "withAccessPolicy")]
+    public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> WithAccessPolicy(
+        this IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> builder,
+        [ResourceName] string name,
+        AzureConnectorNamespaceMcpAccessPolicyOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(options);
+        ValidateMcpAccessPolicyOptions(options);
+        if (builder.Resource.IsExisting)
+        {
+            throw new InvalidOperationException(
+                $"Existing MCP server configuration '{builder.Resource.Name}' is read-only and cannot create an access policy.");
+        }
+
+        var resourceName = GetValidatedMcpAccessPolicyResourceName(builder.Resource, name, options.ObjectId);
+        builder.Resource.AccessPolicies.Add(new AzureConnectorNamespaceMcpAccessPolicyResource(
+            resourceName,
+            builder.Resource,
+            options.ObjectId,
+            options.TenantId,
+            options.PrincipalType));
         return builder;
     }
 
@@ -557,6 +636,54 @@ public static class AzureConnectorNamespaceExtensions
         }
 
         return resourceName;
+    }
+
+    private static string GetValidatedMcpAccessPolicyResourceName(
+        AzureConnectorNamespaceMcpServerConfigResource config,
+        string name,
+        string objectId)
+    {
+        var resourceName = ConnectorNamespaceBicepIdentifiers.CreateMcpAccessPolicy(
+            config.Parent.Name,
+            config.Name,
+            name);
+        if (config.AccessPolicies.Any(policy =>
+            string.Equals(policy.BicepIdentifier, resourceName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Access policy resource '{name}' is already registered on MCP server configuration '{config.Name}'.");
+        }
+
+        if (config.AccessPolicies.Any(policy =>
+            string.Equals(policy.ObjectId, objectId, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"An access policy for principal '{objectId}' is already registered on MCP server configuration '{config.Name}'.");
+        }
+
+        return resourceName;
+    }
+
+    private static void ValidateMcpAccessPolicyOptions(AzureConnectorNamespaceMcpAccessPolicyOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ObjectId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.TenantId);
+        if (!Guid.TryParse(options.ObjectId, out _))
+        {
+            throw new ArgumentException("The MCP access policy object ID must be a valid GUID.", nameof(options));
+        }
+
+        if (!Guid.TryParse(options.TenantId, out _))
+        {
+            throw new ArgumentException("The MCP access policy tenant ID must be a valid GUID.", nameof(options));
+        }
+
+        if (!Enum.IsDefined(options.PrincipalType))
+        {
+            throw new ArgumentException(
+                $"'{options.PrincipalType}' is not a supported MCP access policy principal type.",
+                nameof(options));
+        }
     }
 
     private static void ValidateConnectorResourceName(string name, string paramName)

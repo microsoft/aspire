@@ -56,12 +56,22 @@ connectorNamespace.AddMcpServerConfig("outlook-mcp")
                     DisplayName = "Get emails"
                 }
             ]
+        })
+    .WithAccessPolicy(
+        "developer-access",
+        new AzureConnectorNamespaceMcpAccessPolicyOptions
+        {
+            ObjectId = "11111111-1111-1111-1111-111111111111",
+            TenantId = "22222222-2222-2222-2222-222222222222",
+            PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
         });
 ```
 
 **TypeScript**
 
 ```typescript
+import { AzureConnectorNamespaceMcpAccessPolicyPrincipalType } from "./.aspire/modules/aspire.mjs";
+
 const connectorNamespace = await builder.addAzureConnectorNamespace("connectors");
 
 const outlook = await connectorNamespace.addConnection("outlook", "office365", {
@@ -78,6 +88,11 @@ await outlookMcp.withConnector("office365", outlook, {
         }
     ]
 });
+await outlookMcp.withAccessPolicy("developer-access", {
+    objectId: "11111111-1111-1111-1111-111111111111",
+    tenantId: "22222222-2222-2222-2222-222222222222",
+    principalType: AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+});
 ```
 
 After deployment, open `https://connectors.azure.com/<subscription-id>/<resource-group>/<connector-namespace-name>/overview` and authorize connections that require user consent. Aspire does not automate or store OAuth credentials.
@@ -87,6 +102,7 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 * MCP connector routes require an explicit operation allow-list. Expose only the operations the application needs.
 * `WithAccessPolicy` grants one explicitly identified Microsoft Entra principal access to a connection.
 * `WithIdentityAccessPolicy` grants access to a user-assigned managed identity without hard-coding its principal ID.
+* `WithAccessPolicy` on an MCP server configuration grants an Entra user or group permission to call its MCP endpoint. MCP access policies do not currently support managed identities or service principals.
 * Do not put credentials, tokens, or other secrets in MCP descriptions or operation metadata.
 
 Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting` and `AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references.

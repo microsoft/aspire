@@ -82,6 +82,22 @@ resource connectorMcpServer_location_outlook_mcp_9fda0444956c6cd1 'Microsoft.Web
   ]
 }
 
+resource connectorMcpAccessPolicy_location_outlook_mcp_developer_access_146ddccf26dca673 'Microsoft.Web/connectorGateways/mcpserverConfigs/accessPolicies@2026-05-01-preview' = {
+  name: '33333333-3333-3333-3333-333333333333'
+  location: location
+  properties: {
+    principal: {
+      type: 'ActiveDirectory'
+      identity: {
+        objectId: '33333333-3333-3333-3333-333333333333'
+        tenantId: '22222222-2222-2222-2222-222222222222'
+      }
+    }
+    principalType: 'User'
+  }
+  parent: connectorMcpServer_location_outlook_mcp_9fda0444956c6cd1
+}
+
 output id string = connectorGateway.id
 
 output name string = connectorGateway.name

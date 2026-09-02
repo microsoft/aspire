@@ -42,6 +42,9 @@ internal static class ConnectorNamespaceBicepIdentifiers
     public static string CreateAccessPolicy(string connectorNamespaceName, string connectionName, string policyName)
         => Create("connectorAccessPolicy", connectorNamespaceName, connectionName, policyName);
 
+    public static string CreateMcpAccessPolicy(string connectorNamespaceName, string configName, string policyName)
+        => Create("connectorMcpAccessPolicy", connectorNamespaceName, configName, policyName);
+
     private static string Create(string prefix, params string[] names)
     {
         // Prefixing keeps child declarations away from module parameters and outputs, while the
