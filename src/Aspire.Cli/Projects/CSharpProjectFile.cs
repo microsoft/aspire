@@ -58,7 +58,8 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
     /// <summary>
     /// Adds integration references as package references or project references.
     /// </summary>
-    public void AddIntegrationReferences(
+    /// <returns>The integration names added as project references.</returns>
+    public IReadOnlySet<string> AddIntegrationReferences(
         IEnumerable<IntegrationReference> integrationReferences,
         string? repoRoot,
         bool? isAspireProjectResource = null,
@@ -110,6 +111,8 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
 
             PackageReferences.Add(new CSharpPackageReference(integrationReference.Name, integrationReference.Version, packageVersionAttributeName));
         }
+
+        return addedIntegrations;
     }
 
     /// <summary>
