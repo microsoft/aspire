@@ -260,6 +260,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddSingleton<CommonCommandServices>();
+        services.AddSingleton<ResourceWaitService>();
         services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
@@ -318,6 +319,7 @@ internal static class CliTestHelper
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
+        services.AddTransient<SdkExportCommand>();
         services.AddTransient<ApiCommand>();
         services.AddTransient<ApiListCommand>();
         services.AddTransient<ApiSearchCommand>();

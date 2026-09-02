@@ -5,13 +5,14 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Hosting.Backchannel;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
 internal static class CliPathHelper
 {
-    internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -49,15 +50,11 @@ internal static class CliPathHelper
     }
 
     internal static string GetDefaultAspireHomeDirectory()
-        => GetDefaultAspireHomeDirectory(
-            Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable),
-            GetUserProfileDirectory());
+        => AspireHomeDirectory.GetDefault();
 
     internal static string GetDefaultAspireHomeDirectory(string? configuredAspireHome, string userProfileDirectory)
     {
-        return string.IsNullOrWhiteSpace(configuredAspireHome)
-            ? Path.Combine(userProfileDirectory, ".aspire")
-            : configuredAspireHome;
+        return AspireHomeDirectory.GetDefault(configuredAspireHome, userProfileDirectory);
     }
 
     /// <summary>
@@ -150,9 +147,6 @@ internal static class CliPathHelper
 
         return Path.GetDirectoryName(dogfoodDir);
     }
-
-    internal static string GetUserProfileDirectory()
-        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
     /// Normalizes the casing of a filesystem <paramref name="path"/> so that paths which differ only
@@ -311,11 +305,11 @@ internal static class CliPathHelper
     /// <see cref="CleanupStaleCliSockets(string, TimeSpan, TimeProvider)"/>.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="BackchannelConstants.CleanupOrphanedSockets"/>,
-    /// CLI sockets don't encode the process ID in their filename — they're created with a random
-    /// GUID-style suffix — so the only reliable signal we have for "this is stale" is the file's
-    /// mtime. We pick a generous default threshold so an in-flight long-running run never has its
-    /// socket pruned out from under it.
+    /// Unlike auxiliary backchannel sockets, which encode the owning process ID in their filename so
+    /// <see cref="AppHostSocketManager"/> can prune them by liveness, CLI sockets are created with a
+    /// random GUID-style suffix. The only reliable "this is stale" signal we have is the file's mtime,
+    /// so we pick a generous default threshold and an in-flight long-running run never has its socket
+    /// pruned out from under it.
     /// </remarks>
     internal static int CleanupStaleCliSockets(string socketDirectory, TimeSpan maxAge, TimeProvider? timeProvider = null)
     {

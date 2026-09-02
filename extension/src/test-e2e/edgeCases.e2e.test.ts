@@ -5,7 +5,7 @@ import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForCodeLensText, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface DebugSessionProcessInfo {
     appHostPath?: string;
@@ -212,10 +212,6 @@ builder.Build().Run();`));
             'Set up Python debugging support to debug resources in this app.',
             60000);
         await notification.dismiss();
-
-        await executeE2eControlCommand({ name: 'openFile', filePath: appHostPath });
-        await waitForEditorTitle('apphost.cs');
-        await waitForCodeLensText('apphost.cs', 'Set up Python debugger', 60000);
     });
 
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {

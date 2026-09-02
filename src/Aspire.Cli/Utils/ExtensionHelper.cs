@@ -38,6 +38,7 @@ internal static class KnownCapabilities
     public const string FilePickers = "file-pickers.v1";
     public const string Pipelines = "pipelines";
     public const string PipelineStepListJson = "pipeline-step-list-json.v1";
+    public const string MessageActions = "message-actions.v1";
 
     // Advertised so tooling (e.g. the VS Code extension) can detect that `aspire describe`
     // understands the hidden `--include-disabled-commands` flag without having to optimistically
@@ -47,6 +48,8 @@ internal static class KnownCapabilities
     // Advertised so tooling can detect that `aspire ls --format json --stream` is supported
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
+
+    public const string AppHostLogOutput = "apphost-log-output.v1";
 
     // Advertised so tooling can pass `aspire run --isolated` only to CLIs that understand it.
     public const string IsolatedLaunch = "isolated-launch.v1";

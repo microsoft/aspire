@@ -6,6 +6,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
@@ -23,7 +24,6 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
-            commandResolver: PathLookupHelper.FindFullPathFromPath,
             processExecutionFactory: processExecutionFactory ?? new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     [Fact]
@@ -138,6 +138,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18880")]
     public async Task LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget()
     {
         // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can

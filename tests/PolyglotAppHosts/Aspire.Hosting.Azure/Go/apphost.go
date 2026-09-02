@@ -107,7 +107,8 @@ output inlineUrl string = 'https://inline.example.com'
 
 	infra := builder.AddAzureInfrastructure("infra", func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
 	})
 	if infra.Err() != nil {
 		log.Fatalf(aspire.FormatError(infra.Err()))
@@ -149,7 +150,8 @@ output inlineUrl string = 'https://inline.example.com'
 	}
 	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
 		provisionedIdentity := ctx.GetSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier)
 		deploymentLocation := ctx.Bicep().Location("westus2")
 		_ = provisionedIdentity.SetName("polyglot-identity")

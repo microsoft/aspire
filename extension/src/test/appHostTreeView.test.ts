@@ -453,6 +453,58 @@ suite('AspireAppHostTreeProvider', () => {
         sandbox.restore();
     });
 
+    test('auto-expands a single workspace AppHost only while the Aspire view is visible', async () => {
+        const appHostPath = '/workspace/apps/Store/AppHost.csproj';
+        const dataEmitter = new vscode.EventEmitter<void>();
+        const visibilityEmitter = new vscode.EventEmitter<vscode.TreeViewVisibilityChangeEvent>();
+        let visible = false;
+        const reveal = sandbox.stub().resolves();
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            isLoading: false,
+            onDidChangeData: dataEmitter.event,
+        } as unknown as AppHostDataRepository;
+        const treeView = {
+            get visible() {
+                return visible;
+            },
+            onDidChangeVisibility: visibilityEmitter.event,
+            reveal,
+        } as unknown as Parameters<AspireAppHostTreeProvider['setTreeView']>[0];
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        provider.setTreeView(treeView);
+        dataEmitter.fire();
+        await flushPromises();
+
+        assert.strictEqual(reveal.called, false);
+
+        visible = true;
+        visibilityEmitter.fire({ visible });
+        await flushPromises();
+
+        assert.strictEqual(reveal.callCount, 1);
+        assert.deepStrictEqual(reveal.firstCall.args[1], { expand: true });
+
+        dataEmitter.fire();
+        await flushPromises();
+        assert.strictEqual(reveal.callCount, 1);
+
+        provider.dispose();
+        visibilityEmitter.fire({ visible: true });
+        await flushPromises();
+        assert.strictEqual(reveal.callCount, 1);
+
+        dataEmitter.dispose();
+        visibilityEmitter.dispose();
+    });
+
     test('global apphost labels add enough parent folders to disambiguate duplicate filenames', () => {
         const appHosts = [
             makeAppHost({

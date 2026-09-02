@@ -165,6 +165,20 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Theory]
+    [InlineData(typeof(double?[]), AtsConstants.Number)]
+    [InlineData(typeof(bool?[]), AtsConstants.Boolean)]
+    public void CreateTypeRef_NullableArrayElements_PreserveNullability(Type arrayType, string expectedElementTypeId)
+    {
+        var typeRef = AtsCapabilityScanner.CreateTypeRef(arrayType);
+
+        Assert.NotNull(typeRef);
+        Assert.Equal(AtsTypeCategory.Array, typeRef.Category);
+        Assert.NotNull(typeRef.ElementType);
+        Assert.Equal(expectedElementTypeId, typeRef.ElementType.TypeId);
+        Assert.True(typeRef.ElementType.IsNullable);
+    }
+
     [Fact]
     public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
     {

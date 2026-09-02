@@ -81,7 +81,10 @@ Before starting a release:
    - The build must include native CLI NuGet packages, `microsoft-aspire-cli*.tgz` npm tarballs from the native archive jobs, matching `.tgz.sig` detached signature sidecars, and the Windows, Linux, and macOS npm install validation summaries.
    - If publishing the VS Code extension, the build must include the `aspire-vscode-extension` artifact with exactly one `.vsix`, matching `.manifest`, and matching `.signature.p7s`.
    - If publishing the VS Code extension as a Marketplace pre-release, the build that runs automatically on merge will not work because it packages a stable VSIX; manually queue the `microsoft-aspire` source build on the merge commit with `Package VS Code Extension as Pre-Release=true` so the produced VSIX is marked as pre-release before signing.
-2. **Release branch**: Ensure the release branch exists, for example `release/9.2`.
+2. **Release branch and version**: Ensure the release branch exists, for example `release/9.2`, and that `eng/Versions.props` identifies the next unshipped release.
+   - Before the first stable `X.Y.0` release, the branch remains on `X.Y.0`.
+   - Immediately after publishing stable `X.Y.Z`, merge a dedicated PR that increments `PatchVersion` to `Z+1` before accepting more backports.
+   - Do not leave the branch on a published version. A PR build such as `X.Y.Z-pr.*` has lower SemVer precedence than stable `X.Y.Z`, which can make release-branch CI and CLI update scenarios incorrectly treat the published release as an available update.
 3. **Permissions and approvals**:
    - Access to run Azure DevOps pipelines with the publishing pool.
    - Permission to use the NuGet.org service connection.
@@ -225,6 +228,7 @@ This is a **manual** step performed by the release manager. The release is creat
 3. Uncheck **Set as a pre-release** if it is checked but this is a stable release (or check it for a preview release).
 4. Click **Publish release**.
 5. **Now merge the baseline version PR.** With the release published, its `eng/nix/versions.json` asset URLs resolve, so merging it updates `PackageValidationBaselineVersion` and the Nix manifest on `main` without breaking the flake.
+6. For a stable release, open and merge a dedicated PR against the release branch that increments `PatchVersion` in `eng/Versions.props`. Complete this before accepting more backports so subsequent PR builds use the next unshipped servicing version.
 
 Publishing the draft fires the `release: [published]` event, which triggers:
 

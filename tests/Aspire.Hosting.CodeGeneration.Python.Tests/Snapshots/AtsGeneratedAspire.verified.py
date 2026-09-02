@@ -26,6 +26,9 @@ from contextlib import AbstractContextManager
 
 _logger = logging.getLogger(__name__)
 
+# Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+_ASPIRE_UNSET = object()
+
 # Maximum allowed message size (64 MB) to prevent memory exhaustion from malicious Content-Length
 _MAX_MESSAGE_SIZE = 64 * 1024 * 1024
 
@@ -1529,7 +1532,7 @@ class MergeLoggingParameters(typing.TypedDict, total=False):
     log_level: typing.Required[str]
     log_path: str
     enable_console: bool
-    max_files: int
+    max_files: int | None
 
 
 class MergeRouteParameters(typing.TypedDict, total=False):

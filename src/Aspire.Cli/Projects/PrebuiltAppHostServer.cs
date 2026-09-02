@@ -230,6 +230,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 ChannelName: requestedChannel,
                 NeedsCodeGeneration: true);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (AppHostServerPrepareFailedException ex)
         {
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");

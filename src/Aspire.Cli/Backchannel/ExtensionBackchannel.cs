@@ -22,9 +22,11 @@ internal interface IExtensionBackchannel
 {
     Task ConnectAsync(CancellationToken cancellationToken);
     Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken);
+    Task DisplayMessageAsync(string emojiName, string message, InteractionMessageAction[] actions, CancellationToken cancellationToken);
     Task DisplaySuccessAsync(string message, CancellationToken cancellationToken);
     Task DisplaySubtleMessageAsync(string message, CancellationToken cancellationToken);
     Task DisplayErrorAsync(string error, CancellationToken cancellationToken);
+    Task DisplayErrorAsync(string error, InteractionMessageAction[] actions, CancellationToken cancellationToken);
     Task DisplayEmptyLineAsync(CancellationToken cancellationToken);
     Task DisplayIncompatibleVersionErrorAsync(string requiredCapability, string appHostHostingSdkVersion, CancellationToken cancellationToken);
     Task DisplayCancellationMessageAsync(CancellationToken cancellationToken);
@@ -46,6 +48,7 @@ internal interface IExtensionBackchannel
     Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options, CancellationToken cancellationToken);
     Task DisplayPlainTextAsync(string text, CancellationToken cancellationToken);
     Task WriteDebugSessionMessageAsync(string message, bool stdout, string? textStyle, CancellationToken cancellationToken);
+    Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken);
 }
 
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
@@ -352,6 +355,22 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             cancellationToken);
     }
 
+    public async Task DisplayMessageAsync(string emojiName, string message, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        _logger.LogDebug("Sent message {Message} with {ActionCount} actions", message, actions.Length);
+
+        await rpc.InvokeWithCancellationAsync(
+            "displayMessage",
+            [_token, emojiName, message, actions],
+            cancellationToken);
+    }
+
     public async Task DisplaySuccessAsync(string message, CancellationToken cancellationToken)
     {
         await ConnectAsync(cancellationToken);
@@ -397,6 +416,22 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "displayError",
             [_token, error],
+            cancellationToken);
+    }
+
+    public async Task DisplayErrorAsync(string error, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        _logger.LogDebug("Sent error message with {ActionCount} actions", actions.Length);
+
+        await rpc.InvokeWithCancellationAsync(
+            "displayError",
+            [_token, error, actions],
             cancellationToken);
     }
 
@@ -715,6 +750,20 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "writeDebugSessionMessage",
             [_token, message, stdout, textStyle],
+            cancellationToken);
+    }
+
+    public async Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        await rpc.InvokeWithCancellationAsync(
+            "writeAppHostLogEntry",
+            [_token, entry],
             cancellationToken);
     }
 

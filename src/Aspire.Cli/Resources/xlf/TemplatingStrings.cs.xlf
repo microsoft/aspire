@@ -62,11 +62,6 @@
         <target state="translated">Musí se zadat aspoň jeden objekt pro vytváření šablon.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">Při vytváření vztahu důvěryhodnosti k certifikátům došlo k chybě: {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">Chcete vytvořit soubor NuGet.config pro vybrané kanály?</target>

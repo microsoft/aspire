@@ -75,7 +75,7 @@ suite('E2E bridge production gate', () => {
     });
 
     test('packages the E2E VSIX with the bridge opt-in and asserts the emitted bundle', () => {
-        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'tests.yml'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-unit-tests.yml'), 'utf8');
 
         assert.ok(
             workflow.includes('ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"'),
@@ -101,7 +101,7 @@ suite('E2E bridge production gate', () => {
      * check in this workflow would stay green while the bridge shipped to the Marketplace.
      */
     test('packages a production VSIX without the bridge opt-in and asserts the bridge is absent', () => {
-        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'tests.yml'), 'utf8');
+         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-unit-tests.yml'), 'utf8');
 
         assert.ok(
             workflow.includes('corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix'),

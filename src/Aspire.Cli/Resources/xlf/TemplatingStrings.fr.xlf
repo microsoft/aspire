@@ -62,11 +62,6 @@
         <target state="translated">Au moins une fabrique de modèles doit être fournie.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">Une erreur s’est produite lors de l’approbation des certificats : {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">Voulez-vous créer un fichier NuGet.config pour les canaux sélectionnés ?</target>

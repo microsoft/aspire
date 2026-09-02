@@ -2746,7 +2746,8 @@ public static class AtsCapabilityScanner
         var underlyingType = Nullable.GetUnderlyingType(type);
         if (underlyingType != null)
         {
-            return CreateTypeRef(underlyingType, enumCollector, assemblyExportedTypeCache);
+            var typeRef = CreateTypeRef(underlyingType, enumCollector, assemblyExportedTypeCache);
+            return typeRef is null ? null : WithNullability(typeRef, type, NullabilityState.Nullable);
         }
 
         // Handle primitives

@@ -500,7 +500,7 @@ extends:
           # Split C moves that second sign pass here so the parallelism
           # between `build` and `build_sign_native` is preserved. The Assemble
           # job runs on Windows because Authenticode signing of aspire.js
-          # (MicrosoftDotNet500 cert in eng/Signing.props) is rejected by
+          # (Microsoft400 cert in eng/Signing.props) is rejected by
           # Linux ESRP with "This file format cannot be signed because it is
           # not recognized."
           enableMicrobuild: true
@@ -526,7 +526,7 @@ extends:
           - job: Assemble
             timeoutInMinutes: 60
             # Windows agent: required for MicroBuild signing of aspire.js via
-            # MicrosoftDotNet500 (Authenticode). Linux ESRP rejects that cert
+            # Microsoft400 (Authenticode). Linux ESRP rejects that cert
             # for JS, so we cannot run the sign step on Linux even though the
             # surrounding download/stage/publish work is cross-platform.
             pool:

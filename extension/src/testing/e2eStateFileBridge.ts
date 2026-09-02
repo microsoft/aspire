@@ -13,7 +13,7 @@ import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunch
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECodeLensProbeResult, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
@@ -774,7 +774,17 @@ export async function executeE2eControlCommand(
     }
     case 'proveMauiResourceDebugging': {
       markStarted();
-      return await proveMauiResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider, {
+        displayName: 'MAUI',
+        proof: 'aspire-maui-resource-debug-breakpoint-hit',
+      });
+    }
+    case 'proveDenoResourceDebugging': {
+      markStarted();
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider, {
+        displayName: 'Deno',
+        proof: 'aspire-deno-resource-debug-breakpoint-hit',
+      });
     }
     case 'getExtensionPackageJson': {
       markStarted();
@@ -787,6 +797,31 @@ export async function executeE2eControlCommand(
     case 'getDiagnostics': {
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
+    }
+    case 'getDefinitions': {
+      const filePath = getE2eRunPath(command.filePath);
+      markStarted();
+      const definitions = await vscode.commands.executeCommand<Array<vscode.Location | vscode.LocationLink>>(
+        'vscode.executeDefinitionProvider',
+        vscode.Uri.file(filePath),
+        new vscode.Position(command.line, command.character));
+
+      return (definitions ?? []).map(definition => ({
+        filePath: 'targetUri' in definition ? definition.targetUri.fsPath : definition.uri.fsPath,
+        line: 'targetUri' in definition
+          ? (definition.targetSelectionRange ?? definition.targetRange).start.line
+          : definition.range.start.line,
+      }));
+    }
+    case 'getJavaProjects': {
+      markStarted();
+      const projects = await vscode.commands.executeCommand<Array<vscode.Uri | string>>('java.project.getAll');
+      return (projects ?? []).map(project => typeof project === 'string' ? project : project.toString());
+    }
+    case 'getCodeLenses': {
+      const filePath = getE2eRunPath(command.filePath, command.name);
+      markStarted();
+      return await getCodeLensesForFile(filePath);
     }
     case 'snapshotClipboard': {
       markStarted();
@@ -890,6 +925,10 @@ export async function executeE2eControlCommand(
       markStarted();
       return getActiveEditorInfo();
     }
+    case 'getOpenEditors': {
+      markStarted();
+      return getOpenEditorInfo();
+    }
     case 'runAspireCli': {
       if (!Array.isArray(command.args) || !command.args.every(argument => typeof argument === 'string')) {
         throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
@@ -902,7 +941,11 @@ export async function executeE2eControlCommand(
         [...command.args],
         workingDirectory,
         timeoutMs,
-        terminalProvider.createEnvironment());
+        terminalProvider.createEnvironment(),
+        {
+          noExtensionVariables: false,
+          rejectOnNonZero: command.allowNonZeroExit !== true,
+        });
       markStarted();
       return await commandPromise;
     }
@@ -994,8 +1037,13 @@ function getE2eEnvVars(value: unknown): EnvVar[] {
   return value.map(item => ({ name: item.name, value: item.value }));
 }
 
+type ResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' | 'proveDenoResourceDebugging' }>;
+
+interface ResourceDebugProofOptions {
+  displayName: string;
+  proof: string;
+}
 type AppHostAndResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }>;
-type MauiResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' }>;
 
 interface DebugSessionSnapshot {
   id: string;
@@ -1252,10 +1300,10 @@ ${JSON.stringify({
   }
 }
 
-async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
+async function proveResourceDebugging(command: ResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider, options: ResourceDebugProofOptions): Promise<unknown> {
   const appHostPath = getE2eWorkspacePath(command.appHostPath);
   const sourcePath = getE2eWorkspacePath(command.sourcePath);
-  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E MAUI proof requires resourceName.');
+  const resourceName = getE2eRequiredString(command.resourceName, `Aspire extension E2E ${options.displayName} proof requires resourceName.`);
   const breakpointLine = getE2eBreakpointLine(command.breakpointLine);
   const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
   const pauseOnBreakpointMs = getE2ePositiveInteger(command.pauseOnBreakpointMs, 0, 'pauseOnBreakpointMs');
@@ -1368,12 +1416,13 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
       resourceStartTimeoutMs,
-      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false));
+      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false),
+      { noExtensionVariables: true, rejectOnNonZero: true });
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
       stoppedEvent = await waitForE2eValue(
-        `MAUI breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+        `${options.displayName} breakpoint in ${sourcePath}:${breakpointLine + 1}`,
         breakpointTimeoutMs,
         async () => {
           for (const stoppedEvent of stoppedEvents) {
@@ -1398,7 +1447,9 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
               continue;
             }
             const matchingFrame = stackTrace?.stackFrames?.find((frame: { source?: { path?: string }; line?: number }) =>
-              typeof frame.source?.path === 'string' && isSamePath(frame.source.path, sourcePath));
+              typeof frame.source?.path === 'string' &&
+              isSamePath(frame.source.path, sourcePath) &&
+              frame.line === breakpointLine + 1);
             if (matchingFrame) {
               return { stoppedEvent, stackTrace: stackTrace!, matchingFrame };
             }
@@ -1423,7 +1474,7 @@ ${JSON.stringify({
     }
 
     if (stoppedEvent.matchingFrame.line !== breakpointLine + 1) {
-      throw new Error(`Expected MAUI breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
+      throw new Error(`Expected ${options.displayName} breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
     }
 
     if (pauseOnBreakpointMs > 0) {
@@ -1431,7 +1482,7 @@ ${JSON.stringify({
     }
 
     return {
-      proof: 'aspire-maui-resource-debug-breakpoint-hit',
+      proof: options.proof,
       appHostPath,
       resourceName,
       timeouts: {
@@ -1498,7 +1549,8 @@ async function runAspireCliForE2E(
   args: string[],
   workingDirectory: string,
   timeoutMs: number,
-  environment: Record<string, string | undefined>
+  environment: Record<string, string | undefined>,
+  options: { noExtensionVariables: boolean; rejectOnNonZero: boolean }
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
   const diagnosticCommand = [cliPath, ...redactCliArgsForLogging(args)].join(' ');
@@ -1530,7 +1582,7 @@ async function runAspireCliForE2E(
         completed = true;
         clearTimeout(timeout);
         const result = { exitCode: code, stdout: stdout.join(''), stderr: stderr.join('') };
-        if (code === 0) {
+        if (code === 0 || !options.rejectOnNonZero) {
           resolve(result);
         } else {
           reject(new Error(`${diagnosticCommand} exited with code ${code}.`));
@@ -1545,7 +1597,7 @@ async function runAspireCliForE2E(
         clearTimeout(timeout);
         reject(error);
       },
-      noExtensionVariables: true,
+      noExtensionVariables: options.noExtensionVariables,
       createProcessGroup: true,
       env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
@@ -1845,13 +1897,13 @@ function getWorkspaceFolderInfo(): Array<{ name: string; uri: string; fileName: 
   })) ?? [];
 }
 
-function getE2eRunPath(filePath: unknown): string {
+function getE2eRunPath(filePath: unknown, commandName = 'openFile'): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
-    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+    throw new Error(`Aspire extension E2E ${commandName} requires an absolute file path.`);
   }
 
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+    throw new Error(`Aspire extension E2E ${commandName} requires an existing file: ${filePath}`);
   }
 
   // The workspace root is normally inside the run root, but a run whose workspace has to live
@@ -1863,7 +1915,7 @@ function getE2eRunPath(filePath: unknown): string {
   ].filter((root): root is string => typeof root === 'string' && root.length > 0);
 
   if (!allowedRoots.some(root => isPathWithinDirectory(filePath, root))) {
-    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root or workspace root.');
+    throw new Error(`Aspire extension E2E ${commandName} can only open files inside the configured E2E run root or workspace root.`);
   }
 
   return filePath;
@@ -1991,6 +2043,20 @@ export async function getDiagnosticsForFile(filePath: string): Promise<{ message
   }
 
   return diagnostics;
+}
+
+export async function getCodeLensesForFile(filePath: string): Promise<AspireExtensionE2ECodeLensProbeResult> {
+  const uri = vscode.Uri.file(filePath);
+  const document = await vscode.workspace.openTextDocument(uri);
+  const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
+
+  return {
+    filePath: document.uri.fsPath,
+    languageId: document.languageId,
+    commandTitles: (codeLenses ?? [])
+      .map(codeLens => codeLens.command?.title)
+      .filter((title): title is string => typeof title === 'string' && title.length > 0),
+  };
 }
 
 function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
@@ -2194,6 +2260,18 @@ function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string
     fileName: document?.fileName,
     text: document?.getText(),
   };
+}
+
+function getOpenEditorInfo(): Array<{ label: string; uri?: string; isPreview: boolean }> {
+  return vscode.window.tabGroups.all.flatMap(group =>
+    group.tabs.map(tab => {
+      const uri = tab.input instanceof vscode.TabInputText ? tab.input.uri : undefined;
+      return {
+        label: tab.label,
+        uri: uri?.toString(),
+        isPreview: tab.isPreview,
+      };
+    }));
 }
 
 function cloneTerminalCommandEvent(event: AspireTerminalCommandEvent, sequence: number): AspireExtensionE2ETerminalCommand {

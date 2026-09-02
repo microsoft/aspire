@@ -17,7 +17,7 @@ func main() {
 	api.WithComputeEnvironment(compose)
 
 	compose.WithProperties(func(environment aspire.DockerComposeEnvironmentResource) {
-		environment.SetDefaultNetworkName("validation-network")
+		environment.SetDefaultNetworkName(aspire.StringPtr("validation-network"))
 		_, _ = environment.DefaultNetworkName()
 		environment.SetDashboardEnabled(true)
 		_, _ = environment.DashboardEnabled()
@@ -44,7 +44,7 @@ func main() {
 	})
 
 	compose.ConfigureComposeFile(func(composeFile aspire.ComposeFile) {
-		composeFile.SetName("validation-compose")
+		composeFile.SetName(aspire.StringPtr("validation-compose"))
 		_, _ = composeFile.Name()
 		composeFile.AddNetwork("validation-network-extra", &aspire.AddNetworkOptions{Driver: aspire.StringPtr("bridge")})
 		composeFile.AddService("validation-sidecar", &aspire.AddServiceOptions{Image: aspire.StringPtr("busybox")})
@@ -52,15 +52,15 @@ func main() {
 		composeFile.AddConfig("validation-config", &aspire.AddConfigOptions{Content: aspire.StringPtr("enabled=true")})
 		composeFile.AddSecret("validation-secret", &aspire.AddSecretOptions{External: aspire.BoolPtr(true)})
 		composeApi, _ := composeFile.Services().Get("api")
-		composeApi.SetPullPolicy("always")
+		composeApi.SetPullPolicy(aspire.StringPtr("always"))
 		_, _ = composeApi.PullPolicy()
 		composeApi.AddVolume("validation-data", "/container/compose-data", &aspire.ServiceAddVolumeOptions{IsReadOnly: aspire.BoolPtr(true)})
 	})
 
 	_ = api.PublishAsDockerComposeService(func(composeService aspire.DockerComposeServiceResource, service aspire.Service) {
-		service.SetContainerName("validation-api")
-		service.SetPullPolicy("always")
-		service.SetRestart("unless-stopped")
+		service.SetContainerName(aspire.StringPtr("validation-api"))
+		service.SetPullPolicy(aspire.StringPtr("always"))
+		service.SetRestart(aspire.StringPtr("unless-stopped"))
 
 		_, _ = composeService.Name()
 		composeEnv := composeService.Parent()

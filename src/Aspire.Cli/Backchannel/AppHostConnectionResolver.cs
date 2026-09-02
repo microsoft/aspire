@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -142,19 +143,19 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            var matchingSockets = AppHostSocketManager.FindSockets(
                 projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
 
             // Try each matching socket until we get a connection
-            foreach (var socketPath in matchingSockets)
+            foreach (var appHostSocket in matchingSockets)
             {
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
+                        appHostSocket, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         var result = new AppHostConnectionResult { Connection = connection };
@@ -164,7 +165,7 @@ internal sealed class AppHostConnectionResolver(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogDebug(ex, "Failed to connect to socket at {SocketPath}", socketPath);
+                    logger.LogDebug(ex, "Failed to connect to socket at {SocketPath}", appHostSocket.SocketPath);
                 }
             }
 
