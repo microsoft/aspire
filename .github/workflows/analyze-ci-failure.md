@@ -981,6 +981,12 @@ safe-outputs:
           required: true
           type: string
       steps:
+        - name: Checkout rerun validator
+          uses: actions/checkout@v4.3.1
+          with:
+            persist-credentials: false
+            sparse-checkout: .github/workflows/analyze-ci-failure-cause-resolver.js
+            sparse-checkout-cone-mode: false
         - uses: actions/download-artifact@v4
           with:
             name: ci-failure-data
@@ -993,6 +999,8 @@ safe-outputs:
             script: |
               const fs = require('fs');
               const path = require('path');
+              const { validateCauseJobAttribution } =
+                require('./.github/workflows/analyze-ci-failure-cause-resolver.js');
 
               // Read inputs from the agent output artifact.
               // gh-aw writes { "items": [ { "type": "rerun_failed_jobs", ... } ] }.
@@ -1098,7 +1106,7 @@ safe-outputs:
                 core.setFailed('Rerun requires unique analysis cause IDs matching the generated cause files');
                 return;
               }
-              const causeJobIdCoverage = new Set();
+              const rerunCauses = [];
               for (const causeFileName of causeFiles) {
                 let cause;
                 try {
@@ -1115,18 +1123,6 @@ safe-outputs:
                     !summaryCauseIds.includes(causeId)) {
                   core.setFailed(`Rerun cause ${causeFileName} must be a valid infra-failure cause`);
                   return;
-                }
-
-                if (!Array.isArray(cause.job_ids) ||
-                    cause.job_ids.length === 0 ||
-                    !cause.job_ids.every(jobId => Number.isInteger(jobId) && jobId > 0) ||
-                    new Set(cause.job_ids).size !== cause.job_ids.length ||
-                    !cause.job_ids.every(jobId => trustedJobIdSet.has(jobId))) {
-                  core.setFailed(`Rerun cause ${causeFileName} has invalid or untrusted job_ids`);
-                  return;
-                }
-                for (const jobId of cause.job_ids) {
-                  causeJobIdCoverage.add(jobId);
                 }
 
                 const priorCauseFile = path.join(priorCausesDir, causeFileName);
@@ -1147,10 +1143,12 @@ safe-outputs:
                     return;
                   }
                 }
+                rerunCauses.push(cause);
               }
-
-              if (!analysisJobIds.every(jobId => causeJobIdCoverage.has(jobId))) {
-                core.setFailed('Rerun cause job_ids do not cover every trusted failed job');
+              try {
+                validateCauseJobAttribution(analysis, rerunCauses, trustedFailedJobs);
+              } catch (error) {
+                core.setFailed(`Rerun cause attribution is invalid: ${error.message}`);
                 return;
               }
 
@@ -1324,6 +1322,7 @@ Field details:
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
 - `job_ids`: Required array containing the numeric IDs of every failed job caused by this underlying failure. Use the IDs from `failed_jobs`; do not attribute a cause to an unrelated failed job.
 - The union of `job_ids` across all cause files MUST cover every failed job classified as `transient-infra`, `flaky-test`, or `main-repository-breakage`.
+- `infra-failure` causes may reference only `transient-infra` jobs, `flaky-test` causes only `flaky-test` jobs, and `main-repository-breakage` causes only `main-repository-breakage` jobs.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
@@ -1444,6 +1443,8 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 ### Mixed Failures
 
 If there are both transient and non-transient failures, set `verdict` to `"mixed"`. Report all findings with per-job and per-test classifications.
+
+A single failed job can contain both a deterministic failure and a flaky failed test. In that case, classify the job by the deterministic failure, include the flaky test and its cause, and use `mixed` so neither failure is omitted.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 

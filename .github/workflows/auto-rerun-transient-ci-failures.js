@@ -1134,7 +1134,7 @@ function validatePatternRule(rule, path, allowedFields, matcherFields, errors) {
     }
 
     if (rule.causeId !== undefined &&
-        (typeof rule.causeId !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(rule.causeId))) {
+        (typeof rule.causeId !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(rule.causeId))) {
         errors.push(`${path}: 'causeId' must be a safe cause ID.`);
     }
 

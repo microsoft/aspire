@@ -39,7 +39,8 @@ function duplicateExemptStamp() {
 }
 
 function isDuplicateExempt(issue) {
-    return typeof issue?.body === 'string' && issue.body.includes(DUPLICATE_EXEMPT_MARKER);
+    return typeof issue?.body === 'string' &&
+        issue.body.replaceAll('\r\n', '\n').trimEnd().split('\n').at(-1) === DUPLICATE_EXEMPT_MARKER;
 }
 
 function buildBody({ marker, lead, note, autoClose }) {
@@ -76,7 +77,11 @@ function duplicateReconciliationMarker(canonicalIssueNumber, duplicateIssueNumbe
 }
 
 function hasMarker(items, marker) {
-    return (items ?? []).some(
+    if (!Array.isArray(items)) {
+        return false;
+    }
+
+    return items.some(
         item => typeof (item?.body ?? item) === 'string' && (item.body ?? item).includes(marker));
 }
 
@@ -212,13 +217,32 @@ async function executeAction(transport, action, canonicalIssueNumber) {
     return { ...action, issueNumber };
 }
 
-async function preparePlanningIssues(issues, prepareIssues) {
-    return prepareIssues ? await prepareIssues(issues) : issues;
+async function preparePlanningIssues(issues, prepareIssues, transport, options) {
+    let preparedIssues = prepareIssues ? await prepareIssues(issues) : issues;
+    if (!options.closeDuplicates || typeof transport.listComments !== 'function') {
+        return preparedIssues;
+    }
+
+    const matches = findIssuesForMarkers(
+        preparedIssues,
+        [options.marker, ...(options.alternateMarkers ?? [])],
+        options.isMatchingIssue ?? (() => true))
+        .filter(issue => !isDuplicateExempt(issue))
+        .filter(issue => !Array.isArray(issue.comments));
+    const commentsByNumber = new Map();
+    await Promise.all(matches.map(async issue => {
+        commentsByNumber.set(issue.number, await transport.listComments(issue.number));
+    }));
+    preparedIssues = preparedIssues.map(issue => ({
+        ...issue,
+        comments: commentsByNumber.get(issue.number) ?? issue.comments,
+    }));
+    return preparedIssues;
 }
 
 async function executeIssueReconciliation(transport, core, options) {
     let issues = options.issues ?? await transport.listIssues(options.label);
-    issues = await preparePlanningIssues(issues, options.prepareIssues);
+    issues = await preparePlanningIssues(issues, options.prepareIssues, transport, options);
     let plan = planIssueReconciliation({ ...options, issues });
     const appliedActions = [];
     let createdIssue = null;
@@ -234,7 +258,7 @@ async function executeIssueReconciliation(transport, core, options) {
 
         if (plan.requiresRelist) {
             issues = await transport.listIssues(options.label);
-            issues = await preparePlanningIssues(issues, options.prepareIssues);
+            issues = await preparePlanningIssues(issues, options.prepareIssues, transport, options);
             plan = planIssueReconciliation({ ...options, issues });
             if (plan.actions[0]?.type === 'create') {
                 throw new Error('Created tracking issue was not returned by the all-state label listing.');
@@ -384,7 +408,8 @@ async function recordRun(
         const matches = findIssuesForMarkers(
             inventory,
             [marker, ...alternateMarkers],
-            isMatchingIssue);
+            isMatchingIssue)
+            .filter(issue => !isDuplicateExempt(issue));
         const openMatches = matches.filter(issue => issue.state !== 'closed');
         const planningMatches = !closeDuplicates && openMatches.length > 0
             ? openMatches

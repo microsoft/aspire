@@ -17,6 +17,11 @@ async function main() {
 
 function makeGithub(store) {
     const calls = [];
+    const toRestIssue = issue => ({
+        ...issue,
+        comments: issue.commentBodies.length,
+        commentBodies: undefined,
+    });
     return {
         calls,
         paginate: async (fn, params) => (await fn(params)).data,
@@ -26,7 +31,7 @@ function makeGithub(store) {
                     if (labels !== 'ci-failure-cause' || state !== 'all') {
                         throw new Error('Cause lookup must list all ci-failure-cause issues.');
                     }
-                    return { data: store.issues };
+                    return { data: store.issues.map(toRestIssue) };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
@@ -36,10 +41,10 @@ function makeGithub(store) {
                         title,
                         body,
                         labels,
-                        comments: [],
+                        commentBodies: [],
                     };
                     store.issues.push(issue);
-                    return { data: issue };
+                    return { data: toRestIssue(issue) };
                 },
                 update: async ({ issue_number, state, state_reason, body }) => {
                     calls.push('update');
@@ -55,11 +60,12 @@ function makeGithub(store) {
                 createComment: async ({ issue_number, body }) => {
                     calls.push('createComment');
                     const issue = store.issues.find(candidate => candidate.number === issue_number);
-                    (issue.comments ??= []).push(body);
+                    issue.commentBodies.push(body);
                 },
                 listComments: async ({ issue_number }) => {
+                    calls.push('listComments');
                     const issue = store.issues.find(candidate => candidate.number === issue_number);
-                    return { data: (issue?.comments ?? []).map(body => ({ body })) };
+                    return { data: (issue?.commentBodies ?? []).map(body => ({ body })) };
                 },
                 createLabel: async () => {
                     calls.push('createLabel');
@@ -98,8 +104,9 @@ async function dispatch(operation, payload) {
         issues: (payload.issues ?? []).map(issue => ({
             title: 'Existing issue',
             labels: ['ci-failure-cause'],
-            comments: [],
+            commentBodies: issue.comments ?? [],
             ...issue,
+            comments: undefined,
         })),
     };
     const github = makeGithub(store);
@@ -140,6 +147,7 @@ async function dispatch(operation, payload) {
             title: issue.title,
             body: issue.body,
             labels: issue.labels,
+            comments: issue.commentBodies,
         })),
         storedCause,
     };

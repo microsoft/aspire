@@ -8,11 +8,21 @@ async function main() {
     }
 
     const request = JSON.parse(await fs.readFile(inputPath, 'utf8'));
-    if (request.operation !== 'resolveCauses') {
-        throw new Error(`Unsupported operation '${request.operation}'.`);
+    let result;
+    switch (request.operation) {
+        case 'resolveCauses':
+            result = resolver.resolveCauses(request.payload ?? {});
+            break;
+        case 'validateCauseJobAttribution':
+            result = resolver.validateCauseJobAttribution(
+                request.payload?.analysis,
+                request.payload?.causes,
+                request.payload?.trustedFailedJobs);
+            break;
+        default:
+            throw new Error(`Unsupported operation '${request.operation}'.`);
     }
 
-    const result = resolver.resolveCauses(request.payload ?? {});
     process.stdout.write(JSON.stringify({ result }));
 }
 

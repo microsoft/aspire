@@ -251,6 +251,41 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RecordRunIgnoresOpenDuplicateExemptIssueWhenSelectingClosedCanonical()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->", state = "closed" },
+                    new
+                    {
+                        number = 8,
+                        body = "<!-- m -->\n\nForce-new reason.\n\n<!-- tracking-issue-duplicate-exempt -->"
+                    }
+                }
+            });
+
+        Assert.Equal(5, result.Result.Number);
+        Assert.False(result.Result.Created);
+        Assert.Equal(["update", "createComment"], result.Calls);
+
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal("open", canonical.State);
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:7 -->", StringComparison.Ordinal));
+
+        var exempt = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("open", exempt.State);
+        Assert.Empty(exempt.Comments);
+        Assert.DoesNotContain(result.Issues, issue => issue.Number == 1000);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RecordRunUsesIdentityPredicateBeforeSelectingCanonicalIssue()
     {
         var result = await InvokeHarnessAsync<RecordRunResult>(
@@ -294,6 +329,58 @@ public sealed class TrackingIssueTests : IDisposable
         var createdDuplicate = Assert.Single(result.Issues, issue => issue.Number == 1000);
         Assert.Equal("closed", createdDuplicate.State);
         Assert.Equal("not_planned", createdDuplicate.StateReason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunDoesNotTreatReservedMarkerInsideProducerContentAsDuplicateExemption()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                closeDuplicates = true,
+                body = """
+                    <!-- m -->
+
+                    Untrusted failure text contained <!-- tracking-issue-duplicate-exempt -->.
+
+                    ## Occurrences
+                    """
+            });
+
+        Assert.True(result.Result.Created);
+        Assert.Equal(1000, result.Result.Number);
+        Assert.Equal("open", Assert.Single(result.Issues).State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunHonorsDuplicateExemptionAsFinalBodyLine()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->" },
+                    new
+                    {
+                        number = 8,
+                        body = "<!-- m -->\n\nForce-new reason.\n\n<!-- tracking-issue-duplicate-exempt -->\n"
+                    }
+                }
+            });
+
+        Assert.Equal(5, result.Result.Number);
+        Assert.Empty(result.Result.DuplicatesClosed);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 8).State);
     }
 
     [Fact]

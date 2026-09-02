@@ -12,9 +12,16 @@ async function main() {
     process.stdout.write(JSON.stringify({ result }));
 }
 
-// In-memory octokit fake mirroring the surface recordRun touches, so the
-// find-or-create + comment-dedup contract can be exercised without a network.
-// Comments are stored as plain strings; listComments adapts them to { body }.
+// Issue list/create responses expose GitHub's integer comment count. Comment bodies
+// are available only through listComments, matching the REST API boundary.
+function toRestIssue(issue) {
+    return {
+        ...issue,
+        comments: issue.commentBodies.length,
+        commentBodies: undefined,
+    };
+}
+
 function makeGithub(store, concurrentIssue) {
     const calls = [];
     let listCount = 0;
@@ -33,18 +40,32 @@ function makeGithub(store, concurrentIssue) {
                     }
                     listCount++;
                     if (listCount === 2 && concurrentIssue) {
-                        store.issues.push({ comments: [], state: 'open', ...concurrentIssue });
+                        store.issues.push({
+                            commentBodies: concurrentIssue.comments ?? [],
+                            state: 'open',
+                            ...concurrentIssue,
+                            comments: undefined,
+                        });
                     }
                     const requestedState = state ?? 'open';
                     return {
-                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                        data: store.issues
+                            .filter(issue => requestedState === 'all' || issue.state === requestedState)
+                            .map(toRestIssue),
                     };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
-                    const issue = { number: store.next++, title, body, labels, state: 'open', comments: [] };
+                    const issue = {
+                        number: store.next++,
+                        title,
+                        body,
+                        labels,
+                        state: 'open',
+                        commentBodies: [],
+                    };
                     store.issues.push(issue);
-                    return { data: issue };
+                    return { data: toRestIssue(issue) };
                 },
                 update: async ({ issue_number, state, state_reason, body }) => {
                     calls.push('update');
@@ -56,12 +77,12 @@ function makeGithub(store, concurrentIssue) {
                 },
                 listComments: async ({ issue_number }) => {
                     const issue = store.issues.find(i => i.number === issue_number);
-                    return { data: (issue?.comments ?? []).map(body => ({ body })) };
+                    return { data: (issue?.commentBodies ?? []).map(body => ({ body })) };
                 },
                 createComment: async ({ issue_number, body }) => {
                     calls.push('createComment');
                     const issue = store.issues.find(i => i.number === issue_number);
-                    (issue.comments ??= []).push(body);
+                    issue.commentBodies.push(body);
                 },
             },
         },
@@ -91,7 +112,12 @@ async function dispatch(operation, payload) {
 
         case 'planAndExecute': {
             const store = {
-                issues: (payload.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
+                issues: (payload.issues ?? []).map(issue => ({
+                    commentBodies: issue.comments ?? [],
+                    state: 'open',
+                    ...issue,
+                    comments: undefined,
+                })),
                 next: payload.nextNumber ?? 1000,
             };
             const github = makeGithub(store);
@@ -118,11 +144,10 @@ async function dispatch(operation, payload) {
             };
             const plan = engine.planIssueReconciliation({
                 ...options,
-                issues: store.issues,
+                issues: store.issues.map(toRestIssue),
             });
             const execution = await engine.executeIssueReconciliation(transport, core, {
                 ...options,
-                issues: store.issues,
             });
             return {
                 plan,
@@ -132,7 +157,12 @@ async function dispatch(operation, payload) {
 
         case 'recordRun': {
             const store = {
-                issues: (payload.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
+                issues: (payload.issues ?? []).map(issue => ({
+                    commentBodies: issue.comments ?? [],
+                    state: 'open',
+                    ...issue,
+                    comments: undefined,
+                })),
                 next: payload.nextNumber ?? 1000,
             };
             const github = makeGithub(store, payload.concurrentIssue);
@@ -163,7 +193,7 @@ async function dispatch(operation, payload) {
                     stateReason: issue.stateReason,
                     body: issue.body,
                     labels: issue.labels ?? [],
-                    comments: issue.comments ?? [],
+                    comments: issue.commentBodies,
                 })),
             };
         }

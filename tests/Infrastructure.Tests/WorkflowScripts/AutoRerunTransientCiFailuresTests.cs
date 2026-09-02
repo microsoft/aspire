@@ -2108,6 +2108,35 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains(result.Errors, e => e.Contains("'causeId' must be a safe cause ID", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("cause--id")]
+    [InlineData("cause-")]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsNonCanonicalCauseId(string causeId)
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = Array.Empty<object>(),
+            jobFailurePatterns = new object[]
+            {
+                new
+                {
+                    output = "0xC0000142",
+                    reason = "Worker initialization failure",
+                    causeId
+                }
+            }
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("'causeId' must be a safe cause ID", StringComparison.Ordinal));
+    }
+
     private static void ValidatePatternRule(JsonElement rule, HashSet<string> allowedFields, HashSet<string> matcherFields)
     {
         Assert.Equal(JsonValueKind.Object, rule.ValueKind);
@@ -2132,7 +2161,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         {
             Assert.True(
                 causeId.ValueKind == JsonValueKind.String &&
-                System.Text.RegularExpressions.Regex.IsMatch(causeId.GetString()!, "^[a-z0-9][a-z0-9-]*$"),
+                System.Text.RegularExpressions.Regex.IsMatch(causeId.GetString()!, "^[a-z0-9]+(?:-[a-z0-9]+)*$"),
                 "'causeId' must be a safe cause ID.");
         }
 

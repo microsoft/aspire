@@ -112,10 +112,13 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Equal("open", canonical.State);
         Assert.Equal(1, canonical.Body.Split("[991](", StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("|\n\n|", canonical.Body, StringComparison.Ordinal);
+        Assert.Single(canonical.Comments);
 
         var duplicate = Assert.Single(result.Issues, issue => issue.Number == 20);
         Assert.Equal("closed", duplicate.State);
         Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.Single(duplicate.Comments);
+        Assert.Contains("listComments", result.Calls);
 
         var wrongType = Assert.Single(result.Issues, issue => issue.Number == 5);
         Assert.Equal("open", wrongType.State);
@@ -123,6 +126,44 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Equal(
             "https://github.com/microsoft/aspire/issues/10",
             result.StoredCause.GetProperty("issue_url").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingExistingOccurrenceDoesNotReopenClosedIssue()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            ## Occurrences
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-29 | [991](https://github.com/microsoft/aspire/actions/runs/991) | Build / Windows | #19804 |
+
+                            """
+                    }
+                }
+            });
+
+        Assert.True(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Equal(1, issue.Body.Split("[991](", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("update", result.Calls);
     }
 
     [Fact]
@@ -277,6 +318,7 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     private sealed record PublishResult(
         PublishSummary Publish,
+        string[] Calls,
         IssueState[] Issues,
         JsonElement StoredCause);
 
@@ -288,5 +330,6 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         string? StateReason,
         string Title,
         string Body,
-        string[] Labels);
+        string[] Labels,
+        string[] Comments);
 }

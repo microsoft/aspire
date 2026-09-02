@@ -177,7 +177,7 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         title: buildIssueTitle(cause),
         buildBody: () => buildIssueBody(cause, run),
         closeDuplicates: true,
-        reopen: 'always',
+        reopen: 'when-changing',
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
         actionsForCanonical: (issue, { created }) => {
             if (created || hasOccurrence(issue.body, run.runId)) {
