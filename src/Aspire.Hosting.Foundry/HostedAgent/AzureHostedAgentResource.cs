@@ -379,8 +379,11 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     private static bool IsHostedAgentTargetPortExpression(EndpointReferenceExpression endpointReferenceExpression, AzureHostedAgentResource hostedAgent)
     {
         return endpointReferenceExpression.Property == EndpointProperty.TargetPort &&
-            ReferenceEquals(endpointReferenceExpression.Endpoint.Resource, hostedAgent.Target);
+            IsHostedAgentTarget(endpointReferenceExpression.Endpoint.Resource, hostedAgent);
     }
+
+    private static bool IsHostedAgentTarget(IResource resource, AzureHostedAgentResource hostedAgent) =>
+        ReferenceEquals(resource.GetOwnerOrSelf(), hostedAgent.Target.GetOwnerOrSelf());
 
     private static async ValueTask<string?> ResolveValueProviderAsync(
         IValueProvider provider,
@@ -468,7 +471,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var endpointReference = endpointReferenceExpression.Endpoint;
         var endpoint = endpointReference.EndpointAnnotation;
 
-        if (endpointReference.Resource != hostedAgent.Target && !endpoint.IsExternal)
+        if (!IsHostedAgentTarget(endpointReference.Resource, hostedAgent) && !endpoint.IsExternal)
         {
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, $"Endpoint '{endpoint.Name}' is internal. Foundry hosted agents can only reference externally exposed endpoints during publish.");
         }

@@ -521,7 +521,7 @@ public static class HostedAgentResourceBuilderExtensions
 
         builder.ApplicationBuilder.AddResource(hostedAgent)
             .WithIconName("Agents")
-            .WithReferenceRelationship(target);
+            .WithReferenceRelationship(target.GetOwnerOrSelf());
 
         // Referencing a hosted agent (its node app) only injects the agent's service-discovery URL.
         // Unlike referencing a first-class Azure resource, it does not give the consumer a managed

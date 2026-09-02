@@ -435,6 +435,36 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public async Task AsHostedAgent_InPublishMode_UsesOwnerIdentityForProjectedExecutableTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .WithHttpEndpoint(targetPort: 9000, env: "AGENT_PORT");
+
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        using var app = builder.Build();
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
+
+        var relationship = Assert.Single(
+            hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            annotation => annotation.Type == "Reference");
+        Assert.Same(agent.Resource, relationship.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            hostedAgent.Target,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.DoesNotContain("AGENT_PORT", envVars.Keys);
+    }
+
+    [Fact]
     public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
