@@ -39,6 +39,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private const string ProjectAssetsFileName = "project.assets.json";
     private const string RestoreStampFileName = "aspire-restore.stamp";
+    private const string TemporaryCredentialRestoreDirectoryName = "temporary";
+    private const string TemporaryCredentialRestoreDirectoryPrefix = "credential";
 
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
@@ -817,11 +819,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             hasCredentialBearingAdditionalSource ||
             temporaryRestoreConfig?.ContainsCredentialMaterial == true;
         // NuGet serializes effective sources into project.assets.json and the restore graph under obj/.
-        // The closure reader consumes those files before this method returns, so remove the directory
-        // on every exit rather than leaving credential-bearing URLs in the persistent integration cache.
-        using var restoreMetadataCleanup = hasCredentialBearingRestoreSource
-            ? new CredentialRestoreMetadataCleanup(restoreDir, _logger)
+        // Credential-bearing intermediates therefore use the same leased, owner-only temporary cache
+        // pattern as package-only restores. If cleanup is interrupted, a later restore reclaims the
+        // private directory without risking deletion of one still in use.
+        using var temporaryIntermediateDirectory = hasCredentialBearingRestoreSource
+            ? CreateTemporaryCredentialRestoreDirectory(restoreDir)
             : null;
+        var intermediateOutputPath = temporaryIntermediateDirectory?.FullName ?? Path.Combine(restoreDir, "obj");
 
         FileInfo? restoreConfigFile;
         string? restoreConfigContent;
@@ -885,7 +889,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // parent props from affecting the generated project.
         await WriteIfChangedAsync(
             Path.Combine(restoreDir, "Directory.Build.props"),
-            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDir).ToString(),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDir, intermediateOutputPath).ToString(),
             cancellationToken);
 
         // Write empty Directory.Build.targets to prevent parent targets imports.
@@ -960,7 +964,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
             restoreDir,
-            Path.Combine(restoreDir, "obj", IntegrationClosureBuilder.ProjectAssetsFileName),
+            Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
             appSettingsContent,
             ClosureFileMissingBehavior.Throw,
             _logger,
@@ -975,6 +979,68 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             closureManifest!.GetManifestLines(),
             cancellationToken).ConfigureAwait(false);
         return closureManifest;
+    }
+
+    private TemporaryCacheDirectory CreateTemporaryCredentialRestoreDirectory(string restoreDir)
+    {
+        var temporaryRoot = Path.Combine(restoreDir, TemporaryCredentialRestoreDirectoryName);
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(temporaryRoot);
+        CleanupAbandonedTemporaryCredentialRestoreDirectories(temporaryRoot);
+        return TemporaryCacheDirectory.Create(
+            temporaryRoot,
+            TemporaryCredentialRestoreDirectoryPrefix,
+            path => TryDeleteTemporaryCredentialRestoreDirectory(path, _logger),
+            path => TryDeleteTemporaryCredentialRestoreLease(path, _logger));
+    }
+
+    private void CleanupAbandonedTemporaryCredentialRestoreDirectories(string temporaryRoot)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(
+            temporaryRoot,
+            $".{TemporaryCredentialRestoreDirectoryPrefix}-*"))
+        {
+            try
+            {
+                var leasePath = TemporaryCacheDirectory.GetLeasePath(directory);
+                using (TemporaryCacheDirectory.OpenLease(directory))
+                {
+                    TryDeleteTemporaryCredentialRestoreDirectory(directory, _logger);
+                }
+
+                TryDeleteTemporaryCredentialRestoreLease(leasePath, _logger);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogDebug(ex, "Unable to clean temporary integration restore directory {Path}; it may still be in use.", directory);
+            }
+        }
+    }
+
+    private static void TryDeleteTemporaryCredentialRestoreDirectory(string path, ILogger logger)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Unable to remove temporary integration restore directory {Path}.", path);
+        }
+    }
+
+    private static void TryDeleteTemporaryCredentialRestoreLease(string path, ILogger logger)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Unable to remove temporary integration restore lease {Path}.", path);
+        }
     }
 
     /// <summary>
@@ -1522,22 +1588,4 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
     }
 
-    private sealed class CredentialRestoreMetadataCleanup(string restoreDirectory, ILogger logger) : IDisposable
-    {
-        public void Dispose()
-        {
-            var objDirectory = Path.Combine(restoreDirectory, "obj");
-            try
-            {
-                if (Directory.Exists(objDirectory))
-                {
-                    Directory.Delete(objDirectory, recursive: true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                logger.LogDebug(ex, "Unable to remove credential-bearing integration restore metadata at {Path}.", objDirectory);
-            }
-        }
-    }
 }

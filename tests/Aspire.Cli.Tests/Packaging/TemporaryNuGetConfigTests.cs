@@ -346,6 +346,15 @@ public class TemporaryNuGetConfigTests
                 .ToArray());
     }
 
+    [PlatformSpecific(TestPlatforms.Windows)]
+    [Fact]
+    public void ResolvePathFromOrigin_WithDriveRootRelativePath_UsesOriginDrive()
+    {
+        var result = NuGetConfigComposer.ResolvePathFromOrigin(@"D:\repo", @"\packages");
+
+        Assert.Equal(@"D:\packages", result);
+    }
+
     [Fact]
     public async Task CreateComposedAsync_MoreLocalClearRemovesInheritedSources()
     {

@@ -116,13 +116,14 @@ internal static class IntegrationClosureBuilder
     /// Creates the early-imported props document that redirects generated integration project
     /// outputs into the shared integration restore directory.
     /// </summary>
-    public static XDocument CreateClosureDirectoryBuildProps(string restoreDir)
+    public static XDocument CreateClosureDirectoryBuildProps(string restoreDir, string intermediateOutputPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
+        ArgumentException.ThrowIfNullOrEmpty(intermediateOutputPath);
 
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("BaseOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
-            new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "obj"))),
+            new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(intermediateOutputPath)),
             new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
 
         return new XDocument(new XElement("Project", propertyGroup));

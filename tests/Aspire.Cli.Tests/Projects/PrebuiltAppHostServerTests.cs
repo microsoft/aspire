@@ -496,14 +496,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateClosureDirectoryBuildProps_SetsEarlyOutputPathProperties()
     {
-        var doc = IntegrationClosureBuilder.CreateClosureDirectoryBuildProps("/custom/output/path");
+        var doc = IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+            "/custom/output/path",
+            "/custom/intermediate/path");
 
         var ns = doc.Root!.GetDefaultNamespace();
         Assert.Equal(
             Path.Combine("/custom/output/path", "bin") + Path.DirectorySeparatorChar,
             doc.Descendants(ns + "BaseOutputPath").FirstOrDefault()?.Value);
         Assert.Equal(
-            Path.Combine("/custom/output/path", "obj") + Path.DirectorySeparatorChar,
+            "/custom/intermediate/path" + Path.DirectorySeparatorChar,
             doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault()?.Value);
         Assert.Equal("$(BaseIntermediateOutputPath)", doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault()?.Value);
     }
@@ -2597,6 +2599,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
         string? restoreSourcesPropsFile = null;
         string? restoreSourcesPropsContent = null;
+        string? intermediateOutputPath = null;
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2616,6 +2619,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     .Single(path => string.Equals(Path.GetFileName(path), "IntegrationRestoreSources.props", StringComparison.Ordinal));
                 Assert.True(File.Exists(restoreSourcesPropsFile));
                 restoreSourcesPropsContent = File.ReadAllText(restoreSourcesPropsFile);
+                intermediateOutputPath = GetIntermediateOutputPath(projectFilePath.Directory!);
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             }
@@ -2654,11 +2658,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(result.Success);
             Assert.NotNull(restoreSourcesPropsFile);
             Assert.NotNull(restoreSourcesPropsContent);
+            Assert.NotNull(intermediateOutputPath);
             Assert.Contains(channelSource, restoreSourcesPropsContent);
+            Assert.StartsWith(
+                Path.Combine(workingDirectory, "integration-restore", "temporary") + Path.DirectorySeparatorChar,
+                intermediateOutputPath,
+                StringComparisons.FileSystemPath);
             Assert.False(File.Exists(restoreSourcesPropsFile));
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
             Assert.False(File.Exists(restoreStampFile));
-            Assert.False(Directory.Exists(objDirectory));
+            Assert.False(Directory.Exists(intermediateOutputPath));
 
             var persistedProjectContent = await File.ReadAllTextAsync(
                 Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
@@ -2671,15 +2680,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WhenCredentialBearingProjectRestoreFails_RemovesRestoreMetadata()
+    public async Task PrepareAsync_WhenCredentialBearingProjectRestoreFails_RemovesTemporaryRestoreMetadata()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
+        string? intermediateOutputPath = null;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (projectFilePath, _, _, _) =>
             {
-                var objDirectory = projectFilePath.Directory!.CreateSubdirectory("obj");
+                intermediateOutputPath = GetIntermediateOutputPath(projectFilePath.Directory!);
+                var objDirectory = Directory.CreateDirectory(intermediateOutputPath);
                 File.WriteAllText(Path.Combine(objDirectory.FullName, "project.assets.json"), channelSource);
                 File.WriteAllText(Path.Combine(objDirectory.FullName, "IntegrationRestore.csproj.nuget.dgspec.json"), channelSource);
                 return 1;
@@ -2714,6 +2725,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.False(result.Success);
             Assert.False(Directory.Exists(objDirectory));
+            Assert.NotNull(intermediateOutputPath);
+            Assert.StartsWith(
+                Path.Combine(workingDirectory, "integration-restore", "temporary") + Path.DirectorySeparatorChar,
+                intermediateOutputPath,
+                StringComparisons.FileSystemPath);
+            Assert.False(Directory.Exists(intermediateOutputPath));
         }
         finally
         {
@@ -3465,7 +3482,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 : "|||");
         }
 
-        WriteProjectAssetsFile(restoreDirectory, packageMetadata);
+        WriteProjectAssetsFile(GetIntermediateOutputPath(restoreDirectory), packageMetadata);
         File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName), metadataLines);
         File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName), sourcePaths);
         File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName), targetPaths);
@@ -3480,11 +3497,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private static string GetIntermediateOutputPath(DirectoryInfo restoreDirectory)
+    {
+        var document = XDocument.Load(Path.Combine(restoreDirectory.FullName, "Directory.Build.props"));
+        return document.Descendants("BaseIntermediateOutputPath").Single().Value;
+    }
+
     private static void WriteProjectAssetsFile(
-        DirectoryInfo restoreDirectory,
+        string intermediateOutputPath,
         IReadOnlyDictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)>? packageMetadata)
     {
-        var objDirectory = restoreDirectory.CreateSubdirectory("obj");
+        var objDirectory = Directory.CreateDirectory(intermediateOutputPath);
         var libraries = packageMetadata is null
             ? string.Empty
             : string.Join(

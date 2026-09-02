@@ -350,10 +350,28 @@ internal static class NuGetConfigComposer
         }
 
         var expandedValue = Environment.ExpandEnvironmentVariables(attribute.Value);
-        if (Uri.TryCreate(expandedValue, UriKind.Relative, out _))
+        attribute.Value = ResolvePathFromOrigin(originDirectory, expandedValue);
+    }
+
+    internal static string ResolvePathFromOrigin(string originDirectory, string path)
+    {
+        if (!Uri.TryCreate(path, UriKind.Relative, out _))
         {
-            attribute.Value = Path.GetFullPath(Path.Combine(originDirectory, expandedValue));
+            return path;
         }
+
+        // Windows recognizes three rooted forms:
+        //   C:\packages, \\server\packages, and \packages.
+        // The last form is rooted without naming a drive, so NuGet resolves it against the drive
+        // containing NuGet.Config rather than the process's current drive.
+        // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Configuration/Settings/Settings.cs
+        var root = Path.GetPathRoot(path);
+        var resolvedPath = root is { Length: 1 } &&
+            (root[0] == Path.DirectorySeparatorChar || path[0] == Path.AltDirectorySeparatorChar)
+                ? Path.Combine(Path.GetPathRoot(originDirectory)!, path[1..])
+                : Path.Combine(originDirectory, path);
+
+        return Path.GetFullPath(resolvedPath);
     }
 
     private static string? GetAttributeValue(XElement element, string name)
