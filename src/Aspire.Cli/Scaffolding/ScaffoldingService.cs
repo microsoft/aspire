@@ -443,7 +443,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return initResult;
         }
 
-        var (result, output) = await runtime.InstallDependenciesAsync(directory, cancellationToken);
+        var (result, output) = await runtime.InstallDependenciesAsync(
+            directory,
+            new Dictionary<string, string>(),
+            cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();

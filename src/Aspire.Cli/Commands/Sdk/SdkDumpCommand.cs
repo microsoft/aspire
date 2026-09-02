@@ -776,6 +776,7 @@ internal sealed class TypeRefInfo
     public string TypeId { get; set; } = "";
     public string Category { get; set; } = "";
     public bool IsInterface { get; set; }
+    public bool? IsNullable { get; set; }
     public bool IsReadOnly { get; set; }
     public TypeRefInfo? ElementType { get; set; }
     public TypeRefInfo? KeyType { get; set; }

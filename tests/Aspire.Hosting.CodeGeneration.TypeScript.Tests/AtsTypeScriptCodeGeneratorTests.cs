@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRECOMPUTE002
 
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -775,6 +776,62 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_NullableNumericArrayElements_AreGrouped()
+    {
+        var nullableNumberType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            Category = AtsTypeCategory.Primitive,
+            IsNullable = true
+        };
+        var nullableNumberArrayType = new AtsTypeRef
+        {
+            TypeId = $"{AtsConstants.Number}[]",
+            Category = AtsTypeCategory.Array,
+            ElementType = nullableNumberType
+        };
+        var capability = CreateVoidEntryPointCapability(
+            "inspectNullableNumberArray",
+            new AtsParameterInfo
+            {
+                Name = "values",
+                Type = nullableNumberArrayType
+            });
+        var nullableNumberArrayDto = new AtsDtoTypeInfo
+        {
+            TypeId = "Aspire.Hosting.CodeGeneration.TypeScript.Tests/NullableNumberArrayDto",
+            Name = "NullableNumberArrayDto",
+            Properties =
+            [
+                new AtsDtoPropertyInfo
+                {
+                    Name = "Values",
+                    Type = nullableNumberArrayType
+                }
+            ]
+        };
+        var scannedContext = CreateContextFromTestAssembly();
+        var atsContext = new AtsContext
+        {
+            Capabilities = [.. scannedContext.Capabilities, capability],
+            HandleTypes = scannedContext.HandleTypes,
+            DtoTypes = [.. scannedContext.DtoTypes, nullableNumberArrayDto],
+            EnumTypes = scannedContext.EnumTypes,
+            ExportedValues = scannedContext.ExportedValues,
+            Diagnostics = scannedContext.Diagnostics
+        };
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains(
+            "export async function inspectNullableNumberArray(client: AspireClientRpc, values: (number | null)[]): Promise<void>",
+            aspireTs);
+        Assert.Contains("values?: (number | null)[];", aspireTs);
+        Assert.DoesNotContain("number | null[]", aspireTs);
+    }
+
+    [Fact]
     public void MapInputUnionTypeToTypeScript_ThrowsOnEmptyUnion()
     {
         var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
@@ -929,10 +986,43 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withVolume);
         Assert.Equal("resource", withVolume.TargetParameterName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", withVolume.TargetTypeId);
+        Assert.False(withVolume.TargetType?.IsInterface);
 
-        // Verify correct parameter order: target comes first (required), then name (optional)
-        Assert.Equal("target", withVolume.Parameters[0].Name);
-        Assert.Equal("name", withVolume.Parameters[1].Name);
+        // Preserve the exported parameter list exactly. The Rust generator emits optional capability
+        // parameters positionally and Rust has no overloading, so appending a parameter here would be
+        // a source-breaking change for existing Rust AppHosts. A container always receives `target` as
+        // its effective volume path, so the C# `env` convenience parameter is intentionally not
+        // exported: polyglot callers use withEnvironment(env, target) for the same result.
+        Assert.Equal(
+            ["target", "name", "isReadOnly"],
+            withVolume.Parameters.Select(parameter => parameter.Name));
+
+        var withProjectVolume = Assert.Single(
+            capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/withProjectVolume");
+        Assert.Equal("withVolume", withProjectVolume.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", withProjectVolume.TargetTypeId);
+        Assert.False(withProjectVolume.TargetType?.IsInterface);
+
+        // Projects and executables compute their run-mode path in the host, so `name` and `env` are
+        // required rather than optional. Modelling them as optional would generate polyglot APIs that
+        // type-check but always fail at runtime.
+        Assert.Equal(
+            ["target", "name", "env", "isReadOnly"],
+            withProjectVolume.Parameters.Select(parameter => parameter.Name));
+        Assert.False(withProjectVolume.Parameters[1].IsOptional);
+        Assert.False(withProjectVolume.Parameters[2].IsOptional);
+
+        var withExecutableVolume = Assert.Single(
+            capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/withExecutableVolume");
+        Assert.Equal("withVolume", withExecutableVolume.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", withExecutableVolume.TargetTypeId);
+        Assert.False(withExecutableVolume.TargetType?.IsInterface);
+        Assert.Equal(
+            ["target", "name", "env", "isReadOnly"],
+            withExecutableVolume.Parameters.Select(parameter => parameter.Name));
 
         // Note: withBindMount still uses "builder" - it hasn't been moved to CoreExports yet
         var withBindMount = capabilities
@@ -947,6 +1037,30 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withCommand);
         Assert.Equal("builder", withCommand.TargetParameterName);
+    }
+
+    [Fact]
+    public void Generate_KubernetesPersistentVolumeMount_UsesOptionsObject()
+    {
+        var scanResult = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource).Assembly
+        ]);
+        var files = _generator.GenerateDistributedApplication(scanResult.ToAtsContext());
+        var generatedCode = files["aspire.mts"];
+
+        Assert.Contains("export interface WithKubernetesPersistentVolumeMountOptions", generatedCode);
+        Assert.Contains("isReadOnly?: boolean;", generatedCode);
+        Assert.Contains("env?: string;", generatedCode);
+        Assert.Contains(
+            generatedCode.Split('\n'),
+            line => line.Contains(
+                "withKubernetesPersistentVolumeMount(",
+                StringComparison.Ordinal) &&
+                line.Contains(
+                    "options?: WithKubernetesPersistentVolumeMountOptions",
+                    StringComparison.Ordinal));
     }
 
     // ===== 2-Pass Scanning / Cross-Assembly Expansion Tests =====

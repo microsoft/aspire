@@ -11,8 +11,6 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
 public abstract class TelemetryRepositoryTestBase
 {
-    protected abstract bool UseSqlite { get; }
-
     protected async Task<RepositoryTestContext> CreateRepositoryAsync(
         int? maxMetricsCount = null,
         int? maxAttributeCount = null,
@@ -41,45 +39,33 @@ public abstract class TelemetryRepositoryTestBase
         outgoingPeerResolvers ??= [];
         var options = Options.Create(new global::Aspire.Dashboard.Configuration.DashboardOptions { TelemetryLimits = telemetryLimits });
 
-        if (UseSqlite)
+        var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-telemetry-").FullName;
+        SqliteRepositoryTestContext<SqliteTelemetryRepository> context;
+        try
         {
-            var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-telemetry-").FullName;
-            SqliteRepositoryTestContext<SqliteTelemetryRepository> context;
-            try
-            {
-                context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(
-                    Path.Combine(temporaryDirectory, "dashboard.db"),
-                    pooling: true,
-                    loggerFactory: loggerFactory,
-                    dashboardOptions: options,
-                    pauseManager: pauseManager,
-                    timeProvider: timeProvider,
-                    outgoingPeerResolvers: outgoingPeerResolvers);
-            }
-            catch
-            {
-                Directory.Delete(temporaryDirectory, recursive: true);
-                throw;
-            }
+            context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(
+                Path.Combine(temporaryDirectory, "dashboard.db"),
+                pooling: true,
+                loggerFactory: loggerFactory,
+                dashboardOptions: options,
+                pauseManager: pauseManager,
+                timeProvider: timeProvider,
+                outgoingPeerResolvers: outgoingPeerResolvers);
+        }
+        catch
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+            throw;
+        }
 
-            var sqliteRepository = context.Repository;
-            if (subscriptionMinExecuteInterval is not null)
-            {
-                sqliteRepository.SubscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
-            }
-            return new RepositoryTestContext(
-                sqliteRepository,
-                new TemporaryDirectoryRepositoryContext(context, temporaryDirectory));
-        }
-        else
+        var repository = context.Repository;
+        if (subscriptionMinExecuteInterval is not null)
         {
-            var inMemoryRepository = new InMemoryTelemetryRepository(loggerFactory, options, pauseManager, outgoingPeerResolvers);
-            if (subscriptionMinExecuteInterval is not null)
-            {
-                inMemoryRepository._subscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
-            }
-            return new RepositoryTestContext(inMemoryRepository, inMemoryRepository);
+            repository.SubscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
         }
+        return new RepositoryTestContext(
+            repository,
+            new TemporaryDirectoryRepositoryContext(context, temporaryDirectory));
     }
 
     protected sealed class RepositoryTestContext(

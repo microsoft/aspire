@@ -2683,6 +2683,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     [InlineData("pr-12345", "pr-12345")]
     [InlineData("daily", "daily")]
     [InlineData("DAILY", "daily")] // case-insensitive match against allChannels
+    [InlineData("staging", "staging")]
     public async Task UpdateCommand_WhenIdentityChannelMatchesRegisteredChannel_UsesItWithoutPrompting(string identityChannel, string expectedChannelName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

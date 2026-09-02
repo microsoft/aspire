@@ -23,6 +23,14 @@ cd "$WORK_DIR"
 echo "Creating Rust apphost project..."
 aspire init --language rust --non-interactive -d
 
+cat <<'EOF' > appsettings.json
+{
+  "PolyglotTest": {
+    "Value": "from-appsettings"
+  }
+}
+EOF
+
 # Add Redis integration
 echo "Adding Redis integration..."
 aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
@@ -37,11 +45,11 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis code into apphost.rs
-echo "Configuring apphost.rs with Redis..."
+# Verify appsettings.json through the generated SDK before adding Redis.
+echo "Configuring apphost.rs with appsettings validation and Redis..."
 if [ -f "apphost.rs" ] && grep -q "builder.build()" apphost.rs; then
-    sed -i '/builder.build()/i\    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
-    echo "✅ Redis configuration added to apphost.rs"
+    sed -i '/builder.build()/i\    let appsettings_value = builder.get_configuration()?.get_config_value("PolyglotTest:Value")?;\n    if appsettings_value != "from-appsettings" {\n        return Err(format!("Expected appsettings.json value, got \\"{appsettings_value}\\"").into());\n    }\n\n    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
+    echo "✅ appsettings validation and Redis configuration added to apphost.rs"
 fi
 
 echo "=== apphost.rs ==="

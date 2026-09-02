@@ -505,6 +505,30 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ApplySpanFilters_ContextMatchIncludesAncestorsAndDescendants()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, s_testTime);
+        var scope = CreateOtlpScope(context);
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "root", parentSpanId: null, startDate: s_testTime));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "match", parentSpanId: "root", startDate: s_testTime.AddSeconds(1)));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "descendant", parentSpanId: "match", startDate: s_testTime.AddSeconds(2)));
+        trace.AddSpan(CreateOtlpSpan(resource, trace, scope, spanId: "sibling", parentSpanId: "root", startDate: s_testTime.AddSeconds(3)));
+        var viewModels = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [resource]));
+
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            viewModels,
+            contextFilterMatches: ["match"],
+            durationFilterMatches: null);
+
+        Assert.Collection(filteredItems,
+            item => Assert.Equal("root", item.Span.SpanId),
+            item => Assert.Equal("match", item.Span.SpanId),
+            item => Assert.Equal("descendant", item.Span.SpanId));
+    }
+
+    [Fact]
     public async Task Render_DurationFilter_FiltersShortSpans()
     {
         SetupTraceDetailsServices();
@@ -570,10 +594,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
         // though they don't themselves satisfy the duration filter.
-        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        var durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -581,8 +604,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "10"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         Assert.Collection(filteredItems,
             item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
@@ -595,10 +621,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         // ancestor of 1-3 and 1-5.
         // This is the per-span behavior expected for a "min duration" filter; otherwise
         // a long root span would expose every short descendant in the waterfall.
-        var rootMatchFilteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -606,8 +631,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "2"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var rootMatchFilteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         Assert.Collection(rootMatchFilteredItems,
             item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
@@ -690,10 +718,9 @@ public partial class TraceDetailsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
-        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
-            unfilteredData.Items.ToList(),
-            filter: string.Empty,
-            typeFilter: null,
+        var durationMatches = await GetMatchingSpanIdsAsync(
+            telemetryRepository,
+            traceId,
             [
                 new FieldTelemetryFilter
                 {
@@ -701,8 +728,11 @@ public partial class TraceDetailsTests : DashboardTestContext
                     Condition = FilterCondition.GreaterThanOrEqual,
                     Value = "50"
                 }
-            ],
-            getResourceName: _ => string.Empty).ToList();
+            ]);
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            contextFilterMatches: null,
+            durationMatches).ToList();
 
         // Direct matches: 2-1 (100ms) and 2-4 (80ms). 2-3 (3ms) is kept as an ancestor
         // of 2-4 so the waterfall stays navigable. 2-2 (2ms) has no matching descendant
@@ -949,6 +979,22 @@ public partial class TraceDetailsTests : DashboardTestContext
                 Assert.True(container.ClassList.Contains("main-grid-expanded"));
             }
         });
+    }
+
+    private static async Task<HashSet<string>> GetMatchingSpanIdsAsync(
+        SqliteTelemetryRepository repository,
+        string traceId,
+        List<TelemetryFilter> filters)
+    {
+        var response = await repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = filters,
+            TraceId = traceId
+        }, CancellationToken.None);
+        return response.PagedResult.Items.Select(span => span.SpanId).ToHashSet(StringComparer.Ordinal);
     }
 
     private void SetupTraceDetailsServices(ILoggerFactory? loggerFactory = null)

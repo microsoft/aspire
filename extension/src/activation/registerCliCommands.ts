@@ -54,8 +54,12 @@ export function registerCliCommands(
   const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
   const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, (tp, invocation, cliPath) => openLocalSettingsCommand(tp, invocation.target, cliPath), selectCommandInvocation));
   const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
-  const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
-  const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
+  const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(true, resource));
+  const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(false, resource));
+  const runAppHostFromExplorerRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostFromExplorer', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(true, resource, false));
+  const debugAppHostFromExplorerRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostFromExplorer', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(false, resource, false));
+  const runAppHostFromEditorCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostFromEditorCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
+  const debugAppHostFromEditorCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostFromEditorCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
 
   // Walkthrough commands (no CLI check - the CLI may not be installed yet).
   const installCliRegistration = registerInstrumentedCommand('aspire-vscode.installCli', 'walkthrough', installCliCommand);
@@ -78,6 +82,10 @@ export function registerCliCommands(
     openGlobalSettingsCommandRegistration,
     runAppHostCommandRegistration,
     debugAppHostCommandRegistration,
+    runAppHostFromExplorerRegistration,
+    debugAppHostFromExplorerRegistration,
+    runAppHostFromEditorCommandRegistration,
+    debugAppHostFromEditorCommandRegistration,
     installCliRegistration,
     verifyCliInstalledRegistration,
   ];

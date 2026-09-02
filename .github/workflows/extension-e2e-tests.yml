@@ -217,6 +217,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: debug-startup-timeout
             spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
             runner: ubuntu-latest
@@ -297,6 +313,16 @@ jobs:
             useXvfb: true
             installJava: true
           - name: Linux
+            shardName: java-starter-project-model
+            spec: out/test-e2e/test-e2e/javaStarterProjectModel.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
             shardName: workspace-target-proof
             spec: out/test-e2e/test-e2e/workspaceTargetProof.e2e.test.js
             runner: ubuntu-latest
@@ -362,6 +388,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19639
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -562,7 +589,7 @@ jobs:
           # to rotate when the Maven version changes. Otherwise the key would still hit exactly after a
           # version bump, actions/cache would skip the save, and the newly downloaded distribution would
           # never make it into the cache.
-          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties') }}
+          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties', 'src/Aspire.Cli/Templating/Templates/java-starter/api/build.gradle', 'src/Aspire.Cli/Templating/Templates/java-starter/api/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             java-e2e-${{ runner.os }}-
 
