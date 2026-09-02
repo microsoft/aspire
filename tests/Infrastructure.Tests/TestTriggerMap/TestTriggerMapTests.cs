@@ -412,6 +412,16 @@ public sealed class TestTriggerMapTests
             ]
         },
         {
+            "eng/clipack/Aspire.Cli.linux-musl-x64.csproj",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Infrastructure.Tests",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
             "eng/clipack/npm/aspire.js",
             [
                 "test:Aspire.Cli.Tests",
@@ -726,6 +736,40 @@ public sealed class TestTriggerMapTests
 
         Assert.True(wrong.Count == 0,
             $"gated jobs whose if: does not reference their own selection boolean: {string.Join("; ", wrong)}");
+    }
+
+    [Fact]
+    public void CliStarterValidationArchivePathsMatchConsumedWorkflowRids()
+    {
+        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var expectedArchivePaths = s_cliStarterValidationJobIds
+            .Select(jobId => JobBlock(testsYml, jobId))
+            .Select(jobBlock =>
+            {
+                Assert.NotNull(jobBlock);
+                var buildJobMatch = System.Text.RegularExpressions.Regex.Match(
+                    jobBlock,
+                    @"\bbuild_cli_archive_[a-z0-9_]+\b");
+                Assert.True(buildJobMatch.Success, $"Starter job has no native CLI archive dependency:{Environment.NewLine}{jobBlock}");
+
+                var buildJobBlock = JobBlock(testsYml, buildJobMatch.Value);
+                Assert.NotNull(buildJobBlock);
+                var ridMatch = System.Text.RegularExpressions.Regex.Match(buildJobBlock, @"""rids"": ""([^""]+)""");
+                Assert.True(ridMatch.Success, $"CLI archive build job has no RID target:{Environment.NewLine}{buildJobBlock}");
+
+                return $"eng/clipack/Aspire.Cli.{ridMatch.Groups[1].Value}.csproj";
+            })
+            .Order(StringComparer.Ordinal);
+        var archiveRule = Assert.Single(
+            s_map.PathRules,
+            rule => rule.Targets.Contains("job:cli-starter-validation", StringComparer.Ordinal)
+                && rule.Paths.Contains("eng/clipack/Common.projitems", StringComparer.Ordinal));
+
+        Assert.Equal(
+            expectedArchivePaths,
+            archiveRule.Paths
+                .Where(path => path != "eng/clipack/Common.projitems")
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
