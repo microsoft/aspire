@@ -1265,7 +1265,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             ITestOutputHelper outputHelper,
             TimeProvider timeProvider,
             IAppHostStopper processShutdownService) =>
-            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, timeProvider, processShutdownService);
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, timeProvider, processShutdownService, locateThroughSymlink: false);
 
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, string? appHostSelectionOrigin)
         {
@@ -1292,7 +1292,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             bool selectionWasPrompted,
             bool locateThroughSymlink)
         {
-            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, TimeProvider.System);
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, TimeProvider.System, processShutdownService: null, locateThroughSymlink);
         }
 
         private static AppHostLauncherHarness Create(
@@ -1301,7 +1301,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             bool selectionWasPrompted,
             TimeProvider timeProvider)
         {
-            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, timeProvider, processShutdownService: null);
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, timeProvider, processShutdownService: null, locateThroughSymlink: false);
         }
 
         private static AppHostLauncherHarness Create(
@@ -1309,7 +1309,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             string? appHostSelectionOrigin,
             bool selectionWasPrompted,
             TimeProvider timeProvider,
-            IAppHostStopper? processShutdownService)
+            IAppHostStopper? processShutdownService,
+            bool locateThroughSymlink)
         {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
