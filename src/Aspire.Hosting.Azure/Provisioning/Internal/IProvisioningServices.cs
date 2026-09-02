@@ -368,12 +368,12 @@ internal interface ITenantResource
 }
 
 /// <summary>
-/// Provides user principal retrieval functionality.
+/// Provides Azure principal retrieval functionality.
 /// </summary>
-internal interface IUserPrincipalProvider
+internal interface IAzurePrincipalProvider
 {
     /// <summary>
-    /// Gets the user principal.
+    /// Gets the Azure principal that the running credential represents.
     /// </summary>
-    Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default);
+    Task<AzurePrincipal> GetPrincipalAsync(CancellationToken cancellationToken = default);
 }

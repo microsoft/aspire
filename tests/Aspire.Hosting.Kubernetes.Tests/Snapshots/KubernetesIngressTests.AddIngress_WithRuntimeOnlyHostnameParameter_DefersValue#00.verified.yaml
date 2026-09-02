@@ -1,0 +1,21 @@
+﻿---
+apiVersion: "networking.k8s.io/v1"
+kind: "Ingress"
+metadata:
+  name: "public"
+spec:
+  rules:
+    - http:
+        paths:
+          - backend:
+              service:
+                name: "myapi-service"
+                port:
+                  name: "http"
+            pathType: "Prefix"
+            path: "/api"
+      host: "{{ .Values.parameters.public.hostname }}"
+  tls:
+    - secretName: "public-tls"
+      hosts:
+        - "{{ .Values.parameters.public.hostname }}"

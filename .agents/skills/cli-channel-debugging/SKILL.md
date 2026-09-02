@@ -48,7 +48,7 @@ or `aspire doctor`'s child invocations — treat them as process-local test affo
 | Env var | Effect |
 |---|---|
 | `ASPIRE_CLI_CHANNEL` | Identity channel: `stable`, `staging`, `daily`, `local`, or `pr-<N>`. Drives hive selection and staging-feed provenance. |
-| `ASPIRE_CLI_VERSION` | Informational version (e.g. `13.5.0-preview.1.26310.9`). Drives version-shape (quality) decisions, version pins, the skew warning, and `--version` output. |
+| `ASPIRE_CLI_VERSION` | Informational version (e.g. `13.5.0-preview.1.26310.9`). Drives version pins, the skew warning, and `--version` output. |
 | `ASPIRE_CLI_COMMIT` | Source commit SHA. Drives the staging darc feed name (`darc-pub-microsoft-aspire-<sha8>`). |
 | `ASPIRE_CLI_PACKAGES` | A flat directory of `.nupkg` files (e.g. `artifacts/packages/<Config>/Shipping`). The CLI synthesizes a package channel **named after `ASPIRE_CLI_CHANNEL`** that maps `Aspire*` to this directory (everything else → nuget.org), **replacing** any same-named built-in/discovered/PR channel. See the cleanliness caveat below. |
 | `ASPIRE_CLI_NUGET_SERVICE_INDEX` | Replaces the canonical `https://api.nuget.org/v3/index.json` URL the CLI writes into **newly generated** `NuGet.config` files. Never rewrites URLs read from existing configs. |
@@ -63,6 +63,9 @@ The same values can come from the `channel`, `version`, `commit`, `nugetServiceI
 and `packages` fields of an `.aspire-install.json` sidecar next to the CLI binary. Resolution
 order per field is **env var → sidecar field → assembly-baked stamp**. Use the sidecar when
 you want a persistent emulated identity for an installed binary; use env vars for one-off runs.
+Installer-authored `channel`, `version`, and `commit` fields describe the real installed identity
+and do not show the emulation banner, so use `aspire doctor --format Json` to confirm their source.
+The developer-only `nugetServiceIndexOverride` and `packages` sidecar fields still show the banner.
 
 ### Legacy PackagingService config keys (staging-feed routing only)
 
@@ -73,7 +76,7 @@ lookups, or `--version`. Set with `aspire config set -g <key> <value>`.
 | Config key | Effect |
 |---|---|
 | `overrideCliIdentityChannel` | Identity used for **staging-feed decisions only** (validated against the known channel set). |
-| `overrideCliInformationalVersion` | Version that staging SHA-derivation and version-shape checks read. |
+| `overrideCliInformationalVersion` | Informational version used to derive the staging SHA-specific feed URL. |
 | `overrideStagingFeed` | Forces staging to be available and points it at an explicit feed URL. |
 | `stagingPinToCliVersion` | When `true` (and using the shared feed), pins resolution to the CLI version. |
 
@@ -192,7 +195,7 @@ Reuse `instanceId`s across turns so "the daily terminal" stays the same panel th
 | 3 | PR build identity + CI-built packages, local CLI | `pr-<N>` | `~/.aspire/hives/pr-<N>/packages` | `get-aspire-cli-pr.sh --pr <N>`, then `ASPIRE_CLI_CHANNEL=pr-<N>` |
 | 4 | Latest daily, local CLI | `daily` | dnceng/dotnet9 daily feed | `ASPIRE_CLI_CHANNEL=daily` + `ASPIRE_CLI_VERSION` (+ `ASPIRE_CLI_COMMIT`) |
 | 5 | Staging, unstable version | `staging` | `darc-pub-microsoft-aspire-<sha8>` feed (quality Both) | `ASPIRE_CLI_CHANNEL=staging` + prerelease `ASPIRE_CLI_VERSION` + `ASPIRE_CLI_COMMIT` |
-| 6 | Staging, stable version | `staging` | `darc-pub-microsoft-aspire-<sha8>` feed (quality Stable) | `ASPIRE_CLI_CHANNEL=staging` + stable-shaped `ASPIRE_CLI_VERSION` + `ASPIRE_CLI_COMMIT` |
+| 6 | Staging, stable version | `staging` | `darc-pub-microsoft-aspire-<sha8>` feed (quality Both) | `ASPIRE_CLI_CHANNEL=staging` + stable-shaped `ASPIRE_CLI_VERSION` + `ASPIRE_CLI_COMMIT` |
 | 7 | Released build repro | `stable` | nuget.org | `ASPIRE_CLI_CHANNEL=stable` + released `ASPIRE_CLI_VERSION` |
 | 7b | Released repro + CLI+hosting fix spanning packages | `stable` | locally rebuilt `Shipping` dir | as 7 + `ASPIRE_CLI_PACKAGES=<clean-rebuilt-dir>` |
 
@@ -264,13 +267,14 @@ ASPIRE_CLI_VERSION=13.4.0-preview.1.26280.6 \
 ASPIRE_CLI_COMMIT=<full-commit-sha> \
   dotnet run --project src/Aspire.Cli -- <cmd>
 
-# 6 — stable-shaped version -> quality Stable (the #17527 stabilizing-build scenario)
+# 6 — stable-shaped version -> quality Both (the #17527 stabilizing-build scenario)
 ASPIRE_CLI_CHANNEL=staging ASPIRE_CLI_VERSION=13.4.0 ASPIRE_CLI_COMMIT=<full-commit-sha> \
   dotnet run --project src/Aspire.Cli -- <cmd>
 ```
 
 Staging feed provenance is derived from the commit: `darc-pub-microsoft-aspire-<sha8>`. The
-version **shape** controls only which versions on that feed are eligible (Stable vs Both).
+channel uses `Both` for either version shape because a stable-shaped build can still publish
+prerelease-only integrations alongside stable packages.
 Alternatively, `eng/scripts/debug-staging.sh` / `debug-stable.sh` exercise the same routing via
 the legacy config keys — see `docs/cli-staging-validation.md`.
 

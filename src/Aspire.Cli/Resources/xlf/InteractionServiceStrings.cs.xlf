@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Interaktivní vstup se v tomto prostředí nepodporuje. Použijte příznak --non-interactive nebo zajistěte, aby rozhraní příkazového řádku běželo v interaktivním terminálu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Další informace najdete tady: [link]{0}[/][/]</target>
@@ -132,6 +137,16 @@
         <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
+      <trans-unit id="OpenAppHostLog">
+        <source>Open AppHost Log</source>
+        <target state="new">Open AppHost Log</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenCliLog">
+        <source>Open CLI Log</source>
+        <target state="new">Open CLI Log</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">Operace byla zrušena.</target>
@@ -157,9 +172,9 @@
         <target state="needs-review-translation">Nebyl zadán parametr --apphost a bylo zjištěno více souborů projektu hostitele aplikací.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">Nebyl zadán argument projektu a nebyly zjištěny žádné soubory projektů hostitele aplikace.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

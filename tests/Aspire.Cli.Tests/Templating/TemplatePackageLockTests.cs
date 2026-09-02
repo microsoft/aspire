@@ -66,6 +66,42 @@ public class TemplatePackageLockTests
     [Theory]
     [InlineData("ts-starter")]
     [InlineData("py-starter")]
+    public void StarterAppHostPackageLock_UsesPublicNpmRegistry(string templateName)
+    {
+        // Guards the top-level (AppHost) lockfile in addition to the frontend one covered above.
+        // A shipped lockfile pins the `resolved` registry for every dependency npm restores in a
+        // generated starter, so these must resolve from the public npm registry — otherwise restore
+        // fails for customers who cannot reach a private feed. See https://github.com/microsoft/aspire/issues/19370.
+        var filePath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Templating",
+            "Templates",
+            templateName,
+            "package-lock.json");
+
+        AssertPackageLockResolvesToPublicNpmRegistry(filePath);
+    }
+
+    [Fact]
+    public void ProjectTemplateFrontendPackageLock_UsesPublicNpmRegistry()
+    {
+        var filePath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.ProjectTemplates",
+            "templates",
+            "aspire-ts-cs-starter",
+            "frontend",
+            "package-lock.json");
+
+        AssertPackageLockResolvesToPublicNpmRegistry(filePath);
+    }
+
+    [Theory]
+    [InlineData("ts-starter")]
+    [InlineData("py-starter")]
     [InlineData("java-starter")]
     public void StarterFrontendPackageLock_DoesNotIncludeLegacyEslintYamlLoader(string templateName)
     {
@@ -84,6 +120,22 @@ public class TemplatePackageLockTests
 
         Assert.False(packages.TryGetProperty("node_modules/@eslint/eslintrc", out _));
         Assert.False(packages.TryGetProperty("node_modules/js-yaml", out _));
+    }
+
+    private static void AssertPackageLockResolvesToPublicNpmRegistry(string filePath)
+    {
+        using var packageLock = JsonDocument.Parse(File.ReadAllText(filePath));
+
+        var registryHosts = packageLock.RootElement
+            .GetProperty("packages")
+            .EnumerateObject()
+            .Where(package => package.Value.TryGetProperty("resolved", out _))
+            .Select(package => new Uri(package.Value.GetProperty("resolved").GetString()!).Host)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["registry.npmjs.org"], registryHosts);
     }
 
     private static string GetRepoRoot()

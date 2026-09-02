@@ -11,7 +11,7 @@ namespace Aspire.Shared.TerminalHost;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Written once by <c>TerminalResourceBuilderExtensions.MaterializeTerminalHosts</c> when
+/// Written once by <c>TerminalResourceBuilderExtensions.MaterializeTerminalHostsAsync</c> when
 /// the AppHost materializes each <c>TerminalHostResource</c>
 /// (during <c>BeforeStartEvent</c>) and deleted on <c>ApplicationStopped</c> alongside the
 /// <c>.sock</c> files. The descriptor lets external tools enumerate live terminals by
@@ -26,14 +26,17 @@ namespace Aspire.Shared.TerminalHost;
 /// </remarks>
 internal sealed class TerminalHostMetadata
 {
+    /// <summary>The metadata schema version understood by this build.</summary>
+    public const int CurrentSchemaVersion = 3;
+
     /// <summary>
     /// Bumped when fields are added or semantics change so older readers can refuse
     /// unknown schemas instead of silently misinterpreting them.
     /// </summary>
     [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
-    /// <summary>The replica id (see <see cref="TerminalHostPaths.ComputeReplicaId(string, string, int)"/>).</summary>
+    /// <summary>The replica id (see <see cref="TerminalHostPaths.CreateReplicaId"/>).</summary>
     [JsonPropertyName("replicaId")]
     public required string ReplicaId { get; init; }
 
@@ -50,11 +53,40 @@ internal sealed class TerminalHostMetadata
     public required string AppHostPath { get; init; }
 
     /// <summary>
-    /// Process id of the AppHost process. Stale sidecars (whose PID no longer exists)
-    /// can be safely garbage-collected by external tools.
+    /// Process id of the AppHost process. Readers pair it with
+    /// <see cref="AppHostProcessIdentity"/> before deciding ownership.
     /// </summary>
     [JsonPropertyName("appHostPid")]
     public required int AppHostPid { get; init; }
+
+    /// <summary>
+    /// Opaque same-boot identity of the AppHost process, paired with <see cref="AppHostPid"/>
+    /// so a recycled PID cannot be mistaken for the original owner. Schema-v1 sidecars omit it.
+    /// </summary>
+    [JsonPropertyName("appHostProcessIdentity")]
+    public long? AppHostProcessIdentity { get; init; }
+
+    /// <summary>
+    /// Process identity name used by schema-v2 sidecars from earlier preview builds.
+    /// Retained so readers can recognize those unscoped sidecars and preserve them safely.
+    /// </summary>
+    [JsonPropertyName("appHostProcessStartTimeUnixMilliseconds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? SchemaV2AppHostProcessIdentity { get; init; }
+
+    /// <summary>
+    /// Machine or PID-namespace scope in which <see cref="AppHostPid"/> is meaningful.
+    /// Schema-v1 sidecars omit it.
+    /// </summary>
+    [JsonPropertyName("appHostProcessScopeId")]
+    public string? AppHostProcessScopeId { get; init; }
+
+    /// <summary>
+    /// Linux kernel boot identifier for the owning AppHost. This disambiguates otherwise identical
+    /// boot-relative process identities after a reboot. Other platforms omit it.
+    /// </summary>
+    [JsonPropertyName("appHostBootId")]
+    public string? AppHostBootId { get; init; }
 
     /// <summary>UTC timestamp when the sidecar was written.</summary>
     [JsonPropertyName("createdAtUtc")]

@@ -10,15 +10,25 @@
 import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
+import { loadHealthDashboard } from "./health.mjs";
+import { resolveAzureDevOpsPipeline } from "./azure-devops.mjs";
 import { resolveAccounts } from "./accounts.mjs";
 import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
+  buildHealthActionLog,
+  buildHealthActionPrompt,
+  resolveHealthActionTarget,
+} from "./health-agent.mjs";
+import {
+  addAzurePipeline,
   loadPrefs,
+  removeAzurePipeline,
   updatePrefs,
   parseRepos,
   accountConfig,
   setAccountRepos,
   setAccountActive,
+  setHealthOrder,
   activeIds,
 } from "./state.mjs";
 
@@ -99,14 +109,13 @@ async function resolveAuth(prefs, { reprobe = false } = {}) {
     const best = accounts.find((a) => a.status !== "failed" && a.accessible > 0)
       ?? accounts.find((a) => a.status !== "failed");
     if (best) {
-      best.active = true;
-      setAccountActive(prefs, best.id, true);
-      const saved = await updatePrefs((latest) => {
-        if (activeIds(latest).length === 0 && Object.keys(latest.accounts || {}).length === 0) {
-          setAccountActive(latest, best.id, true);
+      const saved = await updatePrefs((next) => {
+        if (activeIds(next).length === 0 && Object.keys(next.accounts || {}).length === 0) {
+          setAccountActive(next, best.id, true);
         }
       });
       Object.assign(prefs, saved);
+      best.active = accountConfig(prefs, best.id).active;
     }
   }
 
@@ -123,10 +132,37 @@ function invalidateAuth() {
 // `sourceKinds`/`status`/`repos`. Omitting them made set_repos return an empty repo list
 // and summary report undefined sources/status for active accounts.
 function decorateDashboard(dashboard, auth, active, prefs) {
-  if (!dashboard || dashboard.authenticated === false) return;
+  if (!dashboard) return;
   dashboard.accounts = auth.accounts;
   dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host, repos: a.repos, status: a.status, sourceKinds: a.sourceKinds }));
   dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
+  applyHealthOrder(dashboard, prefs.healthOrder);
+}
+
+export function applyHealthOrder(dashboard, order) {
+  const items = dashboard?.health?.items;
+  if (!Array.isArray(items) || items.length < 2) return dashboard;
+  const rank = new Map((Array.isArray(order) ? order : []).map((id, index) => [id, index]));
+  const ordered = items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const aRank = rank.get(a.item?.id);
+      const bRank = rank.get(b.item?.id);
+      if (aRank === undefined && bRank === undefined) return a.index - b.index;
+      if (aRank === undefined) return 1;
+      if (bRank === undefined) return -1;
+      return aRank - bRank;
+    })
+    .map(({ item }) => item);
+  const grouped = new Map();
+  for (const item of ordered) {
+    const groupId = item?.groupId || `source:${String(item?.id ?? "")}`;
+    const group = grouped.get(groupId) ?? [];
+    group.push(item);
+    grouped.set(groupId, group);
+  }
+  dashboard.health.items = [...grouped.values()].flat();
+  return dashboard;
 }
 
 function dashboardContent(dashboard) {
@@ -146,6 +182,7 @@ function dashboardInputKey(prefs) {
     showDrafts: prefs.showDrafts,
     notifications: prefs.notifications,
     dismissedNotifications: prefs.dismissedNotifications,
+    azurePipelines: prefs.azurePipelines,
     accounts: prefs.accounts,
   });
 }
@@ -163,8 +200,9 @@ async function computeDashboard({ progress = true, background = false } = {}) {
     .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
     .filter((a) => a.token && a.login);
 
+  const healthMode = prefs.mode === "health";
   let dashboard;
-  if (accountsForLoad.length === 0) {
+  if (accountsForLoad.length === 0 && !healthMode) {
     const anyDetected = auth.accounts.length > 0;
     const anyActive = auth.accounts.some((a) => a.active);
     dashboard = {
@@ -178,24 +216,32 @@ async function computeDashboard({ progress = true, background = false } = {}) {
       activeAccounts: [],
     };
   } else {
-    dashboard = await loadDashboard({
-      accounts: accountsForLoad,
-      mode: prefs.mode,
-      release: prefs.release,
-      prefs: prefs.notifications,
-      dismissed: prefs.dismissedNotifications,
-      showDrafts: prefs.showDrafts,
-      onProgress: stream && progress ? broadcastProgress : undefined,
-    });
-    decorateDashboard(dashboard, auth, active, prefs);
+    dashboard = healthMode
+      ? await loadHealthDashboard({
+          accounts: accountsForLoad,
+          pipelines: prefs.azurePipelines,
+          onProgress: stream && progress ? broadcastProgress : undefined,
+        })
+      : await loadDashboard({
+          accounts: accountsForLoad,
+          mode: prefs.mode,
+          release: prefs.release,
+          prefs: prefs.notifications,
+          dismissed: prefs.dismissedNotifications,
+          showDrafts: prefs.showDrafts,
+          onProgress: stream && progress ? broadcastProgress : undefined,
+        });
   }
+
   // A preference mutation can finish while GitHub requests are in flight. Auto is a publish choice,
-  // so use its latest committed value. If an input that shaped the dashboard changed, discard this
-  // stale candidate when a prior complete cache exists; the forced mutation compute queued behind it
-  // will publish the correctly-shaped replacement.
+  // and health ordering does not require a provider refetch, so decorate with the latest committed
+  // preferences. If an input that shaped the dashboard changed, discard this stale candidate when a
+  // prior complete cache exists; the forced mutation compute queued behind it will publish the
+  // correctly-shaped replacement.
   const latestPrefs = await loadPrefs();
   if (cache && dashboardInputKey(prefs) !== dashboardInputKey(latestPrefs)) return cache;
 
+  decorateDashboard(dashboard, auth, active, latestPrefs);
   const changed = dashboardChanged(previous, dashboard);
   dashboard.seq = !previous || changed ? ++stateSeq : previous.seq;
   cache = { dashboard, prefs: latestPrefs, at: Date.now() };
@@ -413,6 +459,17 @@ function findCachedPr(repository, number, urlHint, instanceId) {
   return onHost.length === 1 ? onHost[0] : undefined;
 }
 
+// Health action clients send only a source id. Resolve it against the complete snapshot
+// displayed by this canvas so provider coordinates come from this server, never the iframe
+// payload or a background candidate the user has not applied.
+function resolveHealthSource(ref, instanceId) {
+  const id = String(ref?.id ?? ref ?? "").trim();
+  if (!id) return null;
+  const dashboard = displayedSnapshots.get(instanceId) ?? resolveSnapshot ?? cache?.dashboard;
+  const items = dashboard?.health?.items;
+  return Array.isArray(items) ? items.find((item) => item?.id === id) ?? null : null;
+}
+
 // Linked-PR URLs are client-supplied when clicked. Resolve them against the snapshot this canvas is
 // displaying before asking the host to open a browser canvas, so a modified DOM/request cannot turn
 // the loopback route into an arbitrary in-app URL opener.
@@ -584,10 +641,9 @@ async function handle(req, res, log, instanceId) {
     }
     if (req.method === "POST" && path === "/api/mode") {
       const { mode } = await readBody(req);
-      await updatePrefs((prefs) => {
-        if (["review", "issues", "ship"].includes(mode)) prefs.mode = mode;
-      });
-      const next = await getDashboard(true);
+      const next = ["review", "issues", "ship", "health"].includes(mode)
+        ? await setDashboardMode(mode)
+        : await getDashboard(true);
       displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
     }
@@ -629,6 +685,72 @@ async function handle(req, res, log, instanceId) {
       const next = await getDashboard(true);
       displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
+    }
+    if (req.method === "POST" && path === "/api/health/pipeline/add") {
+      const { url: pipelineUrl, branch } = await readBody(req);
+      if (typeof pipelineUrl !== "string" || !pipelineUrl.trim()) {
+        return send(res, 400, { error: "An Azure DevOps pipeline URL is required.", code: "invalid_pipeline_url" });
+      }
+      try {
+        const next = await addAzurePipelineSource(pipelineUrl, branch);
+        displayedSnapshots.set(instanceId, next.dashboard);
+        return send(res, 200, next);
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_pipeline" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/pipeline/remove") {
+      const { id } = await readBody(req);
+      if (typeof id !== "string" || !id.trim()) {
+        return send(res, 400, { error: "A pipeline id is required.", code: "invalid_pipeline" });
+      }
+      try {
+        const next = await removeAzurePipelineSource(id);
+        displayedSnapshots.set(instanceId, next.dashboard);
+        return send(res, 200, next);
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_pipeline" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/order") {
+      const { order } = await readBody(req);
+      if (!Array.isArray(order)) {
+        return send(res, 400, { error: "Health source order must be an array.", code: "invalid_health_order" });
+      }
+      try {
+        const next = await setHealthSourceOrder(order, instanceId);
+        displayedSnapshots.set(instanceId, next.dashboard);
+        return send(res, 200, next);
+      } catch (error) {
+        return send(res, 400, { error: error.message, code: error.code ?? "invalid_health_order" });
+      }
+    }
+    if (req.method === "POST" && path === "/api/health/action") {
+      const { kind, target, source } = await readBody(req);
+      if (!agentSend) {
+        return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
+      }
+      const resolvedSource = resolveHealthSource(source, instanceId);
+      if (!resolvedSource) {
+        return send(res, 400, { error: "This health source is no longer in view. Refresh and try again." });
+      }
+      let prompt;
+      try {
+        prompt = buildHealthActionPrompt(kind, resolvedSource, target);
+      } catch (error) {
+        return send(res, 400, { error: error.message });
+      }
+      const log = buildHealthActionLog(kind, resolvedSource, target);
+      const result = await agentSend({ prompt, log });
+      const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
+      const queued = typeof result === "object" && result ? !!result.queued : false;
+      return send(res, 200, {
+        ok: true,
+        kind,
+        target: resolveHealthActionTarget(resolvedSource, target),
+        messageId,
+        queued,
+      });
     }
     if (req.method === "POST" && path === "/api/agent/action") {
       // A card action button (Test / Review / Resolve conflicts / Address review)
@@ -819,6 +941,77 @@ export async function setReposFor(id, repos) {
   await updatePrefs((prefs) => { setAccountRepos(prefs, id, parseRepos(repos, [])); });
   invalidateAuth();
   return getDashboard(true);
+}
+
+export async function addAzurePipelineSource(url, branch) {
+  const pipeline = await resolveAzureDevOpsPipeline(url, { branch });
+  await updatePrefs((prefs) => { addAzurePipeline(prefs, pipeline); });
+  return getDashboard(true);
+}
+
+export async function setDashboardMode(mode) {
+  await updatePrefs((prefs) => { prefs.mode = mode; });
+  return getDashboard(true);
+}
+
+export async function removeAzurePipelineSource(id) {
+  await updatePrefs((prefs) => {
+    const known = prefs.azurePipelines.some((pipeline) => pipeline.id === id);
+    if (!known) {
+      const error = new Error("The Azure DevOps pipeline is no longer configured.");
+      error.code = "pipeline_not_found";
+      throw error;
+    }
+    removeAzurePipeline(prefs, id);
+  });
+  return getDashboard(true);
+}
+
+export async function setHealthSourceOrder(order, instanceId) {
+  const displayed = displayedSnapshots.get(instanceId);
+  const currentItems = displayed?.health?.items
+    ?? cache?.dashboard?.health?.items
+    ?? resolveSnapshot?.health?.items;
+  const currentIds = Array.isArray(currentItems)
+    ? currentItems.map((item) => item?.id).filter((id) => typeof id === "string" && id)
+    : [];
+  if (currentIds.length === 0) {
+    const error = new Error("No health sources are currently available to reorder.");
+    error.code = "health_sources_unavailable";
+    throw error;
+  }
+
+  const currentSet = new Set(currentIds);
+  const submitted = [];
+  const seen = new Set();
+  for (const raw of order) {
+    const id = String(raw ?? "").trim();
+    if (currentSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      submitted.push(id);
+    }
+  }
+  for (const id of currentIds) {
+    if (!seen.has(id)) submitted.push(id);
+  }
+  const normalizedDashboard = { health: { items: [...currentItems] } };
+  applyHealthOrder(normalizedDashboard, submitted);
+  const normalizedSubmitted = normalizedDashboard.health.items.map((item) => item.id);
+
+  const prefs = await updatePrefs((next) => {
+    const unseen = (next.healthOrder ?? []).filter((id) => !currentSet.has(id));
+    setHealthOrder(next, [...normalizedSubmitted, ...unseen]);
+  });
+
+  const dashboards = new Set([cache?.dashboard, resolveSnapshot].filter(Boolean));
+  for (const dashboard of dashboards) applyHealthOrder(dashboard, prefs.healthOrder);
+  if (cache?.dashboard) {
+    cache.dashboard.seq = ++stateSeq;
+    cache = { dashboard: cache.dashboard, prefs, at: Date.now() };
+    broadcastState(cache.dashboard, prefs);
+    return cache;
+  }
+  return getDashboard(false);
 }
 
 export { getDashboard };

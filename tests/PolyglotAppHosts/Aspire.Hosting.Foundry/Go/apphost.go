@@ -126,7 +126,7 @@ server.listen(port, '127.0.0.1');
 		})
 
 	hostedAgent.AsHostedAgent(project, &aspire.HostedAgentOptions{
-		Description: "Validation hosted agent",
+		Description: aspire.StringPtr("Validation hosted agent"),
 		Cpu:         aspire.Float64Ptr(1),
 		Memory:      aspire.Float64Ptr(2),
 		Metadata: map[string]string{

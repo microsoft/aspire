@@ -38,7 +38,7 @@ public class ConformanceTests : ConformanceTests<CosmosClient, MicrosoftAzureCos
     }
 
     protected override void SetHealthCheck(MicrosoftAzureCosmosSettings options, bool enabled)
-        => throw new NotImplementedException();
+        => options.DisableHealthChecks = !enabled;
 
     protected override void SetTracing(MicrosoftAzureCosmosSettings options, bool enabled)
         => options.DisableTracing = !enabled;

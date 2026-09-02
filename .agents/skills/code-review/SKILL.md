@@ -116,6 +116,28 @@ Use the impact analysis to drive coverage review. A PR can have many tests and s
 
 When the impact analysis is useful to explain a test finding, present it concisely in the finding: identify the impacted code path, the regression risk, and the missing test shape. For example: "This changes `DcpExecutor.PrepareServices()` port allocation timing, but there is no regression test showing a dependent resource can resolve the endpoint before workload creation."
 
+### Conditional Test Selection Impact
+
+Apply the repository-wide Conditional Test Selection rules in `AGENTS.md`.
+Trace new test projects, CI jobs, workflows, scripts, and loose inputs to their
+actual consumers before deciding whether the map needs to change.
+
+Flag concrete selection gaps:
+
+- Treat files evaluated by the `Aspire.slnx` ProjectGraph as Layer 1-owned and
+  projects outside that graph as Layer 2 blind spots.
+- Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
+  explicitly outside the selector. Do not allow `ignore` or prefilter entries
+  to hide a real PR-CI consumer.
+- Require `run_*` wiring for gated `job:` targets, advisory classification for
+  targets outside the regular PR matrix or job gates, and routing from reusable
+  workflow implementations to the jobs they implement.
+
+Selector behavior changes must keep the action, workflow gates, tool, map,
+tests, and canonical documentation synchronized. Require real-map tests for
+curated routing changes and focused synthetic-map tests for engine or CLI
+behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+
 ### Test Coverage Review
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
@@ -140,7 +162,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 
 1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal.
 2. **Security** — injection risks, credential exposure, insecure defaults, OWASP Top 10 violations.
-3. **Correctness** — wrong behavior relative to the PR description or existing contracts, breaking changes to public API without justification.
+3. **Correctness** — wrong behavior relative to the PR description or existing contracts, and breaking changes to the stable Aspire Type System (ATS) surface used for polyglot SDK generation.
 4. **Behavioral contract changes** — when a type/class is replaced, removed, or refactored, check whether any behavioral contracts were silently changed. Examples: a property that previously threw on invalid access now returns a default value; an override that enforced an invariant is gone; a method that validated input no longer does.
 5. **Weakened invariants** — check whether validation was relaxed during refactoring. Examples: `SingleOrDefault` (throws on duplicates) replaced by `FirstOrDefault` (silently picks first); `Debug.Assert` guarding a release-relevant invariant that should be an `if` + `throw`; precondition checks that were removed.
 6. **Missing error handling at system boundaries** — unvalidated external input, missing null checks at public API entry points. Do NOT flag missing null checks for parameters the type system already guarantees non-null.
@@ -166,6 +188,9 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
 - Missing tests for documentation-only changes, comment-only changes, mechanical renames, or refactors that demonstrably preserve behavior
+- Standard C# API review concerns such as naming, namespaces, framework design guidance, and general .NET/C# API breaking changes. These are handled by the dedicated `api-review` skill; this generic review only checks the stable ATS surface used for polyglot SDK generation.
+- ATS breaking changes when the affected package or project contains `<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>`, or when the affected exported API has `[Experimental]` or ATS experimental metadata.
+- The initial placeholder entry in `extension/CHANGELOG.md` created by `extension-release.yml` for bot-authored `extension-release/*` PRs. It is expected, asynchronously replaced by `extension-changelog.md`, and merge-gated by `extension-changelog-finalized.yml`. Continue to flag unrelated placeholders or incomplete release notes outside this exact release flow.
 
 ### Reviewing refactored / moved code
 

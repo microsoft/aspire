@@ -9,6 +9,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Tests;
@@ -187,6 +188,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -207,6 +209,164 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Empty(harness.InteractionService.DisplayedErrors);
     }
 
+    [Theory]
+    [InlineData(false, null, false, "default-discovery")]
+    [InlineData(false, "", false, "default-discovery")]
+    [InlineData(true, null, false, null)]
+    [InlineData(true, "", false, null)]
+    [InlineData(false, "user-selection", false, "user-selection")]
+    [InlineData(true, "explicit-launch-configuration", false, "explicit-launch-configuration")]
+    [InlineData(true, null, true, "user-selection")]
+    [InlineData(true, "explicit-cli", true, "user-selection")]
+    public async Task LaunchDetachedAsync_PropagatesPersistentSelectionOriginToChild(
+        bool passedAppHost,
+        string? inheritedOrigin,
+        bool selectionWasPrompted,
+        string? expectedOrigin)
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper, inheritedOrigin, selectionWasPrompted);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            passedAppHost ? harness.AppHostFile : null,
+            format: null,
+            isolated: false,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        var hasOrigin = harness.ProcessFactory.CreatedEnvironmentVariables.TryGetValue(
+            KnownConfigNames.CliAppHostSelectionOrigin,
+            out var actualOrigin);
+        Assert.Equal(expectedOrigin is not null, hasOrigin);
+        Assert.Equal(expectedOrigin, actualOrigin);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_ExplicitFalseFromLinkedWorktree_ForwardsFalse()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.SetLinkedWorktree();
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(["--isolated", "false"], harness.ProcessFactory.CreatedArguments!.TakeLast(2));
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_OmittedFromLinkedWorktree_DoesNotInferIsolation()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.SetLinkedWorktree();
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: null,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_ExplicitTrue_ForwardsFlag()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: true,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal("--isolated", harness.ProcessFactory.CreatedArguments![^1]);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_OmittedFromPrimaryCheckout_DoesNotForwardOption()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: null,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
+    }
+
     [Fact]
     public async Task LaunchDetachedAsync_DeletesDeadPidSocketBeforeStartingChildProcess()
     {
@@ -224,6 +384,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -261,6 +422,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -304,6 +466,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -406,6 +569,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -442,6 +606,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -499,6 +664,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 harness.AppHostFile,
                 format: null,
                 isolated: false,
+                launchProfile: null,
                 isExtensionHost: false,
                 waitForDebugger: false,
                 timeoutSeconds: 5,
@@ -554,6 +720,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -583,6 +750,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -606,6 +774,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 120,
@@ -647,6 +816,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             harness.AppHostFile,
             format: null,
             isolated: false,
+            launchProfile: null,
             isExtensionHost: false,
             waitForDebugger: false,
             timeoutSeconds: 1,
@@ -684,7 +854,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
         activity.TraceStateString = "state-1";
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
@@ -695,9 +865,27 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DetachedChildEnvironment_ForwardsAppHostSelectionOriginToChildCli()
+    {
+        // The detached child re-resolves the AppHost, so it needs the same selection origin to avoid
+        // clobbering the workspace default in aspire.config.json.
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: "explicit-launch-configuration");
+
+        Assert.Equal("explicit-launch-configuration", environment[KnownConfigNames.CliAppHostSelectionOrigin]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_OmitsAppHostSelectionOriginWhenNoOriginWasRecorded()
+    {
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
+
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliAppHostSelectionOrigin));
+    }
+
+    [Fact]
     public void DetachedChildEnvironment_DoesNotIncludeStartupStatusFile()
     {
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.False(environment.ContainsKey("ASPIRE_CLI_START_READY_FILE"));
     }
@@ -708,7 +896,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         // The detached child's LauncherLivenessMonitor watches this launcher identity (PID + start time)
         // to tear the AppHost down if the foreground launcher dies before readiness. Without it the child
         // cannot detect a dead launcher and the AppHost + dashboard leak as orphaned processes.
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal(
@@ -727,7 +915,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
         Assert.True(activity.IsRunning);
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
@@ -745,7 +933,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
@@ -757,7 +945,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
     {
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
@@ -956,7 +1144,18 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public TestDetachedProcessFactory ProcessFactory { get; }
 
-        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper) =>
+            Create(outputHelper, appHostSelectionOrigin: null);
+
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, string? appHostSelectionOrigin)
+        {
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted: false);
+        }
+
+        public static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted)
         {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
@@ -987,8 +1186,18 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 executionContext, new TestEnvironment(),
                 NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 TimeProvider.System);
+            var projectLocator = new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile])
+                    {
+                        WasExplicitDirectorySelectionPrompted = selectionWasPrompted
+                    })
+            };
+            var projectFactory = new TestAppHostProjectFactory();
             var launcher = new AppHostLauncher(
-                new TestProjectLocator(),
+                projectLocator,
+                projectFactory,
                 executionContext,
                 interactionService,
                 monitor,
@@ -998,6 +1207,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 fileLoggerProvider,
                 processShutdownService,
                 processFactory,
+                CreateConfiguration((KnownConfigNames.CliAppHostSelectionOrigin, appHostSelectionOrigin)),
                 NullLogger<AppHostLauncher>.Instance,
                 TimeProvider.System);
 
@@ -1025,6 +1235,13 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             };
 
             Monitor.AddConnection(hash, $"{socketPrefix}.sock", connection);
+        }
+
+        public void SetLinkedWorktree()
+        {
+            TestGitWorktree.WriteLinkedWorktreeMetadata(
+                _workspace.WorkspaceRoot.FullName,
+                Path.Combine(_workspace.WorkspaceRoot.FullName, "common", ".git"));
         }
 
         public string CreateMatchingSocketFile(int pid)
@@ -1068,7 +1285,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         private TestDetachedProcessExecution? CreatedExecution { get; set; }
 
+        public IReadOnlyList<string>? CreatedArguments => CreatedExecution?.Arguments;
+
         public int CreatedExecutionDisposeCount => CreatedExecution?.DisposeCount ?? 0;
+
+        public IReadOnlyDictionary<string, string?> CreatedEnvironmentVariables =>
+            CreatedExecution?.EnvironmentVariables ?? throw new InvalidOperationException("Expected a detached process execution.");
 
         public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<IProcessExecution>>? StartHandler { get; set; }
 

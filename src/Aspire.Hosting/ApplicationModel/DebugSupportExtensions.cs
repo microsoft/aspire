@@ -74,33 +74,108 @@ public static class DebugSupportExtensions
     }
 
     /// <summary>
+    /// Determines whether the launch configuration performs the resource's tool invocation itself, meaning the
+    /// resource's launch tool arguments must not also be passed to the launched program.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <param name="supportsDebuggingAnnotation">The launch configuration annotation to compare.</param>
+    /// <returns><see langword="true"/> when the launch configuration supplies the tool invocation; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// This is <see langword="false"/> for a resource whose launch tool arguments declare no owning launch
+    /// configuration type, because such a prefix is always passed to the program.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
+    public static bool HasLaunchToolArgsOwnedBy(this IResource resource, SupportsDebuggingAnnotation supportsDebuggingAnnotation)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(supportsDebuggingAnnotation);
+
+        return resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var launchToolAnnotation)
+            && launchToolAnnotation.OwningLaunchConfigurationType is string owner
+            && string.Equals(owner, supportsDebuggingAnnotation.LaunchConfigurationType, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Creates the launch configuration that this resource sends to the IDE for the given launch mode.
     /// </summary>
     /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>
     /// <param name="mode">The launch mode, one of the values on <see cref="ExecutableLaunchMode"/>.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The launch configuration, typically an <see cref="ExecutableLaunchConfiguration"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resource"/> or <paramref name="mode"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">The resource does not declare debug launch support.</exception>
+    /// <remarks>
+    /// <para>
+    /// Launch configuration is created by invoking the producer callback passed to a
+    /// <c>WithDebugSupport</c> overload on <see cref="ResourceBuilderExtensions"/>, which owns the complete
+    /// configuration; Aspire serializes the result as-is. The configuration is produced fresh on each call.
+    /// Aspire may call the producer several times for the same resource.
+    /// </para>
+    /// <para>
+    /// This overload does not resolve the resource's environment variables. A context-based producer receives
+    /// an empty environment. Aspire's executable creation path supplies the resolved environment through the
+    /// context-aware overload.
+    /// </para>
+    /// <para>
+    /// This describes the launch configuration itself, not whether one is going to be used. Depending on how
+    /// the application is started, or how a resource is configured, Aspire may or may not run the resource under
+    /// a debugger. Use <see cref="SupportsDebugging"/> to test for that.
+    /// </para>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
+    public static Task<object> CreateLaunchConfigurationAsync(
+        this IResource resource,
+        string mode,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(mode);
+
+        return resource.CreateLaunchConfigurationAsync(
+            new LaunchConfigurationCallbackContext(
+                mode,
+                resource,
+                new Dictionary<string, string>(),
+                cancellationToken));
+    }
+
+    /// <summary>
+    /// Creates the launch configuration that this resource sends to the IDE using a callback context.
+    /// </summary>
+    /// <param name="resource">The resource to inspect. It must carry a <see cref="SupportsDebuggingAnnotation"/>.</param>
+    /// <param name="context">The callback context containing the resolved environment and launch data.</param>
+    /// <returns>The launch configuration, typically an <see cref="ExecutableLaunchConfiguration"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="context"/> belongs to a different resource.</exception>
     /// <exception cref="InvalidOperationException">The resource does not declare debug launch support.</exception>
     /// <remarks>
     /// <para>
     /// Launch configuration is created by invoking the producer callback passed to
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
-    /// (or its asynchronous overload),
-    /// which owns the complete configuration; Aspire serializes the result as-is. 
-    /// The configuration is produced fresh on each call; it is not a singleton.
-    /// Aspire may call the producer several times for the same resource.
+    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{LaunchConfigurationCallbackContext, Task{TLaunchConfiguration}}, string)"/>,
+    /// which owns the complete configuration; Aspire serializes the result as-is.
     /// </para>
     /// <para>
-    /// This describes the launch configuration itself, not whether one is going to be used. 
-    /// Depending on how the application is started, or how a resource is configured,
-    /// Aspire may or may not run the resource under a debugger. Use <see cref="SupportsDebugging"/> to test for that.
+    /// This method never resolves environment variables. Aspire creates <paramref name="context"/>
+    /// when the active debug-support annotation is producing a launch configuration for an executable creation.
+    /// </para>
+    /// <para>
+    /// This overload is internal because only Aspire constructs callback contexts containing resolved environment
+    /// variables. Use the public overload when inspecting a launch configuration outside executable creation.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
-    public static Task<object> CreateLaunchConfigurationAsync(this IResource resource, string mode, CancellationToken cancellationToken = default)
+    internal static Task<object> CreateLaunchConfigurationAsync(
+        this IResource resource,
+        LaunchConfigurationCallbackContext context)
     {
         ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(mode);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!ReferenceEquals(resource, context.Resource))
+        {
+            throw new ArgumentException(
+                $"The launch configuration callback context belongs to resource '{context.Resource.Name}', " +
+                $"but launch configuration was requested for resource '{resource.Name}'.",
+                nameof(context));
+        }
 
         if (!resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebuggingAnnotation))
         {
@@ -110,7 +185,7 @@ public static class DebugSupportExtensions
                 $"Note that it only adds the annotation in run mode.");
         }
 
-        return supportsDebuggingAnnotation.LaunchConfigurationProducer(mode, cancellationToken);
+        return supportsDebuggingAnnotation.LaunchConfigurationProducer(context);
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

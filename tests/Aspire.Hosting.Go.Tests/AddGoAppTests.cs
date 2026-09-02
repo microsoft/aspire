@@ -514,7 +514,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
             gcFlags: "all=-N -l",
             raceDetector: true);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Equal("go", launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
@@ -532,14 +532,17 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", sourceDir.FullName);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Null(launchConfig.BuildFlags);
     }
 
     [Fact]
-    public async Task WithVSCodeDebugging_RemovesGoToolArguments()
+    public async Task WithVSCodeDebugging_KeepsGoToolArgumentsInTheAppModel()
     {
+        // The `go run [build flags] <pkg>` prefix is declared as launch tool arguments, so it stays part of the
+        // resource's command line even during a debug session. Withholding it from the launched program is a
+        // DCP-level concern (see DcpExecutorTests), which keeps the app model and the dashboard accurate.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
@@ -566,8 +569,42 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
         Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("-race", arg),
+            arg => Assert.Equal("-tags=integration", arg),
+            arg => Assert.Equal("-ldflags=-X main.version=1.0.0", arg),
+            arg => Assert.Equal("-gcflags=all=-N -l", arg),
+            arg => Assert.Equal("./cmd/server", arg),
             arg => Assert.Equal("--config", arg),
             arg => Assert.Equal("prod.yaml", arg));
+
+        // The "go" launch configuration owns that prefix, which is what makes DCP withhold it from the debugger.
+        var debugAnnotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
+        Assert.True(app.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
+    }
+
+    [Fact]
+    public async Task WithVSCodeDebugging_GoToolArgumentsLeadTheCommandLineRegardlessOfCallOrder()
+    {
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the tool prefix used to be
+        // removed by an ordinary WithArgs callback, which silently no-opped when it ran before the callback that
+        // added the prefix. Arguments added by the user must always land after the prefix, whenever they are added.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+
+        var app = builder.AddGoApp("api", sourceDir.FullName, packagePath: "./cmd/server")
+            .WithArgs("--login", "user");
+
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("./cmd/server", arg),
+            arg => Assert.Equal("--login", arg),
+            arg => Assert.Equal("user", arg));
     }
 
     [Fact]
@@ -1146,17 +1183,11 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         await Verify(content);
     }
 
-    private static async Task<GoLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    private static async Task<GoLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var exe = Executable.Create("test", "go");
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        return Assert.IsType<GoLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)

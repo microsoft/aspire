@@ -97,6 +97,11 @@
         <target state="needs-review-translation">対話型入力は、この環境ではサポートされていません。--non-interactive フラグを使用するか、CLI が対話型ターミナルで実行されていることを確認してください。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[暗い]詳細については、次を参照してください: [link]{0}[/][/]</target>
@@ -132,6 +137,16 @@
         <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
+      <trans-unit id="OpenAppHostLog">
+        <source>Open AppHost Log</source>
+        <target state="new">Open AppHost Log</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenCliLog">
+        <source>Open CLI Log</source>
+        <target state="new">Open CLI Log</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">操作は取り消されました。</target>
@@ -157,9 +172,9 @@
         <target state="needs-review-translation">--apphost オプションが指定されておらず、アプリ ホスティング プロセスのプロジェクト ファイルが複数検出されました。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">プロジェクト引数が指定されておらず、アプリ ホスト プロジェクト ファイルが検出されませんでした。</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

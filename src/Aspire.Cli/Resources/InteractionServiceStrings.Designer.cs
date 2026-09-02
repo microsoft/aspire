@@ -241,6 +241,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Invalid selection..
+        /// </summary>
+        public static string InvalidSelection {
+            get {
+                return ResourceManager.GetString("InvalidSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
         public static string MoreInfoNewCliVersion {
@@ -313,6 +322,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Open AppHost Log.
+        /// </summary>
+        public static string OpenAppHostLog {
+            get {
+                return ResourceManager.GetString("OpenAppHostLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open CLI Log.
+        /// </summary>
+        public static string OpenCliLog {
+            get {
+                return ResourceManager.GetString("OpenCliLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {
@@ -367,11 +394,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project argument was not specified and no *.csproj files were detected..
+        ///   Looks up a localized string similar to The --apphost option was not specified and no AppHost project files were detected..
         /// </summary>
-        public static string ProjectOptionNotSpecifiedNoCsprojFound {
+        public static string ProjectOptionNotSpecifiedNoAppHostsFound {
             get {
-                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoCsprojFound", resourceCulture);
+                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoAppHostsFound", resourceCulture);
             }
         }
 

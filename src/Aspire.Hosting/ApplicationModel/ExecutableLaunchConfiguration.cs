@@ -43,8 +43,7 @@ public static class KnownLaunchConfigurationTypes
     /// </summary>
     /// <remarks>
     /// This type is reserved for resources that carry <see cref="IProjectMetadata"/>. Aspire hands the
-    /// project path (and launch profile) to the IDE, which owns building and launching the project, so
-    /// no process fallback is offered for resources using this type.
+    /// project path and launch profile to the IDE, which owns building and launching the project.
     /// </remarks>
     public const string Project = "project";
 }
@@ -60,8 +59,7 @@ public static class KnownLaunchConfigurationTypes
 /// </para>
 /// <para>
 /// Integrations create a derived type and supply it through
-/// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
-/// or its asynchronous overload.
+/// one of the <c>WithDebugSupport</c> overloads on <see cref="ResourceBuilderExtensions"/>.
 /// </para>
 /// </remarks>
 /// <param name="type">The launch configuration type identifier, for example <see cref="KnownLaunchConfigurationTypes.Project"/>.</param>
@@ -90,8 +88,8 @@ public class ExecutableLaunchConfiguration(string type)
     /// <remarks>
     /// Defaults to <see cref="ExecutableLaunchMode.Debug"/> when a debugger is attached to the app host
     /// and <see cref="ExecutableLaunchMode.NoDebug"/> otherwise. The mode requested by the IDE for the
-    /// current debug session is passed to the producer callback of
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>.
+    /// current debug session is passed directly to mode-based producers and is available to context-based
+    /// producers through <see cref="LaunchConfigurationCallbackContext.Mode"/>.
     /// </remarks>
     [JsonPropertyName("mode")]
     public string Mode { get; set; } = System.Diagnostics.Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug;
@@ -101,8 +99,7 @@ public class ExecutableLaunchConfiguration(string type)
 /// The launch configuration used for .NET projects and file-based C# apps.
 /// </summary>
 /// <remarks>
-/// The IDE builds and launches the project itself, so resources using this launch configuration do not
-/// get a process fallback. The resource must carry <see cref="IProjectMetadata"/>.
+/// The IDE builds and launches the project itself. The resource must carry <see cref="IProjectMetadata"/>.
 /// </remarks>
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration(KnownLaunchConfigurationTypes.Project)

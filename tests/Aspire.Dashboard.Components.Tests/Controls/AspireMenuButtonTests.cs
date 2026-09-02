@@ -13,6 +13,22 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuButtonTests : DashboardTestContext
 {
     [Fact]
+    public void Disabled_DisablesButton()
+    {
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+
+        var cut = RenderComponent<AspireMenuButton>(builder => builder
+            .Add(component => component.MenuButtonId, "disabled-menu-button")
+            .Add(component => component.ItemsProvider, () => [new MenuButtonItem { Text = "Item" }])
+            .Add(component => component.Disabled, true));
+
+        Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
+    }
+
+    [Fact]
     public void Render_AddsMenuPopupAriaWithoutExpandedState()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);

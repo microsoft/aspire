@@ -5,13 +5,65 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class AspireMenuTests : DashboardTestContext
 {
+    [Fact]
+    public async Task ClickSecondaryAction_RefreshesOpenMenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+
+        var item = new MenuButtonItem
+        {
+            Text = "Historical run",
+            SecondaryActionIcon = new Icons.Regular.Size16.Pin(),
+            SecondaryActionAriaLabel = "Pin run"
+        };
+        item.OnSecondaryActionClick = () =>
+        {
+            item.SecondaryActionIcon = new Icons.Filled.Size16.Pin();
+            item.SecondaryActionAriaLabel = "Unpin run";
+            item.IsSecondaryActionSelected = true;
+            return Task.CompletedTask;
+        };
+
+        var menuService = Services.GetRequiredService<IMenuService>();
+        var provider = RenderComponent<FluentMenuProvider>();
+        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
+        {
+            builder.Add(p => p.Value, false);
+            builder.AddChildContent<AspireMenu>(menuBuilder =>
+            {
+                menuBuilder.Add(p => p.Anchor, "menu-anchor");
+                menuBuilder.Add(p => p.Open, true);
+                menuBuilder.Add(p => p.Items, new[] { item });
+            });
+        });
+        var menu = menuHost.FindComponent<FluentMenu>().Instance;
+        await menuHost.InvokeAsync(() => menuService.RefreshMenuAsync(menu.Id!, isOpen: true));
+
+        var pinButton = provider.WaitForElement("fluent-button[aria-label='Pin run']");
+        Assert.Equal("false", pinButton.GetAttribute("aria-pressed"));
+        pinButton.Click();
+
+        provider.WaitForAssertion(() =>
+        {
+            Assert.Single(provider.FindComponents<FluentMenu>());
+            var unpinButton = provider.Find("fluent-button[aria-label='Unpin run']");
+            Assert.Equal("true", unpinButton.GetAttribute("aria-pressed"));
+        });
+    }
+
     [Fact]
     public void UnanchoredAspireMenu_RendersFluentMenu()
     {
