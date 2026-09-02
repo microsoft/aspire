@@ -116,7 +116,7 @@ The Aspire repository also includes custom Copilot skills that team members and 
 
 ### [`code-review`](/.agents/skills/code-review/SKILL.md)
 
-Reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
+Reviews a PR for high-confidence problems such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It separately flags sensitive semantic changes that require human judgment—including trust boundaries, internal infrastructure flowing into customer behavior, customer-facing defaults, scope mismatches, and material changes after approval—and does not approve until a human confirms those items were reviewed.
 
 ### [`pr-testing`](/.agents/skills/pr-testing/SKILL.md)
 
