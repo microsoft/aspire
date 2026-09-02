@@ -85,17 +85,11 @@
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.aspireTerminalClosedBeforeProcessStarted">
-      <source xml:lang="en">Aspire terminal closed before its process started.</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.terminalCommandArgumentControlCharacters">
       <source xml:lang="en">Aspire terminal command arguments cannot contain control characters.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.terminalCommandUnsafeLiteral">
       <source xml:lang="en">Aspire terminal command syntax can only contain command names and flags.</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.aspireTerminalProcessFailedToStart">
-      <source xml:lang="en">Aspire terminal process failed to start.</source>
     </trans-unit>
     <trans-unit id="extension.debug.defaultConfiguration.name">
       <source xml:lang="en">Aspire: Launch default AppHost</source>
