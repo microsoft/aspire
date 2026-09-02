@@ -218,6 +218,163 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task RestoreAsync_UsesExplicitSourceWhenMappingRefersToUnavailableSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configDirectory = workspace.CreateDirectory("config");
+        var explicitFeed = workspace.CreateDirectory("explicit-feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(explicitFeed.FullName, packageId, "explicit-source");
+
+        var nugetConfigPath = Path.Combine(configDirectory.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+              <packageSources>
+                <clear />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key=".">
+                  <package pattern="Aspire.Test.Package.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var restoredPackages = await client.RestoreAsync(
+            [(packageId, "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [explicitFeed.FullName],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        var restoredPackage = Assert.Single(restoredPackages);
+        Assert.Equal(
+            "explicit-source",
+            await File.ReadAllTextAsync(
+                Path.Combine(restoredPackage.InstallPath, "lib", "net10.0", "Aspire.Test.Package.dll"),
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RestoreAsync_PrefersAvailableMappedSourceOverExplicitSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var mappedFeed = workspace.CreateDirectory("mapped-feed");
+        var explicitFeed = workspace.CreateDirectory("explicit-feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(mappedFeed.FullName, packageId, "mapped-source");
+        CreatePackage(explicitFeed.FullName, packageId, "explicit-source");
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+              <packageSources>
+                <clear />
+                <add key="mapped" value="{mappedFeed.FullName}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key=".">
+                  <package pattern="Aspire.Test.Package.*" />
+                </packageSource>
+                <packageSource key="mapped">
+                  <package pattern="Aspire.Test.Package.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var restoredPackages = await client.RestoreAsync(
+            [(packageId, "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [explicitFeed.FullName],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        var restoredPackage = Assert.Single(restoredPackages);
+        Assert.Equal(
+            "mapped-source",
+            await File.ReadAllTextAsync(
+                Path.Combine(restoredPackage.InstallPath, "lib", "net10.0", "Aspire.Test.Package.dll"),
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RestoreAsync_RejectsExplicitSourceWhenPackageHasNoMapping()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var explicitFeed = workspace.CreateDirectory("explicit-feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(explicitFeed.FullName, packageId);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+              <packageSources>
+                <clear />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key=".">
+                  <package pattern="Other.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.RestoreAsync(
+            [(packageId, "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [explicitFeed.FullName],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"NuGet package source mapping has no matching source for package '{packageId}'.",
+            exception.Message);
+    }
+
     private static void CreatePackage(
         string feedDirectory,
         string packageId,

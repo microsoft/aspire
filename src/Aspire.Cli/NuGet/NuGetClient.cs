@@ -108,6 +108,7 @@ internal sealed class NuGetClient(
             rootRequirements,
             repositories,
             packageSourceMapping,
+            sources,
             targetFramework,
             cacheContext,
             cancellationToken).ConfigureAwait(false);
@@ -277,6 +278,7 @@ internal sealed class NuGetClient(
         IReadOnlyList<(string Id, VersionRange Range)> rootRequirements,
         IReadOnlyList<SourceRepository> repositories,
         PackageSourceMapping packageSourceMapping,
+        IReadOnlyList<string> explicitSources,
         NuGetFramework targetFramework,
         SourceCacheContext cacheContext,
         CancellationToken cancellationToken)
@@ -299,7 +301,8 @@ internal sealed class NuGetClient(
             var candidateRepositories = GetMappedRepositories(
                 packageId,
                 repositories,
-                packageSourceMapping);
+                packageSourceMapping,
+                explicitSources);
             foreach (var repository in candidateRepositories)
             {
                 var dependencyResource = await repository
@@ -362,7 +365,8 @@ internal sealed class NuGetClient(
     private static IReadOnlyList<SourceRepository> GetMappedRepositories(
         string packageId,
         IReadOnlyList<SourceRepository> repositories,
-        PackageSourceMapping packageSourceMapping)
+        PackageSourceMapping packageSourceMapping,
+        IReadOnlyList<string> explicitSources)
     {
         if (!packageSourceMapping.IsEnabled)
         {
@@ -380,16 +384,25 @@ internal sealed class NuGetClient(
         var mappedRepositories = repositories
             .Where(repository => mappedSources.Contains(repository.PackageSource.Name))
             .ToArray();
-        if (mappedRepositories.Length != mappedSourceNames.Count)
+        if (mappedRepositories.Length > 0)
         {
-            var unavailableSources = mappedSourceNames
-                .Where(sourceName => !mappedRepositories.Any(repository =>
-                    repository.PackageSource.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase)));
-            throw new InvalidOperationException(
-                $"NuGet package source mapping for package '{packageId}' refers to unavailable source(s): {string.Join(", ", unavailableSources)}.");
+            return mappedRepositories;
         }
 
-        return mappedRepositories;
+        // A temporary config can clear inherited package sources while inherited mappings remain.
+        // In that case, use the sources explicitly selected by the CLI instead of failing because
+        // none of the mapped source names are available.
+        var explicitSourceSet = explicitSources.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var explicitRepositories = repositories
+            .Where(repository => explicitSourceSet.Contains(repository.PackageSource.Source))
+            .ToArray();
+        if (explicitRepositories.Length > 0)
+        {
+            return explicitRepositories;
+        }
+
+        throw new InvalidOperationException(
+            $"NuGet package source mapping for package '{packageId}' refers to unavailable source(s): {string.Join(", ", mappedSourceNames)}.");
     }
 
     private async Task<string> DownloadPackageAsync(
