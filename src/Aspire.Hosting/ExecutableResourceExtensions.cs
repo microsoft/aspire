@@ -20,8 +20,6 @@ public static class ExecutableResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources
-            .Select(static resource => resource.GetEffectiveResource())
-            .OfType<ExecutableResource>();
+        return model.Resources.OfType<ExecutableResource>();
     }
 }

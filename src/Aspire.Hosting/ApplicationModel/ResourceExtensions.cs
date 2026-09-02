@@ -1952,17 +1952,16 @@ public static class ResourceExtensions
             return;
         }
 
-        foreach (var owner in model.Resources)
+        foreach (var resource in model.Resources)
         {
-            var effectiveResource = owner.GetEffectiveResource(executionContext);
-            if (effectiveResource.IsContainer() || effectiveResource is not IResourceWithEndpoints)
+            if (resource.IsContainer() || resource is not IResourceWithEndpoints)
             {
                 continue;
             }
 
-            if (effectiveResource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)))
+            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)))
             {
-                AddDependency(owner, dependencies, newDependencies);
+                AddDependency(resource, dependencies, newDependencies);
             }
         }
     }

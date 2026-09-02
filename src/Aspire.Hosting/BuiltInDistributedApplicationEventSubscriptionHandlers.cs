@@ -57,9 +57,8 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     {
         foreach (var resource in beforeStartEvent.Model.Resources)
         {
-            var effectiveResource = resource.GetEffectiveResource();
-            var isHttp2Service = effectiveResource.Annotations.OfType<Http2ServiceAnnotation>().Any();
-            var httpEndpoints = effectiveResource.Annotations.OfType<EndpointAnnotation>().Where(sb => sb.UriScheme == "http" || sb.UriScheme == "https");
+            var isHttp2Service = resource.Annotations.OfType<Http2ServiceAnnotation>().Any();
+            var httpEndpoints = resource.Annotations.OfType<EndpointAnnotation>().Where(sb => sb.UriScheme == "http" || sb.UriScheme == "https");
             foreach (var httpEndpoint in httpEndpoints)
             {
                 httpEndpoint.Transport = isHttp2Service ? "http2" : httpEndpoint.Transport;
@@ -72,7 +71,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     public static Task UpdateContainerRegistryAsync(BeforeStartEvent @event, DistributedApplicationOptions options)
     {
         var resourcesWithContainerImages = @event.Model.Resources.SelectMany(
-            r => r.GetEffectiveResource().Annotations.OfType<ContainerImageAnnotation>()
+            r => r.Annotations.OfType<ContainerImageAnnotation>()
                 .Select(cia => new { Resource = r, Annotation = cia })
             );
 
@@ -97,8 +96,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 
         foreach (var resource in beforeStartEvent.Model.Resources)
         {
-            var effectiveResource = resource.GetEffectiveResource();
-            if (effectiveResource is ContainerResource && effectiveResource.GetLifetimeType() == Lifetime.Persistent)
+            if (resource is ContainerResource && resource.GetLifetimeType() == Lifetime.Persistent)
             {
                 if (logger.IsEnabled(LogLevel.Warning))
                 {

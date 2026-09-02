@@ -30,26 +30,24 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetComputeResources(this DistributedApplicationModel model)
     {
-        foreach (var r in model.Resources)
+        foreach (var resource in model.Resources)
         {
-            var effectiveResource = r.GetEffectiveResource();
-
-            if (effectiveResource.IsExcludedFromPublish())
+            if (resource.IsExcludedFromPublish())
             {
                 continue;
             }
 
-            if (!effectiveResource.IsContainer() && !effectiveResource.IsEmulator() && effectiveResource is not ProjectResource)
+            if (!resource.IsContainer() && !resource.IsEmulator() && resource is not ProjectResource)
             {
                 continue;
             }
 
-            if (effectiveResource.IsBuildOnlyContainer())
+            if (resource.IsBuildOnlyContainer())
             {
                 continue;
             }
 
-            yield return effectiveResource;
+            yield return resource;
         }
     }
 
@@ -62,13 +60,11 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildResources(this DistributedApplicationModel model)
     {
-        foreach (var r in model.Resources)
+        foreach (var resource in model.Resources)
         {
-            var effectiveResource = r.GetEffectiveResource();
-
-            if (effectiveResource.RequiresImageBuild())
+            if (resource.RequiresImageBuild())
             {
-                yield return effectiveResource;
+                yield return resource;
             }
         }
     }
@@ -82,13 +78,11 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildAndPushResources(this DistributedApplicationModel model)
     {
-        foreach (var r in model.Resources)
+        foreach (var resource in model.Resources)
         {
-            var effectiveResource = r.GetEffectiveResource();
-
-            if (effectiveResource.RequiresImageBuildAndPush())
+            if (resource.RequiresImageBuildAndPush())
             {
-                yield return effectiveResource;
+                yield return resource;
             }
         }
     }

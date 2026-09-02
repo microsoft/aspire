@@ -71,15 +71,9 @@ internal sealed class KubernetesPublishingContext(
     {
         // Include the dashboard resource alongside model resources so its templates are generated.
         // This mirrors the Docker Compose pattern in DockerComposePublishingContext.
-        var effectiveComputeResources = model.GetComputeResources()
-            .ToDictionary(resource => resource.Name, StringComparer.OrdinalIgnoreCase);
-        var modelResources = model.Resources.Select(resource =>
-            effectiveComputeResources.TryGetValue(resource.Name, out var effectiveResource)
-                ? effectiveResource
-                : resource);
         IEnumerable<IResource> resources = environment.DashboardEnabled && environment.Dashboard?.Resource is IResource dashboardResource
-            ? [dashboardResource, .. modelResources]
-            : modelResources;
+            ? [dashboardResource, .. model.Resources]
+            : model.Resources;
 
         foreach (var resource in resources)
         {
