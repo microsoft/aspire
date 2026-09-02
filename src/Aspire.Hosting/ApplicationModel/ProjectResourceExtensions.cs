@@ -24,8 +24,7 @@ public static class ProjectResourceExtensions
 
         return model.Resources
             .Select(static resource => resource.GetEffectiveResource())
-            .OfType<ProjectResource>()
-            .Where(static resource => !resource.IsContainer());
+            .OfType<ProjectResource>();
     }
 
     /// <summary>

@@ -476,11 +476,24 @@ public class ResourceProjectionTests
                 Image = "legacy-image",
                 Tag = "latest"
             });
+        var project = builder.AddResource(new ProjectResource("project"))
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Image = "legacy-project-image",
+                Tag = "latest"
+            });
 
         var effectiveResource = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+        var model = new DistributedApplicationModel([executable.Resource, project.Resource]);
 
         Assert.Same(executable.Resource, effectiveResource);
         Assert.True(effectiveResource.IsContainer());
+        Assert.Collection(model.GetExecutableResources(), resource => Assert.Same(executable.Resource, resource));
+        Assert.Collection(model.GetProjectResources(), resource => Assert.Same(project.Resource, resource));
+        Assert.Collection(
+            model.GetContainerResources(),
+            resource => Assert.Same(executable.Resource, resource),
+            resource => Assert.Same(project.Resource, resource));
     }
 
     [Fact]

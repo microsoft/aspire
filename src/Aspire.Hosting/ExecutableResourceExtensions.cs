@@ -22,7 +22,6 @@ public static class ExecutableResourceExtensions
 
         return model.Resources
             .Select(static resource => resource.GetEffectiveResource())
-            .OfType<ExecutableResource>()
-            .Where(static resource => !resource.IsContainer());
+            .OfType<ExecutableResource>();
     }
 }
