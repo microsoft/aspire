@@ -113,6 +113,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         var results = Mapping(s_testJobs, "results");
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any dependency failed");
         var condition = CollapseWhitespace(Scalar(failureStep, "if"));
+
         Assert.Contains("contains(needs.*.result, 'failure')", condition, StringComparison.Ordinal);
         Assert.Contains("contains(needs.*.result, 'cancelled')", condition, StringComparison.Ordinal);
         Assert.Contains(
@@ -128,6 +129,12 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         [
             "needs.extension_tests_win.result == 'skipped'",
             "needs.extension_e2e_tests.result == 'skipped'",
+            "needs.cli_starter_validation_linux_x64.result == 'skipped'",
+            "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_x64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_x64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_arm64.result == 'skipped'",
             "needs.typescript_sdk_tests.result == 'skipped'",
             "needs.typescript_api_compat.result == 'skipped'",
             "needs.build_cli_archive_macos_x64.result == 'skipped'",
