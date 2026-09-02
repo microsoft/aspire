@@ -87,6 +87,41 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void AsExisting_AfterAISearchTool_RemovesToolAndConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("project");
+        var search = builder.AddAzureSearch("search");
+        var toolbox = project.AddToolbox("field-tools");
+        var resourceCountWithoutConnection = builder.Resources.Count;
+        toolbox.WithAISearchTool("knowledge-base", search, "docs");
+        Assert.Equal(resourceCountWithoutConnection + 1, builder.Resources.Count);
+
+        toolbox.AsExisting();
+
+        Assert.Empty(toolbox.Resource.Tools);
+        Assert.Equal(resourceCountWithoutConnection, builder.Resources.Count);
+    }
+
+    [Fact]
+    public void AsExisting_BeforeAISearchTool_DoesNotAddToolOrConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("project");
+        var search = builder.AddAzureSearch("search");
+        var toolbox = project.AddToolbox("field-tools")
+            .AsExisting();
+        var resourceCount = builder.Resources.Count;
+
+        toolbox.WithAISearchTool("knowledge-base", search, "docs");
+
+        Assert.Empty(toolbox.Resource.Tools);
+        Assert.Equal(resourceCount, builder.Resources.Count);
+    }
+
+    [Fact]
     public void WithToolMethods_AddToolDefinitions()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

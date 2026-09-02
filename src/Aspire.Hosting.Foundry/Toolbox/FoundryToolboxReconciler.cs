@@ -325,6 +325,10 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
                 out var existingHash) &&
             string.Equals(existingHash, definition.ConfigurationHash, StringComparison.Ordinal))
         {
+            await VerifyReusedDefaultAsync(
+                definition,
+                existing.DefaultVersion,
+                cancellationToken).ConfigureAwait(false);
             return new(existing.DefaultVersion, FoundryToolboxReconcileAction.Reused);
         }
 
@@ -361,6 +365,29 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
         }
 
         return new(updated, FoundryToolboxReconcileAction.CreatedAndPromoted);
+    }
+
+    private async Task VerifyReusedDefaultAsync(
+        FoundryToolboxDeploymentDefinition definition,
+        string expectedDefaultVersion,
+        CancellationToken cancellationToken)
+    {
+        var current = await administration.GetAsync(definition.Name, cancellationToken).ConfigureAwait(false)
+            ?? throw CreateConcurrentChangeException(
+                definition.Name,
+                $"default version '{expectedDefaultVersion}' matched, but the Toolbox is no longer visible");
+
+        ValidateOwnedDefault(definition.Name, current, concurrentChange: true);
+        if (!string.Equals(current.DefaultVersion, expectedDefaultVersion, StringComparison.Ordinal) ||
+            !current.Default.Metadata.TryGetValue(
+                FoundryToolboxDeploymentDefinition.ConfigurationHashMetadataKey,
+                out var currentHash) ||
+            !string.Equals(currentHash, definition.ConfigurationHash, StringComparison.Ordinal))
+        {
+            throw CreateConcurrentChangeException(
+                definition.Name,
+                $"default version '{expectedDefaultVersion}' matched, but version '{current.DefaultVersion}' with a different configuration is now the default");
+        }
     }
 
     private async Task PromoteOwnedVersionAsync(

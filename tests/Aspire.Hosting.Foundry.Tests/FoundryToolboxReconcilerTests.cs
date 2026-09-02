@@ -44,6 +44,34 @@ public class FoundryToolboxReconcilerTests
     }
 
     [Fact]
+    public async Task ReconcileAsync_RejectsDefaultChangedBeforeReportingReuse()
+    {
+        var definition = await CreateDefinitionAsync();
+        var initial = CreateExistingState(definition, "3");
+        var concurrentlyChanged = new FoundryToolboxState(
+            "4",
+            [
+                initial.Default,
+                CreateVersionState("4", "other-deployment")
+            ]);
+        var administration = new RecordingToolboxAdministration();
+        administration.GetResults.Enqueue(initial);
+        administration.GetResults.Enqueue(concurrentlyChanged);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new FoundryToolboxReconciler(administration)
+                .ReconcileAsync(definition, CancellationToken.None));
+
+        Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "version '4' with a different configuration is now the default",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.Empty(administration.CreatedDefinitions);
+        Assert.Empty(administration.Promotions);
+    }
+
+    [Fact]
     public async Task ReconcileAsync_CreatesAndPromotesChangedAspireManagedVersion()
     {
         var definition = await CreateDefinitionAsync();

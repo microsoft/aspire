@@ -184,6 +184,11 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
     {
         ArgumentNullException.ThrowIfNull(tool);
 
+        if (IsExisting)
+        {
+            return;
+        }
+
         if (_tools.Any(existing => string.Equals(existing.Name, tool.Name, StringComparison.Ordinal)))
         {
             throw new InvalidOperationException(
@@ -192,6 +197,8 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
         _tools.Add(tool);
     }
+
+    internal void ClearTools() => _tools.Clear();
 
     internal async Task<FoundryToolboxDeploymentDefinition> CreateDeploymentDefinitionAsync(
         CancellationToken cancellationToken)

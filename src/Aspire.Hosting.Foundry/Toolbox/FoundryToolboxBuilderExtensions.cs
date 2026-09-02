@@ -84,7 +84,7 @@ public static class FoundryToolboxBuilderExtensions
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
-            builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+            ConfigureAsExisting(builder);
         }
 
         return builder;
@@ -109,7 +109,7 @@ public static class FoundryToolboxBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
-            builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+            ConfigureAsExisting(builder);
         }
 
         return builder;
@@ -132,7 +132,9 @@ public static class FoundryToolboxBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
+        ConfigureAsExisting(builder);
+
+        return builder;
     }
 
     /// <summary>
@@ -290,6 +292,11 @@ public static class FoundryToolboxBuilderExtensions
         ArgumentNullException.ThrowIfNull(search);
         ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
 
+        if (builder.Resource.IsExisting)
+        {
+            return builder;
+        }
+
         var projectBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent);
         var connectionName = CreateSearchConnectionName(
             builder.Resource.Parent.Name,
@@ -315,6 +322,19 @@ public static class FoundryToolboxBuilderExtensions
         var identity = Encoding.UTF8.GetBytes($"{projectName}\0{toolboxName}\0{toolName}\0{searchName}");
         var hash = XxHash3.Hash(identity);
         return $"toolbox-search-{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static void ConfigureAsExisting(IResourceBuilder<FoundryToolboxResource> builder)
+    {
+        foreach (var connection in builder.Resource.Tools
+            .OfType<FoundryToolboxAzureAISearchToolDefinition>()
+            .Select(tool => tool.Connection))
+        {
+            builder.ApplicationBuilder.Resources.Remove(connection);
+        }
+
+        builder.Resource.ClearTools();
+        builder.WithAnnotation(new FoundryToolboxExistingResourceAnnotation());
     }
 
     private static IResourceBuilder<FoundryToolboxResource> WithMcpTool(

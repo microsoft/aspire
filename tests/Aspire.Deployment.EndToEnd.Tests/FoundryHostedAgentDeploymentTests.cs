@@ -446,6 +446,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             endpoint,
             accessToken.Token,
             sessionId: null,
+            protocolVersion: null,
             """
             {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"Aspire.Deployment.EndToEnd.Tests","version":"1.0"}}}
             """,
@@ -460,6 +461,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             endpoint,
             accessToken.Token,
             initialize.SessionId,
+            negotiatedProtocol,
             """{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}""",
             cancellationToken);
         using var discoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -473,6 +475,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     endpoint,
                     accessToken.Token,
                     initialize.SessionId,
+                    negotiatedProtocol,
                     $$$"""{"jsonrpc":"2.0","id":{{{requestId}}},"method":"tools/list","params":{}}""",
                     discoveryCancellation.Token);
                 var toolNames = tools.Result.GetProperty("tools")
@@ -500,6 +503,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         Uri endpoint,
         string accessToken,
         string? sessionId,
+        string? protocolVersion,
         string payload,
         CancellationToken cancellationToken)
     {
@@ -511,6 +515,10 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         if (!string.IsNullOrEmpty(sessionId))
         {
             request.Headers.Add("Mcp-Session-Id", sessionId);
+        }
+        if (!string.IsNullOrEmpty(protocolVersion))
+        {
+            request.Headers.Add("MCP-Protocol-Version", protocolVersion);
         }
         request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
         using var requestDocument = JsonDocument.Parse(payload);
