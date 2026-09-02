@@ -866,14 +866,22 @@ public static class AgentResourceBuilderExtensions
                 CommandResultFormat.Text);
         }
 
-        var runError = GetSseJsonPayloads(responseBody)
-            .FirstOrDefault(payload => string.Equals(GetJsonString(payload["type"]), "RUN_ERROR", StringComparison.Ordinal));
-        if (runError is not null)
+        var terminalEvent = GetSseJsonPayloads(responseBody)
+            .FirstOrDefault(payload => GetJsonString(payload["type"]) is "RUN_FINISHED" or "RUN_ERROR");
+        if (string.Equals(GetJsonString(terminalEvent?["type"]), "RUN_ERROR", StringComparison.Ordinal))
         {
             return CommandResults.Failure(
                 "Agent run returned a RUN_ERROR event.",
-                JsonSerializer.Serialize(runError, s_indentedJsonOptions),
+                JsonSerializer.Serialize(terminalEvent, s_indentedJsonOptions),
                 CommandResultFormat.Json);
+        }
+
+        if (terminalEvent is null)
+        {
+            return CommandResults.Failure(
+                "Agent run ended without a terminal event.",
+                responseBody,
+                CommandResultFormat.Text);
         }
 
         return CommandResults.Success(

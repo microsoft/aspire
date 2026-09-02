@@ -466,6 +466,59 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal("Agent run returned a RUN_ERROR event.", result.Message);
     }
 
+    [Fact]
+    public async Task InvokeAgUiReportsMissingTerminalEvent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new SseAgentCommandHandler(
+            """
+            event: message
+            data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Partial response"}
+
+            """);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.AgUi);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-ag-ui-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-ag-ui-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Agent run ended without a terminal event.", result.Message);
+    }
+
+    [Fact]
+    public async Task InvokeAgUiSucceedsOnRunFinished()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new SseAgentCommandHandler(
+            """
+            event: message
+            data: {"type":"RUN_FINISHED"}
+
+            """);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.AgUi);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-ag-ui-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-ag-ui-send-message", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.True(result.Success);
+    }
+
     [Theory]
     [InlineData("failed")]
     [InlineData("cancelled")]
