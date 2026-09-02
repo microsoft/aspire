@@ -108,18 +108,11 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void FinalResultsRequiresReleaseUnitTestSuccessAndPreservesRequiredSkipChecks()
+    public void FinalResultsRequiresReleaseUnitTestSuccessAndPreservesNormalSkipChecks()
     {
         var results = Mapping(s_testJobs, "results");
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any dependency failed");
         var condition = CollapseWhitespace(Scalar(failureStep, "if"));
-        var starterJobIds = s_testJobs.Children.Keys
-            .Cast<YamlScalarNode>()
-            .Select(key => key.Value)
-            .Where(jobId => jobId?.StartsWith("cli_starter_validation_", StringComparison.Ordinal) == true)
-            .Select(jobId => jobId!)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
 
         Assert.Contains("contains(needs.*.result, 'failure')", condition, StringComparison.Ordinal);
         Assert.Contains("contains(needs.*.result, 'cancelled')", condition, StringComparison.Ordinal);
@@ -131,22 +124,17 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
             "(!inputs.extensionReleaseOnly && ((github.event_name == 'pull_request'",
             condition,
             StringComparison.Ordinal);
-        Assert.Equal(6, starterJobIds.Length);
-        Assert.All(
-            starterJobIds,
-            jobId =>
-            {
-                Assert.Contains(jobId, SequenceScalars(results, "needs"));
-                Assert.Contains(
-                    $"(needs.{jobId}.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true'))",
-                    condition,
-                    StringComparison.Ordinal);
-            });
 
         string[] normalModeSkipChecks =
         [
             "needs.extension_tests_win.result == 'skipped'",
             "needs.extension_e2e_tests.result == 'skipped'",
+            "needs.cli_starter_validation_linux_x64.result == 'skipped'",
+            "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_x64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_x64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_arm64.result == 'skipped'",
             "needs.typescript_sdk_tests.result == 'skipped'",
             "needs.typescript_api_compat.result == 'skipped'",
             "needs.build_cli_archive_macos_x64.result == 'skipped'",

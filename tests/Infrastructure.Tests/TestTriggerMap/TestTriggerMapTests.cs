@@ -729,6 +729,22 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void CliStarterValidationSkipChecksAreRequiredOnlyWhenSelected()
+    {
+        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var resultsBlock = JobBlock(testsYml, "results");
+        Assert.NotNull(resultsBlock);
+        var normalizedResultsBlock = System.Text.RegularExpressions.Regex.Replace(resultsBlock, @"\s+", " ");
+
+        Assert.All(
+            s_cliStarterValidationJobIds,
+            jobId => Assert.Contains(
+                $"(needs.{jobId}.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true'))",
+                normalizedResultsBlock,
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void EveryTestTargetNamesAnExistingTestProject()
     {
         // test:<X> means the matrix project tests/<X> (run-tests.yml entry). A rename or
