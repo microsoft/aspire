@@ -468,6 +468,8 @@ namespace Aspire.TypeSystem
 
     public partial interface ILanguageSupport
     {
+        string? CertificateBundleEnvironmentVariable { get; }
+
         string Language { get; }
 
         DetectionResult Detect(string directoryPath);
@@ -484,6 +486,8 @@ namespace Aspire.TypeSystem
 
     public sealed partial class RuntimeSpec
     {
+        public string? CertificateBundleEnvironmentVariable { get { throw null; } init { } }
+
         public required string CodeGenLanguage { get { throw null; } init { } }
 
         public required string[] DetectionPatterns { get { throw null; } init { } }
