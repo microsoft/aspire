@@ -9,6 +9,7 @@ import {
     __setTelemetryLoggerFactoryForTests,
     __setTelemetryReporterFactoryForTests,
     classifyError,
+    clearTelemetryEnrichmentTask,
     initializeTelemetry,
     isCommandCancellation,
     isExtensionTelemetryEnabled,
@@ -221,6 +222,37 @@ suite('telemetry utilities', () => {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         assert.strictEqual(fake.events.length, 0);
+    });
+
+    test('does not export a queued event after telemetry is disabled and re-enabled', async () => {
+        let resolveInitialEnrichment: () => void = () => { };
+        const initialEnrichment = new Promise<void>(resolve => {
+            resolveInitialEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(initialEnrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.before-opt-out' });
+        fake.telemetryLevel = 'off';
+        clearTelemetryEnrichmentTask();
+
+        let resolveReplacementEnrichment: () => void = () => { };
+        const replacementEnrichment = new Promise<void>(resolve => {
+            resolveReplacementEnrichment = resolve;
+        });
+        fake.telemetryLevel = 'all';
+        setTelemetryEnrichmentTask(replacementEnrichment);
+
+        resolveInitialEnrichment();
+        await initialEnrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.strictEqual(fake.events.length, 0);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.after-opt-in' });
+        resolveReplacementEnrichment();
+        await replacementEnrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.deepStrictEqual(fake.events.map(event => event.properties?.command), ['cmd.after-opt-in']);
     });
 
     test('usage and dashboard events keep their registry wire names', () => {

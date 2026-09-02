@@ -37,6 +37,7 @@ let telemetryLogger: vscode.TelemetryLogger | undefined;
 let telemetryReporterFactory: TelemetryReporterFactory = defaultTelemetryReporterFactory;
 let telemetryLoggerFactory: TelemetryLoggerFactory = defaultTelemetryLoggerFactory;
 let telemetryEnrichmentTask: Promise<void> | undefined;
+let telemetryEnrichmentGeneration = 0;
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
 let commandInvocationListener: (() => void) | undefined;
 const telemetryClientVersion = (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
@@ -172,6 +173,7 @@ export function getCommonTelemetryProperties(): Readonly<Partial<Record<CommonTe
 }
 
 export function setTelemetryEnrichmentTask(task: Promise<void>): void {
+    telemetryEnrichmentGeneration++;
     const readyTask = task.catch(() => { });
     telemetryEnrichmentTask = readyTask;
     void readyTask.finally(() => {
@@ -182,6 +184,7 @@ export function setTelemetryEnrichmentTask(task: Promise<void>): void {
 }
 
 export function clearTelemetryEnrichmentTask(): void {
+    telemetryEnrichmentGeneration++;
     telemetryEnrichmentTask = undefined;
 }
 
@@ -241,7 +244,12 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
 function emitWhenEnriched(emit: () => void): void {
     const enrichmentTask = telemetryEnrichmentTask;
     if (enrichmentTask) {
-        void enrichmentTask.then(emit);
+        const enrichmentGeneration = telemetryEnrichmentGeneration;
+        void enrichmentTask.then(() => {
+            if (telemetryEnrichmentGeneration === enrichmentGeneration) {
+                emit();
+            }
+        });
         return;
     }
 
@@ -564,6 +572,7 @@ export function __resetTelemetryLoggerFactoryForTests(): void {
 
 /** Test seam: clear common properties so tests don't bleed into each other. */
 export function __resetCommonPropertiesForTests(): void {
+    telemetryEnrichmentGeneration++;
     telemetryEnrichmentTask = undefined;
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
