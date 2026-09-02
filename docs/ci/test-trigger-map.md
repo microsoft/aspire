@@ -218,19 +218,14 @@ projects. Test projects often aggregate dependencies that the starter scenarios
 do not exercise, so a test-derived rule can fan unrelated changes into all six
 platform jobs.
 
-```yaml
-- projects: [Aspire.Cli, Aspire.Managed, Aspire.AppHost.Sdk]
-  targets: [job:cli-starter-validation]
-```
-
 Instead, starter validation tracks the stable direct artifact boundaries:
 
 - Affected-project rules cover the CLI and managed executables, AppHost SDK,
   TypeScript code generation and JavaScript hosting, and AppHost and PostgreSQL
-  hosting packages.
+  hosting packages, plus the CreateLayout bundle assembly.
 - Exact path rules cover the C# starter template and template package project,
-  DCP/dashboard package inputs, executable CLI archive and bundle construction,
-  and the PR installer used by the validation workflow.
+  executable CLI archive definitions, `eng/Bundle.proj`, and the PR installer
+  used by the validation workflow.
 
 Their closest aggregate test projects also reference Azure, browser, or Npgsql
 client projects, unrelated templates, or test-only utilities and fakes.

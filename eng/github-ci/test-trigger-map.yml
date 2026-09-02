@@ -334,12 +334,12 @@ path_rules:
     reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests, job:cli-starter-validation]
-    reason: AppHostSdkTargetsTests asserts the package ref; starter AppHosts consume the packaged dashboard SDK
+    targets: [test:Aspire.Hosting.Sdk.Tests]
+    reason: AppHostSdkTargetsTests asserts the per-RID dashboard package reference used when the CLI bundle is disabled
   - paths:
       - eng/dcppack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests, job:cli-starter-validation]
-    reason: AppHostSdkTargetsTests asserts the package ref; TerminalHost and starter AppHosts exercise packaged DCP
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests]
+    reason: AppHostSdkTargetsTests asserts the per-RID orchestration package reference; TerminalHost exercises packaged DCP
   - paths:
       - src/Aspire.ProjectTemplates/**
     targets: [test:Aspire.Templates.Tests]

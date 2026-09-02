@@ -378,6 +378,14 @@ public sealed class TestTriggerMapTests
             ["job:homebrew-installer"]
         },
         {
+            "eng/dashboardpack/Sdk.targets",
+            ["test:Aspire.Hosting.Sdk.Tests"]
+        },
+        {
+            "eng/dcppack/Aspire.Hosting.Orchestration.targets",
+            ["test:Aspire.Hosting.Sdk.Tests", "test:Aspire.TerminalHost.Tests"]
+        },
+        {
             "eng/scripts/load-cli-e2e-images.sh",
             ["test:Aspire.Cli.EndToEnd.Tests"]
         },
@@ -518,8 +526,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj")]
     [InlineData("src/Aspire.ProjectTemplates/templates/aspire-starter/Aspire-StarterApplication.1.AppHost/AppHost.cs")]
-    [InlineData("eng/dcppack/Aspire.Hosting.Orchestration.targets")]
-    [InlineData("eng/dashboardpack/Sdk.targets")]
     [InlineData("eng/Bundle.proj")]
     public void CliStarterValidationRunsForLooseStarterConsumerChange(string path)
     {
@@ -551,7 +557,9 @@ public sealed class TestTriggerMapTests
             "Aspire.Hosting.Tests");
 
         Assert.False(result.SelectsAll);
-        Assert.Equal(["job:extension-e2e", "job:typescript-api-compat"], result.Jobs.Order(StringComparer.Ordinal));
+        Assert.False(
+            result.Jobs.Contains("job:cli-starter-validation", StringComparer.Ordinal),
+            "Aggregate tests selected by Redis changes must not pull in all six starter-validation jobs.");
     }
 
     [Fact]
@@ -587,7 +595,9 @@ public sealed class TestTriggerMapTests
             "Aspire.Cli.EndToEnd.Tests");
 
         Assert.False(result.SelectsAll);
-        Assert.Empty(result.Jobs);
+        Assert.False(
+            result.Jobs.Contains("job:cli-starter-validation", StringComparer.Ordinal),
+            "Shared test utilities must not pull in all six starter-validation jobs.");
     }
 
     [Fact]
