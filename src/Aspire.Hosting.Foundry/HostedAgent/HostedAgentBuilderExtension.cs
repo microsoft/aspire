@@ -476,12 +476,15 @@ public static class HostedAgentResourceBuilderExtensions
         else if (resource is ExecutableResource executableResource)
         {
             // Ensure we have a container resource to deploy.
-            IResourceBuilder<ContainerResource>? containerProjection = null;
             builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
-                .PublishAsDockerFile(container => containerProjection = container);
+                .PublishAsDockerFile();
 
-            target = containerProjection?.Resource ??
+            if (!builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerProjection))
+            {
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be projected as a container resource.");
+            }
+
+            target = containerProjection.Resource;
         }
         else if (resource is ProjectResource)
         {
