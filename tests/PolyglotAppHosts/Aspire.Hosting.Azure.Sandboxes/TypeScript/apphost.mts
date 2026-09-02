@@ -50,6 +50,7 @@ const api = await builder
     .addContainer("api", "mcr.microsoft.com/dotnet/runtime-deps:10.0")
     .withHttpEndpoint({ name: "http", targetPort: 8080 })
     .withExternalHttpEndpoints();
+await api.withReference(outlook);
 
 const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     tier: AzureSandboxTier.Large,

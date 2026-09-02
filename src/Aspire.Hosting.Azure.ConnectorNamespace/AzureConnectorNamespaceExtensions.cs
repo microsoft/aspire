@@ -296,6 +296,45 @@ public static class AzureConnectorNamespaceExtensions
     }
 
     /// <summary>
+    /// Adds a Connector Namespace connection reference to a destination resource.
+    /// </summary>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="connection">The Connector Namespace connection resource.</param>
+    /// <param name="connectionName">
+    /// The optional configuration prefix. The connection's Aspire resource name is used when omitted.
+    /// </param>
+    /// <returns>The destination resource builder.</returns>
+    /// <remarks>
+    /// The reference injects <c>{connectionName}__connectorGatewayName</c> and
+    /// <c>{connectionName}__connectionName</c> for the Azure Connector SDK.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<AzureConnectorNamespaceConnectionResource> connection,
+        string? connectionName = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(connection);
+        if (connectionName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(connectionName);
+        }
+
+        var configurationName = connectionName ?? connection.Resource.Name;
+        builder.WithEnvironment(
+            $"{configurationName}__connectorGatewayName",
+            connection.Resource.Parent.NameOutputReference);
+        builder.WithEnvironment(
+            $"{configurationName}__connectionName",
+            connection.Resource.ConnectionName);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Marks a Connector Namespace connection as an existing Azure resource.
     /// </summary>
     /// <param name="builder">The connection resource builder.</param>

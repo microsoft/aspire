@@ -4,8 +4,10 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIREAZURE004
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -14,6 +16,13 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureConnectorNamespaceTests
 {
+    private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
+        .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+        .Single(m => m.Name == nameof(ResourceBuilderExtensions.WithReference)
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is { Length: 5 } parameters
+            && parameters[1].ParameterType == typeof(IResourceBuilder<IResource>));
+
     [Fact]
     public void AddAzureConnectorNamespaceDoesNotEnableTargetedRoleAssignments()
     {
@@ -25,6 +34,91 @@ public class AzureConnectorNamespaceTests
         var options = app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
 
         Assert.False(options.Value.SupportsTargetedRoleAssignments);
+    }
+
+    [Fact]
+    public async Task WithReferenceAddsConnectorSdkConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection(
+                "outlook",
+                "office365",
+                new AzureConnectorNamespaceConnectionOptions { ConnectionName = "office365-outlook" });
+        var worker = builder.AddContainer("worker", "fake")
+            .WithReference(connection);
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            worker.Resource,
+            DistributedApplicationOperation.Publish,
+            TestServiceProvider.Instance);
+
+        Assert.Equal(2, environment.Count);
+        Assert.Equal("{gateway.outputs.name}", environment["outlook__connectorGatewayName"]);
+        Assert.Equal("office365-outlook", environment["outlook__connectionName"]);
+    }
+
+    [Fact]
+    public async Task PolyglotWithReferenceUsesConfigurationOverrideAndPhysicalExistingConnectionName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection(
+                "outlook",
+                "office365",
+                new AzureConnectorNamespaceConnectionOptions { ConnectionName = "existing-outlook" })
+            .AsExisting();
+        var worker = builder.AddContainer("worker", "fake");
+
+        InvokeWithReference(worker, connection, connectionName: "mail");
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            worker.Resource,
+            DistributedApplicationOperation.Publish,
+            TestServiceProvider.Instance);
+
+        Assert.Equal(2, environment.Count);
+        Assert.Equal("{gateway.outputs.name}", environment["mail__connectorGatewayName"]);
+        Assert.Equal("existing-outlook", environment["mail__connectionName"]);
+    }
+
+    [Theory]
+    [InlineData(true, null, "Optional references are not supported for Connector Namespace connections.")]
+    [InlineData(false, "mail", "Named service references are not supported for Connector Namespace connections.")]
+    public void PolyglotWithReferenceRejectsUnsupportedOptions(
+        bool optional,
+        string? name,
+        string expectedMessage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection("outlook", "office365");
+        var worker = builder.AddContainer("worker", "fake");
+
+        var exception = Assert.Throws<TargetInvocationException>(
+            () => InvokeWithReference(worker, connection, optional: optional, name: name));
+        var dispatchException = Assert.IsType<TargetInvocationException>(exception.InnerException);
+        var innerException = Assert.IsType<InvalidOperationException>(dispatchException.InnerException);
+
+        Assert.Equal(expectedMessage, innerException.Message);
+    }
+
+    [Fact]
+    public void WithReferenceRejectsEmptyConfigurationOverride()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection("outlook", "office365");
+        var worker = builder.AddContainer("worker", "fake");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => worker.WithReference(connection, string.Empty));
+
+        Assert.Equal("connectionName", exception.ParamName);
     }
 
     [Fact]
@@ -746,5 +840,18 @@ public class AzureConnectorNamespaceTests
         };
 
         Assert.Equal(identifiers.Length, identifiers.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    private static IResourceBuilder<TDestination> InvokeWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
+            .MakeGenericMethod(typeof(TDestination))
+            .Invoke(null, [builder, source, connectionName, optional, name])!;
     }
 }

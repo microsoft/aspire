@@ -10,7 +10,10 @@ namespace Aspire.Hosting.Azure;
 /// Represents a connection child resource in an Azure Connector Namespace.
 /// </summary>
 [AspireExport]
-public sealed class AzureConnectorNamespaceConnectionResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>
+public sealed class AzureConnectorNamespaceConnectionResource :
+    Resource,
+    IResourceWithParent<AzureConnectorNamespaceResource>,
+    IResourceWithCustomWithReference<AzureConnectorNamespaceConnectionResource>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureConnectorNamespaceConnectionResource"/> class.
@@ -50,6 +53,31 @@ public sealed class AzureConnectorNamespaceConnectionResource : Resource, IResou
 
     /// <inheritdoc/>
     public AzureConnectorNamespaceResource Parent { get; }
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<AzureConnectorNamespaceConnectionResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source is not IResourceBuilder<AzureConnectorNamespaceConnectionResource> connection)
+        {
+            return null;
+        }
+
+        if (optional)
+        {
+            throw new InvalidOperationException("Optional references are not supported for Connector Namespace connections.");
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Connector Namespace connections.");
+        }
+
+        return global::Aspire.Hosting.AzureConnectorNamespaceExtensions.WithReference(builder, connection, connectionName);
+    }
 
     internal string BicepIdentifier { get; }
 

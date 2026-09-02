@@ -42,6 +42,9 @@ var outlook = connectorNamespace.AddConnection(
         DisplayName = "Office 365 Outlook"
     });
 
+builder.AddProject<Projects.Worker>("worker")
+    .WithReference(outlook);
+
 connectorNamespace.AddMcpServerConfig("outlook-mcp")
     .WithConnector(
         "office365",
@@ -79,6 +82,12 @@ const outlook = await connectorNamespace.addConnection("outlook", "office365", {
     displayName: "Office 365 Outlook"
 });
 
+const worker = await builder.addContainer(
+    "worker",
+    "mcr.microsoft.com/dotnet/runtime-deps:10.0"
+);
+await worker.withReference(outlook);
+
 const outlookMcp = await connectorNamespace.addMcpServerConfig("outlook-mcp");
 await outlookMcp.withConnector("office365", outlook, {
     operations: [
@@ -94,6 +103,8 @@ await outlookMcp.withAccessPolicy("developer-access", {
     principalType: AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
 });
 ```
+
+Referencing `outlook` injects `outlook__connectorGatewayName` and `outlook__connectionName` into the workload for the Azure Connector SDK. Pass a connection-name override to `WithReference` when the consuming application uses a different configuration prefix.
 
 After deployment, open `https://connectors.azure.com/<subscription-id>/<resource-group>/<connector-namespace-name>/overview` and authorize connections that require user consent. Aspire does not automate or store OAuth credentials.
 

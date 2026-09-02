@@ -147,7 +147,8 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
         finally
         {
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
+            var (cleanupSucceeded, cleanupMessage) = await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, cleanupSucceeded, cleanupMessage);
         }
     }
 
@@ -277,7 +278,9 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
             $"--query properties.principal.identity.tenantId -o tsv | grep -i '^{tenantId:D}$'";
     }
 
-    private async Task CleanupResourceGroupAsync(string resourceGroupName, string subscriptionId)
+    private async Task<(bool Succeeded, string Message)> CleanupResourceGroupAsync(
+        string resourceGroupName,
+        string subscriptionId)
     {
         try
         {
@@ -286,7 +289,7 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "az",
-                    Arguments = $"group delete --subscription {subscriptionId} --name {resourceGroupName} --yes --no-wait",
+                    Arguments = $"group delete --subscription {subscriptionId} --name {resourceGroupName} --yes",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false
@@ -296,23 +299,62 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
             process.Start();
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                var terminated = false;
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    using var killTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    await process.WaitForExitAsync(killTimeout.Token);
+                    terminated = true;
+                }
+                catch (Exception ex)
+                {
+                    output.WriteLine($"Failed to terminate timed-out cleanup process: {ex.Message}");
+                }
+
+                try
+                {
+                    await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception ex)
+                {
+                    output.WriteLine($"Failed to drain timed-out cleanup process output: {ex.Message}");
+                }
+
+                var timeoutMessage = terminated
+                    ? "Resource group deletion timed out after 15 minutes; process tree terminated."
+                    : "Resource group deletion timed out after 15 minutes; process tree may still be running.";
+                output.WriteLine(timeoutMessage);
+                return (false, timeoutMessage);
+            }
+
             _ = await stdoutTask;
             var stderr = await stderrTask;
 
             if (process.ExitCode == 0)
             {
-                output.WriteLine($"Resource group deletion initiated: {resourceGroupName}");
+                var message = $"Resource group deleted: {resourceGroupName}";
+                output.WriteLine(message);
+                return (true, "Deleted");
             }
-            else
-            {
-                output.WriteLine(
-                    $"Resource group deletion may have failed (exit code {process.ExitCode}): {stderr.Trim()}");
-            }
+
+            var failureMessage = string.IsNullOrWhiteSpace(stderr)
+                ? $"Exit code {process.ExitCode}"
+                : $"Exit code {process.ExitCode}: {stderr.Trim()}";
+            output.WriteLine($"Resource group deletion may have failed ({failureMessage})");
+            return (false, failureMessage);
         }
         catch (Exception ex)
         {
             output.WriteLine($"Failed to cleanup resource group: {ex.Message}");
+            return (false, ex.Message);
         }
     }
 }
