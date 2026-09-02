@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
+using Azure.Provisioning.Authorization;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
@@ -34,6 +35,13 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
         Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties)
+        => AddConnection(builder, name, configureProperties, configureAdditionalInfrastructure: null);
+
+    private static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties,
+        Action<AzureResourceInfrastructure, CognitiveServicesProject>? configureAdditionalInfrastructure)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -68,6 +76,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 var keyVaultConn = aspireResource.Parent.KeyVaultConn.AddAsExistingResource(infrastructure);
                 connection.DependsOn.Add(keyVaultConn);
             }
+            configureAdditionalInfrastructure?.Invoke(infrastructure, project);
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Name });
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = connection.Id });
         }
@@ -214,21 +223,40 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(search);
 
-        return builder.AddConnection(name, (infra) =>
-        {
-            var searchService = (SearchService)search.AddAsExistingResource(infra);
-            return new AadAuthTypeConnectionProperties()
+        return builder.AddConnection(
+            name,
+            infra =>
             {
-                Category = CognitiveServicesConnectionCategory.CognitiveSearch,
-                Target = BicepFunction.Interpolate($"https://{searchService.Name}.search.windows.net"),
-                Metadata =
+                var searchService = (SearchService)search.AddAsExistingResource(infra);
+                return new AadAuthTypeConnectionProperties()
                 {
-                    { "ApiType", "Azure" },
-                    { "ResourceId", searchService.Id },
-                    { "location", searchService.Location }
-                }
-            };
-        });
+                    Category = CognitiveServicesConnectionCategory.CognitiveSearch,
+                    Target = BicepFunction.Interpolate($"https://{searchService.Name}.search.windows.net"),
+                    Metadata =
+                    {
+                        { "ApiType", "Azure" },
+                        { "ResourceId", searchService.Id },
+                        { "location", searchService.Location }
+                    }
+                };
+            },
+            (infra, project) =>
+            {
+                var searchService = (SearchService)search.AddAsExistingResource(infra);
+                var projectPrincipalId = builder.Resource.PrincipalId.AsProvisioningParameter(infra);
+                AddSearchRoleAssignment(
+                    infra,
+                    searchService,
+                    project,
+                    projectPrincipalId,
+                    SearchBuiltInRole.SearchIndexDataContributor);
+                AddSearchRoleAssignment(
+                    infra,
+                    searchService,
+                    project,
+                    projectPrincipalId,
+                    SearchBuiltInRole.SearchServiceContributor);
+            });
     }
 
     /// <summary>
@@ -239,10 +267,25 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureSearchResource> search)
     {
-        builder.WithRoleAssignments(search,
-            SearchBuiltInRole.SearchIndexDataReader,
-            SearchBuiltInRole.SearchServiceContributor);
         return builder.AddConnection(search.Resource);
+    }
+
+    private static void AddSearchRoleAssignment(
+        AzureResourceInfrastructure infrastructure,
+        SearchService searchService,
+        CognitiveServicesProject project,
+        BicepValue<Guid> projectPrincipalId,
+        SearchBuiltInRole role)
+    {
+        var roleAssignment = searchService.CreateRoleAssignment(
+            role,
+            RoleManagementPrincipalType.ServicePrincipal,
+            projectPrincipalId);
+        roleAssignment.Name = BicepFunction.CreateGuid(
+            searchService.Id,
+            project.Id,
+            roleAssignment.RoleDefinitionId);
+        infrastructure.Add(roleAssignment);
     }
 
     /// <summary>

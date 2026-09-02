@@ -6,7 +6,6 @@ using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Azure.Provisioning.Search;
 
 namespace Aspire.Hosting;
 
@@ -292,10 +291,6 @@ public static class FoundryToolboxBuilderExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
 
         var projectBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent);
-        projectBuilder.WithRoleAssignments(
-            search,
-            SearchBuiltInRole.SearchIndexDataReader,
-            SearchBuiltInRole.SearchServiceContributor);
         var connectionName = CreateSearchConnectionName(
             builder.Resource.Parent.Name,
             builder.Resource.Name,

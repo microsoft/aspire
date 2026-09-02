@@ -595,6 +595,25 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void WithAISearchTool_EmitsSearchRoleAssignmentsForProjectIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var toolbox = project.AddToolbox("field-tools")
+            .WithAISearchTool("knowledge-base", search, "docs");
+        var definition = Assert.IsType<FoundryToolboxAzureAISearchToolDefinition>(
+            Assert.Single(toolbox.Resource.Tools));
+
+        var bicep = definition.Connection.GetBicepTemplateString();
+
+        Assert.Contains("8ebe5a00-799e-43f5-93ac-243d3dce84a7", bicep, StringComparison.Ordinal);
+        Assert.Contains("7ca78c08-252a-4471-8644-bb5ff32d4ba0", bicep, StringComparison.Ordinal);
+        Assert.Contains("principalId", bicep, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WithAISearchTool_RejectsEmptyIndexName()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

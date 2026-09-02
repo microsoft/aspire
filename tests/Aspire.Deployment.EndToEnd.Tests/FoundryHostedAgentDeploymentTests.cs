@@ -30,6 +30,9 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     // Foundry deployments can take longer than standard ACA due to AI resource provisioning.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
+    // This scenario deploys twice; its two phase limits total 50 minutes before setup and inspection.
+    private static readonly TimeSpan s_toolboxTestTimeout = TimeSpan.FromMinutes(70);
+
     [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/16330")]
     public async Task DeployFoundryHostedAgentToAzure()
@@ -45,7 +48,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     [Fact]
     public async Task DeployFoundryToolboxToAzure()
     {
-        using var cts = new CancellationTokenSource(s_testTimeout);
+        using var cts = new CancellationTokenSource(s_toolboxTestTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
@@ -161,6 +164,11 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 credential,
                 cancellationToken);
             Assert.NotEmpty(discoveredTools);
+
+            // The first pipeline banner remains visible, so clear it before waiting for the redeploy.
+            await auto.TypeAsync("clear");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
