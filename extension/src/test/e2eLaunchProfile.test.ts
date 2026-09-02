@@ -572,6 +572,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
         assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(spec.includes('this.timeout(1_200_000);'));
         assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
         assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });

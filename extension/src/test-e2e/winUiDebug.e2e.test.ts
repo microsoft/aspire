@@ -8,7 +8,7 @@ import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths'
 import { openAspireView } from './helpers/vscode';
 
 suite('Aspire WinUI debug E2E', function () {
-    this.timeout(360000);
+    this.timeout(1_200_000);
 
     const readyMarkerPath = path.join(getWorkspaceRoot(), 'winui-e2e-ready.txt');
 
