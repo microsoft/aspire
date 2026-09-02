@@ -1479,7 +1479,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.True(result.Success);
             Assert.Null(server.SelectedProjectLayoutPath);
-            Assert.Equal(2, executionFactory.AttemptCount);
+            Assert.Equal(3, executionFactory.AttemptCount);
 
             var manifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
             Assert.StartsWith(
@@ -2139,6 +2139,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var noRestoreValues = new List<bool>();
         XDocument? generatedProject = null;
         XDocument? generatedRestoreConfig = null;
+        DirectoryInfo? nugetConfigDiscoveryDirectory = null;
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(aspireConfigPath, """
@@ -2177,7 +2178,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             },
-            GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [ambientConfigPath])
+            GetNuGetConfigPathsAsyncCallback = (workingDirectory, _, _) =>
+            {
+                nugetConfigDiscoveryDirectory = workingDirectory;
+                return (0, [ambientConfigPath]);
+            }
         };
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(
@@ -2216,6 +2221,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(secondResult.Success);
             Assert.Equal([false, false], noRestoreValues);
             Assert.NotNull(generatedProject);
+            Assert.Equal(workspace.WorkspaceRoot.FullName, nugetConfigDiscoveryDirectory?.FullName);
 
             var ns = generatedProject!.Root!.GetDefaultNamespace();
             var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
@@ -2246,6 +2252,62 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
         finally
         {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithPackageReferencesAndNoMappings_InvalidatesCacheWhenAmbientNuGetConfigChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var ambientConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(ambientConfigPath, """
+            <configuration>
+              <config>
+                <add key="signatureValidationMode" value="accept" />
+              </config>
+            </configuration>
+            """);
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.AsyncAttemptCallback = (_, _, _) =>
+        {
+            var args = executionFactory.LastArguments!;
+            return Task.FromResult(args is ["nuget", "config-paths", ..]
+                ? (0, (string?)System.Text.Json.JsonSerializer.Serialize(new[] { ambientConfigPath }))
+                : (0, (string?)null));
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+        try
+        {
+            var firstResult = await server.PrepareAsync(
+                "13.4.0",
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0")]);
+            var firstManifestPath = server.IntegrationProbeManifestPath;
+
+            await File.WriteAllTextAsync(ambientConfigPath, """
+                <configuration>
+                  <config>
+                    <add key="signatureValidationMode" value="require" />
+                  </config>
+                </configuration>
+                """);
+
+            var secondResult = await server.PrepareAsync(
+                "13.4.0",
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0")]);
+            var secondManifestPath = server.IntegrationProbeManifestPath;
+
+            Assert.True(firstResult.Success);
+            Assert.True(secondResult.Success);
+            Assert.NotNull(firstManifestPath);
+            Assert.NotNull(secondManifestPath);
+            Assert.NotEqual(firstManifestPath, secondManifestPath);
+        }
+        finally
+        {
+            server.Dispose();
             DeleteWorkingDirectory(workingDirectory);
         }
     }
