@@ -325,6 +325,55 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_CanonicalizesElementsConsumedByMerger()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configDirectory = workspace.CreateDirectory("repo");
+        var configPath = Path.Combine(configDirectory.FullName, "NuGet.Config");
+        const string channelSource = "https://packages.example.com/v3/index.json";
+        await File.WriteAllTextAsync(configPath, $$"""
+            <configuration>
+              <PackageSources>
+                <AdD key="channel" value="{{channelSource}}" />
+              </PackageSources>
+              <PackageSourceMapping>
+                <PackageSource key="channel">
+                  <Package pattern="Contoso.*" />
+                </PackageSource>
+              </PackageSourceMapping>
+              <Config>
+                <AdD key="globalPackagesFolder" value="./packages" />
+              </Config>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [configPath],
+            [new PackageMapping("Aspire*", channelSource)],
+            configureGlobalPackagesFolder: true,
+            globalPackagesFolderValue: Path.Combine(workspace.WorkspaceRoot.FullName, "unused"));
+
+        var configuration = XDocument.Load(config.ConfigFile.FullName).Root!;
+        Assert.Equal(
+            ["packageSources", "packageSourceMapping", "config"],
+            configuration.Elements().Select(element => element.Name.LocalName).ToArray());
+
+        var packageSources = Assert.Single(configuration.Elements("packageSources"));
+        Assert.Equal("channel", Assert.Single(packageSources.Elements("add")).Attribute("key")?.Value);
+
+        var packageSourceMapping = Assert.Single(configuration.Elements("packageSourceMapping"));
+        var sourceMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
+        Assert.Equal(
+            ["Contoso.*", "Aspire*"],
+            sourceMapping.Elements("package").Select(element => element.Attribute("pattern")!.Value).ToArray());
+
+        var globalPackagesFolder = Assert.Single(Assert.Single(configuration.Elements("config")).Elements("add"));
+        Assert.Equal(
+            Path.Combine(configDirectory.FullName, "packages"),
+            globalPackagesFolder.Attribute("value")?.Value);
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MergesSourceNamesCaseInsensitively()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

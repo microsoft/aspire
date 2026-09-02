@@ -232,28 +232,25 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingPlatformPathComparison()
+    public async Task CreateProjectFiles_ExplicitHostingProjectDoesNotAddRepositoryHostingProject()
     {
+        var repositoryHostingDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
+            Path.Combine("src", "Aspire.Hosting"));
+        var repositoryHostingProjectPath = Path.Combine(repositoryHostingDirectory.FullName, "Aspire.Hosting.csproj");
+        await File.WriteAllTextAsync(repositoryHostingProjectPath, "<Project />");
+        var customHostingProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Custom.Aspire.Hosting.csproj");
+        await File.WriteAllTextAsync(customHostingProjectPath, "<Project />");
+
         var project = CreateProject();
-        var firstProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Integration", "Integration.csproj");
-        var secondProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "integration", "Integration.csproj");
         var integrations = new[]
         {
-            IntegrationReference.FromProject("FirstIntegration", firstProjectPath),
-            IntegrationReference.FromProject("SecondIntegration", secondProjectPath)
+            IntegrationReference.FromProject("Aspire.Hosting", customHostingProjectPath)
         };
 
         var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
 
-        var document = XDocument.Load(projectPath);
-        var projectReferences = document.Descendants("ProjectReference")
-            .Select(element => element.Attribute("Include")?.Value)
-            .ToArray();
-        string[] expectedPaths = OperatingSystem.IsWindows()
-            ? [firstProjectPath]
-            : [firstProjectPath, secondProjectPath];
-
-        Assert.Equal(expectedPaths, projectReferences);
+        var projectReference = Assert.Single(XDocument.Load(projectPath).Descendants("ProjectReference"));
+        Assert.Equal(customHostingProjectPath, projectReference.Attribute("Include")?.Value);
     }
 
     [Fact]

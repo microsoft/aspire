@@ -8,6 +8,13 @@ namespace Aspire.Cli.Packaging;
 
 internal static class NuGetConfigComposer
 {
+    private static readonly Dictionary<string, string> s_mergerSectionNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["config"] = "config",
+        ["packageSourceMapping"] = "packageSourceMapping",
+        ["packageSources"] = "packageSources"
+    };
+
     private static readonly HashSet<string> s_knownItemNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "add",
@@ -71,12 +78,18 @@ internal static class NuGetConfigComposer
         // NuGet applies configuration files from lowest to highest precedence. A <clear /> removes
         // inherited items and keyed items replace the inherited item with the same key.
         // https://learn.microsoft.com/nuget/consume-packages/configuring-nuget-behavior#how-settings-are-applied
+        var shouldCanonicalizeSectionName = s_mergerSectionNames.TryGetValue(incomingSection.Name.LocalName, out var canonicalSectionName);
+        var sectionName = canonicalSectionName ?? incomingSection.Name.LocalName;
         var section = configuration.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, incomingSection.Name.LocalName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, sectionName, StringComparison.OrdinalIgnoreCase));
         if (section is null)
         {
-            section = new XElement(incomingSection.Name);
+            section = new XElement(incomingSection.Name.Namespace + sectionName);
             configuration.Add(section);
+        }
+        else if (shouldCanonicalizeSectionName)
+        {
+            section.Name = section.Name.Namespace + sectionName;
         }
 
         foreach (var attribute in incomingSection.Attributes())
@@ -100,22 +113,52 @@ internal static class NuGetConfigComposer
             }
 
             var item = new XElement(incomingItem);
+            CanonicalizeMergerItemNames(sectionName, item);
             ApplyEnvironmentTransforms(item);
-            ResolveRelativePaths(incomingSection.Name.LocalName, item, originDirectory);
+            ResolveRelativePaths(sectionName, item, originDirectory);
 
             var existingItem = section.Elements()
-                .FirstOrDefault(candidate => AreEquivalentItems(incomingSection.Name.LocalName, candidate, item));
+                .FirstOrDefault(candidate => AreEquivalentItems(sectionName, candidate, item));
             if (existingItem is null)
             {
                 section.Add(item);
             }
-            else if (IsUnknownItem(incomingSection.Name.LocalName, item))
+            else if (IsUnknownItem(sectionName, item))
             {
                 MergeUnknownItem(existingItem, item);
             }
             else
             {
                 existingItem.ReplaceWith(item);
+            }
+        }
+    }
+
+    private static void CanonicalizeMergerItemNames(string sectionName, XElement item)
+    {
+        if (string.Equals(sectionName, "config", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sectionName, "packageSources", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(item.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Name = item.Name.Namespace + "add";
+            }
+
+            return;
+        }
+
+        if (!string.Equals(sectionName, "packageSourceMapping", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (string.Equals(item.Name.LocalName, "packageSource", StringComparison.OrdinalIgnoreCase))
+        {
+            item.Name = item.Name.Namespace + "packageSource";
+            foreach (var package in item.Elements().Where(element =>
+                string.Equals(element.Name.LocalName, "package", StringComparison.OrdinalIgnoreCase)))
+            {
+                package.Name = package.Name.Namespace + "package";
             }
         }
     }
