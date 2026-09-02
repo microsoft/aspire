@@ -32,7 +32,9 @@ Outside the post-review escalation path, the user's primary requested action mus
 
 `code-review` covers generic bugs, security, perf, concurrency, and error handling and is sufficient for ordinary PR reviews. This skill covers only checks requiring Aspire domain knowledge. Some topic areas (Security, Performance, Error Handling) exist in both, but the checks are disjoint: generic patterns belong to `code-review`, Aspire-specific patterns belong here.
 
-For an ordinary review, always complete `code-review` before considering this skill. Do not front-load the architectural review or use it to decide what the generic reviewer should inspect. After the generic findings are complete, escalate when correctness depends on a named Aspire-domain contract that the generic review cannot resolve from its own rules and evidence.
+When the user explicitly requests a deep architectural or pattern review, invoke this skill directly; a preliminary `code-review` pass is not required.
+
+For an ordinary review, always complete `code-review` before considering an organic escalation to this skill. Do not front-load the architectural review or use it to decide what the generic reviewer should inspect. After the generic findings are complete, escalate when correctness depends on a named Aspire-domain contract that the generic review cannot resolve from its own rules and evidence.
 
 If `code-review` can already state a concrete, high-confidence defect, report it directly rather than escalating it. If escalation is justified, preserve the completed generic findings, run one focused architectural analysis, and merge only its net-new high-confidence findings. Do not rerun `code-review` afterward.
 
