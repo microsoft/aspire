@@ -1058,6 +1058,28 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NextJsAppWithExistingDockerfileThrowsWhenRunScriptOverridesDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
+        Directory.CreateDirectory(nextDir);
+        File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
+        File.WriteAllText(Path.Combine(nextDir, "Dockerfile"), "FROM scratch");
+
+        var nextJs = builder.AddNextJsApp("nextjs", nextDir)
+            .WithRunScript("migrate");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ManifestUtils.GetManifest(nextJs.Resource, workspace.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
     public void DisableBuildValidationAddsSuppressAnnotation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

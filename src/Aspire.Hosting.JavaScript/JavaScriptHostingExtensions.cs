@@ -2280,9 +2280,8 @@ public static partial class JavaScriptHostingExtensions
                 .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
                 .ClearContainerFilesSources()
                 .WithEnvironment("HOSTNAME", "0.0.0.0");
-
             MarkDockerfileAsExecutable(resourceBuilder);
-            resourceBuilder.PublishAsDockerFile();
+            MarkDockerfileAsExecutable(resourceBuilder);
         }
 
         return resourceBuilder;
