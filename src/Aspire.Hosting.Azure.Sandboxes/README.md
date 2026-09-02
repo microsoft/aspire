@@ -37,8 +37,7 @@ builder.AddProject<Projects.WebFrontend>("frontend")
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
 
 ```csharp
-builder.AddProject<Projects.ApiService>("api")
-    .PublishAsAzureSandbox(new AzureSandboxOptions
+api.PublishAsAzureSandbox(new AzureSandboxOptions
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
