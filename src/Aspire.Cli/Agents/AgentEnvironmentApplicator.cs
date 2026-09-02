@@ -22,14 +22,57 @@ internal sealed class AgentEnvironmentApplicator
         Func<CancellationToken, Task> applyCallback,
         McpInitPromptGroup? promptGroup = null,
         int priority = 0)
+        : this(
+            description,
+            applyCallback,
+            promptGroup,
+            priority,
+            asset: null,
+            targetId: null)
+    {
+    }
+
+    private AgentEnvironmentApplicator(
+        string description,
+        Func<CancellationToken, Task> applyCallback,
+        McpInitPromptGroup? promptGroup,
+        int priority,
+        AgentActionAssetDefinition? asset,
+        string? targetId)
     {
         ArgumentNullException.ThrowIfNull(description);
         ArgumentNullException.ThrowIfNull(applyCallback);
+        if (asset is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
+        }
 
         Description = description;
         _applyCallback = applyCallback;
         PromptGroup = promptGroup ?? McpInitPromptGroup.AgentEnvironments;
         Priority = priority;
+        Asset = asset;
+        TargetId = targetId;
+    }
+
+    /// <summary>
+    /// Creates an applicator for an action-backed agent asset at a detected target.
+    /// </summary>
+    public static AgentEnvironmentApplicator ForAsset(
+        AgentActionAssetDefinition asset,
+        string targetId,
+        string description,
+        Func<CancellationToken, Task> applyCallback)
+    {
+        ArgumentNullException.ThrowIfNull(asset);
+
+        return new(
+            description,
+            applyCallback,
+            promptGroup: McpInitPromptGroup.AgentEnvironments,
+            priority: 0,
+            asset: asset,
+            targetId: targetId);
     }
 
     /// <summary>
@@ -46,6 +89,21 @@ internal sealed class AgentEnvironmentApplicator
     /// Gets the priority within the prompt group for ordering (lower numbers first).
     /// </summary>
     public int Priority { get; }
+
+    /// <summary>
+    /// Gets the action-backed agent asset that owns this applicator, if any.
+    /// </summary>
+    public AgentActionAssetDefinition? Asset { get; }
+
+    /// <summary>
+    /// Gets the agent asset kind that owns this applicator, if any.
+    /// </summary>
+    public AgentAssetKind? AssetKind => Asset?.AssetKind;
+
+    /// <summary>
+    /// Gets the stable identifier for the action target, if any.
+    /// </summary>
+    public string? TargetId { get; }
 
     /// <summary>
     /// Applies the configuration changes to enable the agent environment.

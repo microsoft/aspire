@@ -9,6 +9,7 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
+    private readonly HashSet<string> _applicatorTargets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<AgentClientKind> _detectedClients = [];
 
@@ -37,6 +38,14 @@ internal sealed class AgentEnvironmentScanContext
     public void AddApplicator(AgentEnvironmentApplicator applicator)
     {
         ArgumentNullException.ThrowIfNull(applicator);
+
+        if (applicator.Asset is { } asset &&
+            applicator.TargetId is { } targetId &&
+            !_applicatorTargets.Add($"{asset.AssetKind}:{asset.Name}:{targetId}"))
+        {
+            return;
+        }
+
         _applicators.Add(applicator);
     }
 

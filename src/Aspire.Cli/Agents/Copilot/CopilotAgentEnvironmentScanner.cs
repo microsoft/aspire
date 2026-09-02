@@ -147,7 +147,9 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
     private static AgentEnvironmentApplicator CreateApplicator(string configDirectory)
     {
-        return new AgentEnvironmentApplicator(
+        return AgentEnvironmentApplicator.ForAsset(
+            AgentAssetCatalog.AspireMcpServer,
+            GetMcpConfigFilePath(configDirectory),
             CopilotAgentEnvironmentScannerStrings.ApplicatorDescription,
             ct => ApplyMcpConfigurationAsync(
                 configDirectory,

@@ -56,6 +56,11 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // @playwright/cli acquisition, not the Aspire skills bundle.
         await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("MCP servers should be installed"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "MCP server selection prompt");
+        await auto.EnterAsync(); // Keep the optional MCP asset unselected.
 
         // Wait for installation to complete (this downloads from npm, can take a while)
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
@@ -112,6 +117,11 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // are deterministic and do not depend on Aspire default skills.
         await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("MCP servers should be installed"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "MCP server selection prompt");
+        await auto.EnterAsync(); // Keep the optional MCP asset unselected.
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);

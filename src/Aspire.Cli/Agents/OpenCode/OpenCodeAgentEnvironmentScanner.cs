@@ -171,7 +171,9 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// </summary>
     private static AgentEnvironmentApplicator CreateApplicator(DirectoryInfo configDirectory)
     {
-        return new AgentEnvironmentApplicator(
+        return AgentEnvironmentApplicator.ForAsset(
+            AgentAssetCatalog.AspireMcpServer,
+            $"opencode:{configDirectory.FullName}",
             OpenCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
             async cancellationToken => await ApplyMcpConfigurationAsync(
                 configDirectory,

@@ -164,9 +164,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Tests that aspire agent init with a .vscode folder shows skill location and skill selection
-    /// prompts, and that accepting the defaults completes successfully and creates the default
-    /// skill files in the .agents/skills/ directory.
+    /// Tests that aspire agent init with a .vscode folder shows separate Skill and MCP selections,
+    /// installs the default skills, and configures the selected Aspire MCP server for VS Code.
     /// </summary>
     [Fact]
     public async Task AgentInitCommand_DefaultSelection_InstallsDefaultSkills()
@@ -208,6 +207,11 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Playwright and dotnet-inspect are not pre-selected, so just accept
         // the default Aspire skills from the installed CLI's embedded bundle.
         await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("MCP servers should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "MCP server selection prompt");
+        await auto.TypeAsync(" "); // Select the single, non-default Aspire MCP server choice.
+        await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -218,6 +222,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
         Assert.Contains("name: aspire-deployment", deploymentFileContent);
+        var mcpConfigFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode", "mcp.json");
+        Assert.Contains("\"aspire\"", File.ReadAllText(mcpConfigFilePath));
     }
 
     /// <summary>

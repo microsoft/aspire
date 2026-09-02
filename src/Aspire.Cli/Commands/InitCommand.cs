@@ -107,6 +107,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(NewCommand.s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_mcpsOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -161,6 +162,7 @@ internal sealed class InitCommand : BaseCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        var mcpsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_mcpsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill).
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
@@ -170,14 +172,17 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
+            mcpsBinding,
             null,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+            agentInitResult.GetAssets(AgentAssetKind.Skill).Any(static asset => asset.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
+            var commands = GetAspireifyCommands(
+                agentInitResult.DetectedClients,
+                agentInitResult.GetLocations(AgentAssetKind.Skill));
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -215,21 +220,42 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(
+        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyList<AgentAssetLocation> selectedLocations)
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        if (IsLocationSelectedForClient(
+            AgentClientKind.ClaudeCode,
+            AgentAssetLocation.ClaudeCode,
+            detectedClients,
+            selectedLocations))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        if (IsLocationSelectedForClient(
+            AgentClientKind.OpenCode,
+            AgentAssetLocation.OpenCode,
+            detectedClients,
+            selectedLocations))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
 
         return commands;
+    }
+
+    private static bool IsLocationSelectedForClient(
+        AgentClientKind client,
+        AgentAssetLocation clientSpecificLocation,
+        IReadOnlyCollection<AgentClientKind> detectedClients,
+        IReadOnlyList<AgentAssetLocation> selectedLocations)
+    {
+        return selectedLocations.Contains(clientSpecificLocation) ||
+            (detectedClients.Contains(client) &&
+                selectedLocations.Any(location => location.DefaultForClients.Contains(client)));
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)

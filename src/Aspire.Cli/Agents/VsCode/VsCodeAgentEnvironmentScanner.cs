@@ -227,7 +227,9 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// </summary>
     private static AgentEnvironmentApplicator CreateAspireApplicator(DirectoryInfo vsCodeFolder)
     {
-        return new AgentEnvironmentApplicator(
+        return AgentEnvironmentApplicator.ForAsset(
+            AgentAssetCatalog.AspireMcpServer,
+            $"vscode:{vsCodeFolder.FullName}",
             VsCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
             async cancellationToken => await ApplyAspireMcpConfigurationAsync(vsCodeFolder, cancellationToken));
     }

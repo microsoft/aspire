@@ -322,7 +322,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithChannelOptionUsesSpecifiedChannel()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         string? channelNameUsed = null;
         bool promptedForVersion = false;
 
@@ -332,13 +332,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 var prompter = new TestNewCommandPrompter(interactionService);
-                
+
                 prompter.PromptForTemplatesVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
                     throw new InvalidOperationException("Should not prompt for version when --channel is specified");
                 };
-                
+
                 return prompter;
             };
 
@@ -354,7 +354,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
-                    
+
                     var dailyCache = new FakeNuGetPackageCache();
                     dailyCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
                     {
@@ -362,13 +362,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0-dev" };
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
-                    
+
                     var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
                     var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
-                    
+
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
-                
+
                 return packagingService;
             };
 
@@ -392,7 +392,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
+
         // Assert
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("stable", channelNameUsed); // Verify the stable channel was used
@@ -403,7 +403,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithChannelOptionAutoSelectsHighestVersion()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         string? selectedVersion = null;
         bool promptedForVersion = false;
 
@@ -413,13 +413,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 var prompter = new TestNewCommandPrompter(interactionService);
-                
+
                 prompter.PromptForTemplatesVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
                     throw new InvalidOperationException("Should not prompt for version when --channel is specified");
                 };
-                
+
                 return prompter;
             };
 
@@ -440,14 +440,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         };
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
-                    
+
                     var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
-                
+
                 return packagingService;
             };
-            
+
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
@@ -469,7 +469,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
+
         // Assert
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("9.2.0", selectedVersion); // Should auto-select highest version (9.2.0)
@@ -2322,6 +2322,47 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandNonInteractive_WithMcpsAspire_AppliesDetectedMcpActions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var applyCount = 0;
+        var detector = new FakeAgentEnvironmentDetector(AgentClientKind.VsCode)
+        {
+            Applicators =
+            [
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetCatalog.AspireMcpServer,
+                    "vscode",
+                    "VS Code MCP",
+                    _ =>
+                    {
+                        applyCount++;
+                        return Task.CompletedTask;
+                    })
+            ]
+        };
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+            options.AgentEnvironmentDetectorFactory = _ => detector;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse(
+            "new aspire-empty --name TestApp --output ./output --skill-locations none --skills none --mcps aspire");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, applyCount);
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
@@ -2441,6 +2482,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
                 return runner;
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3256,6 +3298,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3284,6 +3327,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 

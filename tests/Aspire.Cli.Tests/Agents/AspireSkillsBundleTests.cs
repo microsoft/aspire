@@ -17,15 +17,6 @@ public class AspireSkillsBundleTests
 
     private static readonly AspireSkillsBundleProvider s_bundleProvider = new();
 
-    private static SkillDefinition AspireSkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
-        CommonAgentApplicators.AspireSkillName,
-        AspireSkillDescription,
-        installExcludedRelativePaths: ["evals"]);
-
-    private static SkillDefinition AspireifySkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
-        CommonAgentApplicators.AspireifySkillName,
-        AspireifySkillDescription);
-
     [Fact]
     public async Task LoadAsync_ValidatesManifestAndReturnsInstallableFiles()
     {
@@ -41,7 +32,8 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
-            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
+            var skill = Assert.Single(bundle.GetAssetDefinitions());
+            var files = await bundle.GetAssetFilesAsync(skill, CancellationToken.None);
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
             Assert.Contains(files, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
@@ -69,7 +61,8 @@ public class AspireSkillsBundleTests
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
             Directory.Delete(bundleDirectory, recursive: true);
 
-            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
+            var skill = Assert.Single(bundle.GetAssetDefinitions());
+            var files = await bundle.GetAssetFilesAsync(skill, CancellationToken.None);
 
             Assert.Collection(
                 files,
@@ -86,7 +79,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task GetSkillDefinitions_ReturnsManifestSkills()
+    public async Task GetAssetDefinitions_ReturnsManifestSkills()
     {
         var bundleDirectory = CreateTempDirectory();
 
@@ -99,12 +92,12 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
-            var skill = Assert.Single(bundle.GetSkillDefinitions());
+            var skill = Assert.Single(bundle.GetAssetDefinitions());
 
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
             Assert.Equal(AspireSkillDescription, skill.Description);
             Assert.True(skill.IsDefault);
-            Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
+            Assert.Equal(AgentFileAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
             Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
             Assert.Empty(skill.ApplicableLanguages);
         }
@@ -170,7 +163,7 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
-            var skill = Assert.Single(bundle.GetSkillDefinitions());
+            var skill = Assert.Single(bundle.GetAssetDefinitions());
 
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
         }
@@ -630,7 +623,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task GetSkillFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
+    public async Task GetAssetFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
     {
         var bundleDirectory = CreateTempDirectory();
         var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireifySkillName);
@@ -663,7 +656,8 @@ public class AspireSkillsBundleTests
             await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
-            var files = await bundle.GetSkillFilesAsync(AspireifySkillDefinition, CancellationToken.None);
+            var skill = Assert.Single(bundle.GetAssetDefinitions());
+            var files = await bundle.GetAssetFilesAsync(skill, CancellationToken.None);
 
             var skillFile = Assert.Single(files);
             Assert.Equal("SKILL.md", skillFile.RelativePath);
