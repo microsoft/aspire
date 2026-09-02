@@ -44,6 +44,24 @@ public class FoundryToolboxReconcilerTests
     }
 
     [Fact]
+    public async Task ReconcileAsync_RejectsMissingConsumerVersionAfterReconciliation()
+    {
+        var definition = await CreateDefinitionAsync();
+        var administration = new RecordingToolboxAdministration
+        {
+            Existing = CreateExistingState(definition, "3")
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new FoundryToolboxReconciler(administration)
+                .ReconcileAsync(definition, "2", CancellationToken.None));
+
+        Assert.Contains("does not contain version '2'", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(administration.CreatedDefinitions);
+        Assert.Empty(administration.Promotions);
+    }
+
+    [Fact]
     public async Task ReconcileAsync_RejectsDefaultChangedBeforeReportingReuse()
     {
         var definition = await CreateDefinitionAsync();

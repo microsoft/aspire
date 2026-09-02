@@ -304,6 +304,21 @@ internal sealed class FoundryToolboxReconciler(IFoundryToolboxAdministration adm
 {
     public async Task<FoundryToolboxReconcileResult> ReconcileAsync(
         FoundryToolboxDeploymentDefinition definition,
+        string? consumerVersion,
+        CancellationToken cancellationToken)
+    {
+        var result = await ReconcileAsync(definition, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(consumerVersion))
+        {
+            await new FoundryToolboxExistingResourceValidator(administration)
+                .ValidateAsync(definition.Name, consumerVersion, cancellationToken).ConfigureAwait(false);
+        }
+
+        return result;
+    }
+
+    public async Task<FoundryToolboxReconcileResult> ReconcileAsync(
+        FoundryToolboxDeploymentDefinition definition,
         CancellationToken cancellationToken)
     {
         var existing = await administration.GetAsync(definition.Name, cancellationToken).ConfigureAwait(false);

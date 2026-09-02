@@ -253,7 +253,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
 
         var definition = await CreateDeploymentDefinitionAsync(cancellationToken).ConfigureAwait(false);
         var result = await new FoundryToolboxReconciler(administration)
-            .ReconcileAsync(definition, cancellationToken).ConfigureAwait(false);
+            .ReconcileAsync(definition, Version, cancellationToken).ConfigureAwait(false);
         DeployedVersion.Set(result.Version);
 
         return result;
