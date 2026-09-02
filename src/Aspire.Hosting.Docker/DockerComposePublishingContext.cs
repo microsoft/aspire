@@ -74,15 +74,9 @@ internal sealed class DockerComposePublishingContext(
         var composeFile = new ComposeFile();
         composeFile.AddNetwork(defaultNetwork);
 
-        var effectiveComputeResources = model.GetComputeResources()
-            .ToDictionary(resource => resource.Name, StringComparer.OrdinalIgnoreCase);
-        var modelResources = model.Resources.Select(resource =>
-            effectiveComputeResources.TryGetValue(resource.Name, out var effectiveResource)
-                ? effectiveResource
-                : resource);
         IEnumerable<IResource> resources = environment.Dashboard?.Resource is IResource r
-                ? [r, .. modelResources]
-                : modelResources;
+                ? [r, .. model.Resources]
+                : model.Resources;
 
         foreach (var resource in resources)
         {
