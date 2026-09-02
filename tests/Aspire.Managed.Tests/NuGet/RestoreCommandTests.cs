@@ -113,6 +113,17 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
     }
 
+    [Fact]
+    public void ConfigPathsCommand_DiscoversWorkspaceNuGetConfig()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");
+        File.WriteAllText(nugetConfigPath, "<configuration />");
+
+        var configPaths = ConfigPathsCommand.GetConfigFilePaths(_workspace.Path);
+
+        Assert.Contains(nugetConfigPath, configPaths, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Converts a file path to its JSON-escaped representation (e.g. backslashes doubled).
     /// </summary>
