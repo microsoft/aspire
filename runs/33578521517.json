@@ -1,0 +1,95 @@
+{
+  "run_id": 33578521517,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33578521517",
+  "analyzed_at": "2026-09-02T01:58:54Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19670,
+    "title": "Warn when VS Code uses an outdated Aspire CLI",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-warn-outdated-aspire-cli",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19670"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.GitHub.Models / Hosting.GitHub.Models (windows-latest)",
+      "id": 100091051302,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33578521517/job/100091051302",
+      "classification": "transient-infra",
+      "reason": "Process completed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) in post-test cleanup/upload steps (hang dump check, upload logs/results, CLI E2E recordings, summary generation) on windows-latest runner. Known transient Windows runner process-initialization failure unrelated to PR content (PR only touches VS Code extension TypeScript files).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 100091052889,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33578521517/job/100091052889",
+      "classification": "flaky-test",
+      "reason": "AzureSqlPrincipalReconciliationTests fail because SqlServerContainerFixture cannot bind Docker port 1433 (address already in use) on a shared CI runner. This is an environmental Docker networking conflict, not related to the PR's VS Code extension changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) ... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Docker port 1433 conflict on shared runner; SqlServerContainerFixture is not touched by this PR which only modifies VS Code extension files."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationHandlesPrincipalNamesRequiringEscaping",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationIsANoOpWhenTheScriptRunsAgain",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationLeavesPrincipalsItDidNotCreateIntact",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationRollsBackWhenTheUserCannotBeRecreated",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint peaceful_gagarin: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync... at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port 1433 conflict as other tests in this fixture; unrelated to PR changes."
+    }
+  ],
+  "causes": ["windows-process-init-failure-0xc0000142", "sqlserver-container-fixture-port-in-use"]
+}

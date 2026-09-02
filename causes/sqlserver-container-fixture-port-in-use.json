@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: AzureSqlPrincipalReconciliationTests fail because SqlServerContainerFixture cannot bind port 1433 (address already in use)",
   "test_name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests",
-  "error_pattern": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint testcontainers-ryuk-...: failed to bind host port for 0.0.0.0::172.17.0.2:8080/tcp: address already in use\"}",
+  "error_pattern": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connect",
   "occurrences": [
     {
       "run_id": 31019606526,
@@ -25,6 +25,13 @@
       "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
       "pr_number": 19238,
       "observed_at": "2026-08-20T19:25:00Z"
+    },
+    {
+      "run_id": 33578521517,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33578521517",
+      "job": "Tests / Hosting.GitHub.Models / Hosting.GitHub.Models (windows-latest)",
+      "pr_number": 19670,
+      "observed_at": "2026-09-02T01:58:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19014"
