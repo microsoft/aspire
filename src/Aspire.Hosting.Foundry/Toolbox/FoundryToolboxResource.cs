@@ -173,7 +173,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
     /// Gets the Toolbox MCP endpoint URI expression.
     /// </summary>
     public ReferenceExpression UriExpression => Version is { Length: > 0 } version
-        ? ReferenceExpression.Create($"{Parent.Endpoint}/toolboxes/{Name}/versions/{version}/mcp?api-version={ApiVersion}")
+        ? GetVersionUriExpression(version)
         : ReferenceExpression.Create($"{Parent.Endpoint}/toolboxes/{Name}/mcp?api-version={ApiVersion}");
 
     /// <summary>
@@ -357,7 +357,10 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
             {
                 State = new("Waiting for Toolbox tools", KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
-            await WaitForToolDiscoveryAsync(context, cancellationToken).ConfigureAwait(false);
+            await WaitForToolDiscoveryAsync(
+                context,
+                result.Version,
+                cancellationToken).ConfigureAwait(false);
 
             if (IsExisting)
             {
@@ -408,9 +411,11 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
 
     private async Task WaitForToolDiscoveryAsync(
         PipelineStepContext context,
+        string reconciledVersion,
         CancellationToken cancellationToken)
     {
-        var endpointValue = await UriExpression.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var endpointValue = await GetVersionUriExpression(reconciledVersion)
+            .GetValueAsync(cancellationToken).ConfigureAwait(false);
         if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme != Uri.UriSchemeHttps)
         {
@@ -433,6 +438,10 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
             requiredToolNames,
             cancellationToken).ConfigureAwait(false);
     }
+
+    internal ReferenceExpression GetVersionUriExpression(string version) =>
+        ReferenceExpression.Create(
+            $"{Parent.Endpoint}/toolboxes/{Name}/versions/{version}/mcp?api-version={ApiVersion}");
 
     private async Task WaitForProjectAndToolsAsync(
         ResourceNotificationService notificationService,

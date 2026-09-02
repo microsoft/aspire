@@ -209,6 +209,25 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void GetVersionUriExpression_UsesReconciledVersionInsteadOfConsumerPin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var toolbox = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .AddToolbox("field-tools", options => options.Version = "7");
+
+        var expression = toolbox.Resource.GetVersionUriExpression("9");
+
+        Assert.Equal(
+            "{my-project.outputs.endpoint}/toolboxes/field-tools/versions/9/mcp?api-version=v1",
+            expression.ValueExpression);
+        Assert.Contains(
+            "/versions/7/",
+            toolbox.Resource.UriExpression.ValueExpression,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AsHostedAgent_ResolvesToolboxConnectionString()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
