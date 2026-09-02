@@ -52,7 +52,7 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
-    public void DenoIsInstalledOnlyForLaunchProfileShards()
+    public void DenoIsInstalledOnlyForDenoE2eShards()
     {
         var job = LoadExtensionE2eJob();
         var rows = MatrixIncludeRows(job).ToList();
@@ -60,9 +60,17 @@ public sealed class ExtensionE2eWorkflowTests
             .Where(row => Scalar(row, "installDeno") == "true")
             .ToList();
 
-        Assert.Equal(2, denoRows.Count);
-        Assert.All(denoRows, row => Assert.Equal("launch-profiles", Scalar(row, "shardName")));
-        Assert.Equal(["Linux", "Windows"], denoRows.Select(row => Scalar(row, "name")!).Order().ToArray());
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Linux" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Windows" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.All(denoRows, row =>
+        {
+            var name = Scalar(row, "name");
+            var shardName = Scalar(row, "shardName");
+            Assert.True(
+                (shardName == "launch-profiles" && name is "Linux" or "Windows") ||
+                (shardName == "deno-debugger" && name == "Linux"),
+                $"Deno should not be installed for the {name}/{shardName} shard.");
+        });
 
         var installDenoStep = Assert.Single(
             ExtensionE2eWorkflow.Steps(job),
