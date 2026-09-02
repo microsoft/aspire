@@ -860,6 +860,27 @@ public class ToolboxTests
         Assert.Equal(dependenciesBefore, toolboxDeploy.DependsOnSteps);
     }
 
+    [Fact]
+    public async Task WaitForMcpResourceAsync_ThrowsWhenDependencyFailsToStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var mcp = builder.AddContainer("mcp", "ghcr.io/example/mcp");
+        using var app = builder.Build();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notifications.PublishUpdateAsync(mcp.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.FailedToStart
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => FoundryToolboxResource.WaitForMcpResourceAsync(
+                notifications,
+                mcp.Resource,
+                CancellationToken.None));
+
+        Assert.Contains("terminal state 'FailedToStart'", exception.Message, StringComparison.Ordinal);
+    }
+
     private static PipelineContext CreatePipelineContext(DistributedApplication app, DistributedApplicationOperation operation)
     {
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

@@ -464,12 +464,28 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
 
         var mcpResourceWaits = GetMcpReferencedResources(model)
             .Where(resource => resource is IComputeResource and IResourceWithWaitSupport)
-            .Select(resource => notificationService.WaitForResourceAsync(
-                resource.Name,
-                KnownResourceStates.Running,
+            .Select(resource => WaitForMcpResourceAsync(
+                notificationService,
+                resource,
                 cancellationToken));
 
         await Task.WhenAll(connectionProvisioningTasks.Concat(mcpResourceWaits)).ConfigureAwait(false);
+    }
+
+    internal static async Task WaitForMcpResourceAsync(
+        ResourceNotificationService notificationService,
+        IResource resource,
+        CancellationToken cancellationToken)
+    {
+        var state = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            [KnownResourceStates.Running, .. KnownResourceStates.TerminalStates],
+            cancellationToken).ConfigureAwait(false);
+        if (!StringComparers.ResourceState.Equals(state, KnownResourceStates.Running))
+        {
+            throw new InvalidOperationException(
+                $"MCP dependency '{resource.Name}' entered terminal state '{state}' before it became ready.");
+        }
     }
 
     private IEnumerable<IResource> GetMcpReferencedResources(DistributedApplicationModel model)
