@@ -83,8 +83,8 @@ ignore:
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
   - eng/scripts/cli-starter-validation.ps1              # exercised by unconditional cross-platform CLI starter PR jobs
-  - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
-  - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
+  - eng/scripts/update-aspire-skills-bundles.ps1        # schedule/dispatch-only bundle updater
+  - eng/scripts/verify-aspire-skills-bundles.ps1        # exercised by its dedicated PR workflow
   # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
@@ -296,7 +296,7 @@ path_rules:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
   - paths:
-      - eng/scripts/aspire-skills-bundle.common.ps1
+      - eng/scripts/aspire-skills-bundles.common.ps1
       - eng/test-retry-patterns.json
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests validates the shared Aspire skills bundle helpers and transient retry-pattern configuration

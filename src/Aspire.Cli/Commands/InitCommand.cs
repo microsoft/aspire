@@ -108,6 +108,8 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
         Options.Add(AgentInitCommand.s_mcpsOption);
+        Options.Add(AgentInitCommand.s_extensionLocationsOption);
+        Options.Add(AgentInitCommand.s_extensionsOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -163,6 +165,8 @@ internal sealed class InitCommand : BaseCommand
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         var mcpsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_mcpsOption);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill).
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
@@ -173,6 +177,8 @@ internal sealed class InitCommand : BaseCommand
             skillLocationsBinding,
             skillsBinding,
             mcpsBinding,
+            extensionLocationsBinding,
+            extensionsBinding,
             null,
             cancellationToken);
 

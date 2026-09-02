@@ -93,7 +93,10 @@ internal sealed class AgentAssetFile
         }
     }
 
-    private static string DecodeText(ReadOnlySpan<byte> content)
+    /// <summary>
+    /// Decodes strict UTF-8 content, discarding a leading byte order mark when present.
+    /// </summary>
+    internal static string DecodeText(ReadOnlySpan<byte> content)
     {
         var text = s_strictUtf8.GetString(content);
         return text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;

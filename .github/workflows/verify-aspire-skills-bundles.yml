@@ -1,4 +1,4 @@
-name: Verify Aspire Skills Bundle
+name: Verify Aspire Skills Bundles
 
 on:
   workflow_dispatch:
@@ -7,9 +7,9 @@ on:
       - 'src/Aspire.Cli/Agents/AspireSkills/Embedded/**'
       - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh'
       - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
-      - 'eng/scripts/verify-aspire-skills-bundle.ps1'
-      - 'eng/scripts/aspire-skills-bundle.common.ps1'
-      - '.github/workflows/verify-aspire-skills-bundle.yml'
+      - 'eng/scripts/verify-aspire-skills-bundles.ps1'
+      - 'eng/scripts/aspire-skills-bundles.common.ps1'
+      - '.github/workflows/verify-aspire-skills-bundles.yml'
 
 permissions:
   contents: read
@@ -22,8 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Verify embedded Aspire skills bundle attestation
+      - name: Verify embedded Aspire Skills bundle attestations
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./eng/scripts/verify-aspire-skills-bundle.ps1
+        run: ./eng/scripts/verify-aspire-skills-bundles.ps1

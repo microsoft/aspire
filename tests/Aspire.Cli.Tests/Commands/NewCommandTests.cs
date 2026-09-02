@@ -3317,6 +3317,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandNonInteractive_ExplicitExtensionOptionsInstallProjectExtension()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse(
+            "new aspire-empty --name TestApp --output ./output " +
+            "--skill-locations none --skills none " +
+            "--extension-locations project --extensions aspire-doctor");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var extensionPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "output",
+            ".github",
+            "extensions",
+            "aspire-doctor",
+            "extension.mjs");
+        Assert.True(File.Exists(extensionPath), $"Expected extension at {extensionPath}");
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractive_NoSuppressAgentInitOption_DefaultsToRunAgentInit()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -178,7 +178,8 @@ internal static class TelemetryConstants
 
         /// <summary>
         /// Tag for the AI agent telemetry event type forwarded by the hook scripts.
-        /// One of <c>skill_invocation</c>, <c>tool_invocation</c>, or <c>reference_file_read</c>.
+        /// One of <c>skill_invocation</c>, <c>tool_invocation</c>,
+        /// <c>extension_tool_invocation</c>, or <c>reference_file_read</c>.
         /// </summary>
         public const string AgentEventType = "aspire.cli.agent.event_type";
 
@@ -187,6 +188,36 @@ internal static class TelemetryConstants
         /// <c>claude-code</c>, or <c>vscode</c>).
         /// </summary>
         public const string AgentClientName = "aspire.cli.agent.client_name";
+
+        /// <summary>
+        /// Tag for the kind of agent asset involved in an operation.
+        /// </summary>
+        public const string AgentAssetKind = "aspire.cli.agent.asset_kind";
+
+        /// <summary>
+        /// Tag for the stable name of an acquired agent asset bundle.
+        /// </summary>
+        public const string AgentAssetBundleName = "aspire.cli.agent.asset_bundle.name";
+
+        /// <summary>
+        /// Tag for the version of an acquired agent asset bundle.
+        /// </summary>
+        public const string AgentAssetBundleVersion = "aspire.cli.agent.asset_bundle.version";
+
+        /// <summary>
+        /// Tag for the transport source of an acquired agent asset bundle.
+        /// </summary>
+        public const string AgentAssetBundleSource = "aspire.cli.agent.asset_bundle.source";
+
+        /// <summary>
+        /// Tag indicating whether an agent asset bundle was loaded from cache.
+        /// </summary>
+        public const string AgentAssetBundleCacheHit = "aspire.cli.agent.asset_bundle.cache_hit";
+
+        /// <summary>
+        /// Tag indicating whether remote agent asset bundle acquisition was enabled.
+        /// </summary>
+        public const string AgentAssetBundleRemoteFetchEnabled = "aspire.cli.agent.asset_bundle.remote_fetch_enabled";
 
         /// <summary>
         /// Tag for the AI agent session identifier. This is an opaque per-session GUID and does
@@ -200,7 +231,13 @@ internal static class TelemetryConstants
         public const string AgentSkillName = "aspire.cli.agent.skill_name";
 
         /// <summary>
-        /// Tag for the Aspire MCP tool name associated with a <c>tool_invocation</c> event.
+        /// Tag for the Aspire Extension name associated with an
+        /// <c>extension_tool_invocation</c> event.
+        /// </summary>
+        public const string AgentExtensionName = "aspire.cli.agent.extension_name";
+
+        /// <summary>
+        /// Tag for the Aspire MCP or Extension tool name associated with a tool invocation event.
         /// </summary>
         public const string AgentToolName = "aspire.cli.agent.tool_name";
 

@@ -551,7 +551,7 @@ gh run download <run-id> --repo microsoft/aspire -D ./_artifacts
 
 Where a verify script already exists, run it against the downloaded artifact instead of
 eyeballing — e.g. `eng/scripts/verify-cli-tool-nupkg.ps1`, `verify-cli-archive.ps1`,
-`verify-cli-npm-package.ps1`, `verify-aspire-skills-bundle.ps1`. If a packaging change has
+`verify-cli-npm-package.ps1`, `verify-aspire-skills-bundles.ps1`. If a packaging change has
 no such check, that absence is itself a finding.
 
 **Build behavior changed → read the binlog, not just the console.** CI build jobs emit

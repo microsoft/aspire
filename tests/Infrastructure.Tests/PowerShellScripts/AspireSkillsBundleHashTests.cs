@@ -8,8 +8,8 @@ using Xunit;
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Offline guards for the hashing helpers in <c>eng/scripts/aspire-skills-bundle.common.ps1</c> that
-/// the embedded-bundle verification (<c>verify-aspire-skills-bundle.ps1</c>) relies on. Those helpers
+/// Offline guards for the hashing helpers in <c>eng/scripts/aspire-skills-bundles.common.ps1</c> that
+/// the embedded-bundle verification (<c>verify-aspire-skills-bundles.ps1</c>) relies on. Those helpers
 /// hash the telemetry hook scripts over LF-normalized UTF-8 (no BOM) so the recorded hash is stable no
 /// matter how git checked the file out — <c>track-telemetry.ps1</c> is <c>text=auto</c> and lands with
 /// CRLF on Windows, while <c>track-telemetry.sh</c> is <c>eol=lf</c>.
@@ -38,7 +38,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     {
         _output = output;
         _workspace = TemporaryWorkspace.Create(output);
-        _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundle.common.ps1");
+        _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundles.common.ps1");
     }
 
     public void Dispose() => _workspace.Dispose();

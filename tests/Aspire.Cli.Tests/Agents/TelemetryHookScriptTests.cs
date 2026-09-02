@@ -79,6 +79,40 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_ExtensionTool_CopilotApp_ForwardsExtensionAndToolNames()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"open_aspire_doctor","sessionId":"session-1","toolArgs":{"instanceId":"doctor-main"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "extension_tool_invocation");
+        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--extension-name", "aspire-doctor");
+        AssertArg(args, "--tool-name", "open_aspire_doctor");
+        AssertArg(args, "--session-id", "session-1");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_UnownedExtensionTool_DoesNotInvokeCli()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"open_aspire_third_party","toolArgs":{}}""",
+            new() { ["COPILOT_CLI"] = "1" });
+        AssertContinue(run);
+        AssertNotInvoked(run);
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_ReferenceFileRead_ForwardsRelativePath()
     {
         var run = await RunBashHookAsync(
@@ -287,6 +321,38 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
         AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_ExtensionTool_CopilotApp_ForwardsExtensionAndToolNames()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"open_aspire_doctor","sessionId":"session-1","toolArgs":{"instanceId":"doctor-main"}}""",
+            new()
+            {
+                ["AI_AGENT"] = "github_copilot_app_agent",
+                ["COPILOT_CLI"] = "1",
+            });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "extension_tool_invocation");
+        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--extension-name", "aspire-doctor");
+        AssertArg(args, "--tool-name", "open_aspire_doctor");
+        AssertArg(args, "--session-id", "session-1");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_UnownedExtensionTool_DoesNotInvokeCli()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"OPEN_ASPIRE_DOCTOR","toolArgs":{}}""",
+            new() { ["COPILOT_CLI"] = "1" });
+        AssertContinue(run);
+        AssertNotInvoked(run);
     }
 
     [Fact]

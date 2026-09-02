@@ -11,8 +11,8 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Hidden, machine-facing command invoked by the agent telemetry hook scripts
 /// (<c>track-telemetry.sh</c> / <c>track-telemetry.ps1</c>) on each agent <c>PostToolUse</c>
-/// event. It records a single reported activity describing the Aspire skill, MCP tool, or
-/// reference-file usage that the hook detected.
+/// event. It records a single reported activity describing the Aspire skill, MCP tool, Extension
+/// tool, or reference-file usage that the hook detected.
 /// </summary>
 /// <remarks>
 /// Hook-safety contract: this command must never throw and must always exit 0. A hook that fails
@@ -33,10 +33,13 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
     // skills-relative reference paths) are well under this length.
     private const int MaxTagValueLength = 256;
+    private const string AspireDoctorExtensionName = "aspire-doctor";
+    private const string AspireDoctorToolName = "open_aspire_doctor";
 
     // The only event types the hook scripts emit. Anything else is dropped so a script bug or a
     // crafted argument cannot introduce arbitrary, high-cardinality event categories.
-    private static readonly string[] s_knownEventTypes = ["skill_invocation", "tool_invocation", "reference_file_read"];
+    private static readonly string[] s_knownEventTypes =
+        ["skill_invocation", "tool_invocation", "extension_tool_invocation", "reference_file_read"];
 
     private readonly Option<string?> _eventTypeOption = new("--event-type")
     {
@@ -56,6 +59,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     private readonly Option<string?> _skillNameOption = new("--skill-name")
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SkillNameDescription
+    };
+
+    private readonly Option<string?> _extensionNameOption = new("--extension-name")
+    {
+        Description = AgentCommandStrings.AgentTelemetryCommand_ExtensionNameDescription
     };
 
     private readonly Option<string?> _toolNameOption = new("--tool-name")
@@ -87,6 +95,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_clientNameOption);
         Options.Add(_sessionIdOption);
         Options.Add(_skillNameOption);
+        Options.Add(_extensionNameOption);
         Options.Add(_toolNameOption);
         Options.Add(_fileReferenceOption);
         Options.Add(_timestampOption);
@@ -129,17 +138,41 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     private List<(string Name, string Value)> CollectValidTags(ParseResult parseResult)
     {
+        var eventType = parseResult.GetValue(_eventTypeOption);
+        var skillName = parseResult.GetValue(_skillNameOption);
+        var extensionName = parseResult.GetValue(_extensionNameOption);
+        var toolName = parseResult.GetValue(_toolNameOption);
+        var fileReference = parseResult.GetValue(_fileReferenceOption);
+
+        var isExtensionToolInvocation = string.Equals(eventType, "extension_tool_invocation", StringComparison.Ordinal);
+        if ((!isExtensionToolInvocation && !string.IsNullOrWhiteSpace(extensionName)) ||
+            (isExtensionToolInvocation &&
+            (!IsKnownExtensionTool(extensionName, toolName) ||
+             !string.IsNullOrWhiteSpace(skillName) ||
+             !string.IsNullOrWhiteSpace(fileReference))))
+        {
+            return [];
+        }
+
         var tags = new List<(string Name, string Value)>();
 
-        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, eventType, static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
         AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
         AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), IsSafeReference);
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, skillName, static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentExtensionName, extensionName, static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, toolName, static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, fileReference, IsSafeReference);
         AddIfValid(tags, TelemetryConstants.Tags.AgentEventTimestamp, parseResult.GetValue(_timestampOption), IsValidTimestamp);
 
         return tags;
+    }
+
+    private static bool IsKnownExtensionTool(string? extensionName, string? toolName)
+    {
+        // Keep this exact pair in sync with the Aspire-owned allowlists in track-telemetry.sh/.ps1.
+        return string.Equals(extensionName, AspireDoctorExtensionName, StringComparison.Ordinal) &&
+            string.Equals(toolName, AspireDoctorToolName, StringComparison.Ordinal);
     }
 
     private static void AddIfValid(List<(string Name, string Value)> tags, string name, string? value, Func<string, bool> isValid)

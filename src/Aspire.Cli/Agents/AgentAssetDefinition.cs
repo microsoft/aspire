@@ -88,7 +88,7 @@ internal sealed class AgentFileAssetDefinition : AgentAssetDefinition
     }
 
     /// <summary>
-    /// Creates a skill asset sourced from the Aspire skills bundle.
+    /// Creates a file asset sourced from an Aspire Skills bundle.
     /// </summary>
     internal static AgentFileAssetDefinition CreateAspireSkillsBundle(
         AgentAssetKind assetKind,
@@ -278,7 +278,7 @@ internal enum AgentFileAssetSourceKind
     Static,
 
     /// <summary>
-    /// The asset is installed from the external Aspire skills bundle.
+    /// The asset is installed from an external Aspire Skills bundle.
     /// </summary>
     AspireSkillsBundle,
 

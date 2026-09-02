@@ -54,6 +54,8 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
         Options.Add(s_mcpsOption);
+        Options.Add(s_extensionLocationsOption);
+        Options.Add(s_extensionsOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -88,6 +90,23 @@ internal sealed class AgentInitCommand : BaseCommand
         Recursive = true
     };
 
+    internal static readonly Option<string?> s_extensionLocationsOption = new("--extension-locations")
+    {
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ExtensionLocationsOptionDescription,
+            string.Join(",", AgentAssetLocation.GetLocations(AgentAssetKind.Extension).Select(static location => location.Id)),
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
+    };
+
+    internal static readonly Option<string?> s_extensionsOption = new("--extensions")
+    {
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ExtensionsOptionDescription,
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
+    };
+
     private static readonly FileAssetKindConfiguration s_skillAssets = new(
         AgentAssetKind.Skill,
         AgentCommandStrings.InitCommand_SelectSkillLocations,
@@ -97,6 +116,20 @@ internal sealed class AgentInitCommand : BaseCommand
         AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
         AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
         AgentCommandStrings.InitCommand_NoDetectedClientForSkills);
+
+    // Extension directories are package-owned executable trees, so an upgrade must not leave a
+    // hybrid of old and new files behind. Skills keep their additive behavior.
+    private static readonly FileAssetKindConfiguration s_extensionAssets = new(
+        AgentAssetKind.Extension,
+        AgentCommandStrings.InitCommand_SelectExtensionLocations,
+        AgentCommandStrings.InitCommand_SelectExtensions,
+        AgentCommandStrings.InitCommand_FailedToInstallExtension,
+        AgentCommandStrings.InitCommand_InstalledExtensionsSummary,
+        AgentCommandStrings.InitCommand_InstalledExtensionsSummaryExtensions,
+        AgentCommandStrings.InitCommand_InstalledExtensionsSummaryLocations,
+        AgentCommandStrings.InitCommand_NoDetectedClientForExtensions,
+        RemoveStaleFiles: true,
+        RequireExplicitBundleAvailability: true);
 
     private static readonly ActionAssetKindConfiguration s_mcpAssets = new(
         AgentAssetKind.Mcp,
@@ -121,10 +154,10 @@ internal sealed class AgentInitCommand : BaseCommand
     /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
-    /// Callers that expose <c>--skill-locations</c>, <c>--skills</c>, and <c>--mcps</c> can pass
-    /// <paramref name="skillLocationsBinding"/>, <paramref name="skillsBinding"/>, and
-    /// <paramref name="mcpsBinding"/> so the chained execution reuses the same non-interactive
-    /// selection semantics as standalone <c>aspire agent init</c>.
+    /// Callers that expose <c>--skill-locations</c>, <c>--skills</c>, <c>--mcps</c>,
+    /// <c>--extension-locations</c>, and <c>--extensions</c> can pass the matching bindings so the
+    /// chained execution reuses the same non-interactive selection semantics as standalone
+    /// <c>aspire agent init</c>.
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
@@ -134,6 +167,8 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<string?> mcpsBinding,
+        PromptBinding<string?> extensionLocationsBinding,
+        PromptBinding<string?> extensionsBinding,
         Func<AgentFileAssetDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
@@ -152,7 +187,15 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, mcpsBinding, cancellationToken);
+            return await ExecuteAgentInitAsync(
+                workspaceRoot,
+                selectByDefault,
+                skillLocationsBinding,
+                skillsBinding,
+                mcpsBinding,
+                extensionLocationsBinding,
+                extensionsBinding,
+                cancellationToken);
         }
 
         return AgentInitExecutionResult.Empty(CliExitCodes.Success);
@@ -163,11 +206,21 @@ internal sealed class AgentInitCommand : BaseCommand
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         // Standalone `aspire agent init` is typically run against an existing project, so don't
         // pre-select the one-time aspireify wiring skill even though every other bundle skill
-        // is default-on. Users can still opt into it from the prompt or via --skills.
+        // is default-on. Users can still opt into it from the prompt or via --skills/--extensions.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
         var mcpsBinding = PromptBinding.Create(parseResult, s_mcpsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupAssetsFromDefaults, skillLocationsBinding, skillsBinding, mcpsBinding, cancellationToken);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, s_extensionsOption);
+        var result = await ExecuteAgentInitAsync(
+            workspaceRoot,
+            ExcludeOneTimeSetupAssetsFromDefaults,
+            skillLocationsBinding,
+            skillsBinding,
+            mcpsBinding,
+            extensionLocationsBinding,
+            extensionsBinding,
+            cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -233,6 +286,8 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<string?> mcpsBinding,
+        PromptBinding<string?> extensionLocationsBinding,
+        PromptBinding<string?> extensionsBinding,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -274,7 +329,19 @@ internal sealed class AgentInitCommand : BaseCommand
             skillLocationsBinding,
             skillsBinding,
             selectByDefault,
-            ResolveAvailableSkillsAsync,
+            ResolveAvailableFileAssetsAsync,
+            cancellationToken);
+
+        // Extensions reuse the same descriptor-driven selection and installation pipeline as
+        // skills; the only additive behavior is the kind-aware client capability gate.
+        var extensionSelection = await SelectFileAssetsAsync(
+            s_extensionAssets,
+            context,
+            detectedLanguage,
+            extensionLocationsBinding,
+            extensionsBinding,
+            selectByDefault,
+            ResolveAvailableFileAssetsAsync,
             cancellationToken);
 
         // Scanner-discovered applicators are the concrete targets for action-backed assets. They
@@ -290,6 +357,16 @@ internal sealed class AgentInitCommand : BaseCommand
             workspaceRoot,
             context,
             skillSelection,
+            cancellationToken);
+        hasErrors |= skillSelection.HasErrors;
+
+        // Extensions are installed before MCP so a failing MCP target degrades only the exit code:
+        // the extension file tree has already been committed by its own transactional installer.
+        hasErrors |= extensionSelection.HasErrors;
+        hasErrors |= await ApplyFileAssetsAsync(
+            s_extensionAssets,
+            workspaceRoot,
+            extensionSelection,
             cancellationToken);
         hasErrors |= mcpSelection.HasErrors;
         hasErrors |= await ApplyActionAssetsAsync(
@@ -317,6 +394,7 @@ internal sealed class AgentInitCommand : BaseCommand
             [.. context.DetectedClients],
             [
                 skillSelection.ToResult(),
+                extensionSelection.ToResult(),
                 mcpSelection.ToResult(),
             ]);
     }
@@ -328,7 +406,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> locationsBinding,
         PromptBinding<string?> assetsBinding,
         Func<AgentFileAssetDefinition, bool>? selectByDefault,
-        Func<LanguageId?, CancellationToken, Task<AvailableFileAssets>> resolveAvailableAssets,
+        Func<AgentAssetKind, LanguageId?, CancellationToken, Task<AvailableFileAssets>> resolveAvailableAssets,
         CancellationToken cancellationToken)
     {
         var availableLocations = AgentAssetLocation.GetLocations(configuration.AssetKind);
@@ -340,7 +418,8 @@ internal sealed class AgentInitCommand : BaseCommand
         var hasExplicitSelection =
             PromptBinding.Resolve(locationsBinding).WasProvided ||
             PromptBinding.Resolve(assetsBinding).WasProvided;
-        if (!hasExplicitSelection && !HasDetectedClient(context))
+        var hasCompatibleClient = HasCompatibleClient(context, configuration.AssetKind);
+        if (!hasExplicitSelection && !hasCompatibleClient)
         {
             DisplayNoDetectedClientWarning(configuration.NoDetectedClientWarning);
             return SelectedFileAssets.Empty(configuration.AssetKind);
@@ -363,7 +442,19 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken: cancellationToken);
         if (selectedLocations.Count == 0)
         {
-            return new(configuration.AssetKind, selectedLocations, [], Bundle: null);
+            return new(configuration.AssetKind, selectedLocations, [], Bundle: null, HasErrors: false);
+        }
+
+        // Extensions are only understood by the Copilot App today, so an explicit request on a
+        // machine without it still installs but warns that nothing will load the files.
+        if (configuration.AssetKind is AgentAssetKind.Extension &&
+            hasExplicitSelection &&
+            !hasCompatibleClient &&
+            ExplicitAssetSelectionAllowsInstallation(assetsBinding))
+        {
+            InteractionService.DisplayMessage(
+                KnownEmojis.Warning,
+                AgentCommandStrings.InitCommand_NoCompatibleClientForExplicitExtensions);
         }
 
         var cliDefinedAssets = AgentAssetCatalog.GetFileAssets(configuration.AssetKind);
@@ -379,7 +470,7 @@ internal sealed class AgentInitCommand : BaseCommand
         }
         else
         {
-            resolvedAssets = await resolveAvailableAssets(detectedLanguage, cancellationToken);
+            resolvedAssets = await resolveAvailableAssets(configuration.AssetKind, detectedLanguage, cancellationToken);
         }
 
         var availableAssets = resolvedAssets.Assets
@@ -391,15 +482,31 @@ internal sealed class AgentInitCommand : BaseCommand
 
         // An explicit bundle-only name would otherwise be reported merely as an invalid choice.
         // Preserve the resolver failure so the user sees why that asset is absent from the catalog.
+        var hasErrors = false;
+        var explicitBundleFailure = false;
         if (resolvedAssets.FailureMessage is not null)
         {
             var (wasProvided, requestedAssets, _) = PromptBinding.Resolve(assetsBindingWithDefault);
-            if (wasProvided &&
+            if (configuration.RequireExplicitBundleAvailability && hasExplicitSelection)
+            {
+                // Skills preserve their legacy best-effort behavior, but a user who explicitly
+                // requested a peer asset kind must not receive a success result after nothing installed.
+                InteractionService.DisplayError(resolvedAssets.FailureMessage);
+                hasErrors = true;
+                explicitBundleFailure = true;
+            }
+            else if (wasProvided &&
                 requestedAssets is not null &&
                 HasUnknownBundleAssetCandidate(requestedAssets, availableAssets, cliDefinedAssets))
             {
                 InteractionService.DisplayError(resolvedAssets.FailureMessage);
             }
+        }
+
+        var (assetsWereProvided, _, _) = PromptBinding.Resolve(assetsBindingWithDefault);
+        if (availableAssets.Count == 0 && (!assetsWereProvided || explicitBundleFailure))
+        {
+            return new(configuration.AssetKind, selectedLocations, [], resolvedAssets.Bundle, hasErrors);
         }
 
         var selectedAssets = await InteractionService.PromptForSelectionsAsync(
@@ -412,7 +519,7 @@ internal sealed class AgentInitCommand : BaseCommand
             echoSelected: false,
             cancellationToken: cancellationToken);
 
-        return new(configuration.AssetKind, selectedLocations, selectedAssets, resolvedAssets.Bundle);
+        return new(configuration.AssetKind, selectedLocations, selectedAssets, resolvedAssets.Bundle, hasErrors);
     }
 
     private async Task<SelectedActionAssets> SelectActionAssetsAsync(
@@ -427,7 +534,7 @@ internal sealed class AgentInitCommand : BaseCommand
             .ToList();
         var availableAssets = AgentAssetCatalog.GetActionAssets(configuration.AssetKind);
         var (assetsWereProvided, _, _) = PromptBinding.Resolve(assetsBinding);
-        var hasDetectedClient = HasDetectedClient(context);
+        var hasDetectedClient = HasCompatibleClient(context, configuration.AssetKind);
         if (!hasDetectedClient && !assetsWereProvided)
         {
             DisplayNoDetectedClientWarning(configuration.NoDetectedClientWarning);
@@ -467,8 +574,22 @@ internal sealed class AgentInitCommand : BaseCommand
         return new(configuration.AssetKind, selectedAssets, applicators, hasErrors);
     }
 
-    private static bool HasDetectedClient(AgentEnvironmentScanContext context)
-        => context.DetectedClients.Count > 0;
+    /// <summary>
+    /// Gets whether a detected client can consume the specified agent asset kind.
+    /// </summary>
+    /// <remarks>
+    /// Capability is kind-aware because extensions are only understood by the Copilot App today,
+    /// while skills and MCP configuration are understood by every supported client.
+    /// </remarks>
+    private static bool HasCompatibleClient(AgentEnvironmentScanContext context, AgentAssetKind assetKind)
+        => context.DetectedClients.Any(client => client.Supports(assetKind));
+
+    private static bool ExplicitAssetSelectionAllowsInstallation(PromptBinding<string?> assetsBinding)
+    {
+        var (wasProvided, value, _) = PromptBinding.Resolve(assetsBinding);
+        return !wasProvided ||
+            !string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase);
+    }
 
     private void DisplayNoDetectedClientWarning(string message)
     {
@@ -692,35 +813,42 @@ internal sealed class AgentInitCommand : BaseCommand
             _ => client.ToString(),
         };
 
-    private async Task<AvailableFileAssets> ResolveAvailableSkillsAsync(
+    private async Task<AvailableFileAssets> ResolveAvailableFileAssetsAsync(
+        AgentAssetKind assetKind,
         LanguageId? detectedLanguage,
         CancellationToken cancellationToken)
     {
-        var skills = new List<AgentFileAssetDefinition>();
+        var assets = new List<AgentFileAssetDefinition>();
         AspireSkillsBundle? bundle = null;
         string? failureMessage = null;
 
-        var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
+        var result = await _aspireSkillsInstaller.InstallAsync(assetKind, cancellationToken);
         if (result.Status is AspireSkillsInstallStatus.Installed)
         {
             bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
-            skills.AddRange(bundle.GetAssetDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
+            if (bundle.AssetKind != assetKind)
+            {
+                throw new InvalidOperationException(
+                    $"Aspire Skills bundle has kind '{bundle.AssetKind}' instead of requested kind '{assetKind}'.");
+            }
+
+            assets.AddRange(bundle.GetAssetDefinitions().Where(asset => !IsCliDefinedAssetName(assetKind, asset.Name)));
         }
-        else
+        else if (result.Status is AspireSkillsInstallStatus.Failed)
         {
-            // Preserve the install failure so the caller can surface it only when the user
-            // passed an explicit --skills value that names a bundle-only skill. Happy-path
-            // (interactive prompt with the embedded fallback) stays silent.
+            // Preserve the install failure so the caller can surface it only when it is actionable.
+            // An Unavailable bundle (no provider registered for the kind) falls back silently to the
+            // CLI-defined assets; the installer already logs the underlying cause at debug level.
             failureMessage = result.Message;
         }
 
         // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
-        // silently to the CLI-defined skills. The installer already logs the underlying cause
-        // at debug level, so the user is not interrupted with a warning they cannot act on.
-        skills.AddRange(AgentAssetCatalog.GetFileAssets(AgentAssetKind.Skill));
+        // silently to the CLI-defined assets so the user is not interrupted with a warning they
+        // cannot act on.
+        assets.AddRange(AgentAssetCatalog.GetFileAssets(assetKind));
 
         return new(
-            skills
+            assets
                 .Where(asset => asset.IsApplicableToLanguage(detectedLanguage))
                 .ToList(),
             bundle,
@@ -785,10 +913,10 @@ internal sealed class AgentInitCommand : BaseCommand
             selectedAssetNames.All(name => cliDefinedAssets.Any(asset => asset.HasName(name, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private static bool IsCliDefinedSkillName(string name)
+    private static bool IsCliDefinedAssetName(AgentAssetKind assetKind, string name)
     {
-        return AgentAssetCatalog.GetFileAssets(AgentAssetKind.Skill)
-            .Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));
+        return AgentAssetCatalog.GetFileAssets(assetKind)
+            .Any(asset => asset.HasName(name, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -866,6 +994,12 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Installs the files for an agent asset at the specified target.
     /// </summary>
+    /// <remarks>
+    /// The install is transactional: every changed file is written into a sibling staging directory
+    /// first and only then renamed into place, with the previous contents moved aside so a mid-publish
+    /// failure can be rolled back. Files whose content already matches are skipped entirely, which keeps
+    /// repeated runs idempotent for both normalized text and exact-byte binary assets.
+    /// </remarks>
     /// <returns>The install result, including the asset/location pair when files were updated.</returns>
     private async Task<AgentAssetInstallResult> InstallAgentAssetAsync(
         FileAssetKindConfiguration configuration,
@@ -875,43 +1009,79 @@ internal sealed class AgentInitCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         var relativeAssetPath = Path.Combine(target.RelativeAssetDirectory, asset.Name);
-        var fullAssetDirectoryPath = Path.Combine(target.RootDirectory.FullName, relativeAssetPath);
+        var rootDirectoryPath = target.RootDirectory.FullName;
+        var fullAssetDirectoryPath = Path.Combine(rootDirectoryPath, relativeAssetPath);
 
         try
         {
             var assetFiles = await GetAgentAssetFilesAsync(asset, bundle, cancellationToken);
-            var anyFileUpdated = false;
+            var stagedFiles = new List<StagedAgentAssetFile>();
+            string? stagingDirectoryPath = null;
 
-            foreach (var assetFile in assetFiles)
+            try
             {
-                var fullPath = Path.Combine(target.RootDirectory.FullName, relativeAssetPath, assetFile.RelativePath);
-                var directory = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                foreach (var assetFile in assetFiles)
                 {
-                    Directory.CreateDirectory(directory);
+                    var fullPath = Path.Combine(rootDirectoryPath, relativeAssetPath, assetFile.RelativePath);
+                    var directory = Path.GetDirectoryName(fullPath)
+                        ?? throw new InvalidOperationException($"Agent asset file '{assetFile.RelativePath}' does not have a parent directory.");
+                    ValidateSafeExistingAssetDirectory(rootDirectoryPath, directory);
+
+                    if (ValidateAgentAssetDestinationFile(fullPath))
+                    {
+                        var existingContent = await File.ReadAllBytesAsync(fullPath, cancellationToken);
+                        if (assetFile.ContentEquals(existingContent))
+                        {
+                            continue;
+                        }
+                    }
+
+                    stagingDirectoryPath ??= CreateAgentAssetTransactionDirectory(
+                        rootDirectoryPath,
+                        Path.GetDirectoryName(fullAssetDirectoryPath)
+                            ?? throw new InvalidOperationException($"Agent asset directory '{fullAssetDirectoryPath}' does not have a parent directory."),
+                        asset.Name,
+                        "staging");
+                    var stagedPath = Path.Combine(stagingDirectoryPath, assetFile.RelativePath);
+                    var stagedDirectory = Path.GetDirectoryName(stagedPath)
+                        ?? throw new InvalidOperationException($"Staged agent asset file '{assetFile.RelativePath}' does not have a parent directory.");
+                    EnsureSafeAssetDirectory(stagingDirectoryPath, stagedDirectory);
+                    await WriteStagedAgentAssetFileAsync(stagedPath, assetFile.Bytes, cancellationToken);
+                    stagedFiles.Add(new(fullPath, stagedPath));
                 }
 
-                if (File.Exists(fullPath))
+                if (configuration.RemoveStaleFiles)
                 {
-                    var existingContent = await File.ReadAllBytesAsync(fullPath, cancellationToken);
-                    if (assetFile.ContentEquals(existingContent))
+                    // Extension directories are package-owned executable trees. Remove files that
+                    // disappeared from the manifest so an upgrade cannot leave a hybrid of old and
+                    // new JavaScript/UI assets. Skills preserve their existing additive behavior.
+                    foreach (var staleFile in GetStaleAgentAssetFiles(fullAssetDirectoryPath, assetFiles))
                     {
-                        continue;
+                        stagedFiles.Add(new(staleFile, StagedPath: null));
                     }
                 }
 
-                await File.WriteAllBytesAsync(fullPath, assetFile.Bytes, cancellationToken);
-                anyFileUpdated = true;
-            }
+                if (stagedFiles.Count == 0)
+                {
+                    return new(Succeeded: true, UpdatedAsset: null);
+                }
 
-            if (!anyFileUpdated)
+                var backupDirectoryPath = CreateAgentAssetTransactionDirectory(
+                    rootDirectoryPath,
+                    Path.GetDirectoryName(fullAssetDirectoryPath)
+                        ?? throw new InvalidOperationException($"Agent asset directory '{fullAssetDirectoryPath}' does not have a parent directory."),
+                    asset.Name,
+                    "rollback");
+                PublishStagedAgentAssetFiles(rootDirectoryPath, stagedFiles, backupDirectoryPath);
+
+                return new(Succeeded: true, new InstalledAgentAssetSummaryItem(asset.Name, target.DisplayDirectory));
+            }
+            finally
             {
-                return new(Succeeded: true, UpdatedAsset: null);
+                DeleteAgentAssetTransactionDirectory(stagingDirectoryPath);
             }
-
-            return new(Succeeded: true, new InstalledAgentAssetSummaryItem(asset.Name, target.DisplayDirectory));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or AggregateException)
         {
             InteractionService.DisplayError(
                 string.Format(
@@ -966,6 +1136,325 @@ internal sealed class AgentInitCommand : BaseCommand
             .Replace(Path.AltDirectorySeparatorChar, '/');
     }
 
+    private static void EnsureSafeAssetDirectory(string rootDirectoryPath, string directoryPath)
+        => ValidateOrCreateSafeAssetDirectory(rootDirectoryPath, directoryPath, createMissing: true);
+
+    private static void ValidateSafeExistingAssetDirectory(string rootDirectoryPath, string directoryPath)
+        => ValidateOrCreateSafeAssetDirectory(rootDirectoryPath, directoryPath, createMissing: false);
+
+    /// <summary>
+    /// Verifies that a destination directory stays inside the installation root and is not reached
+    /// through a symbolic link, optionally creating the missing segments.
+    /// </summary>
+    private static void ValidateOrCreateSafeAssetDirectory(
+        string rootDirectoryPath,
+        string directoryPath,
+        bool createMissing)
+    {
+        var relativeDirectoryPath = Path.GetRelativePath(rootDirectoryPath, directoryPath);
+        if (Path.IsPathRooted(relativeDirectoryPath) ||
+            relativeDirectoryPath.Equals("..", StringComparison.Ordinal) ||
+            relativeDirectoryPath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+            relativeDirectoryPath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Agent asset destination '{directoryPath}' is outside the installation root.");
+        }
+
+        if (createMissing)
+        {
+            Directory.CreateDirectory(rootDirectoryPath);
+        }
+
+        var currentPath = rootDirectoryPath;
+        foreach (var segment in relativeDirectoryPath.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            currentPath = Path.Combine(currentPath, segment);
+            if (TryGetPathAttributes(currentPath, out var attributes))
+            {
+                if (attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    throw new InvalidOperationException($"Agent asset destination directory '{currentPath}' is a symbolic link or reparse point.");
+                }
+
+                if (!attributes.HasFlag(FileAttributes.Directory))
+                {
+                    throw new IOException($"Agent asset destination directory '{currentPath}' is a file.");
+                }
+
+                continue;
+            }
+
+            if (!createMissing)
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(currentPath);
+            if (!TryGetPathAttributes(currentPath, out attributes) ||
+                attributes.HasFlag(FileAttributes.ReparsePoint) ||
+                !attributes.HasFlag(FileAttributes.Directory))
+            {
+                throw new IOException($"Agent asset destination directory '{currentPath}' could not be created safely.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether a regular file already exists at the destination, rejecting symlinks and directories.
+    /// </summary>
+    private static bool ValidateAgentAssetDestinationFile(string destinationPath)
+    {
+        if (!TryGetPathAttributes(destinationPath, out var attributes))
+        {
+            return false;
+        }
+
+        if (attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new InvalidOperationException($"Agent asset destination '{destinationPath}' is a symbolic link or reparse point.");
+        }
+
+        if (attributes.HasFlag(FileAttributes.Directory))
+        {
+            throw new IOException($"Agent asset destination '{destinationPath}' is a directory.");
+        }
+
+        return true;
+    }
+
+    private static string CreateAgentAssetTransactionDirectory(
+        string rootDirectoryPath,
+        string parentDirectoryPath,
+        string assetName,
+        string purpose)
+    {
+        EnsureSafeAssetDirectory(rootDirectoryPath, parentDirectoryPath);
+
+        // Staging and rollback directories must share the destination volume so publishing can
+        // use rename operations rather than copying bytes through the destination path.
+        var transactionDirectoryPath = Path.Combine(
+            parentDirectoryPath,
+            $".{assetName}.{purpose}.{Guid.NewGuid():N}");
+        if (TryGetPathAttributes(transactionDirectoryPath, out _))
+        {
+            throw new IOException($"Agent asset transaction directory '{transactionDirectoryPath}' already exists.");
+        }
+
+        Directory.CreateDirectory(transactionDirectoryPath);
+        if (!TryGetPathAttributes(transactionDirectoryPath, out var attributes) ||
+            attributes.HasFlag(FileAttributes.ReparsePoint) ||
+            !attributes.HasFlag(FileAttributes.Directory))
+        {
+            throw new IOException($"Agent asset transaction directory '{transactionDirectoryPath}' could not be created safely.");
+        }
+
+        return transactionDirectoryPath;
+    }
+
+    private static async Task WriteStagedAgentAssetFileAsync(
+        string stagedPath,
+        ReadOnlyMemory<byte> content,
+        CancellationToken cancellationToken)
+    {
+        // FileMode.CreateNew guarantees the staged path is not an existing file or a pre-planted symlink.
+        await using var stream = new FileStream(
+            stagedPath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            useAsync: true);
+        await stream.WriteAsync(content, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+    }
+
+    private static void PublishStagedAgentAssetFiles(
+        string rootDirectoryPath,
+        IReadOnlyList<StagedAgentAssetFile> stagedFiles,
+        string backupDirectoryPath)
+    {
+        var publishedFiles = new List<PublishedAgentAssetFile>();
+
+        try
+        {
+            for (var i = 0; i < stagedFiles.Count; i++)
+            {
+                var stagedFile = stagedFiles[i];
+                var destinationDirectory = Path.GetDirectoryName(stagedFile.DestinationPath)
+                    ?? throw new InvalidOperationException($"Agent asset destination '{stagedFile.DestinationPath}' does not have a parent directory.");
+                EnsureSafeAssetDirectory(rootDirectoryPath, destinationDirectory);
+
+                var destinationExists = ValidateAgentAssetDestinationFile(stagedFile.DestinationPath);
+                if (destinationExists)
+                {
+                    var backupPath = Path.Combine(backupDirectoryPath, i.ToString(CultureInfo.InvariantCulture));
+                    File.Move(stagedFile.DestinationPath, backupPath);
+                    publishedFiles.Add(new(stagedFile.DestinationPath, backupPath));
+                }
+
+                // A staged file without a staged path is a delete-only entry produced by the stale
+                // extension-file sweep: moving the original aside is the entire operation.
+                if (stagedFile.StagedPath is not null)
+                {
+                    File.Move(stagedFile.StagedPath, stagedFile.DestinationPath);
+                    if (!destinationExists)
+                    {
+                        publishedFiles.Add(new(stagedFile.DestinationPath, BackupPath: null));
+                    }
+                }
+            }
+        }
+        catch (Exception publishException) when (publishException is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            var rollbackExceptions = RollbackPublishedAgentAssetFiles(rootDirectoryPath, publishedFiles);
+            if (rollbackExceptions.Count > 0)
+            {
+                throw new AggregateException(
+                    $"Agent asset publication failed and rollback was incomplete. Original files were preserved under '{backupDirectoryPath}'.",
+                    [publishException, .. rollbackExceptions]);
+            }
+
+            DeleteAgentAssetTransactionDirectory(backupDirectoryPath);
+            throw;
+        }
+
+        DeleteAgentAssetTransactionDirectory(backupDirectoryPath);
+    }
+
+    private static IReadOnlyList<Exception> RollbackPublishedAgentAssetFiles(
+        string rootDirectoryPath,
+        IReadOnlyList<PublishedAgentAssetFile> publishedFiles)
+    {
+        var rollbackExceptions = new List<Exception>();
+        for (var i = publishedFiles.Count - 1; i >= 0; i--)
+        {
+            var publishedFile = publishedFiles[i];
+            try
+            {
+                var destinationDirectory = Path.GetDirectoryName(publishedFile.DestinationPath)
+                    ?? throw new InvalidOperationException($"Agent asset destination '{publishedFile.DestinationPath}' does not have a parent directory.");
+                EnsureSafeAssetDirectory(rootDirectoryPath, destinationDirectory);
+
+                if (TryGetPathAttributes(publishedFile.DestinationPath, out var attributes))
+                {
+                    if (attributes.HasFlag(FileAttributes.Directory))
+                    {
+                        throw new IOException($"Agent asset rollback destination '{publishedFile.DestinationPath}' is a directory.");
+                    }
+
+                    // File.Delete removes a final-component symbolic link rather than following it.
+                    File.Delete(publishedFile.DestinationPath);
+                }
+
+                if (publishedFile.BackupPath is not null)
+                {
+                    File.Move(publishedFile.BackupPath, publishedFile.DestinationPath);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                rollbackExceptions.Add(ex);
+            }
+        }
+
+        return rollbackExceptions;
+    }
+
+    private IReadOnlyList<string> GetStaleAgentAssetFiles(
+        string assetDirectoryPath,
+        IReadOnlyList<AgentAssetFile> expectedFiles)
+    {
+        if (!TryGetPathAttributes(assetDirectoryPath, out var attributes))
+        {
+            return [];
+        }
+
+        if (attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new InvalidOperationException($"Agent asset directory '{assetDirectoryPath}' is a symbolic link or reparse point.");
+        }
+
+        if (!attributes.HasFlag(FileAttributes.Directory))
+        {
+            throw new IOException($"Agent asset directory '{assetDirectoryPath}' is a file.");
+        }
+
+        // Windows and default macOS APFS volumes are case-insensitive, so a manifest entry of
+        // "ui/icon.bin" already owns an existing "UI/icon.bin". On case-sensitive file systems the
+        // differently cased path is a genuinely stale leftover and must be removed.
+        var pathComparer = _environment.IsWindows() || _environment.IsMacOS()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var expectedPaths = expectedFiles
+            .Select(file => Path.GetFullPath(Path.Combine(assetDirectoryPath, file.RelativePath)))
+            .ToHashSet(pathComparer);
+        var staleFiles = new List<string>();
+        CollectStaleAgentAssetFiles(assetDirectoryPath, expectedPaths, staleFiles);
+        return staleFiles;
+    }
+
+    private static void CollectStaleAgentAssetFiles(
+        string directoryPath,
+        IReadOnlySet<string> expectedPaths,
+        List<string> staleFiles)
+    {
+        foreach (var entryPath in Directory.EnumerateFileSystemEntries(directoryPath))
+        {
+            var attributes = File.GetAttributes(entryPath);
+            if (attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                throw new InvalidOperationException($"Agent asset entry '{entryPath}' is a symbolic link or reparse point.");
+            }
+
+            if (attributes.HasFlag(FileAttributes.Directory))
+            {
+                CollectStaleAgentAssetFiles(entryPath, expectedPaths, staleFiles);
+            }
+            else if (!expectedPaths.Contains(Path.GetFullPath(entryPath)))
+            {
+                staleFiles.Add(entryPath);
+            }
+        }
+    }
+
+    private static void DeleteAgentAssetTransactionDirectory(string? transactionDirectoryPath)
+    {
+        if (transactionDirectoryPath is null ||
+            !TryGetPathAttributes(transactionDirectoryPath, out var attributes))
+        {
+            return;
+        }
+
+        if (attributes.HasFlag(FileAttributes.ReparsePoint) ||
+            !attributes.HasFlag(FileAttributes.Directory))
+        {
+            throw new InvalidOperationException($"Agent asset transaction directory '{transactionDirectoryPath}' changed unexpectedly.");
+        }
+
+        Directory.Delete(transactionDirectoryPath, recursive: true);
+    }
+
+    private static bool TryGetPathAttributes(string path, out FileAttributes attributes)
+    {
+        try
+        {
+            attributes = File.GetAttributes(path);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            attributes = default;
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            attributes = default;
+            return false;
+        }
+    }
+
     private static async Task<IReadOnlyList<AgentAssetFile>> GetAgentAssetFilesAsync(
         AgentFileAssetDefinition asset,
         AspireSkillsBundle? bundle,
@@ -1000,7 +1489,9 @@ internal sealed class AgentInitCommand : BaseCommand
         string InstalledSummary,
         string InstalledAssetsSummary,
         string InstalledLocationsSummary,
-        string NoDetectedClientWarning);
+        string NoDetectedClientWarning,
+        bool RemoveStaleFiles = false,
+        bool RequireExplicitBundleAvailability = false);
 
     private sealed record ActionAssetKindConfiguration(
         AgentAssetKind AssetKind,
@@ -1018,9 +1509,10 @@ internal sealed class AgentInitCommand : BaseCommand
         AgentAssetKind AssetKind,
         IReadOnlyList<AgentAssetLocation> Locations,
         IReadOnlyList<AgentFileAssetDefinition> Assets,
-        AspireSkillsBundle? Bundle)
+        AspireSkillsBundle? Bundle,
+        bool HasErrors)
     {
-        public static SelectedFileAssets Empty(AgentAssetKind assetKind) => new(assetKind, [], [], Bundle: null);
+        public static SelectedFileAssets Empty(AgentAssetKind assetKind) => new(assetKind, [], [], Bundle: null, HasErrors: false);
 
         public AgentAssetSelection ToResult() => new(AssetKind, Locations, Assets);
     }
@@ -1037,6 +1529,10 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private sealed record InstalledAgentAssetSummaryItem(string AssetName, string DisplayLocation);
+
+    private sealed record StagedAgentAssetFile(string DestinationPath, string? StagedPath);
+
+    private sealed record PublishedAgentAssetFile(string DestinationPath, string? BackupPath);
 
     private readonly record struct AgentAssetInstallResult(bool Succeeded, InstalledAgentAssetSummaryItem? UpdatedAsset);
 }

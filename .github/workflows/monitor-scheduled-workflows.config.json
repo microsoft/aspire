@@ -7,7 +7,7 @@
     { "file": "update-dependencies.yml", "name": "Update Dependencies" },
     { "file": "update-ai-foundry-models.yml", "name": "Update AI Foundry Models" },
     { "file": "update-azure-vm-sizes.yml", "name": "Update Azure VM Sizes" },
-    { "file": "update-aspire-skills-bundle.yml", "name": "Update Aspire Skills Bundle" },
+    { "file": "update-aspire-skills-bundles.yml", "name": "Update Aspire Skills Bundles" },
     { "file": "deployment-cleanup.yml", "name": "Deployment Cleanup" },
     { "file": "labeler-cache-retention.yml", "name": "Labeler Cache Retention" },
     { "file": "warm-cli-e2e-image-cache.yml", "name": "Warm CLI E2E Image Cache" },

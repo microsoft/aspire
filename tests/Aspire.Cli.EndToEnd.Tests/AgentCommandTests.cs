@@ -274,6 +274,50 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Verifies that the packaged CLI resolves its embedded extensions bundle and installs
+    /// <c>aspire-doctor</c> into both project and user extension locations.
+    /// </summary>
+    [Fact]
+    public async Task AgentInit_NonInteractive_InstallsExtensionAtProjectAndUserScope()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.TypeAsync(
+            "aspire agent init --workspace-root . " +
+            "--skill-locations none --skills none " +
+            "--extension-locations project,user --extensions aspire-doctor");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandAsync(
+            "test -f .github/extensions/aspire-doctor/extension.mjs " +
+            "&& test -f \"$HOME/.copilot/extensions/aspire-doctor/extension.mjs\"",
+            counter);
+
+        var projectExtension = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".github",
+            "extensions",
+            "aspire-doctor",
+            "extension.mjs");
+        Assert.True(File.Exists(projectExtension), $"Expected project extension at {projectExtension}");
+        Assert.Contains("aspire-doctor", File.ReadAllText(projectExtension), StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)
     {
         Assert.SkipWhen(

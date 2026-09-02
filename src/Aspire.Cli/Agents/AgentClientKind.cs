@@ -23,3 +23,27 @@ internal enum AgentClientKind
     /// <summary>OpenCode.</summary>
     OpenCode,
 }
+
+/// <summary>
+/// Provides agent asset capabilities for known clients.
+/// </summary>
+internal static class AgentClientKindExtensions
+{
+    /// <summary>
+    /// Gets whether the client supports the specified agent asset kind.
+    /// </summary>
+    public static bool Supports(this AgentClientKind client, AgentAssetKind assetKind)
+    {
+        return assetKind switch
+        {
+            AgentAssetKind.Skill or AgentAssetKind.Mcp =>
+                client is AgentClientKind.CopilotCli or
+                    AgentClientKind.CopilotApp or
+                    AgentClientKind.ClaudeCode or
+                    AgentClientKind.VsCode or
+                    AgentClientKind.OpenCode,
+            AgentAssetKind.Extension => client is AgentClientKind.CopilotApp,
+            _ => false,
+        };
+    }
+}

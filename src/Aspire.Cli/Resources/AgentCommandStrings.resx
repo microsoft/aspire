@@ -105,6 +105,12 @@
   <data name="InitCommand_SelectSkills" xml:space="preserve">
     <value>Which skills should be installed?</value>
   </data>
+  <data name="InitCommand_SelectExtensionLocations" xml:space="preserve">
+    <value>Where should extension files be installed?</value>
+  </data>
+  <data name="InitCommand_SelectExtensions" xml:space="preserve">
+    <value>Which extensions should be installed?</value>
+  </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
   </data>
@@ -123,11 +129,26 @@
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
   </data>
+  <data name="InitCommand_InstalledExtensionsSummary" xml:space="preserve">
+    <value>Installed Aspire extensions:</value>
+  </data>
+  <data name="InitCommand_InstalledExtensionsSummaryExtensions" xml:space="preserve">
+    <value>Extensions: {0}</value>
+  </data>
+  <data name="InitCommand_InstalledExtensionsSummaryLocations" xml:space="preserve">
+    <value>Locations: {0}</value>
+  </data>
+  <data name="InitCommand_FailedToInstallExtension" xml:space="preserve">
+    <value>Failed to install {0} extension at {1}: {2}</value>
+  </data>
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
   </data>
   <data name="InitCommand_NoDetectedClientForSkills" xml:space="preserve">
     <value>No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</value>
+  </data>
+  <data name="InitCommand_NoDetectedClientForExtensions" xml:space="preserve">
+    <value>The GitHub Copilot App was not detected, so default extension installation was skipped. Pass --extension-locations and --extensions to install extensions anyway.</value>
   </data>
   <data name="InitCommand_NoDetectedClientForMcp" xml:space="preserve">
     <value>No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</value>
@@ -136,7 +157,10 @@
     <value>No compatible detected agent environment is available for the selected MCP server configuration.</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, Extension tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+  </data>
+  <data name="InitCommand_NoCompatibleClientForExplicitExtensions" xml:space="preserve">
+    <value>The GitHub Copilot App was not detected. Continuing because explicit Extension options were provided.</value>
   </data>
   <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>
@@ -186,35 +210,47 @@
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
   </data>
+  <data name="ExtensionLocation_ProjectName" xml:space="preserve">
+    <value>Project (.github/extensions/)</value>
+  </data>
+  <data name="ExtensionLocation_ProjectDescription" xml:space="preserve">
+    <value>Available to agents in this project</value>
+  </data>
+  <data name="ExtensionLocation_UserName" xml:space="preserve">
+    <value>User (~/.copilot/extensions/)</value>
+  </data>
+  <data name="ExtensionLocation_UserDescription" xml:space="preserve">
+    <value>Available to agents for the current user</value>
+  </data>
   <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
-    <value>Installing Aspire skills...</value>
+    <value>Installing {0}...</value>
   </data>
   <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
+    <value>The {0} bundle could not be downloaded from GitHub, and no valid cached or embedded bundle is available.</value>
   </data>
   <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
-    <value>The Aspire skills bundle is invalid: {0}</value>
+    <value>The {0} bundle is invalid: {1}</value>
   </data>
   <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
-    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
+    <value>Embedded {0} bundle metadata is invalid: {1}</value>
   </data>
   <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a version.</value>
+    <value>Embedded {0} bundle metadata must specify a version.</value>
   </data>
   <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
-    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
+    <value>Embedded {0} bundle metadata repository '{1}' does not match expected repository '{2}'.</value>
   </data>
   <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
+    <value>Embedded {0} bundle metadata must specify a GitHub release tag.</value>
   </data>
   <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
+    <value>Embedded {0} bundle metadata must specify an asset name.</value>
   </data>
   <data name="AspireSkillsInstaller_MissingMetadataSha512" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</value>
+    <value>Embedded {0} bundle metadata must specify the archive SHA-512 hash.</value>
   </data>
   <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
-    <value>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</value>
+    <value>Embedded {0} bundle archive failed SHA-512 verification. Expected '{1}', got '{2}'.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
@@ -255,11 +291,17 @@
   <data name="InitCommand_McpsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</value>
   </data>
+  <data name="InitCommand_ExtensionLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of extension locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_ExtensionsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of extensions to install. Bundle extensions are loaded dynamically. Use '{0}' or '{1}'</value>
+  </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
-    <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
+    <value>Record AI agent skill, MCP tool, Extension tool, and reference-file usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
   </data>
   <data name="AgentTelemetryCommand_EventTypeDescription" xml:space="preserve">
-    <value>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</value>
+    <value>The telemetry event type (skill_invocation, tool_invocation, extension_tool_invocation, or reference_file_read)</value>
   </data>
   <data name="AgentTelemetryCommand_ClientNameDescription" xml:space="preserve">
     <value>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</value>
@@ -270,8 +312,11 @@
   <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
     <value>The Aspire skill name for a skill_invocation event</value>
   </data>
+  <data name="AgentTelemetryCommand_ExtensionNameDescription" xml:space="preserve">
+    <value>The Aspire Extension name for an extension_tool_invocation event</value>
+  </data>
   <data name="AgentTelemetryCommand_ToolNameDescription" xml:space="preserve">
-    <value>The Aspire MCP tool name for a tool_invocation event</value>
+    <value>The Aspire MCP or Extension tool name for a tool invocation event</value>
   </data>
   <data name="AgentTelemetryCommand_FileReferenceDescription" xml:space="preserve">
     <value>The Aspire skills-relative reference file path for a reference_file_read event</value>

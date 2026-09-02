@@ -12,9 +12,11 @@ public class CommonAgentApplicatorsTests
     private const int MaxSkillDescriptionLength = 1024;
 
     [Fact]
-    public void AgentAssetKind_ContainsOnlySkillAndMcp()
+    public void AgentAssetKind_ContainsSkillMcpAndExtension()
     {
-        Assert.Equal([AgentAssetKind.Skill, AgentAssetKind.Mcp], Enum.GetValues<AgentAssetKind>());
+        Assert.Equal(
+            [AgentAssetKind.Skill, AgentAssetKind.Mcp, AgentAssetKind.Extension],
+            Enum.GetValues<AgentAssetKind>());
     }
 
     [Fact]
@@ -28,6 +30,48 @@ public class CommonAgentApplicatorsTests
                 AgentAssetLocation.OpenCode,
             ],
             AgentAssetLocation.GetLocations(AgentAssetKind.Skill));
+    }
+
+    [Fact]
+    public void AgentAssetLocation_All_ContainsSkillAndExtensionLocations()
+    {
+        Assert.Equal(
+            [
+                AgentAssetLocation.Standard,
+                AgentAssetLocation.ClaudeCode,
+                AgentAssetLocation.GitHubSkills,
+                AgentAssetLocation.OpenCode,
+                AgentAssetLocation.ProjectExtensions,
+                AgentAssetLocation.UserExtensions,
+            ],
+            AgentAssetLocation.All);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_ExtensionLocations_KeepProjectAndUserTargetsSeparate()
+    {
+        Assert.Equal(
+            [AgentAssetLocation.ProjectExtensions, AgentAssetLocation.UserExtensions],
+            AgentAssetLocation.GetLocations(AgentAssetKind.Extension));
+
+        Assert.Equal(AgentAssetKind.Extension, AgentAssetLocation.ProjectExtensions.AssetKind);
+        Assert.Equal(AgentAssetLocationScope.Workspace, AgentAssetLocation.ProjectExtensions.Scopes);
+        Assert.Equal(Path.Combine(".github", "extensions"), AgentAssetLocation.ProjectExtensions.RelativeAssetDirectory);
+
+        Assert.Equal(AgentAssetKind.Extension, AgentAssetLocation.UserExtensions.AssetKind);
+        Assert.Equal(AgentAssetLocationScope.User, AgentAssetLocation.UserExtensions.Scopes);
+        Assert.Equal(Path.Combine(".copilot", "extensions"), AgentAssetLocation.UserExtensions.RelativeAssetDirectory);
+    }
+
+    [Fact]
+    public void AgentAssetLocation_DefaultsAreScopedByAssetKind()
+    {
+        Assert.True(AgentAssetLocation.Standard.IsDefault);
+        Assert.False(AgentAssetLocation.ClaudeCode.IsDefault);
+        Assert.False(AgentAssetLocation.GitHubSkills.IsDefault);
+        Assert.False(AgentAssetLocation.OpenCode.IsDefault);
+        Assert.True(AgentAssetLocation.ProjectExtensions.IsDefault);
+        Assert.False(AgentAssetLocation.UserExtensions.IsDefault);
     }
 
     [Fact]
@@ -82,6 +126,16 @@ public class CommonAgentApplicatorsTests
         Assert.Empty(AgentAssetLocation.GetDefaultLocations(
             AgentAssetKind.Mcp,
             [AgentClientKind.VsCode]));
+    }
+
+    [Fact]
+    public void AgentAssetLocation_GetDefaultLocations_CopilotApp_UsesProjectExtensionLocation()
+    {
+        Assert.Equal(
+            [AgentAssetLocation.ProjectExtensions],
+            AgentAssetLocation.GetDefaultLocations(
+                AgentAssetKind.Extension,
+                [AgentClientKind.CopilotApp]));
     }
 
     [Fact]
@@ -159,6 +213,20 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public void AgentAssetDefinition_ExtensionBundleAsset_UsesExtensionKindAndSource()
+    {
+        var extension = AgentFileAssetDefinition.CreateAspireSkillsBundle(
+            AgentAssetKind.Extension,
+            "aspire-doctor",
+            "Runs Aspire doctor in a canvas");
+
+        Assert.Equal(AgentAssetKind.Extension, extension.AssetKind);
+        Assert.Empty(extension.Files);
+        Assert.Equal(AgentFileAssetSourceKind.AspireSkillsBundle, extension.SourceKind);
+        Assert.True(extension.HasInstallableFiles);
+    }
+
+    [Fact]
     public void AgentAssetDefinition_StaticInstallableSkillDescriptionsFitAgentHostLimits()
     {
         var installableSkills = AgentAssetCatalog.GetFileAssets(AgentAssetKind.Skill)
@@ -198,7 +266,44 @@ public class CommonAgentApplicatorsTests
 
         Assert.Equal(AgentFileAssetSourceKind.Static, AgentAssetCatalog.DotnetInspect.SourceKind);
         Assert.True(AgentAssetCatalog.DotnetInspect.HasInstallableFiles);
+        Assert.Equal("SKILL.md", skillFile.RelativePath);
         Assert.Contains("# dotnet-inspect", skillFile.Content);
+    }
+
+    [Fact]
+    public void AgentClientKind_AllKnownClientsSupportSkillsAndMcp()
+    {
+        AgentClientKind[] clients =
+        [
+            AgentClientKind.CopilotCli,
+            AgentClientKind.CopilotApp,
+            AgentClientKind.VsCode,
+            AgentClientKind.ClaudeCode,
+            AgentClientKind.OpenCode,
+        ];
+
+        Assert.All(clients, static client =>
+        {
+            Assert.True(client.Supports(AgentAssetKind.Skill));
+            Assert.True(client.Supports(AgentAssetKind.Mcp));
+        });
+
+        // Extensions are a Copilot App concept today; every other client must not silently
+        // receive an extension tree it cannot load.
+        Assert.True(AgentClientKind.CopilotApp.Supports(AgentAssetKind.Extension));
+        Assert.All(
+            clients.Where(static client => client is not AgentClientKind.CopilotApp),
+            static client => Assert.False(client.Supports(AgentAssetKind.Extension)));
+    }
+
+    [Fact]
+    public void EveryAgentAssetKind_HasSupportingClient()
+    {
+        var clients = Enum.GetValues<AgentClientKind>();
+
+        Assert.All(
+            Enum.GetValues<AgentAssetKind>(),
+            assetKind => Assert.Contains(clients, client => client.Supports(assetKind)));
     }
 
     [Fact]
@@ -248,6 +353,7 @@ public class CommonAgentApplicatorsTests
     {
         Assert.Equal(AgentAssetBackingKind.File, AgentAssetKind.Skill.GetBackingKind());
         Assert.Equal(AgentAssetBackingKind.Action, AgentAssetKind.Mcp.GetBackingKind());
+        Assert.Equal(AgentAssetBackingKind.File, AgentAssetKind.Extension.GetBackingKind());
     }
 
     [Fact]
