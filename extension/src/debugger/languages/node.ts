@@ -1,7 +1,7 @@
 import * as net from "net";
 import * as path from "path";
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
-import { nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import { denoAppHostRunCommandMissing, denoInspectorAddressUnavailable, nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
@@ -33,7 +33,7 @@ async function getAvailableLoopbackPort(): Promise<number> {
             const address = server.address();
             if (!address || typeof address === 'string') {
                 server.close();
-                reject(new Error('Expected a TCP address while reserving the Deno inspector port.'));
+                reject(new Error(denoInspectorAddressUnavailable));
                 return;
             }
 
@@ -73,7 +73,7 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
             if (launchOptions.debug && launchOptions.isApphost && isDenoRuntimeExecutable(config.runtime_executable)) {
                 const runArgumentIndex = runtimeArgs.indexOf('run');
                 if (runArgumentIndex < 0) {
-                    throw new Error("Expected the Deno AppHost command to contain the 'run' subcommand.");
+                    throw new Error(denoAppHostRunCommandMissing);
                 }
 
                 // Deno does not load js-debug's Node bootloader. Open its native inspector and tell

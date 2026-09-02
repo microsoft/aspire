@@ -19,6 +19,7 @@ export type Capability =
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
     | 'node' // Support for running Node.js projects
+    | 'deno.v1' // Support for debugging Deno AppHosts through js-debug's inspector attach path
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
@@ -149,6 +150,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isNodeInstalled()) {
         capabilities.push("node");
+        capabilities.push("deno.v1");
         capabilities.push("browser");
     }
 

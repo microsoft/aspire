@@ -176,6 +176,8 @@
   "aspire-vscode.strings.yesLabel": "Yes",
   "aspire-vscode.strings.noLabel": "No",
   "aspire-vscode.strings.invalidLaunchConfiguration": "Invalid launch configuration for {0}.",
+  "aspire-vscode.strings.denoInspectorAddressUnavailable": "Could not reserve a loopback address for the Deno inspector.",
+  "aspire-vscode.strings.denoAppHostRunCommandMissing": "The Deno AppHost command does not contain the required 'run' subcommand.",
   "aspire-vscode.strings.unsupportedBrowserDebugTarget": "Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.",
   "aspire-vscode.strings.unsupportedBrowserDebugTargetWithoutUrl": "Browser '{0}' cannot be debugged. Supported browsers are: {1}.",
   "aspire-vscode.strings.noAppHostInWorkspace": "No AppHost found in the Aspire settings file.",

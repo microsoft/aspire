@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { nodeDebuggerExtension } from '../debugger/languages/node';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
@@ -6,6 +7,10 @@ import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } fro
 
 suite('Node Debugger Tests', () => {
     const fakeAspireDebugSession = {} as AspireDebugSession;
+
+    test('advertises versioned Deno AppHost debugging support', () => {
+        assert.ok(getSupportedCapabilities().includes('deno.v1'));
+    });
 
     test('configures js-debug to capture process stdout and stderr', async () => {
         const launchConfig: NodeLaunchConfiguration = {

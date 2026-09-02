@@ -414,7 +414,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["run", "-A", "--sloppy-imports", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("deno", runtimeSpec.WatchExecute?.Command);
         Assert.Equal(["run", "-A", "--sloppy-imports", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
-        Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("deno.v1", runtimeSpec.ExtensionLaunchCapability);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()
