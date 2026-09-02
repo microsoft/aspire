@@ -35,6 +35,24 @@ internal static class AzureSandboxContainerDeployment
     internal const string SandboxStateSectionPrefix = $"{SandboxStateParentSection}:";
     private const int DiskImageReadyTimeoutSeconds = 600;
     private static readonly IReadOnlySet<string> s_noExcludedIds = new HashSet<string>(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> s_outboundHttpConnectionStringKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "AccountEndpoint",
+        "Address",
+        "BlobEndpoint",
+        "Data Source",
+        "DataLakeEndpoint",
+        "Endpoint",
+        "EndpointAIInference",
+        "FileEndpoint",
+        "IngestionEndpoint",
+        "LiveEndpoint",
+        "QueueEndpoint",
+        "ServiceUri",
+        "TableEndpoint",
+        "Uri",
+        "Url"
+    };
 
     public static IEnumerable<PipelineStep> CreatePipelineSteps(AzureSandboxContainerResource resource)
     {
@@ -855,12 +873,14 @@ internal static class AzureSandboxContainerDeployment
         try
         {
             // Aspire connection references can resolve to composite values such as:
-            //   Endpoint=https://account.blob.core.windows.net;ContainerName=uploads
-            // Use the connection-string parser so quoted values containing semicolons remain intact.
+            //   Endpoint=https://account.blob.core.windows.net;Password="value;with;semicolons"
+            // Only address-bearing fields contribute policy hosts. Inspecting arbitrary values could
+            // mistake a URI-shaped credential for an endpoint and widen the deny-by-default policy.
             var builder = new DbConnectionStringBuilder { ConnectionString = value };
-            return builder.Values
-                .Cast<object>()
-                .Select(static candidate => Convert.ToString(candidate, CultureInfo.InvariantCulture))
+            return builder.Keys
+                .Cast<string>()
+                .Where(s_outboundHttpConnectionStringKeys.Contains)
+                .Select(key => Convert.ToString(builder[key], CultureInfo.InvariantCulture))
                 .Select(static candidate => TryGetOutboundHttpHost(candidate, out var candidateHost) ? candidateHost : null)
                 .OfType<string>();
         }

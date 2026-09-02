@@ -2852,6 +2852,43 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SandboxConnectionReferencesDoNotTreatCredentialsAsEgressHosts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+        var connection = builder.AddConnectionString(
+            "external",
+            ReferenceExpression.Create($"Endpoint=https://api.example.test;Password=https://credential.example.test"));
+        var worker = builder.AddProject<TestProject>("worker", launchProfileName: null)
+            .WithReference(connection)
+            .PublishAsAzureSandbox();
+
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(
+            stepContext,
+            worker.Resource);
+
+        Assert.Equal(
+            "Endpoint=https://api.example.test;Password=https://credential.example.test",
+            environment.Values["ConnectionStrings__external"]);
+        Assert.Equal(["api.example.test"], environment.EgressHosts);
+    }
+
+    [Fact]
     public async Task SandboxDeployStepsFollowReferencedEndpointDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
