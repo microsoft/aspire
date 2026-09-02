@@ -2251,6 +2251,90 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithPackageReferencesAndExplicitChannel_ComposesAmbientNuGetConfigAndCleansCredentialRestore()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string channelSource = "https://packages.example.com/v3/index.json";
+        var ambientConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(ambientConfigPath, $$"""
+            <configuration>
+              <packageSources>
+                <add key="private" value="{{channelSource}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </private>
+              </packageSourceCredentials>
+              <config>
+                <add key="signatureValidationMode" value="require" />
+              </config>
+            </configuration>
+            """);
+
+        var dailyChannel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        XDocument? restoreConfig = null;
+        executionFactory.AsyncAttemptCallback = (_, _, _) =>
+        {
+            var args = executionFactory.LastArguments!;
+            if (args is ["nuget", "config-paths", ..])
+            {
+                return Task.FromResult((0, (string?)System.Text.Json.JsonSerializer.Serialize(new[] { ambientConfigPath })));
+            }
+
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreConfig = XDocument.Load(GetArgumentValue(args, "--nuget-config"));
+            }
+
+            return Task.FromResult((0, (string?)null));
+        };
+
+        string? nonReusableRestoreDirectory = null;
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0")],
+                requestedChannel: "daily");
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreConfig);
+            Assert.NotNull(restoreConfig.Descendants("packageSourceCredentials").Single().Element("private"));
+            Assert.Equal(
+                "require",
+                restoreConfig.Descendants("config").Elements("add").Single().Attribute("value")?.Value);
+            Assert.Contains(
+                restoreConfig.Descendants("packageSourceMapping").Elements("packageSource"),
+                source => source.Attribute("key")?.Value == "private");
+
+            nonReusableRestoreDirectory = Directory.GetParent(server.IntegrationProbeManifestPath!)!.FullName;
+            Assert.True(Directory.Exists(nonReusableRestoreDirectory));
+
+            server.Dispose();
+
+            Assert.False(Directory.Exists(nonReusableRestoreDirectory));
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(GetWorkingDirectory(server));
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WhenComposedNuGetConfigChanges_InvalidatesRestoreStamp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2628,6 +2712,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 }
             }
         };
+        executionFactory.AsyncAttemptCallback = (_, _, _) =>
+            Task.FromResult(executionFactory.LastArguments is ["nuget", "config-paths", ..]
+                ? (0, (string?)"[]")
+                : (executionFactory.DefaultExitCode, (string?)null));
 
         var nugetService = new BundleNuGetService(
             new FixedLayoutDiscovery(layout),
@@ -3145,6 +3233,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         var layout = CreateBundleLayout(workspace);
         var executionFactory = new TestProcessExecutionFactory();
+        executionFactory.AsyncAttemptCallback = (_, _, _) =>
+            Task.FromResult(executionFactory.LastArguments is ["nuget", "config-paths", ..]
+                ? (0, (string?)"[]")
+                : (executionFactory.DefaultExitCode, (string?)null));
         var nugetService = new BundleNuGetService(
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),

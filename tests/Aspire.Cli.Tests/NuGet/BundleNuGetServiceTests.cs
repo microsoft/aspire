@@ -8,6 +8,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -174,6 +175,119 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             workingDirectory: appHostDirectory.FullName);
 
         Assert.NotEqual(firstResult, secondResult);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_DoesNotReuseCredentialBearingSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        const string credentialBearingSource = "https://packages.example.com/v3/index.json?sig=secret";
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var firstResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: [credentialBearingSource],
+            workingDirectory: appHostDirectory.FullName);
+        var secondResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: [credentialBearingSource],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(firstResult, secondResult);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RedactsCredentialBearingSourcesFromFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        const string credentialBearingSource = "https://user:password@packages.example.com/v3/index.json?sig=secret";
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionCallback = (args, environment, _, options) => new TestProcessExecution(
+                "aspire-managed",
+                args,
+                environment,
+                options,
+                (_, _, _) => Task.FromResult((0, (string?)null)),
+                () => 1)
+            {
+                WaitForExitAsyncCallback = (invocationOptions, _) =>
+                {
+                    invocationOptions.StandardErrorCallback?.Invoke($"Unable to load the service index for source {credentialBearingSource}.");
+                    return Task.FromResult(1);
+                }
+            }
+        };
+        var sink = new TestSink();
+        var logger = new TestLogger<BundleNuGetService>(new TestLoggerFactory(sink, enabled: true));
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            logger);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: [credentialBearingSource],
+            workingDirectory: appHostDirectory.FullName));
+
+        Assert.DoesNotContain(credentialBearingSource, exception.Message);
+        Assert.Contains("packages.example.com", exception.Message);
+        Assert.DoesNotContain(sink.Writes, write => write.Message?.Contains(credentialBearingSource, StringComparison.Ordinal) == true);
+        Assert.Empty(Directory.EnumerateDirectories(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore")));
+    }
+
+    [Fact]
+    public async Task GetNuGetConfigPathsAsync_UsesBundledHelper()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var configPath = Path.Combine(appHostDirectory.FullName, "NuGet.Config");
+        string[]? invocation = null;
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) => invocation = args,
+            AttemptCallback = (_, _) => (0, System.Text.Json.JsonSerializer.Serialize(new[] { configPath }))
+        };
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var configPaths = await service.GetNuGetConfigPathsAsync(appHostDirectory.FullName, CancellationToken.None);
+
+        Assert.Equal([configPath], configPaths);
+        Assert.Equal(["nuget", "config-paths", "--working-dir", appHostDirectory.FullName], invocation!);
     }
 
     [Fact]
