@@ -128,9 +128,8 @@ internal static partial class JavaDockerfileGenerator
         var build = prebuiltJar is null ? JavaContainerBuild.Resolve(resource, appDirectory) : null;
         var javaVersion = JavaVersionDetector.Detect(appDirectory, build?.Tool);
 
-        // ctx.Resource is the ContainerResource PublishAsDockerFile substitutes in, but it shares the
-        // original JavaAppResource's annotation collection, which is why WithDockerfileBaseImage authored
-        // on the Java resource is visible from here.
+        // The container projection inherits Java resource annotations, so base-image configuration
+        // authored on the owner remains visible while projection-local configuration can override it.
         context.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
         // A plain JDK image is always enough because a wrapper is required: the wrapper downloads the exact
         // tool version the project pins, so nothing has to come from the image. That also keeps the build

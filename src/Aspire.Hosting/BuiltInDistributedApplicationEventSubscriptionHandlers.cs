@@ -21,7 +21,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 
         foreach (var container in beforeStartEvent.Model.GetContainerResources())
         {
-            nameGenerator.EnsureDcpInstancesPopulated(container);
+            nameGenerator.EnsureDcpInstancesPopulated(container.GetOwnerOrSelf(), container);
         }
 
         foreach (var executable in beforeStartEvent.Model.GetExecutableResources())
@@ -57,8 +57,9 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     {
         foreach (var resource in beforeStartEvent.Model.Resources)
         {
-            var isHttp2Service = resource.Annotations.OfType<Http2ServiceAnnotation>().Any();
-            var httpEndpoints = resource.Annotations.OfType<EndpointAnnotation>().Where(sb => sb.UriScheme == "http" || sb.UriScheme == "https");
+            var effectiveResource = resource.GetEffectiveResource();
+            var isHttp2Service = effectiveResource.Annotations.OfType<Http2ServiceAnnotation>().Any();
+            var httpEndpoints = effectiveResource.Annotations.OfType<EndpointAnnotation>().Where(sb => sb.UriScheme == "http" || sb.UriScheme == "https");
             foreach (var httpEndpoint in httpEndpoints)
             {
                 httpEndpoint.Transport = isHttp2Service ? "http2" : httpEndpoint.Transport;
@@ -71,8 +72,8 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     public static Task UpdateContainerRegistryAsync(BeforeStartEvent @event, DistributedApplicationOptions options)
     {
         var resourcesWithContainerImages = @event.Model.Resources.SelectMany(
-            r => r.Annotations.OfType<ContainerImageAnnotation>()
-                              .Select(cia => new { Resource = r, Annotation = cia })
+            r => r.GetEffectiveResource().Annotations.OfType<ContainerImageAnnotation>()
+                .Select(cia => new { Resource = r, Annotation = cia })
             );
 
         foreach (var resourceWithContainerImage in resourcesWithContainerImages)
@@ -96,7 +97,8 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 
         foreach (var resource in beforeStartEvent.Model.Resources)
         {
-            if (resource is ContainerResource && resource.GetLifetimeType() == Lifetime.Persistent)
+            var effectiveResource = resource.GetEffectiveResource();
+            if (effectiveResource is ContainerResource && effectiveResource.GetLifetimeType() == Lifetime.Persistent)
             {
                 if (logger.IsEnabled(LogLevel.Warning))
                 {

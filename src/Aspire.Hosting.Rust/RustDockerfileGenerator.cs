@@ -96,8 +96,8 @@ internal static partial class RustDockerfileGenerator
         ValidateDockerfileValue(target.ProfileDirectory, "resolved Cargo profile directory", resource.Name);
         ValidateDockerfileValue(target.Target, "resolved Cargo target triple directory", resource.Name);
 
-        // Read from `resource` rather than context.Resource because the latter is the ContainerResource that
-        // PublishAsDockerFile substitutes in, which does not carry the Rust annotations.
+        // Read from the canonical Rust resource because target resolution depends on Rust-specific state;
+        // context.Resource is the selected container projection used for container-specific configuration.
         var cargoArgs = await ResolvePublishCargoArgsAsync(resource, context.CancellationToken).ConfigureAwait(false);
 
         if (options.ManifestPath is { } path && containerManifestPath is { } containerPath)
@@ -479,7 +479,7 @@ internal static partial class RustDockerfileGenerator
     }
 
     // WithDockerfileBaseImage may be applied to the Rust resource builder or, inside the PublishAsDockerFile
-    // callback, to the substituted container resource.
+    // callback, to its selected container projection.
     private static DockerfileBaseImageAnnotation? ResolveBaseImageAnnotation(RustAppResource resource, DockerfileBuilderCallbackContext context)
         => context.Resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault()
             ?? resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault();

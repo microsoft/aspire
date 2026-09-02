@@ -43,7 +43,7 @@ internal sealed class ExecutableCreator(
         RenderedModelResource<Executable> resource,
         EmptyCreationContext context) =>
         !DcpModelUtilities.ShouldDeferCreateForExplicitStart(
-            resource.ModelResource,
+            resource.EffectiveResource,
             resource.DcpResource.Spec.Start);
 
     public async Task CreateObjectAsync(

@@ -375,13 +375,13 @@ public class ExecutableResourceBuilderExtensionTests
         // container's arguments would run the wrong command.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddExecutable("myexe", "command", "workingdirectory")
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
             .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = Assert.IsAssignableFrom<ContainerResource>(executable.Resource.GetEffectiveResource());
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(container);
 

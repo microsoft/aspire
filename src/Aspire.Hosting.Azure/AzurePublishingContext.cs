@@ -390,8 +390,17 @@ public sealed class AzurePublishingContext(
 
         // Capture any bicep outputs referenced from resources outside of the MainInfrastructure.
         // These include DeploymentTarget resources and any other resources that have parameters that reference bicep outputs.
-        foreach (var resource in model.Resources)
+        var effectiveComputeResources = model.GetComputeResources()
+            .ToDictionary(resource => resource.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var modelResource in model.Resources)
         {
+            // Deployment targets are attached to the effective compute shape, while non-compute
+            // resources remain canonical model members and must still participate in publishing.
+            var resource = effectiveComputeResources.TryGetValue(modelResource.Name, out var effectiveResource)
+                ? effectiveResource
+                : modelResource;
+
             if (resource.GetDeploymentTargetAnnotation() is { } annotation && annotation.DeploymentTarget is AzureBicepResource br)
             {
                 // Materialize Dockerfile factory if present

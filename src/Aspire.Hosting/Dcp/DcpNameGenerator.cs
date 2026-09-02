@@ -34,30 +34,37 @@ internal sealed class DcpNameGenerator
 
     public void EnsureDcpInstancesPopulated(IResource resource)
     {
-        ThrowIfPersistentExecutableHasReplicas(resource);
+        EnsureDcpInstancesPopulated(resource, resource);
+    }
+
+    public void EnsureDcpInstancesPopulated(IResource resource, IResource configurationResource)
+    {
+        // Instance annotations stay on the canonical owner because notifications and commands use
+        // that identity, but names and lifetime come from the selected projection's effective shape.
+        ThrowIfPersistentExecutableHasReplicas(configurationResource);
 
         if (resource.TryGetInstances(out _))
         {
             return;
         }
 
-        if (resource.IsContainer())
+        if (configurationResource.IsContainer())
         {
-            var (name, suffix) = GetContainerName(resource);
+            var (name, suffix) = GetContainerName(configurationResource);
             AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
         }
-        else if (resource is ExecutableResource or ContainerExecutableResource)
+        else if (configurationResource is ExecutableResource or ContainerExecutableResource)
         {
-            var (name, suffix) = GetExecutableName(resource);
+            var (name, suffix) = GetExecutableName(configurationResource);
             AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
         }
-        else if (resource is ProjectResource)
+        else if (configurationResource is ProjectResource)
         {
-            var replicas = resource.GetReplicaCount();
+            var replicas = configurationResource.GetReplicaCount();
             var builder = ImmutableArray.CreateBuilder<DcpInstance>(replicas);
             for (var i = 0; i < replicas; i++)
             {
-                var (name, suffix) = GetExecutableName(resource);
+                var (name, suffix) = GetExecutableName(configurationResource);
                 builder.Add(new DcpInstance(name, suffix, i));
             }
             AddInstancesAnnotation(resource, builder.ToImmutable());

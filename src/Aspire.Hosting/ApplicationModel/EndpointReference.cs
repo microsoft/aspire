@@ -25,7 +25,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
 
     private string BuildMissingEndpointMessage()
     {
-        var availableNames = Resource.Annotations
+        var availableNames = ((IResource)Resource).GetEffectiveResource().Annotations
             .OfType<EndpointAnnotation>()
             .Select(a => a.Name)
             .Where(n => !string.IsNullOrEmpty(n))
@@ -228,7 +228,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             return _endpointAnnotation;
         }
 
-        _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
+        _endpointAnnotation ??= ((IResource)Resource).GetEffectiveResource().Annotations.OfType<EndpointAnnotation>()
             .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
 
         return _endpointAnnotation;

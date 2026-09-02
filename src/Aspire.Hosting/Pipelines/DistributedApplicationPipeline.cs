@@ -229,16 +229,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Description = "Prerequisite step that runs before any push operations.",
             Action = async context =>
             {
-                foreach (var resource in context.Model.Resources)
+                foreach (var owner in context.Model.Resources)
                 {
-                    if (!resource.RequiresImageBuildAndPush())
+                    var effectiveResource = owner.GetEffectiveResource(context.ExecutionContext);
+
+                    if (!effectiveResource.RequiresImageBuildAndPush())
                     {
                         continue;
                     }
 
                     // Check if the resource is configured to save images as archives
                     // rather than pushing to a registry. These don't require a registry.
-                    var buildOptionsContext = await resource.ProcessContainerBuildOptionsCallbackAsync(
+                    var buildOptionsContext = await effectiveResource.ProcessContainerBuildOptionsCallbackAsync(
                         context.Services,
                         context.Logger,
                         context.ExecutionContext,
@@ -251,35 +253,35 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         if (string.IsNullOrEmpty(buildOptionsContext.OutputPath))
                         {
                             throw new InvalidOperationException(
-                                $"Resource '{resource.Name}' has Destination set to Archive but OutputPath is not configured. " +
+                                $"Resource '{owner.Name}' has Destination set to Archive but OutputPath is not configured. " +
                                 $"Please set the OutputPath in the container build options.");
                         }
                         continue;
                     }
 
                     // Skip if resource already has a ContainerRegistryReferenceAnnotation (explicit WithContainerRegistry call)
-                    if (resource.TryGetAnnotationsIncludingAncestorsOfType<ContainerRegistryReferenceAnnotation>(out var annotations) &&
+                    if (effectiveResource.TryGetAnnotationsIncludingAncestorsOfType<ContainerRegistryReferenceAnnotation>(out var annotations) &&
                         annotations.Any())
                     {
                         continue;
                     }
 
                     // Skip if resource has a deployment target with a ContainerRegistry set
-                    var deploymentTargetAnnotation = resource.GetDeploymentTargetAnnotation();
+                    var deploymentTargetAnnotation = effectiveResource.GetDeploymentTargetAnnotation();
                     if (deploymentTargetAnnotation?.ContainerRegistry is not null)
                     {
                         continue;
                     }
 
                     // Check for RegistryTargetAnnotations (automatically added via BeforeStartEvent)
-                    var registryTargetAnnotations = resource.Annotations.OfType<RegistryTargetAnnotation>().ToArray();
+                    var registryTargetAnnotations = effectiveResource.Annotations.OfType<RegistryTargetAnnotation>().ToArray();
 
                     // When multiple registries exist, require explicit WithContainerRegistry call
                     if (registryTargetAnnotations.Length > 1)
                     {
                         var registryNames = string.Join(", ", registryTargetAnnotations.Select(a => a.Registry is IResource res ? res.Name : a.Registry.ToString()));
                         throw new InvalidOperationException(
-                            $"Resource '{resource.Name}' requires image push but has multiple container registries available - '{registryNames}'. " +
+                            $"Resource '{owner.Name}' requires image push but has multiple container registries available - '{registryNames}'. " +
                             $"Please specify which registry to use with '.WithContainerRegistry(registryBuilder)'.");
                     }
 
@@ -287,7 +289,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     if (registryTargetAnnotations.Length == 0)
                     {
                         throw new InvalidOperationException(
-                            $"Resource '{resource.Name}' requires image push but no container registry is available. " +
+                            $"Resource '{owner.Name}' requires image push but no container registry is available. " +
                             $"Please add a container registry using 'builder.AddContainerRegistry(...)' or specify one with '.WithContainerRegistry(registryBuilder)'.");
                     }
                 }
@@ -740,9 +742,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     {
         var steps = new List<PipelineStep>();
 
-        foreach (var resource in context.Model.Resources)
+        foreach (var owner in context.Model.Resources)
         {
-            var annotations = resource.Annotations
+            var effectiveResource = owner.GetEffectiveResource(context.ExecutionContext);
+            var annotations = effectiveResource.Annotations
                 .OfType<PipelineStepAnnotation>();
 
             foreach (var annotation in annotations)
@@ -750,14 +753,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var factoryContext = new PipelineStepFactoryContext
                 {
                     PipelineContext = context,
-                    Resource = resource
+                    Resource = effectiveResource
                 };
 
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
                 foreach (var step in annotationSteps)
                 {
                     steps.Add(step);
-                    step.Resource ??= resource;
+                    step.Resource ??= effectiveResource;
                 }
             }
         }
@@ -775,9 +778,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         callbacks.AddRange(_configurationCallbacks);
 
         // Collect callbacks from resource annotations
-        foreach (var resource in pipelineContext.Model.Resources)
+        foreach (var owner in pipelineContext.Model.Resources)
         {
-            var annotations = resource.Annotations.OfType<PipelineConfigurationAnnotation>();
+            var effectiveResource = owner.GetEffectiveResource(pipelineContext.ExecutionContext);
+            var annotations = effectiveResource.Annotations.OfType<PipelineConfigurationAnnotation>();
             foreach (var annotation in annotations)
             {
                 callbacks.Add(annotation.Callback);

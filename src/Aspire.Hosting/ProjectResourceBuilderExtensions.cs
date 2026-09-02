@@ -959,7 +959,7 @@ public static class ProjectResourceBuilderExtensions
     /// </summary>
     /// <ats-summary>Publishes a project as a Docker file with optional container configuration</ats-summary>
     /// <remarks>
-    /// When the executable resource is converted to a container resource, the arguments to the executable
+    /// When the project resource is projected as a container resource, the arguments to the project
     /// are not used. This is because arguments to the project often contain physical paths that are not valid
     /// in the container. The container can be set up with the correct arguments using the <paramref name="configure"/> action.
     /// </remarks>
@@ -972,54 +972,50 @@ public static class ProjectResourceBuilderExtensions
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : ProjectResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
 
-        // Check if this resource has already been converted to a container resource.
-        // This makes the method idempotent - multiple calls won't cause errors.
-        if (builder.ApplicationBuilder.TryCreateResourceBuilder<ProjectContainerResource>(builder.Resource.Name, out var existingBuilder))
+        var projectFilePath = builder.Resource.GetProjectMetadata().ProjectPath;
+        var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
+        var hasProjection = builder.Resource.TrySelectProjection(
+            builder.ApplicationBuilder.ExecutionContext,
+            out _);
+
+        builder.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container =>
+            {
+                if (!hasProjection)
+                {
+                    container.WithImage(builder.Resource.Name);
+                    container.WithDockerfile(contextPath: projectDirectoryPath);
+
+                    // ASP.NET container images listen on port 8080 by default.
+                    container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                    container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                }
+            });
+
+        if (!builder.Resource.TrySelectProjection(builder.ApplicationBuilder.ExecutionContext, out var projection) ||
+            projection is not ContainerResource containerProjection)
         {
-            // Resource has already been converted, just invoke the configure callback if provided
-            configure?.Invoke(existingBuilder);
             return builder;
         }
 
-        // The implementation here is less than ideal, but we don't have a clean way of building resource types
-        // that change their behavior based on the context. In this case, we want to change the behavior of the
-        // resource from a ProjectResource to a ContainerResource. We do this by removing the ProjectResource
-        // from the application model and adding a new ContainerResource in its place in publish mode.
+        if (!hasProjection)
+        {
+            // Project launch arguments describe the host process, so hide the arguments visible when
+            // the projection is created. Arguments added later explicitly target the projected shape.
+            containerProjection.Annotations.RemoveAnnotations<CommandLineArgsCallbackAnnotation>();
+        }
 
-        // There are still dangling references to the original ProjectResource in the application model, but
-        // in publish mode, it won't be used. This is a limitation of the current design.
-        builder.ApplicationBuilder.Resources.Remove(builder.Resource);
-
-        var container = new ProjectContainerResource(builder.Resource);
-        var cb = builder.ApplicationBuilder.AddResource(container);
-        // WithImage makes this a container resource (adding the annotation)
-        cb.WithImage(builder.Resource.Name);
-
-        var projectFilePath = builder.Resource.GetProjectMetadata().ProjectPath;
-        var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
-
-        cb.WithDockerfile(contextPath: projectDirectoryPath);
-        // Arguments to the executable often contain physical paths that are not valid in the container
-        // Clear them out so that the container can be set up with the correct arguments
-        cb.WithArgs(c => c.Args.Clear());
-
-        // Configure default http/https endpoints for the container
-        // Note that we set the target port to 8080 (if not already set), which is the port used in the ASP.NET base images
-        cb.WithEndpoint("http", e => e.TargetPort ??= 8080, createIfNotExists: false);
-        cb.WithEndpoint("https", e => e.TargetPort ??= 8080, createIfNotExists: false);
-
-        configure?.Invoke(cb);
-
-        // Even through we're adding a ContainerResource
-        // update the manifest publishing callback on the original ProjectResource
-        // so that the container resource is written to the manifest
-        return builder.WithManifestPublishingCallback(context =>
-            context.WriteContainerAsync(container));
+        return builder.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => configure?.Invoke(container));
     }
 
     private static IConfiguration GetConfiguration(IResource projectResource)
@@ -1210,11 +1206,5 @@ public static class ProjectResourceBuilderExtensions
             return "localhost";
         }
         return host;
-    }
-
-    // Allows us to mirror annotations from ProjectContainerResource to ContainerResource
-    private sealed class ProjectContainerResource(ProjectResource pr) : ContainerResource(pr.Name)
-    {
-        public override ResourceAnnotationCollection Annotations => pr.Annotations;
     }
 }

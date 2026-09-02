@@ -68,11 +68,23 @@ internal class AppResource<TDcpResource> : IAppResource, IDisposable, IEquatable
 [DebuggerDisplay("ModelResource = {ModelResource}, DcpResourceName = {DcpResourceName}, DcpResourceKind = {DcpResourceKind}")]
 internal class RenderedModelResource<TDcpResource> : AppResource<TDcpResource>, IResourceReference where TDcpResource : CustomResource, IKubernetesStaticMetadata
 {
+    /// <summary>
+    /// Gets the canonical model member used for identity-sensitive operations.
+    /// </summary>
     public IResource ModelResource { get; }
 
-    public RenderedModelResource(IResource modelResource, TDcpResource dcpResource) : base(dcpResource)
+    /// <summary>
+    /// Gets the selected resource shape used to configure the rendered DCP object.
+    /// </summary>
+    public IResource EffectiveResource { get; }
+
+    public RenderedModelResource(
+        IResource modelResource,
+        TDcpResource dcpResource,
+        IResource? effectiveResource = null) : base(dcpResource)
     {
         ModelResource = modelResource;
+        EffectiveResource = effectiveResource ?? modelResource;
     }
 
     public virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];

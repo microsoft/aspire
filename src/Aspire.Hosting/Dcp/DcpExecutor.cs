@@ -652,7 +652,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _logger.LogDebug("Preparing services. Ports randomized: {RandomizePorts}", _options.Value.RandomizePorts);
 
         var serviceProducers = _model.Resources
-            .Select(r => (ModelResource: r, Endpoints: r.Annotations.OfType<EndpointAnnotation>().ToArray()))
+            .Select(r =>
+            {
+                var effectiveResource = r.GetEffectiveResource(_executionContext);
+                return (
+                    ModelResource: r,
+                    EffectiveResource: effectiveResource,
+                    Endpoints: effectiveResource.Annotations.OfType<EndpointAnnotation>().ToArray());
+            })
             .Where(sp => sp.Endpoints.Any())
             .ToArray();
 
@@ -661,21 +668,21 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             foreach (var endpoint in sp.Endpoints)
             {
-                endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
-                DcpModelUtilities.ValidateEndpointPorts(sp.ModelResource, endpoint);
+                endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.EffectiveResource, endpoint, _options.Value.RandomizePorts));
+                DcpModelUtilities.ValidateEndpointPorts(sp.EffectiveResource, endpoint);
 
-                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
+                if (TryGetEffectiveFixedPublicPort(sp.EffectiveResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(fixedPublicPort);
                 }
 
-                if (TryGetPersistedProxylessEndpointPort(sp.ModelResource, endpoint) is int persistedPort)
+                if (TryGetPersistedProxylessEndpointPort(sp.EffectiveResource, endpoint) is int persistedPort)
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(persistedPort);
                 }
 
                 if (sp.ModelResource is IComputeResource &&
-                    !sp.ModelResource.IsContainer() &&
+                    !sp.EffectiveResource.IsContainer() &&
                     EndpointAnnotation.NormalizePort(endpoint.TargetPort) is int fixedTargetPort)
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(fixedTargetPort);
@@ -690,7 +697,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             foreach (var endpoint in endpoints)
             {
-                var (serviceName, isNew) = _nameGenerator.GetServiceName(sp.ModelResource, endpoint, endpoint.DefaultNetworkID);
+                var (serviceName, isNew) = _nameGenerator.GetServiceName(sp.EffectiveResource, endpoint, endpoint.DefaultNetworkID);
                 if (!isNew)
                 {
                     _logger.LogWarning("Encountered the same service-endpoint combination more than once for {EndpointName} on resource {ResourceName} when creating default endpoint services. This should never happen.", endpoint.Name, sp.ModelResource.Name);
@@ -699,9 +706,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                 var svc = Service.Create(serviceName);
 
-                EnsureProxylessEndpointPort(sp.ModelResource, endpoint);
+                EnsureProxylessEndpointPort(sp.EffectiveResource, endpoint);
 
-                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
+                if (TryGetEffectiveFixedPublicPort(sp.EffectiveResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
                     svc.Spec.Port = fixedPublicPort;
                 }
@@ -1267,13 +1274,13 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             switch (resourceReference)
             {
                 // We need to handle explicit start persistent resources specially on first launch as they may already be running, so we need to register them with DCP to discover their status.
-                case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
+                case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.EffectiveResource, cr.DcpResource.Spec.Start):
                     await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
-                case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
+                case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.EffectiveResource, er.DcpResource.Spec.Start):
                     await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
@@ -1327,7 +1334,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _logger.LogDebug("Ensuring '{ResourceName}' is deleted.", resource.DcpResourceName);
 
         // Reset cached callback results so they are re-evaluated on restart.
-        ForgetCachedCallbackResults(resource.ModelResource);
+        var effectiveResource = resource is RenderedModelResource<T> renderedResource
+            ? renderedResource.EffectiveResource
+            : resource.ModelResource;
+        ForgetCachedCallbackResults(effectiveResource);
         ForgetConnectionStringAvailableEvent(resource.ModelResource);
 
         var result = await DeleteResourceRetryPipeline.ExecuteAsync(async (resourceName, attemptCancellationToken) =>

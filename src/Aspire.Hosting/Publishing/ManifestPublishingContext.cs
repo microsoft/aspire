@@ -110,6 +110,10 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     internal async Task WriteResourceAsync(IResource resource)
     {
+        // The owner remains the model member and manifest key, while the selected projection is
+        // authoritative for the shape and configuration written for the current operation.
+        resource = resource.GetEffectiveResource(ExecutionContext);
+
         // First see if the resource has a callback annotation with overrides the behavior for rendering
         // out the JSON. If so use that callback, otherwise use the fallback logic that we have.
         if (resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var manifestPublishingCallbackAnnotation))

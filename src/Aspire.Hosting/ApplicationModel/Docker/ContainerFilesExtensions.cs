@@ -31,9 +31,10 @@ public static class ContainerFilesExtensions
             foreach (var containerFileDestination in containerFilesDestinationAnnotations)
             {
                 var source = containerFileDestination.Source;
+                var effectiveSource = source.GetEffectiveResource();
 
-                // get image name - skip this source if it doesn't have an image name
-                if (!source.TryGetContainerImageName(out var sourceImageName))
+                // References retain the canonical owner, while image metadata comes from the selected shape.
+                if (!effectiveSource.TryGetContainerImageName(out var sourceImageName))
                 {
                     logger?.LogWarning("Cannot get container image name for source resource {SourceName}, skipping", source.Name);
                     continue;
@@ -90,9 +91,10 @@ public static class ContainerFilesExtensions
             foreach (var containerFileDestination in containerFilesDestinationAnnotations)
             {
                 var source = containerFileDestination.Source;
+                var effectiveSource = source.GetEffectiveResource();
 
-                // get image name - skip this source if it doesn't have an image name
-                if (!source.TryGetContainerImageName(out var _))
+                // References retain the canonical owner, while file metadata comes from the selected shape.
+                if (!effectiveSource.TryGetContainerImageName(out var _))
                 {
                     logger?.LogWarning("Cannot get container image name for source resource {SourceName}, skipping", source.Name);
                     continue;
@@ -106,7 +108,7 @@ public static class ContainerFilesExtensions
                     destinationPath = $"{rootDestinationPath}/{destinationPath}";
                 }
 
-                foreach (var containerFilesSource in source.Annotations.OfType<ContainerFilesSourceAnnotation>())
+                foreach (var containerFilesSource in effectiveSource.Annotations.OfType<ContainerFilesSourceAnnotation>())
                 {
                     logger?.LogDebug("Adding COPY --from={SourceImage} {SourcePath} {DestinationPath}",
                         sourceImageStageName, containerFilesSource.SourcePath, destinationPath);

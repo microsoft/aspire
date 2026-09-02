@@ -19,22 +19,24 @@ public static class DistributedApplicationModelExtensions
     {
         foreach (var r in model.Resources)
         {
-            if (r.IsExcludedFromPublish())
+            var effectiveResource = r.GetEffectiveResource();
+
+            if (effectiveResource.IsExcludedFromPublish())
             {
                 continue;
             }
 
-            if (!r.IsContainer() && !r.IsEmulator() && r is not ProjectResource)
+            if (!effectiveResource.IsContainer() && !effectiveResource.IsEmulator() && effectiveResource is not ProjectResource)
             {
                 continue;
             }
 
-            if (r.IsBuildOnlyContainer())
+            if (effectiveResource.IsBuildOnlyContainer())
             {
                 continue;
             }
 
-            yield return r;
+            yield return effectiveResource;
         }
     }
 
@@ -49,9 +51,11 @@ public static class DistributedApplicationModelExtensions
     {
         foreach (var r in model.Resources)
         {
-            if (r.RequiresImageBuild())
+            var effectiveResource = r.GetEffectiveResource();
+
+            if (effectiveResource.RequiresImageBuild())
             {
-                yield return r;
+                yield return effectiveResource;
             }
         }
     }
@@ -67,9 +71,11 @@ public static class DistributedApplicationModelExtensions
     {
         foreach (var r in model.Resources)
         {
-            if (r.RequiresImageBuildAndPush())
+            var effectiveResource = r.GetEffectiveResource();
+
+            if (effectiveResource.RequiresImageBuildAndPush())
             {
-                yield return r;
+                yield return effectiveResource;
             }
         }
     }

@@ -278,6 +278,50 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithProjectionPipelineStepFactory_UsesProjectionAnnotations()
+    {
+        using var builder = CreatePipelineTestBuilder();
+
+        var stepExecuted = false;
+        var configurationCallbackInvoked = false;
+        IResource? factoryResource = null;
+        var owner = builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithPipelineConfiguration(_ =>
+                    {
+                        configurationCallbackInvoked = true;
+                        return Task.CompletedTask;
+                    })
+                    .WithPipelineStepFactory(factoryContext =>
+                    {
+                        factoryResource = factoryContext.Resource;
+                        return new PipelineStep
+                        {
+                            Name = "projected-step",
+                            Action = _ =>
+                            {
+                                stepExecuted = true;
+                                return Task.CompletedTask;
+                            }
+                        };
+                    }));
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.True(stepExecuted);
+        Assert.True(configurationCallbackInvoked);
+        Assert.IsAssignableFrom<ContainerResource>(factoryResource);
+        Assert.NotSame(owner.Resource, factoryResource);
+        Assert.Collection(context.Model.Resources, resource => Assert.Same(owner.Resource, resource));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
         using var builder = CreatePipelineTestBuilder();
@@ -2117,6 +2161,34 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Act & Assert - Should not throw an exception even though no registry is configured
         // because the Destination is Archive, not Registry
         await pipeline.ExecuteAsync(context).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task PushPrereq_UsesProjectionBuildOptions()
+    {
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
+
+        var callbackInvoked = false;
+        builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithDockerfile(".")
+                    .WithContainerBuildOptions(context =>
+                    {
+                        callbackInvoked = true;
+                        context.Destination = ContainerImageDestination.Archive;
+                        context.OutputPath = "/tmp/output";
+                    }));
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.True(callbackInvoked);
     }
 
     [Fact]

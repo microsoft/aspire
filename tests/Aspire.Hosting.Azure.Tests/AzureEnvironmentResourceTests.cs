@@ -311,6 +311,26 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task PublishAsync_WithProjectedDockerfileFactory_WritesDockerfileToOutputFolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var dockerfileContent = "FROM alpine:latest\nRUN echo 'Generated for projected executable'";
+        builder.AddExecutable("testexecutable", "node", ".")
+            .PublishAsDockerFile(container => container.WithDockerfileFactory(".", _ => dockerfileContent));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var dockerfilePath = Path.Combine(workspace.Path, "testexecutable.Dockerfile");
+        Assert.True(File.Exists(dockerfilePath));
+        Assert.Equal(dockerfileContent, await File.ReadAllTextAsync(dockerfilePath));
+    }
+
+    [Fact]
     public void AzurePublishingContext_WithBicepTemplateFile_WorksWithRelativePath()
     {
         using var workspace = TemporaryWorkspace.Create(output);

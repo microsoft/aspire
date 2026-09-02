@@ -144,9 +144,8 @@ public static partial class JavaHostingExtensions
             });
 
         // The generated image copies files out of each container files source, so those sources have to be
-        // built first. PublishAsDockerFile removes the Java resource from the model, but the container it
-        // substitutes shares this annotation collection, so the callback still runs; the step lookup matches
-        // on resource name and therefore finds the substituted container's build steps.
+        // built first. Pipeline collection resolves the owner's effective projection, and step lookup matches
+        // resources by name so owner-authored dependencies still find the projection's build steps.
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))

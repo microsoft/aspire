@@ -36,6 +36,18 @@ public class ResourceProjectionTests
 
         var projection = Assert.IsType<ContainerResourceProjection<ExecutableResource>>(
             executable.Resource.GetEffectiveResource(builder.ExecutionContext));
+        Assert.True(executable.Resource.IsContainer());
+        Assert.Collection(
+            new DistributedApplicationModel(builder.Resources).GetContainerResources(),
+            resource => Assert.Same(projection, resource));
+        Assert.Collection(
+            new DistributedApplicationModel(builder.Resources).GetComputeResources(),
+            resource => Assert.Same(projection, resource));
+        Assert.Empty(new DistributedApplicationModel(builder.Resources).GetExecutableResources());
+        Assert.True(builder.TryCreateResourceBuilder<ExecutableResource>("worker", out var ownerBuilder));
+        Assert.Same(executable.Resource, ownerBuilder.Resource);
+        Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
+        Assert.Same(projection, projectionBuilder.Resource);
 
         Assert.Same(executable.Resource, projection.Owner);
         Assert.NotSame(executable.Resource, projection);
@@ -55,6 +67,150 @@ public class ResourceProjectionTests
 
         Assert.Equal("owner", environment["OWNER_SETTING"]);
         Assert.Equal("projection", environment["PROJECTION_SETTING"]);
+    }
+
+    [Fact]
+    public void ManifestCallbackAddedAfterProjectionRemainsAuthoritative()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile()
+            .ExcludeFromManifest();
+
+        var projection = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+
+        Assert.True(executable.Resource.IsExcludedFromPublish());
+        Assert.True(projection.IsExcludedFromPublish());
+    }
+
+    [Fact]
+    public void ProjectionLocalManifestExclusionIsAuthoritative()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .ExcludeFromManifest());
+        var model = new DistributedApplicationModel(builder.Resources);
+
+        Assert.True(executable.Resource.IsExcludedFromPublish());
+        Assert.Empty(model.GetComputeResources());
+    }
+
+    [Fact]
+    public void BuildResourceEnumerationReturnsEffectiveProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile();
+        var projection = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+        var model = new DistributedApplicationModel(builder.Resources);
+
+        Assert.Same(projection, Assert.Single(model.GetBuildResources()));
+        Assert.Same(projection, Assert.Single(model.GetBuildAndPushResources()));
+    }
+
+    [Fact]
+    public async Task DependencyDiscoveryUsesProjectionConfigurationAndReturnsCanonicalResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var parameter = builder.AddParameter("secret");
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithEnvironment("SECRET", parameter));
+
+        var dependencies = await executable.Resource.GetResourceDependenciesAsync(
+            builder.ExecutionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly,
+            TestContext.Current.CancellationToken);
+
+        Assert.Collection(dependencies, dependency => Assert.Same(parameter.Resource, dependency));
+    }
+
+    [Fact]
+    public void CanonicalEndpointReferencesResolveProjectionOnlyEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        var endpointReference = executable.GetEndpoint("projected");
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container
+                .WithImage("projected-image")
+                .WithHttpEndpoint(targetPort: 8080, name: "projected"));
+
+        var projection = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+        var endpoint = Assert.Single(projection.Annotations.OfType<EndpointAnnotation>());
+
+        Assert.True(endpointReference.Exists);
+        Assert.Same(executable.Resource, endpointReference.Resource);
+        Assert.Same(endpoint, endpointReference.EndpointAnnotation);
+        Assert.Same(endpoint, Assert.Single(executable.Resource.GetEndpoints()).EndpointAnnotation);
+    }
+
+    [Fact]
+    public void RepeatedExecutableProjectionPreservesArgumentsAddedAfterCreation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile()
+            .WithArgs("--retained")
+            .PublishAsDockerFile();
+        var projection = executable.Resource.GetEffectiveResource(builder.ExecutionContext);
+
+        Assert.Single(projection.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
+    }
+
+    [Fact]
+    public void CanonicalOwnerResolvesProjectionDeploymentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var target = builder.AddContainer("target", "target-image");
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithAnnotation(new DeploymentTargetAnnotation(target.Resource)));
+
+        var annotation = Assert.IsType<DeploymentTargetAnnotation>(
+            executable.Resource.GetDeploymentTargetAnnotation());
+
+        Assert.Same(target.Resource, annotation.DeploymentTarget);
+    }
+
+    [Fact]
+    public async Task LateHttp2ConfigurationAppliesToProjectedEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithHttpEndpoint()
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithImage("projected-image"))
+            .WithAnnotation(new Http2ServiceAnnotation());
+        var model = new DistributedApplicationModel(builder.Resources);
+
+        await BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync(
+            new BeforeStartEvent(TestServiceProvider.Instance, model),
+            TestContext.Current.CancellationToken);
+
+        var ownerEndpoint = Assert.Single(executable.Resource.Annotations.OfType<EndpointAnnotation>());
+        var projection = Assert.Single(model.GetContainerResources());
+        var projectionEndpoint = Assert.Single(projection.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("http", ownerEndpoint.Transport);
+        Assert.Equal("http2", projectionEndpoint.Transport);
     }
 
     [Fact]

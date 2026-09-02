@@ -19,6 +19,33 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
+    internal static IResource GetEffectiveResource(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        if (resource is IResourceProjection)
+        {
+            return resource;
+        }
+
+        IResource? selectedProjection = null;
+        foreach (var annotation in resource.Annotations.OfType<ResourceProjectionAnnotation>())
+        {
+            if (selectedProjection is not null)
+            {
+                throw new DistributedApplicationException(
+                    $"Resource '{resource.Name}' has more than one active projection.");
+            }
+
+            // Projection registration is currently operation-gated, so every annotation present on
+            // an owner is active for the process operation. A later deferred evaluation phase can
+            // replace this with an explicitly selected annotation without changing classification.
+            selectedProjection = annotation.Source.Projection;
+        }
+
+        return selectedProjection ?? resource;
+    }
+
     internal static IResource GetEffectiveResource(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext)
@@ -65,6 +92,13 @@ public static class ResourceExtensions
         }
 
         return selectedProjection is not null;
+    }
+
+    internal static IResource GetOwnerOrSelf(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource is IResourceProjection projection ? projection.Owner : resource;
     }
 
     /// <summary>
@@ -655,8 +689,13 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to determine if it should be excluded from being published.</param>
     [AspireExportIgnore(Reason = "Manifest inspection helper — not part of the ATS surface.")]
-    public static bool IsExcludedFromPublish(this IResource resource) =>
-        resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var lastAnnotation) && lastAnnotation == ManifestPublishingCallbackAnnotation.Ignore;
+    public static bool IsExcludedFromPublish(this IResource resource)
+    {
+        var effectiveResource = resource.GetEffectiveResource();
+
+        return effectiveResource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var lastAnnotation) &&
+            lastAnnotation == ManifestPublishingCallbackAnnotation.Ignore;
+    }
 
     internal static async ValueTask ProcessContainerRuntimeArgValues(
         this IResource resource,
@@ -780,7 +819,7 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Endpoint annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetEndpoints(this IResource resource, [NotNullWhen(true)] out IEnumerable<EndpointAnnotation>? endpoints)
     {
-        return TryGetAnnotationsOfType(resource, out endpoints);
+        return TryGetAnnotationsOfType(resource.GetEffectiveResource(), out endpoints);
     }
 
     /// <summary>
@@ -803,7 +842,7 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Resource handle endpoint enumeration is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource)
     {
-        if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
+        if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
             return endpoints.Select(e => new EndpointReference(resource, e));
         }
@@ -820,7 +859,7 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Network-specific endpoint enumeration is not part of the ATS surface.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkId)
     {
-        if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
+        if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
             return endpoints.Select(e => new EndpointReference(resource, e, contextNetworkId));
         }
@@ -1049,12 +1088,15 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
-        if (resource.IsExcludedFromPublish())
+        var effectiveResource = resource.GetEffectiveResource();
+
+        if (effectiveResource.IsExcludedFromPublish())
         {
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return effectiveResource is ProjectResource ||
+            effectiveResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1075,7 +1117,9 @@ public static class ResourceExtensions
 
     internal static bool IsBuildOnlyContainer(this IResource resource)
     {
-        return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
+        var effectiveResource = resource.GetEffectiveResource();
+
+        return effectiveResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
             !dockerfileBuild.HasEntrypoint;
     }
 
@@ -1101,8 +1145,9 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Deployment target inspection helper — not part of the ATS surface.")]
     public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null)
     {
+        var effectiveResource = resource.GetEffectiveResource();
         IComputeEnvironmentResource? selectedComputeEnvironment = null;
-        if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
+        if (effectiveResource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
         {
             // If you have a ComputeEnvironmentAnnotation, it means the resource is bound to a specific compute environment.
             // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
@@ -1115,7 +1160,7 @@ public static class ResourceExtensions
             selectedComputeEnvironment = computeEnvironmentAnnotation.ComputeEnvironment;
         }
 
-        if (resource.TryGetAnnotationsOfType<DeploymentTargetAnnotation>(out var deploymentTargetAnnotations))
+        if (effectiveResource.TryGetAnnotationsOfType<DeploymentTargetAnnotation>(out var deploymentTargetAnnotations))
         {
             var annotations = deploymentTargetAnnotations.ToArray();
 
@@ -1638,7 +1683,7 @@ public static class ResourceExtensions
         // Ensure the input resources are not in its own dependency set, even if referenced transitively.
         foreach (var resource in resources)
         {
-            dependencies.Remove(resource);
+            dependencies.Remove(resource.GetOwnerOrSelf());
         }
 
         return dependencies;
@@ -1662,12 +1707,19 @@ public static class ResourceExtensions
         CancellationToken cancellationToken)
     {
         var visited = new HashSet<object>();
+        var owner = resource.GetOwnerOrSelf();
+        var effectiveResource = owner.GetEffectiveResource(executionContext);
 
-        // Collect direct dependencies from annotations
-        CollectAnnotationDependencies(resource, dependencies, newDependencies);
+        // Parent relationships are structural properties of the owner, while wait and redirect
+        // annotations can be projection-local. Inspect both and canonicalize discovered resources.
+        CollectAnnotationDependencies(owner, dependencies, newDependencies);
+        if (!ReferenceEquals(owner, effectiveResource))
+        {
+            CollectAnnotationDependencies(effectiveResource, dependencies, newDependencies);
+        }
 
         // Collect raw (unresolved) environment variable and argument values
-        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, options, cancellationToken).ConfigureAwait(false);
+        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(effectiveResource, executionContext, options, cancellationToken).ConfigureAwait(false);
 
         foreach (var value in rawValues)
         {
@@ -1790,10 +1842,7 @@ public static class ResourceExtensions
         // Parent relationship
         if (resource is IResourceWithParent resourceWithParent)
         {
-            if (dependencies.Add(resourceWithParent.Parent))
-            {
-                newDependencies.Add(resourceWithParent.Parent);
-            }
+            AddDependency(resourceWithParent.Parent, dependencies, newDependencies);
         }
 
         // Wait annotations
@@ -1801,20 +1850,26 @@ public static class ResourceExtensions
         {
             foreach (var waitAnnotation in waitAnnotations)
             {
-                if (dependencies.Add(waitAnnotation.Resource))
-                {
-                    newDependencies.Add(waitAnnotation.Resource);
-                }
+                AddDependency(waitAnnotation.Resource, dependencies, newDependencies);
             }
         }
 
         // Connection string redirect
         if (resource.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var redirectAnnotation))
         {
-            if (dependencies.Add(redirectAnnotation.Resource))
-            {
-                newDependencies.Add(redirectAnnotation.Resource);
-            }
+            AddDependency(redirectAnnotation.Resource, dependencies, newDependencies);
+        }
+    }
+
+    private static void AddDependency(
+        IResource resource,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies)
+    {
+        var owner = resource.GetOwnerOrSelf();
+        if (dependencies.Add(owner))
+        {
+            newDependencies.Add(owner);
         }
     }
 
@@ -1841,19 +1896,13 @@ public static class ResourceExtensions
         // Direct resource references
         if (value is IResource resource)
         {
-            if (dependencies.Add(resource))
-            {
-                newDependencies.Add(resource);
-            }
+            AddDependency(resource, dependencies, newDependencies);
         }
 
         // Resource builder wrapping a resource
         if (value is IResourceBuilder<IResource> resourceBuilder)
         {
-            if (dependencies.Add(resourceBuilder.Resource))
-            {
-                newDependencies.Add(resourceBuilder.Resource);
-            }
+            AddDependency(resourceBuilder.Resource, dependencies, newDependencies);
             value = resourceBuilder.Resource;
         }
 
@@ -1893,11 +1942,17 @@ public static class ResourceExtensions
             return;
         }
 
-        foreach (var resource in model.Resources.Where(r => !r.IsContainer()).OfType<IResourceWithEndpoints>())
+        foreach (var owner in model.Resources)
         {
-            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)) && dependencies.Add(resource))
+            var effectiveResource = owner.GetEffectiveResource(executionContext);
+            if (effectiveResource.IsContainer() || effectiveResource is not IResourceWithEndpoints)
             {
-                newDependencies.Add(resource);
+                continue;
+            }
+
+            if (effectiveResource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)))
+            {
+                AddDependency(owner, dependencies, newDependencies);
             }
         }
     }

@@ -44,6 +44,111 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task ExecutableContainerProjectionCreatesOnlyAContainerFromProjectionConfiguration()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEnvironment("OWNER_SETTING", "owner")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Run,
+                container => container
+                    .WithImage("projected-image:latest")
+                    .WithContainerName("projected-worker")
+                    .WithPersistentLifetime()
+                    .WithEnvironment("PROJECTION_SETTING", "projection"));
+        var kubernetesService = new TestKubernetesService();
+        IResource? startingResource = null;
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            if (context.ResourceType == "Container")
+            {
+                startingResource = context.Resource;
+            }
+
+            return Task.CompletedTask;
+        });
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        }).Build();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource, resource));
+
+        var appExecutor = CreateAppExecutor(
+            model,
+            configuration: configuration,
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.Empty(kubernetesService.CreatedResources.OfType<Executable>());
+        Assert.Equal("projected-image:latest", container.Spec.Image);
+        Assert.Equal("projected-worker", container.Metadata.Name);
+        Assert.Equal("projected-worker", container.Spec.ContainerName);
+        Assert.Equal("owner", Assert.Single(container.Spec.Env!, variable => variable.Name == "OWNER_SETTING").Value);
+        Assert.Equal("projection", Assert.Single(container.Spec.Env!, variable => variable.Name == "PROJECTION_SETTING").Value);
+        Assert.Equal(executable.Resource.Name, container.AppModelResourceName);
+        Assert.Same(executable.Resource, startingResource);
+        Assert.NotNull(executable.GetEndpoint("http").AllocatedEndpoint);
+        Assert.True(Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>()).Spec.Persistent);
+    }
+
+    [Fact]
+    public async Task ExplicitStartProjectionDefersCallbacksAndReevaluatesThemOnRestart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var callbackCount = 0;
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Run,
+                container => container
+                    .WithImage("projected-image:latest")
+                    .WithExplicitStart()
+                    .WithEnvironment(context =>
+                    {
+                        callbackCount++;
+                        context.EnvironmentVariables["CALL_COUNT"] = callbackCount.ToString(CultureInfo.InvariantCulture);
+                    }));
+        var kubernetesService = new TestKubernetesService();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(model, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(0, callbackCount);
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Container>(), container => container.AppModelResourceName == executable.Resource.Name);
+
+        var resourceReference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(resourceReference, CancellationToken.None);
+
+        Assert.Equal(1, callbackCount);
+        Assert.Equal(
+            "1",
+            Assert.Single(
+                kubernetesService.CreatedResources.OfType<Container>(),
+                container => container.AppModelResourceName == executable.Resource.Name).Spec.Env!
+                .Single(variable => variable.Name == "CALL_COUNT").Value);
+
+        await appExecutor.StopResourceAsync(resourceReference, CancellationToken.None);
+        await appExecutor.StartResourceAsync(resourceReference, CancellationToken.None);
+
+        Assert.Equal(2, callbackCount);
+        Assert.Equal(
+            "2",
+            kubernetesService.CreatedResources.OfType<Container>()
+                .Last(container => container.AppModelResourceName == executable.Resource.Name).Spec.Env!
+                .Single(variable => variable.Name == "CALL_COUNT").Value);
+    }
+
+    [Fact]
     public async Task ContainersArePassedOtelServiceName()
     {
         // Arrange

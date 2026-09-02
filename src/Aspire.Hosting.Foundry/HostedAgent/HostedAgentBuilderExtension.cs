@@ -476,18 +476,12 @@ public static class HostedAgentResourceBuilderExtensions
         else if (resource is ExecutableResource executableResource)
         {
             // Ensure we have a container resource to deploy.
-            // ExecutableResource needs PublishAsDockerFile() to convert it into a container resource at this stage.
+            IResourceBuilder<ContainerResource>? containerProjection = null;
             builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
-                .PublishAsDockerFile();
+                .PublishAsDockerFile(container => containerProjection = container);
 
-            if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out containerResourceBuilder))
-            {
-                target = containerResourceBuilder.Resource;
-            }
-            else
-            {
-                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
-            }
+            target = containerProjection?.Resource ??
+                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be projected as a container resource.");
         }
         else if (resource is ProjectResource)
         {
@@ -532,11 +526,12 @@ public static class HostedAgentResourceBuilderExtensions
         // Referencing a hosted agent (its node app) only injects the agent's service-discovery URL.
         // Unlike referencing a first-class Azure resource, it does not give the consumer a managed
         // identity or any RBAC on the Foundry account, so calls to the agent's invocation endpoint
-        // fail with 401/403 at runtime. Stamp a ReferenceRoleAssignmentAnnotation on the agent's
-        // target so AzureResourcePreparer grants the "Azure AI User" role on the owning Foundry
+        // fail with 401/403 at runtime. Stamp a ReferenceRoleAssignmentAnnotation on the canonical
+        // resource so consumers can discover it even when the deployed target is a projection.
+        // AzureResourcePreparer then grants the "Azure AI User" role on the owning Foundry
         // account to every consumer that references this agent, and provisions the identity that
         // makes ACA inject AZURE_CLIENT_ID.
-        StampHostedAgentConsumerRoleAnnotation(target, projectResource.Parent);
+        StampHostedAgentConsumerRoleAnnotation(resource, projectResource.Parent);
     }
 
     private static void StampHostedAgentConsumerRoleAnnotation(IResourceWithEnvironment target, FoundryResource account)

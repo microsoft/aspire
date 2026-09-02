@@ -972,10 +972,7 @@ public static partial class JavaScriptHostingExtensions
                .WithContainerFilesSource(GetContainerFilesSourcePath(options.OutputPath))
                .WithOtlpExporter();
 
-        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-        {
-            dockerfileBuildAnnotation.HasEntrypoint = true;
-        }
+        MarkDockerfileAsExecutable(builder);
 
         return builder;
     }
@@ -1032,10 +1029,7 @@ public static partial class JavaScriptHostingExtensions
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
-        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-        {
-            dockerfileBuildAnnotation.HasEntrypoint = true;
-        }
+        MarkDockerfileAsExecutable(builder);
 
         return builder;
     }
@@ -1095,12 +1089,23 @@ public static partial class JavaScriptHostingExtensions
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
-        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+        MarkDockerfileAsExecutable(builder);
+
+        return builder;
+    }
+
+    private static void MarkDockerfileAsExecutable<TResource>(IResourceBuilder<TResource> builder)
+        where TResource : JavaScriptAppResource
+    {
+        // Avoid re-entering PublishAsDockerFile here because its argument normalization intentionally
+        // removes callbacks that precede the initial projection registration.
+        if (builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(
+            builder.Resource.Name,
+            out var container) &&
+            container.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
             dockerfileBuildAnnotation.HasEntrypoint = true;
         }
-
-        return builder;
     }
 
     private static void AddInstallCommand(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager, JavaScriptInstallCommandAnnotation installCommand)
@@ -1140,6 +1145,7 @@ public static partial class JavaScriptHostingExtensions
         string runScriptName,
         Action<CommandLineArgsCallbackContext>? argsCallback = null) where TResource : JavaScriptAppResource
     {
+        IResourceBuilder<ContainerResource>? publishContainerBuilder = null;
         var resourceBuilder = builder.AddResource(resource)
             .WithNodeDefaults()
             .WithArgs(c =>
@@ -1166,6 +1172,8 @@ public static partial class JavaScriptHostingExtensions
             .WithNpm()
             .PublishAsDockerFile(c =>
             {
+                publishContainerBuilder = c;
+
                 // Only generate a Dockerfile if one doesn't already exist in the app directory
                 if (File.Exists(Path.Combine(appDirectory, "Dockerfile")))
                 {
@@ -1341,7 +1349,7 @@ public static partial class JavaScriptHostingExtensions
                 });
 
                 // JavaScript apps default to build-only publishing unless a standalone runtime is enabled.
-                if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerFileAnnotation))
+                if (c.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerFileAnnotation))
                 {
                     dockerFileAnnotation.HasEntrypoint =
                         resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out _);
@@ -1355,8 +1363,7 @@ public static partial class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
-        if (builder.ExecutionContext.IsPublishMode &&
-            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        if (publishContainerBuilder is { } containerBuilder)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
 
@@ -1367,7 +1374,6 @@ public static partial class JavaScriptHostingExtensions
             }
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
             containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
             {
                 Name = validationStepName,
@@ -1697,23 +1703,10 @@ public static partial class JavaScriptHostingExtensions
             .WithHttpEndpoint(env: "PORT")
             .WithOtlpExporter();
 
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            resourceBuilder
-                .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
-                .ClearContainerFilesSources()
-                .WithEnvironment("HOSTNAME", "0.0.0.0");
-
-            if (resourceBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-            {
-                dockerfileBuildAnnotation.HasEntrypoint = true;
-            }
-        }
-
         // Add a publish prereq step that validates the Next.js config has standalone output enabled.
         // This runs at deploy time (not resource creation time) so it doesn't block `aspire start`.
         // Can be disabled with .DisableBuildValidation().
-        resourceBuilder.WithAnnotation(new PipelineStepAnnotation(factoryCtx =>
+        var standaloneValidation = new PipelineStepAnnotation(factoryCtx =>
         [
             new PipelineStep
             {
@@ -1732,7 +1725,22 @@ public static partial class JavaScriptHostingExtensions
                     return Task.CompletedTask;
                 }
             }
-        ]));
+        ]);
+
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            resourceBuilder
+                .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
+                .ClearContainerFilesSources()
+                .WithEnvironment("HOSTNAME", "0.0.0.0");
+
+            MarkDockerfileAsExecutable(resourceBuilder);
+            resourceBuilder.PublishAsDockerFile(container => container.WithAnnotation(standaloneValidation));
+        }
+        else
+        {
+            resourceBuilder.WithAnnotation(standaloneValidation);
+        }
 
         return resourceBuilder;
     }

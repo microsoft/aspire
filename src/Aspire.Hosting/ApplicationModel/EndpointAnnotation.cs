@@ -382,12 +382,22 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// Gets the <see cref="AllocatedEndpointSnapshot"/> for the default <see cref="AllocatedEndpoint"/>.
     /// </summary>
     [Obsolete("This property will be marked as internal in future Aspire release. Use AllocatedEndpoint and AllAllocatedEndpoints properties to access and change allocated endpoints associated with an EndpointAnnotation.")]
-    public ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot { get; } = new();
+    public ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot { get; private set; } = new();
 
     /// <summary>
     /// Gets the list of all AllocatedEndpoints associated with this Endpoint.
     /// </summary>
-    public NetworkEndpointSnapshotList AllAllocatedEndpoints { get; } = new();
+    public NetworkEndpointSnapshotList AllAllocatedEndpoints { get; private set; } = new();
+
+    internal void ShareAllocationStateWith(EndpointAnnotation endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+
+#pragma warning disable CS0618 // Type or member is obsolete (AllocatedEndpointSnapshot)
+        AllocatedEndpointSnapshot = endpoint.AllocatedEndpointSnapshot;
+#pragma warning restore CS0618 // Type or member is obsolete (AllocatedEndpointSnapshot)
+        AllAllocatedEndpoints = endpoint.AllAllocatedEndpoints;
+    }
 }
 
 /// <summary>

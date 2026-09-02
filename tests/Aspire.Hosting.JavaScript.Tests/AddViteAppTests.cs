@@ -73,7 +73,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
             """.Replace("\r\n", "\n");
         Assert.Equal(expectedDockerfile, dockerfileContents);
 
-        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = nodeApp.GetDockerfileBuildAnnotation();
         Assert.False(dockerBuildAnnotation.HasEntrypoint);
 
         var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
@@ -99,7 +99,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var dockerfilePath = Path.Combine(workspace.Path, "vite.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
-        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = nodeApp.GetDockerfileBuildAnnotation();
         Assert.True(dockerBuildAnnotation.HasEntrypoint);
 
         var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
@@ -203,7 +203,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var dockerfilePath = Path.Combine(workspace.Path, "angular.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
-        var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = nodeApp.GetDockerfileBuildAnnotation();
         Assert.True(dockerBuildAnnotation.HasEntrypoint);
 
         var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
@@ -1085,16 +1085,32 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
         File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), "const nextConfig = {}; export default nextConfig;");
 
-        builder.AddNextJsApp("nextjs", nextDir);
+        var nextJs = builder.AddNextJsApp("nextjs", nextDir);
+        Assert.Collection(builder.Resources, resource => Assert.Same(nextJs.Resource, resource));
 
         var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var projection = Assert.Single(model.GetContainerResources());
         var pipeline = new DistributedApplicationPipeline();
         var context = new PipelineContext(
-            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            model,
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             app.Services,
             app.Services.GetRequiredService<ILogger<AddViteAppTests>>(),
             CancellationToken.None);
+        var factoryContext = new PipelineStepFactoryContext
+        {
+            PipelineContext = context,
+            Resource = projection
+        };
+        var projectedStepNames = new List<string>();
+        foreach (var annotation in projection.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            projectedStepNames.AddRange((await annotation.CreateStepsAsync(factoryContext)).Select(step => step.Name));
+        }
+        Assert.Equal(
+            ["build-nextjs", "push-nextjs", "validate-javascript-dockerfile-run-script-nextjs", "nextjs-standalone-check-nextjs"],
+            projectedStepNames);
 
         // Pipeline throws AggregateException when multiple steps fail
         var ex = await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context));

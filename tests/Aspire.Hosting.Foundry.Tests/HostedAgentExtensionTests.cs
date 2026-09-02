@@ -726,13 +726,14 @@ public class HostedAgentExtensionTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app");
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        Assert.Single(agent.Resource.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>

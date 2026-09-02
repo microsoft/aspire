@@ -88,6 +88,7 @@ public static class RustHostingExtensions
         // reader by registering one before or after AddRustApp.
         builder.Services.TryAddSingleton<ICargoMetadataReader, CargoMetadataReader>();
 
+        IResourceBuilder<ContainerResource>? containerBuilder = null;
         var resourceBuilder = builder.AddResource(resource)
             .WithRequiredCommand("cargo", "https://www.rust-lang.org/tools/install")
             .WithRustDefaults()
@@ -127,12 +128,11 @@ public static class RustHostingExtensions
                 context.Args.Add("--");
             }, ownedByLaunchConfigurationType: "rust")
             .WithVSCodeDebugging()
-            .PublishAsDockerFile();
+            .PublishAsDockerFile(container => containerBuilder = container);
 
         // The generated image copies files out of each container files source, so those sources have to be
-        // built first. PublishAsDockerFile removes the Rust resource from the model, but the container it
-        // substitutes shares this annotation collection, so the callback still runs; the step lookup matches
-        // on resource name and therefore finds the substituted container's build steps.
+        // built first. Pipeline collection resolves the owner's effective projection, and step lookup matches
+        // resources by name so owner-authored dependencies still find the projection's build steps.
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
@@ -147,7 +147,7 @@ public static class RustHostingExtensions
 
         if (builder.ExecutionContext.IsPublishMode)
         {
-            if (!builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder)
+            if (containerBuilder is null
                 || !containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var provisionalDockerfile))
             {
                 throw new InvalidOperationException(
@@ -165,7 +165,7 @@ public static class RustHostingExtensions
 
             builder.OnBeforeStart((_, _) =>
             {
-                FinalizePublishDockerfile(builder, resource, provisionalDockerfile, publishState);
+                FinalizePublishDockerfile(containerBuilder, resource, provisionalDockerfile, publishState);
                 return Task.CompletedTask;
             });
         }
@@ -718,17 +718,11 @@ public static class RustHostingExtensions
     }
 
     private static void FinalizePublishDockerfile(
-        IDistributedApplicationBuilder applicationBuilder,
+        IResourceBuilder<ContainerResource> containerBuilder,
         RustAppResource resource,
         DockerfileBuildAnnotation provisionalDockerfile,
         RustPublishState publishState)
     {
-        if (!applicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
-        {
-            throw new InvalidOperationException(
-                $"The published Rust app '{resource.Name}' was not converted to a container resource.");
-        }
-
         var annotations = containerBuilder.Resource.Annotations;
         if (!containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var activeDockerfile)
             || !ReferenceEquals(activeDockerfile, provisionalDockerfile))
@@ -763,7 +757,7 @@ public static class RustHostingExtensions
             publishState.TargetPlatform = targetPlatform;
             containerBuilder.WithAnnotation(
                 CreateGeneratedDockerfileAnnotation(
-                    applicationBuilder,
+                    containerBuilder.ApplicationBuilder,
                     resource,
                     workingDirectory,
                     provisionalDockerfile.Stage),

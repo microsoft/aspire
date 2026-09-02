@@ -20,6 +20,8 @@ internal static class ContainerExecutableResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources.OfType<ContainerExecutableResource>();
+        return model.Resources
+            .Select(static resource => resource.GetEffectiveResource())
+            .OfType<ContainerExecutableResource>();
     }
 }

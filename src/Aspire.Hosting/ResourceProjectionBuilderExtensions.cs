@@ -55,6 +55,9 @@ internal static class ResourceProjectionBuilderExtensions
         // Container image annotations discriminate the effective shape. A container projection
         // must define its own image without exposing or mutating an owner-level legacy discriminator.
         projection.Annotations.SuppressInheritedAnnotations<ContainerImageAnnotation>();
+        // Hide callbacks present at registration because they describe the owner's legacy shape.
+        // Later callbacks remain visible so APIs such as ExcludeFromManifest retain call ordering.
+        projection.Annotations.RemoveAnnotations<ManifestPublishingCallbackAnnotation>();
 
         // Configuration callbacks must never observe mutable owner annotation instances. Known
         // annotations that support in-place container configuration are materialized above; all
@@ -72,7 +75,7 @@ internal static class ResourceProjectionBuilderExtensions
         // Projection registration happens while building the model, before endpoint allocation.
         // Clone model-time endpoint configuration so container callbacks can adapt the selected
         // shape without changing endpoint semantics on the canonical owner.
-        return new EndpointAnnotation(
+        var clone = new EndpointAnnotation(
             endpoint.Protocol,
             endpoint.DefaultNetworkID,
             endpoint.UriScheme,
@@ -89,5 +92,10 @@ internal static class ResourceProjectionBuilderExtensions
             TargetPortEnvironmentVariable = endpoint.TargetPortEnvironmentVariable,
             TlsEnabled = endpoint.TlsEnabled
         };
+
+        // Endpoint references retain the owner, so both shapes must complete the same allocation
+        // snapshots even though model-time endpoint configuration is independently mutable.
+        clone.ShareAllocationStateWith(endpoint);
+        return clone;
     }
 }

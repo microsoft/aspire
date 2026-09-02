@@ -22,7 +22,10 @@ public static class ProjectResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources.OfType<ProjectResource>();
+        return model.Resources
+            .Select(static resource => resource.GetEffectiveResource())
+            .OfType<ProjectResource>()
+            .Where(static resource => !resource.IsContainer());
     }
 
     /// <summary>

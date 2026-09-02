@@ -22,9 +22,10 @@ public static class ContainerResourceExtensions
 
         foreach (var resource in model.Resources)
         {
-            if (resource.Annotations.OfType<ContainerImageAnnotation>().Any())
+            var effectiveResource = resource.GetEffectiveResource();
+            if (effectiveResource.Annotations.OfType<ContainerImageAnnotation>().Any())
             {
-                yield return resource;
+                yield return effectiveResource;
             }
         }
     }
@@ -39,6 +40,6 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.Annotations.OfType<ContainerImageAnnotation>().Any();
+        return resource.GetEffectiveResource().Annotations.OfType<ContainerImageAnnotation>().Any();
     }
 }

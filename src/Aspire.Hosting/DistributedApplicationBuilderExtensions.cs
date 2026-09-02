@@ -70,12 +70,17 @@ public static class DistributedApplicationBuilderExtensions
             throw new InvalidOperationException($"Resource '{name}' was not found.");
         }
 
-        if (resource is not T typedResource)
+        if (resource is T typedResource)
+        {
+            return builder.CreateResourceBuilder(typedResource);
+        }
+
+        if (resource.GetEffectiveResource() is not T effectiveResource)
         {
             throw new InvalidOperationException($"Resource '{name}' of type '{resource.GetType()}' is not assignable to requested type '{typeof(T).Name}'.");
         }
 
-        return builder.CreateResourceBuilder(typedResource);
+        return builder.CreateResourceBuilder(effectiveResource);
     }
 
     /// <summary>
@@ -98,14 +103,25 @@ public static class DistributedApplicationBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
 
         var resource = builder.Resources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (resource is null || resource is not T typedResource)
+        if (resource is null)
         {
             resourceBuilder = null;
             return false;
         }
 
-        resourceBuilder = builder.CreateResourceBuilder(typedResource);
+        if (resource is T typedResource)
+        {
+            resourceBuilder = builder.CreateResourceBuilder(typedResource);
+            return true;
+        }
+
+        if (resource.GetEffectiveResource() is not T effectiveResource)
+        {
+            resourceBuilder = null;
+            return false;
+        }
+
+        resourceBuilder = builder.CreateResourceBuilder(effectiveResource);
         return true;
     }
 }
-

@@ -55,6 +55,15 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
         }
     }
 
+    internal void RemoveAnnotations<TAnnotation>()
+        where TAnnotation : IResourceAnnotation
+    {
+        foreach (var annotation in this.OfType<TAnnotation>().ToArray())
+        {
+            Remove(annotation);
+        }
+    }
+
     /// <summary>
     /// Monotonically increasing mutation counter used by layered collections to invalidate
     /// their cached merged snapshot when this collection changes.
