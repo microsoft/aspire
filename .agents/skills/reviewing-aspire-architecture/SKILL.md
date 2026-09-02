@@ -1,6 +1,6 @@
 ---
 name: reviewing-aspire-architecture
-description: "Reviews an existing PR or diff for Aspire-specific architectural concerns. Use only when the user explicitly requests deep architectural or pattern review, or when a generic review identifies a concrete Aspire-domain question that requires specialist analysis. Do not use merely because changed files are in hosting core, Azure integrations, dashboard, CLI, or components."
+description: "Use only when the user explicitly requests a deep Aspire architectural or pattern review of an existing PR or diff, or when a generic reviewer escalates a named Aspire-domain question it cannot resolve. Do not use for ordinary review, implementation, debugging, explanation, or design discussion—even when a PR is referenced—and never select it from changed file paths alone."
 ---
 
 # Aspire Architectural Review
@@ -16,7 +16,9 @@ Aspire-specific architectural review via the `reviewing-aspire-architecture` age
 
 Changed file location is routing information after this skill is selected, not a reason to select it. A PR touching hosting core, Azure integrations, dashboard, CLI, components, resource types, the app model, or deployment behavior does not by itself qualify.
 
-**Don't use** this skill for implementation, debugging, testing, routine code changes, post-change validation, design brainstorming without a review target, generic PR review, doc/config-only PRs, CI failures, flaky tests, or API surface review. Use `code-review`, `ci-test-failures`, `fix-flaky-test`, or `api-review` where appropriate.
+The user's primary requested action must be architectural review. Asking to understand, explain, compare, or design something does not qualify, even when the request references a PR or diff.
+
+**Don't use** this skill for implementation, debugging, testing, routine code changes, post-change validation, design questions or brainstorming, explanatory investigation, generic PR review, doc/config-only PRs, CI failures, flaky tests, or API surface review. Use `code-review`, `ci-test-failures`, `fix-flaky-test`, or `api-review` where appropriate.
 
 ## Invocation Guard
 

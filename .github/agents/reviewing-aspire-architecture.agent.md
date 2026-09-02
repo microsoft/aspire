@@ -1,6 +1,6 @@
 ---
 name: reviewing-aspire-architecture
-description: "Reviews an existing PR or diff for Aspire-specific architectural concerns. Use only for an explicit deep architectural or pattern-review request, or a focused Aspire-domain question escalated by a generic reviewer. Never trigger solely from changed file paths or routine implementation work."
+description: "Use only for an explicit deep Aspire architectural or pattern review of an existing PR or diff, or a named Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for ordinary review, implementation, debugging, explanation, or design discussion—even when a PR is referenced—and never select it from changed file paths alone."
 ---
 
 # Reviewing Aspire Architecture
