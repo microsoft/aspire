@@ -254,5 +254,4 @@ After you are completely finished creating or updating the PR (after step 5 and,
 - Keep the body aligned with `.github/pull_request_template.md`.
 - If the user asks to preview before creating, show the prepared PR body first, then create after confirmation.
 - For checklist sections with Yes/No alternatives, prefer selecting exactly one option per question when information is known.
-- See [GitHub CLI: Media in issues, pull requests, and comments](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/) for the attachment feature announcement.
 - **After creating the PR**, if non-trivial UI changes were detected but media could not be attached, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension], but screenshots or recordings are still needed. The PR description identifies the scenario to capture." Include the PR URL so the user can edit it directly.
