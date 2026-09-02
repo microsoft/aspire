@@ -325,6 +325,57 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_MergesSourceNamesCaseInsensitively()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var userConfigPath = Path.Combine(workspace.CreateDirectory("user").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(userConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="private" value="https://inherited.example.com/v3/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="inherited-user" />
+                  <add key="ClearTextPassword" value="inherited-password" />
+                </private>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+        var workspaceConfigPath = Path.Combine(workspace.CreateDirectory("repo").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(workspaceConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="PRIVATE" value="https://replacement.example.com/v3/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <PRIVATE>
+                  <add key="Username" value="replacement-user" />
+                  <add key="ClearTextPassword" value="replacement-password" />
+                </PRIVATE>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [workspaceConfigPath, userConfigPath],
+            []);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var packageSource = document.Descendants("packageSources").Elements("add").Single();
+        Assert.Equal("PRIVATE", packageSource.Attribute("key")?.Value);
+        Assert.Equal("https://replacement.example.com/v3/index.json", packageSource.Attribute("value")?.Value);
+
+        var credentials = document.Descendants("packageSourceCredentials").Elements().Single();
+        Assert.Equal("PRIVATE", credentials.Name.LocalName);
+        Assert.Equal(
+            [("Username", "replacement-user"), ("ClearTextPassword", "replacement-password")],
+            credentials.Elements("add")
+                .Select(element => (element.Attribute("key")!.Value, element.Attribute("value")!.Value))
+                .ToArray());
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MergesTrustedRepositoriesByServiceIndex()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
