@@ -194,6 +194,13 @@ internal sealed class ExecutableCreator(
                 argument.Value,
                 argument.IsSensitive,
                 argument.EffectiveArgumentIndex)));
+        // Hidden launch-tool arguments are intentionally absent from resource.appArgs, but launch metadata
+        // still needs their sensitivity without copying their resolved values into another DCP annotation.
+        executable.SetAnnotationAsObjectList(
+            Executable.SensitiveEffectiveArgumentIndexesAnnotation,
+            plan.LaunchArguments
+                .Where(static argument => argument.IsSensitive && argument.EffectiveArgumentIndex is not null)
+                .Select(static argument => argument.EffectiveArgumentIndex!.Value));
 
         ApplyLifetime(renderedResource.ModelResource, spec);
         ApplyTerminal(renderedResource.ModelResource, executable, logger);

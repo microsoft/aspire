@@ -21,6 +21,7 @@ import {
     type AppHostLifecycleRunningAppHost,
     type AppHostLifecycleToolResult,
 } from '../lm/appHostLifecycleTools';
+import { AppHostTargetResolverService } from '../lm/appHostTargetResolverService';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity, type AppHostIdentityRelation } from '../utils/appHostIdentity';
@@ -288,7 +289,10 @@ class FakeDiscoveryService implements AppHostLifecycleDiscoveryService {
         return this.registeredPaths
             .filter(candidatePath => {
                 const relative = path.relative(folderPath, candidatePath);
-                return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
+                return relative.length > 0 &&
+                    relative !== '..' &&
+                    !relative.startsWith(`..${path.sep}`) &&
+                    !path.isAbsolute(relative);
             })
             .map(candidatePath => ({ path: candidatePath, language: 'csharp', status: 'buildable' }));
     }
@@ -385,9 +389,10 @@ suite('AppHost lifecycle language model tools', () => {
         discoveryService = new FakeDiscoveryService();
         discoveryService.registeredPaths.push(appHostProjectPath);
         editorSessions = [];
+        const targetResolver = new AppHostTargetResolverService({ discoveryService });
         service = new AppHostLifecycleToolService({
             launchService,
-            discoveryService,
+            targetResolver,
         });
         launchService.editorSessions = editorSessions;
     });
@@ -410,9 +415,12 @@ suite('AppHost lifecycle language model tools', () => {
             const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
             const tools = manifest.contributes.languageModelTools ?? [];
 
-            assert.deepStrictEqual(tools.map(tool => tool.name), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
+            const lifecycleTools = tools.filter(tool =>
+                tool.name === aspireAppHostStartToolName ||
+                tool.name === aspireAppHostStopToolName);
+            assert.deepStrictEqual(lifecycleTools.map(tool => tool.name), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
 
-            for (const tool of tools) {
+            for (const tool of lifecycleTools) {
                 for (const localizedField of ['displayName', 'modelDescription', 'userDescription']) {
                     const reference = tool[localizedField] as string;
                     assert.match(reference, /^%[\w.-]+%$/, `${tool.name}.${localizedField} must be a package.nls reference.`);
@@ -568,6 +576,18 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'invalidInput');
             assert.strictEqual(discoveryService.discoverCalls, 0);
+        });
+
+        test('rejects line and paragraph separators before consulting the AppHost registry', async () => {
+            for (const separator of ['\u2028', '\u2029']) {
+                const result = await service.start(
+                    { appHostPath: `AppHost${separator}/AppHost.csproj`, mode: 'run' },
+                    new vscode.CancellationTokenSource().token);
+
+                assert.strictEqual(result.outcome, 'invalidInput');
+                assert.strictEqual(discoveryService.discoverCalls, 0);
+                assert.strictEqual(launchService.launchCalls.length, 0);
+            }
         });
 
         test('rejects a non-boolean isolated property before consulting the AppHost registry', async () => {
@@ -835,6 +855,19 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'started');
             assert.strictEqual(result.appHostPath, 'SingleFile/apphost.cs');
+        });
+
+        test('accepts an in-workspace directory whose name begins with two dots', async () => {
+            const directory = path.join(workspaceRoot, '..services');
+            fs.mkdirSync(directory, { recursive: true });
+            const project = path.join(directory, 'AppHost.csproj');
+            fs.writeFileSync(project, appHostProjectContents);
+            discoveryService.registeredPaths.push(project);
+
+            const result = await service.start({ appHostPath: '..services/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.appHostPath, '..services/AppHost.csproj');
         });
 
         test('treats a symlinked AppHost as the AppHost it points at', async function () {

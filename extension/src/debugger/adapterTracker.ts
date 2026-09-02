@@ -19,6 +19,7 @@ export type AppHostRestartHandler = (debugSessionId: string) => boolean;
  */
 export type DapOutputCategory = 'console' | 'important' | 'stdout' | 'stderr' | 'debug' | 'telemetry' | (string & {}) | undefined;
 export type AppHostOutputHandler = (output: string, category: DapOutputCategory) => void;
+export type DebuggeeProcessHandler = (session: vscode.DebugSession, processId: number | undefined) => void;
 
 export interface AppHostTrackerOptions {
     // VS Code invokes every factory registered for an adapter type for every matching
@@ -29,7 +30,12 @@ export interface AppHostTrackerOptions {
     onOutput?: AppHostOutputHandler;
 }
 
-export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, appHostTracker?: AppHostTrackerOptions): vscode.Disposable {
+export function createDebugAdapterTracker(
+    dcpServer: AspireDcpServer,
+    debugAdapter: string,
+    appHostTracker?: AppHostTrackerOptions,
+    onDebuggeeProcess?: DebuggeeProcessHandler,
+): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
             const configuration = session.configuration;
@@ -104,6 +110,13 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                         // Reset before the PID guard: `systemProcessId` is optional in DAP, so a
                         // restart reported without it must still clear the stale exit code.
                         debuggeeExitCode = undefined;
+                        if (!configuration.isApphost) {
+                            onDebuggeeProcess?.(
+                                session,
+                                typeof message.body?.systemProcessId === 'number'
+                                    ? message.body.systemProcessId
+                                    : undefined);
+                        }
 
                         if (typeof message.body?.systemProcessId !== 'number') {
                             extensionLogOutputChannel.warn(`Debug session ${session.id} does not have a valid system process ID.`);
@@ -125,6 +138,9 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     }
 
                     if (message.type === 'event' && message.event === 'exited' && typeof message.body?.exitCode === 'number') {
+                        if (!configuration.isApphost) {
+                            onDebuggeeProcess?.(session, undefined);
+                        }
                         debuggeeExitCode = message.body.exitCode;
                     }
                 },

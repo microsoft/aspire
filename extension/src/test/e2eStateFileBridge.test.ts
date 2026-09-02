@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { registerTreeViewCommands } from '../activation/registerTreeViewCommands';
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
+import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { executeE2eControlCommand } from '../testing/e2eStateFileBridge';
 import { pipelineInteractionCapability } from '../types/configInfo';
@@ -22,6 +23,13 @@ function createLaunchService(): AppHostLaunchService {
     return new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
     });
+}
+
+function createResourceDebugger(): ResourceDebugger {
+    return {
+        canAttachToResource: () => false,
+        debug: async () => ({ outcome: 'unsupportedResource' }),
+    };
 }
 
 suite('E2E state file bridge', () => {
@@ -72,7 +80,7 @@ suite('E2E state file bridge', () => {
                 pipelineInteractionCapability,
             ],
         });
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const registeredCommands = captureRegisteredTreeCommands(sandbox, provider, repository);
         sandbox.stub(vscode.commands, 'executeCommand').callsFake(async (commandId: string, ...args: unknown[]) => {
             const command = registeredCommands.get(commandId);
@@ -109,7 +117,7 @@ suite('E2E state file bridge', () => {
         const repository = createRepository(['/repo/primary/AppHost/AppHost.csproj']);
         const terminalProvider = {} as AspireTerminalProvider;
         const launchService = createLaunchService();
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
 
         await assert.rejects(
@@ -133,7 +141,7 @@ suite('E2E state file bridge', () => {
         const terminalProvider = {} as AspireTerminalProvider;
         const launchService = createLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService, createResourceDebugger());
         const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves('refreshed');
         const markStarted = sandbox.spy();
 

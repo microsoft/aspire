@@ -236,7 +236,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
-    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelAfterMs?: number }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
@@ -258,7 +258,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
     | { name: 'getOpenEditors' }
-    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; allowNonZeroExit?: boolean }
+    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; noExtensionVariables?: boolean; allowNonZeroExit?: boolean }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
@@ -272,6 +272,17 @@ export type AspireExtensionE2EControlCommand =
         isApphost?: boolean;
         debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
         environmentKeys?: readonly string[];
+    }
+    | {
+        name: 'proveAttachedResourceDebugging';
+        appHostPath: string;
+        resourceName: string;
+        sourcePath: string;
+        breakpointLine: number;
+        expectedDebugType: 'coreclr' | 'go';
+        expectedResponse: string;
+        resourceRequestPath?: string;
+        timeoutMs?: number;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

@@ -633,16 +633,72 @@ suite('E2E launch profile', () => {
         assert.ok(csharpInstallIndex > dotnetRuntimeInstallIndex);
         assert.ok(resourceGroupsInstallIndex > csharpInstallIndex);
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
-        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
         assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
         assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
         assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
         assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
+    });
+
+    test('attributes missing VSIX dependencies to the selecting E2E shard', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const azureFunctionsResolver = runner.slice(
+            runner.indexOf('function resolveAzureFunctionsVsixPaths()'),
+            runner.indexOf('function resolveResourceDebugVsixPaths()'));
+        const resourceDebugResolver = runner.slice(
+            runner.indexOf('function resolveResourceDebugVsixPaths()'),
+            runner.indexOf('function validateResourceDebugTools()'));
+
+        assert.ok(azureFunctionsResolver.includes(
+            "resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
+        assert.ok(resourceDebugResolver.includes(
+            "resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG')"));
+        assert.ok(runner.includes('`${environmentVariable} is required when ${selectingFeatureFlag}=true.`'));
+        assert.ok(runner.includes('`${environmentVariable} points to a missing file: ${resolvedPath}. It is required when ${selectingFeatureFlag}=true.`'));
+    });
+
+    test('configures Linux ptrace access for packaged Go resource attach', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const resourceDebugPrerequisites = workflow.slice(
+            workflow.indexOf('- name: Install resource debug E2E prerequisites'),
+            workflow.indexOf('- name: Set up the JDK for the Java E2E specs'));
+
+        assert.ok(resourceDebugPrerequisites.includes('sudo sysctl --write kernel.yama.ptrace_scope=0'));
+        assert.ok(resourceDebugPrerequisites.includes('test "$(cat /proc/sys/kernel/yama/ptrace_scope)" = "0"'));
+        assert.ok(runner.includes("const ptraceScopePath = '/proc/sys/kernel/yama/ptrace_scope';"));
+        assert.ok(runner.includes('The resource debug E2E shard requires kernel.yama.ptrace_scope=0'));
+    });
+
+    test('disables Go optimizations for the packaged attach breakpoint proof', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const resourceDebugSpec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'resourceDebugTools.e2e.test.ts'), 'utf8');
+
+        assert.ok(runner.includes('builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")'));
+        assert.ok(runner.includes('.WithCommand("./test-tools/go")'));
+        assert.ok(runner.includes("['build', '-gcflags=all=-N -l', '-o', debugExecutable, '.']"));
+        assert.ok(runner.includes("'go-build-debug', 'exe'"));
+        assert.ok(resourceDebugSpec.includes("marker: 'message := \"go-ok\"'"));
+        assert.ok(resourceDebugSpec.includes("proof.proof, 'aspire-resource-attach-breakpoint-detach'"));
+    });
+
+    test('keeps packaged attach failures diagnosable before the outer timeout', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const bridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const resourceDebugSpec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'resourceDebugTools.e2e.test.ts'), 'utf8');
+
+        assert.ok(bridge.includes('Resource debug E2E ${session.type} setBreakpoints response:'));
+        assert.ok(bridge.includes('Resource debug E2E first traffic response for resource'));
+        assert.ok(bridge.includes('Resource debug E2E attach proof failed:'));
+        assert.ok(resourceDebugSpec.includes('{ timeoutMs: 360000 }'));
     });
 
     test('wires structured E2E harness failures into advisory handling', () => {

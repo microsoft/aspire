@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Dashboard.Model;
 using Aspire.Shared.Model.Serialization;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -29,6 +30,38 @@ public class ResourceSnapshotMapperTests
         Assert.NotNull(snapshot);
         var pid = Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["executable.pid"]);
         Assert.Equal(12345, pid.GetValue<int>());
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithDebugProperties_PreservesProperties()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "mauiapp-android-emulator",
+            DisplayName = "MAUI",
+            ResourceType = "Project",
+            State = "Running",
+            Properties =
+            {
+                [KnownProperties.Executable.Args] = null,
+                [KnownProperties.Project.Path] = JsonValue.Create("/repo/maui/MauiApp.csproj"),
+                [KnownProperties.Project.LaunchProfile] = JsonValue.Create("AndroidEmulator"),
+                [KnownProperties.Project.LaunchCommand] = JsonValue.Create("watch"),
+                [KnownProperties.Project.Configuration] = JsonValue.Create("Release"),
+                [KnownProperties.Project.TargetFramework] = JsonValue.Create("net10.0"),
+                [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("maui"),
+                [KnownProperties.Resource.ParentName] = JsonValue.Create("mauiapp"),
+            }
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        Assert.Null(result.Properties![KnownProperties.Executable.Args]);
+        Assert.Equal("maui", result.Properties![KnownProperties.Resource.LaunchConfigurationType]!.GetValue<string>());
+        Assert.Equal("watch", result.Properties[KnownProperties.Project.LaunchCommand]!.GetValue<string>());
+        Assert.Equal("Release", result.Properties[KnownProperties.Project.Configuration]!.GetValue<string>());
+        Assert.Equal("net10.0", result.Properties[KnownProperties.Project.TargetFramework]!.GetValue<string>());
+        Assert.Equal("MauiApp.csproj", result.Source);
     }
 
     [Fact]

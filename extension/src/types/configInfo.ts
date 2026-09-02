@@ -60,6 +60,13 @@ export const pipelineStepListJsonCapability = 'pipeline-step-list-json.v1';
 export const describeIncludeDisabledCommandsCapability = 'describe-include-disabled-commands.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire describe` accepts `--apphost-pid` to bind an
+ * explicit AppHost path to one running process. Keep in sync with
+ * `KnownCapabilities.DescribeAppHostPid` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const describeAppHostPidCapability = 'describe-apphost-pid.v1';
+
+/**
  * Capability advertised by the CLI when `aspire ls --format json --stream` emits AppHost
  * candidates as newline-delimited JSON. Tooling uses this to avoid probing localized CLI errors
  * for CLIs that do not recognize the hidden streaming flag.

@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+#pragma warning disable ASPIREEXTENSION001 // Launch configuration metadata is experimental but needed for snapshot serialization.
 
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
@@ -173,6 +173,11 @@ internal class ResourceSnapshotBuilder
         var properties = GetLaunchConfigurationType(appModelResource) is { } launchConfigurationType
             ? previous.Properties.SetResourceProperty(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)
             : previous.Properties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
+        properties = properties
+            .RemoveResourceProperty(KnownProperties.Project.LaunchCommand)
+            .RemoveResourceProperty(KnownProperties.Project.Configuration)
+            .RemoveResourceProperty(KnownProperties.Project.TargetFramework);
+        var dotNetLaunchProperties = GetDotNetLaunchProperties(executable, executable.Spec.ExecutablePath, effectiveArgs);
 
         if (projectPath is not null)
         {
@@ -190,6 +195,7 @@ internal class ResourceSnapshotBuilder
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
                     new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                     new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                    .. dotNetLaunchProperties,
                 ]),
                 EnvironmentVariables = environment,
                 CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
@@ -240,6 +246,179 @@ internal class ResourceSnapshotBuilder
     private static bool IsNotStartedExecutableState(string? state)
     {
         return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
+    }
+
+    private static ImmutableArray<ResourcePropertySnapshot> GetDotNetLaunchProperties(
+        CustomResource resource,
+        string? executablePath,
+        IReadOnlyList<string>? effectiveArgs)
+    {
+        var executableName = Path.GetFileName(executablePath);
+        if (!string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(executableName, "dotnet.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        if (effectiveArgs is null ||
+            FindDotNetProjectCommand(effectiveArgs) is not { } commandInfo)
+        {
+            return [new(KnownProperties.Project.LaunchCommand, null)];
+        }
+
+        var (command, commandIndex) = commandInfo;
+        var sensitiveArgumentIndexes = GetSensitiveEffectiveArgumentIndexes(resource);
+        if (sensitiveArgumentIndexes.Contains(commandIndex))
+        {
+            return [new(KnownProperties.Project.LaunchCommand, null)];
+        }
+
+        string? configuration = null;
+        string? targetFramework = null;
+
+        // DCP reports dotnet launch arguments as:
+        //   ["watch", "--project", "/repo/api.csproj", "--configuration", "Release", "--framework=net10.0", "--", ...appArgs]
+        //   ["[env:NAME=value]", "--diagnostics", "run", "--project", "/repo/api.csproj"]
+        //   ["-d", "watch", "--project", "/repo/api.csproj"]
+        // Only launcher arguments before "--" are safe to publish as launch metadata. Application
+        // arguments after the separator can contain unrelated values and remain sensitive in executable.args.
+        // See https://learn.microsoft.com/dotnet/core/tools/dotnet and
+        // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/EnvironmentVariablesDirective.cs.
+        for (var index = commandIndex + 1; index < effectiveArgs.Count; index++)
+        {
+            var argument = effectiveArgs[index];
+            if (argument == "--")
+            {
+                break;
+            }
+
+            if (TryReadOptionValue(argument, "--configuration", "-c", out var inlineConfiguration))
+            {
+                configuration = sensitiveArgumentIndexes.Contains(index) ? null : inlineConfiguration;
+                continue;
+            }
+
+            if (TryReadOptionValue(argument, "--framework", "-f", out var inlineTargetFramework))
+            {
+                targetFramework = sensitiveArgumentIndexes.Contains(index) ? null : inlineTargetFramework;
+                continue;
+            }
+
+            if (argument is "--configuration" or "-c")
+            {
+                configuration = ReadNextValue(effectiveArgs, sensitiveArgumentIndexes, ref index);
+                continue;
+            }
+
+            if (argument is "--framework" or "-f")
+            {
+                targetFramework = ReadNextValue(effectiveArgs, sensitiveArgumentIndexes, ref index);
+            }
+        }
+
+        var launchCommand = command.ToLowerInvariant();
+        var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>(3);
+        properties.Add(new(KnownProperties.Project.LaunchCommand, launchCommand));
+        if (configuration is not null)
+        {
+            properties.Add(new(KnownProperties.Project.Configuration, configuration));
+        }
+
+        if (targetFramework is not null)
+        {
+            properties.Add(new(KnownProperties.Project.TargetFramework, targetFramework));
+        }
+
+        return properties.ToImmutable();
+
+        static (string Command, int Index)? FindDotNetProjectCommand(IReadOnlyList<string> arguments)
+        {
+            var index = 0;
+            var hasEnvironmentVariableDirective = false;
+            while (index < arguments.Count &&
+                (string.Equals(arguments[index], "[env]", StringComparison.OrdinalIgnoreCase) ||
+                 arguments[index].StartsWith("[env:", StringComparison.OrdinalIgnoreCase) && arguments[index].EndsWith(']')))
+            {
+                hasEnvironmentVariableDirective = true;
+                index++;
+            }
+
+            while (index < arguments.Count && arguments[index] is "-d" or "--diagnostics")
+            {
+                index++;
+            }
+
+            if (index >= arguments.Count)
+            {
+                return null;
+            }
+
+            return arguments[index].ToLowerInvariant() switch
+            {
+                "run" => ("run", index),
+                // .NET 10 cannot resolve the external watch command through an environment directive.
+                "watch" when !hasEnvironmentVariableDirective => ("watch", index),
+                _ => null,
+            };
+        }
+
+        static bool TryReadOptionValue(string argument, string longOption, string shortOption, out string? value)
+        {
+            foreach (var option in new[] { longOption, shortOption })
+            {
+                var prefix = option + "=";
+                if (argument.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    value = NormalizeValue(argument[prefix.Length..]);
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
+        }
+
+        static string? ReadNextValue(IReadOnlyList<string> arguments, HashSet<int> sensitiveArgumentIndexes, ref int index)
+        {
+            var optionIsSensitive = sensitiveArgumentIndexes.Contains(index);
+            if (index + 1 >= arguments.Count || arguments[index + 1] == "--")
+            {
+                return null;
+            }
+
+            index++;
+            return optionIsSensitive || sensitiveArgumentIndexes.Contains(index)
+                ? null
+                : NormalizeValue(arguments[index]);
+        }
+
+        static string? NormalizeValue(string value)
+        {
+            var normalized = value.Trim();
+            return normalized.Length > 0 ? normalized : null;
+        }
+    }
+
+    private static HashSet<int> GetSensitiveEffectiveArgumentIndexes(CustomResource resource)
+    {
+        if (resource.TryGetAnnotationAsObjectList(
+            Executable.SensitiveEffectiveArgumentIndexesAnnotation,
+            out List<int>? sensitiveEffectiveArgumentIndexes))
+        {
+            return sensitiveEffectiveArgumentIndexes.ToHashSet();
+        }
+
+        if (!resource.TryGetAnnotationAsObjectList(
+            CustomResource.ResourceAppArgsAnnotation,
+            out List<AppLaunchArgumentAnnotation>? launchArgumentAnnotations))
+        {
+            return [];
+        }
+
+        return launchArgumentAnnotations
+            .Where(static annotation => annotation.IsSensitive && annotation.EffectiveArgumentIndex is not null)
+            .Select(static annotation => annotation.EffectiveArgumentIndex!.Value)
+            .ToHashSet();
     }
 
     private static (ImmutableArray<string> Args, ImmutableArray<int>? ArgsAreSensitive, bool IsSensitive)? GetLaunchArgs(CustomResource resource, IReadOnlyList<string>? effectiveArgs)

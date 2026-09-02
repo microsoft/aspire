@@ -165,6 +165,15 @@ export const appHostPublishingDescription = vscode.l10n.t('Publishing...');
 export const appHostRunningPipelineStepDescription = vscode.l10n.t('Running pipeline step...');
 export const appHostDebuggingPipelineStepDescription = vscode.l10n.t('Debugging pipeline step...');
 export const appHostDiscoveryProgress = vscode.l10n.t('Discovering AppHosts...');
+export const attachDebuggerConfigurationName = (resource: string) => vscode.l10n.t('Attach debugger: {0}', resource);
+export const attachDebuggerUnavailable = vscode.l10n.t('This resource cannot be attached to a debugger.');
+export const attachDebuggerResourceNotFound = vscode.l10n.t('The selected resource is no longer available. Refresh the Aspire pane and try again.');
+export const attachDebuggerWorkspaceNotTrusted = vscode.l10n.t('Trust this workspace before attaching a debugger to an Aspire resource.');
+export const attachDebuggerCsharpExtensionRequired = vscode.l10n.t('Install the C# extension to attach the debugger to .NET project resources.');
+export const attachDebuggerExtensionsRequired = (labels: string) => vscode.l10n.t('Install {0} to attach the debugger to this resource.', labels);
+export const attachDebuggerDeclined = (resource: string) => vscode.l10n.t('VS Code did not start the debugger attach session for {0}.', resource);
+export const attachingDebugger = (resource: string) => vscode.l10n.t('Attaching debugger to {0}...', resource);
+export const attachDebuggerAlreadyDebugging = (resource: string) => vscode.l10n.t('A debugger is already attached to {0}.', resource);
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
 export const workspaceViewSelectedSingleAppHost = (language?: string) => language
@@ -333,4 +342,9 @@ export const appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified = vscode.
 export const appHostLifecycleInvalidLaunchProfile = vscode.l10n.t('an invalid launch profile');
 export const appHostLifecycleLaunchProfileRequiresRun = vscode.l10n.t('Launch profiles are only supported for the run command.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
+export const resourceDebugToolConfirmationTitle = vscode.l10n.t('Attach debugger to Aspire resource');
+export const resourceDebugToolConfirmationMessage = (resourceName: string, appHostPath: string) => vscode.l10n.t('Attach the debugger to resource {0} from Aspire AppHost {1}?', resourceName, appHostPath);
+export const resourceDebugToolUnresolvedConfirmationMessage = vscode.l10n.t('Attach the debugger to the requested Aspire resource?');
+export const resourceDebugToolInvocationMessage = (resourceName: string) => vscode.l10n.t('Attaching debugger to Aspire resource {0}...', resourceName);
+export const resourceDebugToolUnavailableInvocationMessage = vscode.l10n.t('Attaching debugger to the requested Aspire resource...');
 export const appHostOperationAlreadyInProgress = vscode.l10n.t('Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.');

@@ -291,6 +291,46 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('reports the debuggee process for non-AppHost sessions', () => {
+        const processHandler = sinon.spy();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', undefined, processHandler);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+
+        assert.strictEqual(processHandler.calledOnceWithExactly(debugSession, 4242), true);
+        disposable.dispose();
+    });
+
+    test('clears the tracked debuggee process on missing restart PIDs and exit', () => {
+        const processHandler = sinon.spy();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', undefined, processHandler);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: {}
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 0 }
+        });
+
+        assert.deepStrictEqual(processHandler.getCalls().map(call => call.args), [
+            [debugSession, undefined],
+            [debugSession, undefined],
+        ]);
+        disposable.dispose();
+    });
+
     test('process event without a system process ID still resets a captured exit code', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
         const factory = registerFactoryStub.lastCall.args[1];

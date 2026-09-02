@@ -20,6 +20,7 @@ An **AppHost** defines your app in code: services, containers, databases, front 
 
 - **Run your apps:** Start, debug, and stop an Aspire application, or use the available start, stop, and restart actions for individual resources, from the Aspire view.
 - **Debug across your stack:** Aspire debug sessions support C#, JavaScript, Python, Go, Java, and Rust application resources when the corresponding debugger is available. Java and Rust debugging require Aspire 13.6 or later.
+- **Attach to running resources:** Attach to .NET and Go resources from the Aspire view. The action remains available when a required debugger extension is missing so VS Code can show installation guidance.
 - **See live health and analytics:** Open the Aspire dashboard for resource health, endpoints, console logs, structured logs, distributed traces, and metrics.
 - **Monitor without leaving VS Code:** See resource health summaries and quick actions beside resource definitions in your AppHost.
 - **Move toward production.** Deploy, publish artifacts, and run pipeline steps using the Aspire view.
@@ -27,6 +28,10 @@ An **AppHost** defines your app in code: services, containers, databases, front 
 ## Bring your stack
 
 Aspire can bring together C#, TypeScript and JavaScript, Python, Go, Java, containers, databases, cloud resources, and more. Browse the [integration gallery](https://aspire.dev/integrations/gallery/) to find the pieces your app needs.
+
+## Chat tools for agents
+
+The extension contributes `aspire_apphost_start`, `aspire_apphost_stop`, and `aspire_resource_debug` language model tools. They only accept AppHosts and resources already discovered in a trusted workspace, reject arbitrary or absolute paths, and ask the user to confirm before acting. Resource debugging attaches to a running resource; it does not start or restart one.
 
 ## Learn more
 

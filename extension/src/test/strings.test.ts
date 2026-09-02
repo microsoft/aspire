@@ -132,6 +132,22 @@ suite('utils/strings tests', () => {
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
     });
 
+    test('resource debugger strings are present in package.nls.json and the generated XLF catalog', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+        const expectedStrings = {
+            attachingDebugger: 'Attaching debugger to {0}...',
+            attachDebuggerAlreadyDebugging: 'A debugger is already attached to {0}.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            const key = `aspire-vscode.strings.${name}`;
+            assert.strictEqual(packageNls[key], value);
+            assert.ok(xlf.includes(`<trans-unit id="${key}">`));
+        }
+    });
+
     test('Java loc strings are present in package.nls.json and the generated XLF catalog', () => {
         // Same guard as the Rust strings above: package.nls.json is the only input to the XLF
         // catalog (see gulpfile.js), so a Java string that only exists in strings.ts ships

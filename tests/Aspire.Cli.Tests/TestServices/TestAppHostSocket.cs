@@ -12,8 +12,15 @@ internal sealed class TestAppHostSocket(string socketPath) : IAppHostSocket
 
     public int? ProcessId { get; init; } = BackchannelConstants.ExtractPid(socketPath);
 
+    public Func<CancellationToken, ValueTask<Socket>>? ConnectAsyncCallback { get; init; }
+
     public async ValueTask<Socket> ConnectAsync(CancellationToken cancellationToken)
     {
+        if (ConnectAsyncCallback is not null)
+        {
+            return await ConnectAsyncCallback(cancellationToken);
+        }
+
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {

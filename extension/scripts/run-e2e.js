@@ -68,6 +68,11 @@ const useJavaStarterWorkspace = enableJavaE2E && javaStarterTestSpecs.length > 0
 // dependency of it. capabilities.ts only advertises the `java` capability - which is what makes the
 // CLI hand the AppHost launch back to the extension - when the first two are both installed.
 const REQUIRED_JAVA_EXTENSION_IDS = ['redhat.java', 'vscjava.vscode-java-debug', 'vscjava.vscode-java-dependency'];
+const REQUIRED_RESOURCE_DEBUG_EXTENSION_IDS = [
+  'ms-dotnettools.vscode-dotnet-runtime',
+  'ms-dotnettools.csharp',
+  'golang.go',
+];
 const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
 if (!extesterVersion) {
   throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
@@ -142,6 +147,7 @@ const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'Asp
 const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const enableResourceDebugE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -644,8 +650,12 @@ async function main() {
     }
     validateVsix(vsixPath);
     const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+    const resourceDebugVsixPaths = resolveResourceDebugVsixPaths();
     if (enableAzureFunctionsE2E) {
       validateAzureFunctionsCoreTools();
+    }
+    if (enableResourceDebugE2E) {
+      validateResourceDebugTools();
     }
 
     ensureExtester();
@@ -672,6 +682,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG: enableResourceDebugE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
@@ -716,11 +727,12 @@ async function main() {
 
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
-    for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
-      logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
-      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+    for (const dependencyVsix of [...azureFunctionsVsixPaths, ...resourceDebugVsixPaths]) {
+      logStep(`Installing ${dependencyVsix.displayName} VSIX`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', dependencyVsix.path], extestEnv, { timeout: 300000 });
     }
     assertJavaExtensionsRegistered();
+    assertResourceDebugExtensionsRegistered();
 
     recording = startRecording();
     try {
@@ -878,21 +890,67 @@ function resolveAzureFunctionsVsixPaths() {
   return [
     {
       displayName: '.NET Install Tool',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
     },
     {
       displayName: 'C#',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
     },
     {
       displayName: 'Azure Resource Groups',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
     },
     {
       displayName: 'Azure Functions',
-      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS'),
     },
   ];
+}
+
+function resolveResourceDebugVsixPaths() {
+  if (!enableResourceDebugE2E) {
+    return [];
+  }
+
+  // The Extension Host runs offline. Install both debugger adapters and C#'s runtime dependency
+  // explicitly so this shard proves packaged attach behavior rather than a developer profile.
+  return [
+    {
+      displayName: '.NET Install Tool',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG'),
+    },
+    {
+      displayName: 'C#',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG'),
+    },
+    {
+      displayName: 'Go',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_GO_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG'),
+    },
+  ];
+}
+
+function validateResourceDebugTools() {
+  const result = spawnSync('dlv', ['version'], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`The resource debug E2E shard requires dlv on PATH. ${result.error?.message ?? result.stderr ?? `exit code ${result.status}`}`);
+  }
+
+  if (process.platform === 'linux') {
+    const ptraceScopePath = '/proc/sys/kernel/yama/ptrace_scope';
+    if (fs.existsSync(ptraceScopePath)) {
+      const ptraceScope = fs.readFileSync(ptraceScopePath, 'utf8').trim();
+      if (ptraceScope !== '0') {
+        throw new Error(`The resource debug E2E shard requires kernel.yama.ptrace_scope=0 so Delve can attach to DCP-launched Go processes, but ${ptraceScopePath} contains '${ptraceScope}'.`);
+      }
+    }
+  }
 }
 
 /**
@@ -1213,6 +1271,18 @@ function assertJavaExtensionsRegistered() {
     return;
   }
 
+  assertExtensionsRegistered('Java', REQUIRED_JAVA_EXTENSION_IDS);
+}
+
+function assertResourceDebugExtensionsRegistered() {
+  if (!enableResourceDebugE2E) {
+    return;
+  }
+
+  assertExtensionsRegistered('Resource debug', REQUIRED_RESOURCE_DEBUG_EXTENSION_IDS);
+}
+
+function assertExtensionsRegistered(label, requiredExtensionIds) {
   const manifestPath = path.join(extensionsDir, 'extensions.json');
   if (!fs.existsSync(manifestPath)) {
     throw new Error(`VS Code did not write ${manifestPath}, so no extension is registered for the run.`);
@@ -1230,7 +1300,7 @@ function assertJavaExtensionsRegistered() {
     .map(entry => entry?.identifier?.id)
     .filter(Boolean);
 
-  for (const identifier of REQUIRED_JAVA_EXTENSION_IDS) {
+  for (const identifier of requiredExtensionIds) {
     const entry = registered.find(candidate => candidate?.identifier?.id?.toLowerCase() === identifier.toLowerCase());
     if (!entry) {
       throw new Error(`${identifier} is not registered in ${manifestPath}, so VS Code will not load it. Registered: ${registeredIds.join(', ') || '(none)'}`);
@@ -1239,7 +1309,7 @@ function assertJavaExtensionsRegistered() {
     assertExtensionSupportsVsCodeVersion(path.join(extensionsDir, entry.relativeLocation), entry.relativeLocation);
   }
 
-  console.log(`Java extensions registered for the run: ${REQUIRED_JAVA_EXTENSION_IDS.join(', ')}.`);
+  console.log(`${label} extensions registered for the run: ${requiredExtensionIds.join(', ')}.`);
 }
 
 /**
@@ -1273,14 +1343,15 @@ function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName)
   }
 }
 
-function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = process.env[environmentVariable];
+function resolveRequiredVsixPath(environmentVariable, selectingFeatureFlag) {
+  const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
-    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+    throw new Error(`${environmentVariable} is required when ${selectingFeatureFlag}=true.`);
   }
 
   const resolvedPath = path.resolve(configuredPath);
   if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}`);
+    throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}. It is required when ${selectingFeatureFlag}=true.`);
   }
 
   validateVsix(resolvedPath);
@@ -1395,10 +1466,13 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.mkdirSync(workspaceRoot, { recursive: true });
   fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
   writeWorkerProject('AspireE2E.Worker');
+  if (enableResourceDebugE2E) {
+    writeGoWorker('AspireE2E.Go');
+  }
   if (enableAzureFunctionsE2E) {
     writeAzureFunctionsProject('AspireE2E.Functions');
   }
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
+  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableResourceDebugE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1451,11 +1525,14 @@ function restoreWorkspaceFixture() {
   }
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
+    : '';
+  const goPackageReference = includeResourceDebug
+    ? `    <PackageReference Include="Aspire.Hosting.Go" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
@@ -1468,13 +1545,20 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
 
   <ItemGroup>
     <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${azureFunctionsPackageReference}  </ItemGroup>
+${azureFunctionsPackageReference}${goPackageReference}  </ItemGroup>
 
 </Project>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
     ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
+    : '';
+  const goResource = includeResourceDebug
+    ? `builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")
+    .WithCommand("./test-tools/go")
+    .WithHttpEndpoint(name: "http", env: "PORT");
+
+`
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
@@ -1558,7 +1642,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${azureFunctionsResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -1689,6 +1773,92 @@ app.MapGet("/", () => "ok");
 
 app.Run();
 `);
+}
+
+function writeGoWorker(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'go.mod'), `module example.com/aspire-e2e-go
+
+go 1.24
+`);
+  fs.writeFileSync(path.join(projectDirectory, 'main.go'), `package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+)
+
+func main() {
+	http.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
+		message := "go-ok"
+		_, _ = fmt.Fprint(writer, message)
+	})
+	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
+}
+`);
+
+  // `go run` intentionally links its temporary executable with `-s -w`, so Delve can attach to
+  // the process but cannot bind source breakpoints. Keep the supported AddGoApp/go-launcher shape,
+  // while using an unstripped child under a go-build*/exe path that the attach provider recognizes.
+  const debugExecutable = path.join(projectDirectory, 'go-build-debug', 'exe', isWindows ? 'e2e-go.exe' : 'e2e-go');
+  fs.mkdirSync(path.dirname(debugExecutable), { recursive: true });
+  buildGoE2EExecutable(projectDirectory, ['build', '-gcflags=all=-N -l', '-o', debugExecutable, '.'], 'debug target');
+
+  const launcherSourceDirectory = path.join(projectDirectory, 'debug-launcher');
+  fs.mkdirSync(launcherSourceDirectory, { recursive: true });
+  fs.writeFileSync(path.join(launcherSourceDirectory, 'main.go'), `package main
+
+import (
+	"log"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+)
+
+func main() {
+	target := filepath.Join(filepath.Dir(os.Args[0]), "..", "go-build-debug", "exe", "${isWindows ? 'e2e-go.exe' : 'e2e-go'}")
+	command := exec.Command(target)
+	command.Env = os.Environ()
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		_ = command.Process.Signal(<-signals)
+	}()
+
+	if err := command.Wait(); err != nil {
+		log.Fatal(err)
+	}
+}
+`);
+
+  const launcherExecutable = path.join(projectDirectory, 'test-tools', isWindows ? 'go.exe' : 'go');
+  fs.mkdirSync(path.dirname(launcherExecutable), { recursive: true });
+  buildGoE2EExecutable(projectDirectory, ['build', '-o', launcherExecutable, './debug-launcher'], 'debug launcher');
+}
+
+function buildGoE2EExecutable(projectDirectory, args, description) {
+  const result = spawnSync('go', args, {
+    cwd: projectDirectory,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Unable to build the Go E2E ${description}. ${result.error?.message ?? result.stderr ?? `exit code ${result.status}`}`);
+  }
 }
 
 function resolveAppHostSdkVersion(resolvedCliPath) {

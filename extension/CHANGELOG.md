@@ -14,6 +14,10 @@
 
 <!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
 
+### Features
+
+- Add an **Attach debugger** action for running .NET and Go resources in the Aspire pane, including installation guidance when the required C# or Go debugger extension is missing ([#18602](https://github.com/microsoft/aspire/pull/18602)).
+
 ### Fixes
 
 - Prevent the Aspire view from stealing sidebar focus and reappearing in the Activity Bar when the window is reloaded ([#19746](https://github.com/microsoft/aspire/issues/19746), [#19754](https://github.com/microsoft/aspire/pull/19754)).

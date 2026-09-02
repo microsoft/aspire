@@ -307,6 +307,132 @@
         "comment": "The numeric process exit code for the resource debug session."
       }
     },
+    "aspire/vscode/resourcedebug/start": {
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded extension surface that requested resource debugging: tree or languageModelTool."
+      },
+      "requested_strategy": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded resource debug strategy requested by the caller: auto, attach, or invalid."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded controller responsible for resource debugging: editor."
+      }
+    },
+    "aspire/vscode/resourcedebug/result": {
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded extension surface that requested resource debugging: tree or languageModelTool."
+      },
+      "provider": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded attach provider selected for the resource: dotnet, go, or none."
+      },
+      "resource_type": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The coarse resource type bucket: project, executable, container, or other."
+      },
+      "requested_strategy": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded resource debug strategy requested by the caller: auto, attach, or invalid."
+      },
+      "effective_strategy": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded effective resource debug strategy: attach or none."
+      },
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded ResourceDebugResult outcome."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded controller responsible for resource debugging: editor."
+      },
+      "state": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The coarse resource state: running, notRunning, or unknown."
+      },
+      "debugger_requirement": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the selected provider debugger requirement was installed, missing, or not applicable."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded ResourceDebugErrorKind for an error result, or none."
+      },
+      "resolution_duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-negative duration of resource and attach resolution in milliseconds."
+      },
+      "debug_start_duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-negative duration of the VS Code debugger start request in milliseconds."
+      },
+      "total_duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-negative total resource debug operation duration in milliseconds."
+      }
+    },
+    "aspire/vscode/resourcedebug/session/end": {
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded extension surface that requested resource debugging: tree or languageModelTool."
+      },
+      "provider": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded attach provider selected for the resource: dotnet or go."
+      },
+      "resource_type": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The coarse resource type bucket: project, executable, container, or other."
+      },
+      "requested_strategy": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded resource debug strategy requested by the caller: auto or attach."
+      },
+      "effective_strategy": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded effective resource debug strategy: attach."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded controller responsible for resource debugging: editor."
+      },
+      "session_end_reason": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded reason the tracked independent attach session ended: terminated."
+      },
+      "session_duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-negative duration of the tracked independent attach session in milliseconds."
+      }
+    },
     "aspire/vscode/dashboard/launch/resolved": {
       "behavior": {
         "classification": "SystemMetaData",

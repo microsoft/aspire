@@ -193,7 +193,7 @@ internal sealed class ExecutableLaunchContext(
 /// </param>
 /// <param name="environmentVariables">The resolved environment variables for the executable.</param>
 /// <param name="launchConfigurations">The serialized launch configurations supplied to an IDE.</param>
-/// <param name="displayArguments">The arguments projected into the dashboard command line.</param>
+/// <param name="launchArguments">The resolved arguments and their execution and dashboard projections.</param>
 internal sealed class ExecutableLaunchPlan(
     string command,
     string workingDirectory,
@@ -201,7 +201,7 @@ internal sealed class ExecutableLaunchPlan(
     IReadOnlyList<string>? arguments,
     IEnumerable<KeyValuePair<string, string>> environmentVariables,
     IEnumerable<JsonElement> launchConfigurations,
-    IEnumerable<ExecutableLaunchArgument> displayArguments)
+    IEnumerable<ExecutableLaunchArgument> launchArguments)
 {
     /// <summary>
     /// Gets the executable path or command name.
@@ -236,9 +236,15 @@ internal sealed class ExecutableLaunchPlan(
     public IReadOnlyList<JsonElement> LaunchConfigurations { get; } = launchConfigurations.ToArray();
 
     /// <summary>
+    /// Gets the resolved arguments and their execution and dashboard projections.
+    /// </summary>
+    public IReadOnlyList<ExecutableLaunchArgument> LaunchArguments { get; } = launchArguments.ToArray();
+
+    /// <summary>
     /// Gets the arguments projected into the dashboard command line.
     /// </summary>
-    public IReadOnlyList<ExecutableLaunchArgument> DisplayArguments { get; } = displayArguments.ToArray();
+    public IReadOnlyList<ExecutableLaunchArgument> DisplayArguments { get; } =
+        launchArguments.Where(static argument => argument.Display).ToArray();
 }
 
 /// <summary>
@@ -327,7 +333,7 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
         var omittedLaunchToolArgumentCount = omitLaunchToolArguments ? launchToolArgumentCount : 0;
 
         var executableArguments = new List<string>(arguments.Count - omittedLaunchToolArgumentCount);
-        var displayArguments = new List<ExecutableLaunchArgument>(arguments.Count);
+        var launchArguments = new List<ExecutableLaunchArgument>(arguments.Count);
         var nextExecutableArgumentIndex = 0;
 
         for (var i = 0; i < arguments.Count; i++)
@@ -343,16 +349,13 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 executableArguments.Add(argument.Value);
             }
 
-            if (display)
-            {
-                displayArguments.Add(new(
-                    argument.Value,
-                    argument.IsSensitive,
-                    executable,
-                    display,
-                    effectiveArgumentIndex,
-                    isLaunchToolArgument ? ExecutableLaunchArgumentRole.LaunchTool : ExecutableLaunchArgumentRole.Application));
-            }
+            launchArguments.Add(new(
+                argument.Value,
+                argument.IsSensitive,
+                executable,
+                display,
+                effectiveArgumentIndex,
+                isLaunchToolArgument ? ExecutableLaunchArgumentRole.LaunchTool : ExecutableLaunchArgumentRole.Application));
         }
 
         var launchConfigurations = await CreateLaunchConfigurationsAsync(context).ConfigureAwait(false);
@@ -364,7 +367,7 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
             executableArguments.Count > 0 ? executableArguments : null,
             context.ExecutionConfiguration.EnvironmentVariables,
             launchConfigurations,
-            displayArguments);
+            launchArguments);
     }
 
     private static async Task<IReadOnlyList<JsonElement>> CreateLaunchConfigurationsAsync(ExecutableLaunchContext context)
@@ -524,7 +527,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             projectArguments.Count > 0 ? projectArguments : null,
             context.ExecutionConfiguration.EnvironmentVariables,
             launchConfigurations,
-            launchArguments.Where(static argument => argument.Display));
+            launchArguments);
     }
 
     private static async Task<IReadOnlyList<JsonElement>> CreateLaunchConfigurationsAsync(

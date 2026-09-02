@@ -211,6 +211,41 @@ public class ExecutableLaunchPlanTests
     }
 
     [Fact]
+    public void RendererPreservesSensitivityForHiddenEffectiveArguments()
+    {
+        var resource = new ExecutableResource("app", "dotnet", "/tmp");
+        var executable = Executable.Create("app-12345678", "stale-tool");
+        var renderedResource = new RenderedModelResource<Executable>(resource, executable);
+        var plan = new ExecutableLaunchPlan(
+            "dotnet",
+            "/tmp",
+            ExecutableLaunchMechanism.Process,
+            ["run", "--configuration", "resolved-secret"],
+            [],
+            [],
+            [
+                new("run", isSensitive: false, executable: true, display: false, effectiveArgumentIndex: 0, role: ExecutableLaunchArgumentRole.LaunchTool),
+                new("--configuration", isSensitive: false, executable: true, display: false, effectiveArgumentIndex: 1, role: ExecutableLaunchArgumentRole.LaunchTool),
+                new("resolved-secret", isSensitive: true, executable: true, display: false, effectiveArgumentIndex: 2, role: ExecutableLaunchArgumentRole.LaunchTool),
+            ]);
+
+        ExecutableCreator.Render(
+            renderedResource,
+            plan,
+            pemCertificates: null,
+            NullLogger<ExecutableCreator>.Instance);
+
+        Assert.True(executable.TryGetAnnotationAsObjectList<int>(
+            Executable.SensitiveEffectiveArgumentIndexesAnnotation,
+            out var sensitiveEffectiveArgumentIndexes));
+        Assert.Equal([2], sensitiveEffectiveArgumentIndexes);
+        Assert.True(executable.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(
+            CustomResource.ResourceAppArgsAnnotation,
+            out var displayedArguments));
+        Assert.Empty(displayedArguments);
+    }
+
+    [Fact]
     public async Task ResolverRejectsMultipleLaunchRecipes()
     {
         var resource = new ExecutableResource("app", "tool", "/tmp");

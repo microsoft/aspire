@@ -5297,6 +5297,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 exit_code: 17,
             },
         ]);
+        assert.strictEqual(aspireDebugSession.hasResourceDebugSessionProcess(4242), false);
 
         aspireDebugSession.dispose();
     });
@@ -5341,6 +5342,48 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(result, undefined);
         assert.strictEqual(stopSession.calledOnce, true);
+    });
+
+    test('reports whether an Aspire-owned resource debug session has a process ID', () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        (aspireDebugSession as any)._resourceDebugSessions = [{
+            id: 'run-1',
+            processId: 4242,
+            session: { id: 'run-1' } as vscode.DebugSession,
+            stopSession: sinon.stub(),
+        }];
+
+        assert.strictEqual(
+            (aspireDebugSession as unknown as { hasResourceDebugSessionProcess(processId: number): boolean })
+                .hasResourceDebugSessionProcess(4242),
+            true);
+        assert.strictEqual(
+            (aspireDebugSession as unknown as { hasResourceDebugSessionProcess(processId: number): boolean })
+                .hasResourceDebugSessionProcess(5252),
+            false);
+        (aspireDebugSession as any)._resourceDebugSessionProcessIds.set('run-2', 5252);
+        assert.strictEqual(
+            (aspireDebugSession as unknown as { hasResourceDebugSessionProcess(processId: number): boolean })
+                .hasResourceDebugSessionProcess(5252),
+            true);
+        aspireDebugSession.dispose();
     });
 
     test('retries MAUI resource debug sessions when the first start attempt is canceled', async () => {

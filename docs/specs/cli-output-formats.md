@@ -197,7 +197,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, or `null` when a dotnet project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |

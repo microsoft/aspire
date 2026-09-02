@@ -15,6 +15,7 @@ import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
 import { launchConfigurationTypePropertyName } from '../debugger/debuggerInstallHints';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
@@ -72,9 +73,13 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
+    const resourceDebugger: ResourceDebugger = {
+        debug: async () => ({ outcome: 'unsupportedResource' }),
+        canAttachToResource: () => false,
+    };
     const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
-    }));
+    }), resourceDebugger);
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
