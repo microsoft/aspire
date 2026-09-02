@@ -1,0 +1,29 @@
+{
+  "run_id": 33583332995,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33583332995",
+  "analyzed_at": "2026-09-02T03:06:39Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19762,
+    "title": "Match AppHosts across equivalent filesystem paths",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta/apphost-path-normalization",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19762"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 100104386583,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33583332995/job/100104386583",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' and no fetchable job logs or TRX test failures. This matches the known recurring flaky pattern for the 'VS Code extension E2E (Windows, dynamic-debug-configuration)' shard. The PR only modifies Aspire.Cli backchannel/apphost path-normalization and Aspire.Hosting code, not the VS Code extension, so the failure is unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
