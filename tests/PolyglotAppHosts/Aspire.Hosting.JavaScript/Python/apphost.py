@@ -1,10 +1,10 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import DistributedApplicationBuilder, create_builder
 
 
-def add_deno_app(builder):
+def add_deno_app(builder: DistributedApplicationBuilder):
     deno_app = builder.add_deno_app("deno-app", "./deno-app", "main.ts")
     deno_app.with_deno(install=False, install_args=["--cached-only"])
     deno_app.with_deno_allow_all(enabled=False)
