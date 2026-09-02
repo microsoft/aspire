@@ -524,6 +524,7 @@ internal sealed class AgentInitCommand : BaseCommand
         => client switch
         {
             AgentClientKind.CopilotCli => "GitHub Copilot CLI",
+            AgentClientKind.CopilotApp => "GitHub Copilot App",
             AgentClientKind.ClaudeCode => "Claude Code",
             AgentClientKind.VsCode => "VS Code",
             AgentClientKind.OpenCode => "OpenCode",

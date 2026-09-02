@@ -14,9 +14,9 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
@@ -124,8 +124,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "AppHost.cs");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "AppHost.cs");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -160,8 +160,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var processId1 = int.MaxValue - 3;
         var processId2 = int.MaxValue - 4;
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, processId1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath, processId2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath, processId1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath, processId2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -197,7 +197,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 5);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 5);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -248,8 +248,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             int.MaxValue - 8,
             isInScope: AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, workspace.WorkspaceRoot.FullName));
         nestedConnection.SocketPath = CreateMatchingSocketFile(nestedAppHost, workspace, 8);
-        monitor.AddConnection("hash1", primaryConnection.SocketPath, primaryConnection);
-        monitor.AddConnection("hash2", nestedConnection.SocketPath, nestedConnection);
+        monitor.AddConnection(primaryConnection.SocketPath, primaryConnection);
+        monitor.AddConnection(nestedConnection.SocketPath, nestedConnection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -324,7 +324,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(worktreeRoot, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -363,7 +363,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -399,8 +399,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var processId1 = int.MaxValue - 7;
         var processId2 = int.MaxValue - 8;
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, processId1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, processId2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath1, processId1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath2, processId2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -549,7 +549,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = CreateConnection(runningAppHostFile.FullName, int.MaxValue - 11);
         connection.SocketPath = CreateMatchingSocketFile(runningAppHostFile.FullName, workspace, 11);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -663,7 +663,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var outOfScopeAppHostFile = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherWorkspace", "Other.AppHost.csproj");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(outOfScopeAppHostFile, int.MaxValue - 12, isInScope: false));
+        monitor.AddConnection("socket.hash1", CreateConnection(outOfScopeAppHostFile, int.MaxValue - 12, isInScope: false));
 
         var projectLocator = new TestProjectLocator
         {
@@ -1091,7 +1091,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             AppHostInfo = null,
             IsInScope = true
         };
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
@@ -1130,7 +1130,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = CreateConnection(appHostFile.FullName, int.MaxValue - 10);
         connection.SocketPath = CreateMatchingSocketFile(appHostFile.FullName, workspace, 10);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -1195,7 +1195,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         connection.SocketPath = socketPath;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", socketPath, connection);
+        monitor.AddConnection(socketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1282,7 +1282,6 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     {
         return new TestAppHostAuxiliaryBackchannel
         {
-            Hash = $"hash-{processId.ToString(CultureInfo.InvariantCulture)}",
             SocketPath = $"socket.{processId.ToString(CultureInfo.InvariantCulture)}",
             IsInScope = isInScope,
             AppHostInfo = new AppHostInformation
@@ -1300,7 +1299,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDirectory);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var instanceSuffix = instanceId.ToString("000", CultureInfo.InvariantCulture);
         var socketPath = Path.Combine(

@@ -4,10 +4,13 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Acquisition;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class ExtensionGuestLauncherTests
 {
     [Fact]
@@ -26,8 +29,10 @@ public class ExtensionGuestLauncherTests
             new FileInfo("/tmp/apphost.ts"),
             debug: false);
 
+        var command = Path.Combine(Path.GetTempPath(), "npx");
+
         await launcher.LaunchAsync(
-            "npx",
+            command,
             ["tsx", "/tmp/apphost.ts"],
             new DirectoryInfo("/tmp"),
             new Dictionary<string, string>(),
@@ -36,9 +41,48 @@ public class ExtensionGuestLauncherTests
             CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
-        Assert.Equal("npx", capturedArgs[0]);
+        Assert.Equal(command, capturedArgs[0]);
         Assert.Equal("tsx", capturedArgs[1]);
         Assert.Equal("/tmp/apphost.ts", capturedArgs[2]);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_ResolvesCommandFromEffectiveEnvironmentBeforePassingItToTheExtension()
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-extension-java-path-");
+        try
+        {
+            var ambientJava = CreateExecutable(root, "jdk-21", "java");
+            var effectiveJava = CreateExecutable(root, "jdk-25", "java");
+            var effectivePath = Path.GetDirectoryName(effectiveJava)!;
+            using var ambientPath = new EnvVarOverride("PATH", Path.GetDirectoryName(ambientJava));
+            using var ambientPathExtensions = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".EXE") : null;
+            List<string>? capturedArgs = null;
+            var service = new FakeLaunchExtensionService((_, args, _, _) => capturedArgs = args);
+            var launcher = new ExtensionGuestLauncher(
+                service,
+                new FileInfo(Path.Combine(root.FullName, "AppHost.java")),
+                debug: true);
+
+            await launcher.LaunchAsync(
+                "java",
+                ["-cp", ".java-build", "AppHost"],
+                root,
+                new Dictionary<string, string> { ["PATH"] = effectivePath },
+                afterLaunchAsync: null,
+                options: null,
+                CancellationToken.None);
+
+            Assert.NotNull(capturedArgs);
+            Assert.Equal(
+                effectiveJava,
+                capturedArgs[0],
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -53,7 +97,7 @@ public class ExtensionGuestLauncherTests
         var appHostFile = new FileInfo("/home/user/project/apphost.ts");
         var launcher = new ExtensionGuestLauncher(service, appHostFile, debug: true);
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
+        await launcher.LaunchAsync(Path.Combine(Path.GetTempPath(), "npx"), ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, capturedProjectFile);
     }
@@ -68,7 +112,7 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: true);
-        await launcher.LaunchAsync("npx", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
+        await launcher.LaunchAsync(Path.Combine(Path.GetTempPath(), "npx"), [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.True(capturedDebug);
     }
@@ -89,7 +133,7 @@ public class ExtensionGuestLauncherTests
             ["NODE_ENV"] = "development"
         };
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), envVars, afterLaunchAsync: null, options: null, CancellationToken.None);
+        await launcher.LaunchAsync(Path.Combine(Path.GetTempPath(), "npx"), ["tsx"], new DirectoryInfo("/tmp"), envVars, afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedEnv);
         Assert.Equal(2, capturedEnv.Count);
@@ -103,7 +147,7 @@ public class ExtensionGuestLauncherTests
         var service = new FakeLaunchExtensionService((_, _, _, _) => { });
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
 
-        var (exitCode, output) = await launcher.LaunchAsync("cmd", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
+        var (exitCode, output) = await launcher.LaunchAsync(Path.Combine(Path.GetTempPath(), "cmd"), [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.Null(output);
@@ -119,16 +163,31 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
-        await launcher.LaunchAsync("python", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
+        var command = Path.Combine(Path.GetTempPath(), "python");
+        await launcher.LaunchAsync(command, [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
         Assert.Single(capturedArgs);
-        Assert.Equal("python", capturedArgs[0]);
+        Assert.Equal(command, capturedArgs[0]);
     }
 
     /// <summary>
     /// Minimal fake that only implements LaunchAppHostAsync for testing ExtensionGuestLauncher.
     /// </summary>
+    private static string CreateExecutable(DirectoryInfo root, string runtimeDirectory, string command)
+    {
+        var binDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, runtimeDirectory, "bin"));
+        var executable = Path.Combine(binDirectory.FullName, OperatingSystem.IsWindows() ? $"{command}.exe" : command);
+        File.WriteAllText(executable, string.Empty);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        return executable;
+    }
+
     private sealed class FakeLaunchExtensionService : IExtensionInteractionService
     {
         private readonly Action<string, List<string>, List<EnvVar>, bool> _onLaunch;
@@ -141,6 +200,9 @@ public class ExtensionGuestLauncherTests
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
         public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
 
         public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
         {
@@ -156,6 +218,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayConsolePlainText(string message) => throw new NotImplementedException();
         public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null) => throw new NotImplementedException();
         public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle) => throw new NotImplementedException();
+        public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry) => throw new NotImplementedException();
         public Task RequestAppHostAttachAsync(int processId, string projectName) => throw new NotImplementedException();
         public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) => throw new NotImplementedException();

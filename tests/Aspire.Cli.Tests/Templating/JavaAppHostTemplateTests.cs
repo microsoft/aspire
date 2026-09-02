@@ -80,9 +80,15 @@ public class JavaAppHostTemplateTests
     {
         var apiDirectory = Path.Combine(GetJavaStarterDirectory(), "api");
 
-        var pomPath = Path.Combine(apiDirectory, "pom.xml");
-        Assert.True(File.Exists(pomPath), $"Expected the java-starter API's Maven project at {pomPath}");
-        Assert.Contains("spring-boot-starter-parent", File.ReadAllText(pomPath), StringComparison.Ordinal);
+        var buildPath = Path.Combine(apiDirectory, "build.gradle");
+        Assert.True(File.Exists(buildPath), $"Expected the java-starter API's Gradle build at {buildPath}");
+
+        var build = File.ReadAllText(buildPath);
+        Assert.Contains("id 'org.springframework.boot' version '3.5.14'", build, StringComparison.Ordinal);
+        Assert.Contains("languageVersion = JavaLanguageVersion.of(25)", build, StringComparison.Ordinal);
+
+        var settingsPath = Path.Combine(apiDirectory, "settings.gradle");
+        Assert.True(File.Exists(settingsPath), $"Expected the java-starter API's Gradle settings at {settingsPath}");
 
         var javaSources = Directory
             .EnumerateFiles(apiDirectory, "*.java", SearchOption.AllDirectories)
@@ -117,25 +123,32 @@ public class JavaAppHostTemplateTests
 
     /// <summary>
     /// The AppHost never names a build tool: addSpringBootApp resolves one from the project, and the
-    /// resolver prefers a wrapper over whatever <c>mvn</c> happens to be on PATH so the scaffolded
-    /// project builds identically on a machine with no Maven installed. That only holds if the
-    /// wrapper is actually in the template. The wrapper is script-only by design — a
-    /// <c>distributionType</c> of anything else requires committing maven-wrapper.jar.
+    /// resolver prefers a wrapper over whatever <c>gradle</c> happens to be on PATH. Pinning the
+    /// distribution and its checksum keeps every scaffold on the same verified Gradle version.
     /// </summary>
     [Fact]
-    public void JavaStarterTemplate_ShipsAScriptOnlyMavenWrapper()
+    public void JavaStarterTemplate_ShipsAPinnedGradleWrapper()
     {
         var apiDirectory = Path.Combine(GetJavaStarterDirectory(), "api");
 
-        foreach (var relativePath in new[] { "mvnw", "mvnw.cmd" })
+        foreach (var relativePath in new[] { "gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar" })
         {
             var path = Path.Combine(apiDirectory, relativePath);
-            Assert.True(File.Exists(path), $"Expected the java-starter Maven wrapper at {path}");
+            Assert.True(File.Exists(path), $"Expected the java-starter Gradle wrapper at {path}");
         }
 
-        var propertiesPath = Path.Combine(apiDirectory, ".mvn", "wrapper", "maven-wrapper.properties");
+        var propertiesPath = Path.Combine(apiDirectory, "gradle", "wrapper", "gradle-wrapper.properties");
         Assert.True(File.Exists(propertiesPath), $"Expected the java-starter wrapper properties at {propertiesPath}");
-        Assert.Contains("distributionType=only-script", File.ReadAllText(propertiesPath), StringComparison.Ordinal);
+
+        var properties = File.ReadAllText(propertiesPath);
+        Assert.Contains("gradle-9.7.0-bin.zip", properties, StringComparison.Ordinal);
+        Assert.Contains("distributionSha256Sum=84fbba45c7f4c64abc77460e1c00f541e9f960e3c7ed2538f1ede19eacd873ae", properties, StringComparison.Ordinal);
+
+        foreach (var relativePath in new[] { "pom.xml", "mvnw", "mvnw.cmd", ".mvn" })
+        {
+            var path = Path.Combine(apiDirectory, relativePath);
+            Assert.False(File.Exists(path) || Directory.Exists(path), $"Did not expect a Maven build or wrapper path at {path}");
+        }
     }
 
     /// <summary>

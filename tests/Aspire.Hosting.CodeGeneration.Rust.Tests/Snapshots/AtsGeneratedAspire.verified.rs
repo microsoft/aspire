@@ -81,7 +81,7 @@ pub struct TestConfigDto {
     #[serde(rename = "Enabled")]
     pub enabled: bool,
     #[serde(rename = "OptionalField")]
-    pub optional_field: String,
+    pub optional_field: Option<String>,
 }
 
 impl TestConfigDto {
@@ -471,7 +471,7 @@ impl TestCallbackContext {
     }
 
     /// Gets the Name property
-    pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", args)?;
@@ -479,7 +479,7 @@ impl TestCallbackContext {
     }
 
     /// Sets the Name property
-    pub fn set_name(&self, value: &str) -> Result<TestCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_name(&self, value: Option<&str>) -> Result<TestCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -920,7 +920,7 @@ impl TestEnvironmentContext {
     }
 
     /// Gets the Description property
-    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", args)?;
@@ -928,7 +928,7 @@ impl TestEnvironmentContext {
     }
 
     /// Sets the Description property
-    pub fn set_description(&self, value: &str) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
+    pub fn set_description(&self, value: Option<&str>) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));

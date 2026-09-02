@@ -35,6 +35,30 @@ public sealed class CiWorkflowTests
     }
 
     [Fact]
+    public void RunTestsInstallsJavaForProjectsThatRequireIt()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "run-tests.yml"));
+        var javaSetup = System.Text.RegularExpressions.Regex.Match(
+            workflow,
+            "(?ms)^      - name: Set up Java\\n(?<body>.*?)(?=^      - |\\z)");
+        Assert.True(javaSetup.Success, "Could not find the Java setup step in run-tests.yml.");
+        Assert.Contains("if: ${{ fromJson(inputs.properties).requiresJava == true }}", javaSetup.Value);
+        Assert.Contains("uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0", javaSetup.Value);
+        Assert.Contains("distribution: temurin", javaSetup.Value);
+        Assert.Contains("java-version: 21", javaSetup.Value);
+
+        var properties = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng", "testing", "CITestsProperties.props"));
+        Assert.Contains("<CITestsProperty Include=\"requiresJava\" MSBuildProp=\"RequiresJava\"", properties);
+
+        var javaTests = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "tests",
+            "Aspire.Hosting.CodeGeneration.Java.Tests",
+            "Aspire.Hosting.CodeGeneration.Java.Tests.csproj"));
+        Assert.Contains("<RequiresJava>true</RequiresJava>", javaTests);
+    }
+
+    [Fact]
     public void CiFailureTrackerCheckoutDoesNotPinMain()
     {
         var workflow = ReadWorkflow("ci.yml");

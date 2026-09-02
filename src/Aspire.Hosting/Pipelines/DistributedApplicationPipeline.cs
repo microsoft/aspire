@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -74,45 +75,42 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 context.Logger.LogInformation("Initializing deployment for environment '{EnvironmentName}'", hostEnvironment.EnvironmentName);
                 var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
 
-                if (deploymentStateManager.StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+                if (deploymentStateManager.StateFilePath is string stateFilePath &&
+                    File.Exists(stateFilePath) &&
+                    !options.Value.ClearCache)
                 {
-                    // Check if --clear-cache flag is set and prompt user before deleting deployment state
-                    if (!options.Value.ClearCache)
+                    context.Logger.LogInformation("Deployment state will be loaded from: {StateFilePath}", stateFilePath);
+                }
+                else if (options.Value.ClearCache &&
+                    deploymentStateManager.StateFilePath is string existingStateFilePath &&
+                    (File.Exists(existingStateFilePath) ||
+                     File.Exists(FileDeploymentStateManager.GetMigrationStatePath(existingStateFilePath))))
+                {
+                    var interactionService = context.Services.GetRequiredService<IInteractionService>();
+                    if (interactionService.IsAvailable)
                     {
-                        // Add a task to show the deployment state file path if available
-                        context.Logger.LogInformation("Deployment state will be loaded from: {StateFilePath}", stateFilePath);
-                    }
-                    else
-                    {
-                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
-                        if (interactionService.IsAvailable)
+                        var result = await interactionService.PromptNotificationAsync(
+                            "Clear Deployment State",
+                            $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be cleared. Do you want to continue?",
+                            new NotificationInteractionOptions
                         {
-                            var result = await interactionService.PromptNotificationAsync(
-                                "Clear Deployment State",
-                                $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be deleted. Do you want to continue?",
-                                new NotificationInteractionOptions
-                                {
-                                    Intent = MessageIntent.Confirmation,
-                                    ShowSecondaryButton = true,
-                                    ShowDismiss = false,
-                                    PrimaryButtonText = "Yes",
-                                    SecondaryButtonText = "No"
-                                },
-                                context.CancellationToken).ConfigureAwait(false);
+                            Intent = MessageIntent.Confirmation,
+                            ShowSecondaryButton = true,
+                            ShowDismiss = false,
+                            PrimaryButtonText = "Yes",
+                            SecondaryButtonText = "No"
+                        },
+                        context.CancellationToken).ConfigureAwait(false);
 
-                            if (result.Canceled || !result.Data)
-                            {
-                                // User declined or canceled - exit the deployment
-                                context.Logger.LogInformation("User declined to clear deployment state. Canceling pipeline execution.");
-
-                                throw new OperationCanceledException("Pipeline execution canceled by user.");
-                            }
-
-                            // User confirmed - delete the deployment state file
-                            context.Logger.LogInformation("Deleting deployment state file at {Path} due to --clear-cache flag", stateFilePath);
-                            await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
+                        if (result.Canceled || !result.Data)
+                        {
+                            context.Logger.LogInformation("User declined to clear deployment state. Canceling pipeline execution.");
+                            throw new OperationCanceledException("Pipeline execution canceled by user.");
                         }
                     }
+
+                    context.Logger.LogInformation("Clearing deployment state due to --clear-cache flag.");
+                    await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                 }
 
                 var computeResources = context.Model.Resources

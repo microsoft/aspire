@@ -1,4 +1,4 @@
-services:
+﻿services:
   docker-compose-dashboard:
     image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
     ports:

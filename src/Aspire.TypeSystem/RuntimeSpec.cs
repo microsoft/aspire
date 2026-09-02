@@ -113,14 +113,14 @@ public sealed class CommandSpec
     public Dictionary<string, string>? EnvironmentVariables { get; init; }
 
     /// <summary>
-    /// Gets an optional incremental-build check. When set, the command is skipped if its stamp file
-    /// is newer than every declared input. Null means the command always runs.
+    /// Gets an optional incremental-build check. When set, the command is skipped if every declared
+    /// output exists and its stamp file is newer than every declared input. Null means the command always runs.
     /// </summary>
     public CommandUpToDateCheck? UpToDateCheck { get; init; }
 }
 
 /// <summary>
-/// Declares the inputs and stamp file that let the CLI skip a command whose work is already done.
+/// Declares the inputs, outputs, and stamp file that let the CLI skip a command whose work is already done.
 /// </summary>
 /// <remarks>
 /// This exists for compilers that have no incremental mode of their own. <c>javac</c> given an
@@ -142,6 +142,13 @@ public sealed class CommandUpToDateCheck
     /// Entries that do not exist are ignored, so a spec can name a path that only some layouts have.
     /// </remarks>
     public required string[] Inputs { get; init; }
+
+    /// <summary>
+    /// Gets the outputs that must exist for the command to be considered up to date, relative to the
+    /// working directory unless absolute. Supports the same placeholders as <see cref="CommandSpec.Args" />.
+    /// Null or empty preserves the stamp-and-input-only behavior of older runtime specifications.
+    /// </summary>
+    public string[]? Outputs { get; init; }
 
     /// <summary>
     /// Gets the file extensions, including the leading dot, that identify input files.

@@ -571,12 +571,6 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     }
 }
 
-public sealed class InMemoryTelemetryLimitTests : TelemetryLimitTests
-{
-    protected override bool UseSqlite => false;
-}
-
 public sealed class SqliteTelemetryLimitTests : TelemetryLimitTests
 {
-    protected override bool UseSqlite => true;
 }

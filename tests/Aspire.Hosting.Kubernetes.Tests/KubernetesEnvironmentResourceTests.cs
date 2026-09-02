@@ -197,6 +197,28 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task KubernetesPersistentVolumeCannotTargetDockerCompose()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var kubernetes = builder.AddKubernetesEnvironment("kubernetes");
+        var dockerCompose = builder.AddDockerComposeEnvironment("docker-compose");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithComputeEnvironment(dockerCompose)
+            .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("project", exception.Message);
+        Assert.Contains("docker-compose", exception.Message);
+        Assert.Contains("data", exception.Message);
+        Assert.Contains("kubernetes", exception.Message);
+    }
+
+    [Fact]
     public async Task RunningTheDeploymentTargetHooksTwiceLeavesOneTargetPerEnvironment()
     {
         // The prepare-deployment-target step declares RequiredBySteps = [BeforeStart], so it runs once in

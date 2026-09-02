@@ -44,9 +44,24 @@ const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec)
 //
 // ASPIRE_EXTENSION_E2E_ENABLE_JAVA remains as an explicit override for running a Java spec through
 // a glob, or for forcing the Java workspace off while debugging the runner.
+const matchedJavaTestSpecs = matchedTestSpecs.filter(isJavaSpecPath);
+const javaStarterTestSpecs = matchedJavaTestSpecs.filter(isJavaStarterSpecPath);
+const javaPlaygroundTestSpecs = matchedJavaTestSpecs.filter(specPath => !isJavaStarterSpecPath(specPath));
+const matchedNonJavaTestSpecs = matchedTestSpecs.filter(specPath => !isJavaSpecPath(specPath));
+if (matchedJavaTestSpecs.length > 0 && matchedNonJavaTestSpecs.length > 0) {
+  const javaMatches = matchedJavaTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  const nonJavaMatches = matchedNonJavaTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  throw new Error(`Java E2E spec selection mixes Java and non-Java workspace fixtures. Java matches: ${javaMatches.join(', ')}. Non-Java matches: ${nonJavaMatches.join(', ')}. Split these specs into separate runs.`);
+}
 const enableJavaE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA
   ? process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA === 'true'
-  : matchedTestSpecs.length > 0 && matchedTestSpecs.every(isJavaSpecPath);
+  : matchedJavaTestSpecs.length > 0 && matchedNonJavaTestSpecs.length === 0;
+if (javaStarterTestSpecs.length > 0 && javaPlaygroundTestSpecs.length > 0) {
+  const starterMatches = javaStarterTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  const playgroundMatches = javaPlaygroundTestSpecs.map(specPath => toPosixPath(path.relative(extensionRoot, specPath))).sort();
+  throw new Error(`Java E2E spec selection mixes workspace fixtures. Starter matches: ${starterMatches.join(', ')}. Playground matches: ${playgroundMatches.join(', ')}. Split these specs into separate runs.`);
+}
+const useJavaStarterWorkspace = enableJavaE2E && javaStarterTestSpecs.length > 0;
 // redhat.java supplies the language server, which is what produces workspace diagnostics and the
 // classpath the debug adapter launches against. vscjava.vscode-java-debug supplies the `java` debug
 // adapter the Aspire debugger delegates to, and vscjava.vscode-java-dependency is a hard activation
@@ -337,6 +352,10 @@ function isJavaSpecPath(specPath) {
   return path.basename(specPath).toLowerCase().startsWith('java');
 }
 
+function isJavaStarterSpecPath(specPath) {
+  return path.basename(specPath).toLowerCase().startsWith('javastarterprojectmodel.');
+}
+
 function logStep(name) {
   console.log(`\n--- ${name} ---`);
 }
@@ -422,7 +441,7 @@ function escapeRegExp(value) {
 }
 
 function toPosixPath(value) {
-  return path.resolve(value).replace(/^\\\\\?\\/, '').split(path.sep).join('/');
+  return value.replace(/^\\\\\?\\/, '').split(path.sep).join('/');
 }
 
 function writeVsCodeLocaleFile() {
@@ -614,7 +633,7 @@ async function main() {
     validateCliPath(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
-    copyJavaPlaygroundIntoWorkspace(bundledCliPath);
+    prepareJavaWorkspace(bundledCliPath, appHostSdkVersion);
     restoreWorkspaceFixture();
     const vsixPath = process.env.ASPIRE_EXTENSION_E2E_VSIX
       ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_VSIX)
@@ -900,7 +919,7 @@ function copyJavaPlaygroundIntoWorkspace(bundledCliPath) {
   // `.aspire/` is generated rather than checked in, so it has to exist before the copy: it is what
   // the AppHost's `import aspire.*` statements resolve against, and the generated sources are the
   // very thing the diagnostics test measures.
-  ensureJavaAppHostSdkGenerated(bundledCliPath, source);
+  ensureJavaAppHostSdkGenerated(bundledCliPath, path.join(source, 'JavaSpringBoot.AppHost.Java'));
 
   logStep('Copying the Java Spring Boot playground into the E2E workspace');
   fs.cpSync(source, workspaceRoot, {
@@ -939,6 +958,70 @@ function copyJavaPlaygroundIntoWorkspace(bundledCliPath) {
   fs.rmSync(path.join(workspaceRoot, 'aspire.config.json'), { force: true });
 }
 
+function prepareJavaWorkspace(bundledCliPath, appHostSdkVersion) {
+  if (!enableJavaE2E) {
+    return;
+  }
+
+  if (!useJavaStarterWorkspace) {
+    copyJavaPlaygroundIntoWorkspace(bundledCliPath);
+    return;
+  }
+
+  assertWorkspaceRootIsNotGitIgnored();
+  logStep('Generating the Java starter in the E2E workspace');
+
+  for (const entry of fs.readdirSync(workspaceRoot)) {
+    fs.rmSync(path.join(workspaceRoot, entry), { recursive: true, force: true });
+  }
+
+  const result = spawnSync(bundledCliPath, [
+    'new',
+    'aspire-java-starter',
+    '--name',
+    'JavaStarter',
+    '--output',
+    workspaceRoot,
+    '--version',
+    appHostSdkVersion,
+    '--localhost-tld',
+    'false',
+    '--suppress-agent-init',
+    '--non-interactive',
+    '--nologo',
+  ], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 600000,
+  });
+  fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
+
+  if (result.error) {
+    throw new Error(`Unable to generate the Java starter: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Generating the Java starter failed with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.
+stdout:
+${result.stdout}
+stderr:
+${result.stderr}`);
+  }
+
+  ensureJavaAppHostSdkGenerated(bundledCliPath, workspaceRoot);
+
+  const settingsPath = path.join(workspaceRoot, '.vscode', 'settings.json');
+  const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
+  settings['aspire.aspireCliExecutablePath'] = bundledCliPath;
+  settings['aspire.enableAutoRestore'] = false;
+  settings['aspire.enableSettingsFileCreationPromptOnStartup'] = false;
+  settings['aspire.appHostDiscoveryTimeoutMs'] = 120000;
+  settings['java.configuration.updateBuildConfiguration'] = 'automatic';
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
+}
+
 /**
  * Fails when the Java workspace root is excluded by a .gitignore rule.
  *
@@ -970,14 +1053,12 @@ function assertWorkspaceRootIsNotGitIgnored() {
 }
 
 /**
- * Makes sure the playground's generated Aspire Java SDK exists before it is copied.
+ * Makes sure the Java AppHost's generated Aspire SDK exists before VS Code opens the workspace.
  *
- * `aspire restore` is run in the playground itself rather than in the copied workspace because the
- * generator assemblies resolve relative to the repository's package feed; the same command run
- * against a copy under a temporary directory fails to discover the Java code generator.
+ * `aspire restore` runs in the repository-local AppHost because the generator assemblies resolve
+ * relative to the repository's package feed; a temporary-directory copy cannot discover them.
  */
-function ensureJavaAppHostSdkGenerated(bundledCliPath, playgroundRoot) {
-  const appHostDirectory = path.join(playgroundRoot, 'JavaSpringBoot.AppHost.Java');
+function ensureJavaAppHostSdkGenerated(bundledCliPath, appHostDirectory) {
   const generatedModules = path.join(appHostDirectory, '.aspire', 'modules');
   if (fs.existsSync(generatedModules) && fs.readdirSync(generatedModules).length > 0) {
     return;

@@ -15,6 +15,7 @@ internal sealed class WaitCommand : BaseCommand
 
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<WaitCommand> _logger;
+    private readonly ResourceWaitService _resourceWaitService;
     private readonly TimeProvider _timeProvider;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
@@ -41,12 +42,14 @@ internal sealed class WaitCommand : BaseCommand
     public WaitCommand(
         AppHostConnectionResolver connectionResolver,
         ILogger<WaitCommand> logger,
+        ResourceWaitService resourceWaitService,
         CommonCommandServices services,
         TimeProvider timeProvider)
         : base("wait", WaitCommandStrings.Description, services)
     {
         _connectionResolver = connectionResolver;
         _logger = logger;
+        _resourceWaitService = resourceWaitService;
         _timeProvider = timeProvider;
 
         Arguments.Add(s_resourceArgument);
@@ -111,9 +114,14 @@ internal sealed class WaitCommand : BaseCommand
             string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForResource, resourceName, statusLabel),
             (Func<Task<int>>)(async () =>
             {
-                var response = await connection.WaitForResourceAsync(resourceName, status, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                var response = await _resourceWaitService.WaitAsync(
+                    connection,
+                    resourceName,
+                    GetWaitTarget(status),
+                    timeoutSeconds,
+                    cancellationToken).ConfigureAwait(false);
 
-                if (response.Success)
+                if (response.Outcome == ResourceWaitOutcome.Success)
                 {
                     return CliExitCodes.Success;
                 }
@@ -124,7 +132,7 @@ internal sealed class WaitCommand : BaseCommand
                     return CliExitCodes.WaitResourceFailed;
                 }
 
-                if (response.TimedOut)
+                if (response.Outcome == ResourceWaitOutcome.Timeout)
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitTimedOut, resourceName, statusLabel, timeoutSeconds));
                     return CliExitCodes.WaitTimeout;
@@ -160,6 +168,17 @@ internal sealed class WaitCommand : BaseCommand
             "healthy" => "healthy",
             "down" => "down",
             _ => status
+        };
+    }
+
+    private static ResourceWaitTarget GetWaitTarget(string status)
+    {
+        return status switch
+        {
+            "healthy" => ResourceWaitTarget.Healthy,
+            "up" => ResourceWaitTarget.Up,
+            "down" => ResourceWaitTarget.Down,
+            _ => throw new ArgumentOutOfRangeException(nameof(status))
         };
     }
 }
