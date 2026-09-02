@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#19755, which targets release/13.6, not milestone 13.5; no matching changelog entry found",
+  "mergedAt": "2026-09-01T20:53:57Z",
+  "number": 1605,
+  "runDate": "2026-09-02T00:07:18Z",
+  "status": "excluded",
+  "title": "[docs] Document consolidated VS Code AppHost build failure notification"
+}
