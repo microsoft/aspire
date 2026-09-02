@@ -215,9 +215,10 @@ internal static class Selection
         // run-full-ci label kill switch fired), so ResolveChangedFiles would otherwise throw for lack of a
         // --from/--changed-files input.
         trace.EnterStage("resolve changed files");
-        var rawChangedFiles = options.ForceAll
-            ? Array.Empty<string>()
+        var changedFileSet = options.ForceAll
+            ? new ChangedFileSet(Array.Empty<string>())
             : ResolveChangedFiles(options);
+        var rawChangedFiles = changedFileSet.Files;
 
         // Split the raw change set into excluded (reported for audit transparency) and the filtered
         // set that actually drives Layer 2. RunLayer1 applies the same filter to Layer 1's own git
@@ -407,14 +408,15 @@ internal static class Selection
         Console.Out.WriteLine($"::warning::{message}");
     }
 
-    private static IReadOnlyCollection<string> ResolveChangedFiles(RunOptions options)
+    private static ChangedFileSet ResolveChangedFiles(RunOptions options)
     {
         if (options.ChangedFilesPath is not null)
         {
-            return File.ReadAllLines(options.ChangedFilesPath)
+            var suppliedFiles = File.ReadAllLines(options.ChangedFilesPath)
                 .Select(l => l.Trim())
                 .Where(l => l.Length > 0)
                 .ToList();
+            return new ChangedFileSet(suppliedFiles);
         }
 
         if (options.From is null)
@@ -426,17 +428,24 @@ internal static class Selection
         // globs expect. `<from> <to>` diffs the two refs; omitting <to> diffs against the work tree.
         // From has already been rebound to the merge-base (see RunCore), so this is a branch-point..head
         // diff -- the PR's own changes -- not a base-tip..head diff.
-        // --no-renames decomposes a rename into a delete (old path) + add (new path) so BOTH sides
-        // are glob-matched. Without it, git's default rename detection reports only the destination,
-        // so a file moved OUT of a mapped directory (e.g. eng/clipack/foo -> eng/elsewhere) would hide
-        // the old path and silently skip that directory's mapped tests. Layer 1 captures both sides via
-        // -M; this keeps Layer 2 consistent.
         var range = options.To is null ? new[] { options.From } : new[] { options.From, options.To };
-        // -c core.quotePath=false: with the default (true), git octal-escapes and double-quotes any
-        // path with non-ASCII bytes (e.g. "src/caf\303\251.cs"). That escaped string is not the real
-        // repo-relative path, so the map globs below would silently miss it. Forcing quotePath off makes
-        // git emit the literal UTF-8 path, which is what the globs expect. (Layer 1's diff does the same.)
-        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-only", "--no-renames" };
+        // --name-status -M (not --name-only --no-renames): a rename is reported as one "R###" record
+        // carrying BOTH paths, not decomposed into a separate delete(old) + add(new). We glob-match
+        // both sides identically to any other changed file -- a file moved OUT of a mapped directory
+        // (e.g. eng/clipack/foo -> eng/elsewhere) must still hit that directory's rule via its old path
+        // (see SelectTestsCliTests.RenameOutOfMappedPathStillSelectsItsTests), and an old path matched
+        // by nothing still forces the same run-all fallback as a plain deletion would (see
+        // TestSelector.Select). Layer 1 (GraphAffectedProjects.GetChangedPathsFromGit) parses the same
+        // "-M -z" format via ParseNameStatusOutput below -- one shared parser for both layers.
+        // -z NUL-terminates every field instead of git's default newline-per-record, tab-per-field
+        // text format. That default format quotes/escapes any path containing a byte >= 0x80, a tab,
+        // a newline, a double-quote, or a backslash (e.g. a literal tab in a name becomes the 8
+        // characters "old\tname.txt", with a literal backslash-t, not a real tab byte) -- and
+        // `-c core.quotePath=false` only suppresses the non-ASCII-byte escaping, not the
+        // tab/newline/quote/backslash escaping. A quoted/escaped path never glob-equals the real
+        // repo-relative path, so the map rules below would silently miss it. NUL can never appear in a
+        // valid path, so `-z` lets git skip quoting entirely, for every path, with no exceptions.
+        var args = new List<string> { "diff", "--name-status", "-M", "-z" };
         args.AddRange(range);
 
         var stdout = RunProcess("git", args, options.RepoRoot, out var exitCode, out var stderr);
@@ -445,8 +454,79 @@ internal static class Selection
             throw new InvalidOperationException($"git diff failed ({exitCode}): {stderr}");
         }
 
-        return stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return ParseNameStatusOutput(stdout);
     }
+
+    // Extracted from ResolveChangedFiles so tests can feed hand-crafted (including malformed)
+    // NUL-delimited `git diff --name-status -M -z` output directly, without needing an actual git
+    // process to produce it -- a real `git diff` that exits 0 never emits a truncated record, so the
+    // malformed-input path below can only be exercised synthetically. Also called directly by Layer 1
+    // (GraphAffectedProjects.GetChangedPathsFromGit), which runs the identical "-M -z" diff: sharing
+    // one parser guarantees both layers attribute byte-for-byte the same paths for every change,
+    // instead of two independently-maintained parsers that could silently drift apart.
+    internal static ChangedFileSet ParseNameStatusOutput(string stdout)
+    {
+        var files = new List<string>();
+        // With -z the whole stream is just NUL-delimited fields back to back -- "status\0path\0" for a
+        // plain change, "R100\0old\0new\0" for a rename (the numeric similarity suffix varies) -- with
+        // no per-line framing to split on first. How many fields follow depends on the status, so walk
+        // the flat token stream and consume 1 or 2 fields per record accordingly. -M alone won't emit
+        // "C" copy records -- see GraphAffectedProjects.GetChangedPathsFromGit for the same format with
+        // more examples.
+        // Well-formed `-z` output always ends its last field with a NUL, same as every other field --
+        // there is no special "no trailing NUL" case. `Split` doesn't care whether the string ends with
+        // the delimiter, so a stream truncated mid-path (the final field's NUL never arrived, e.g. a
+        // killed process or a partial pipe read) would otherwise parse as a shorter-but-plausible-looking
+        // path instead of failing loudly like every other truncation case below.
+        if (stdout.Length > 0 && stdout[^1] != '\0')
+        {
+            throw new InvalidOperationException(
+                "git diff --name-status -M -z produced a truncated stream: output did not end with a NUL terminator, so the final path may be incomplete.");
+        }
+
+        var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var tokenIndex = 0;
+        while (tokenIndex < tokens.Length)
+        {
+            var status = tokens[tokenIndex++];
+            if (status.StartsWith('R') || status.StartsWith('C'))
+            {
+                if (tokenIndex + 1 >= tokens.Length)
+                {
+                    // `git diff` exited 0 but the NUL-delimited stream ended mid-record (a status token
+                    // with no path(s) following it). This should never happen for well-formed output;
+                    // silently stopping here would return a partial change-file set to the selector,
+                    // which could omit a rule-matching path and under-select tests -- the opposite of
+                    // this tool's fail-safe design. Fail loudly instead.
+                    throw new InvalidOperationException(
+                        $"git diff --name-status -M -z produced a truncated rename/copy record: status '{status}' at token {tokenIndex - 1} of {tokens.Length} was not followed by both an old and new path.");
+                }
+
+                var oldPath = tokens[tokenIndex++];
+                var newPath = tokens[tokenIndex++];
+                files.Add(oldPath);
+                files.Add(newPath);
+            }
+            else
+            {
+                if (tokenIndex >= tokens.Length)
+                {
+                    // Same reasoning as above: a plain-change status token with no path following it is
+                    // malformed output from a successful git invocation, not an expected empty diff.
+                    throw new InvalidOperationException(
+                        $"git diff --name-status -M -z produced a truncated record: status '{status}' at token {tokenIndex - 1} of {tokens.Length} was not followed by a path.");
+                }
+
+                files.Add(tokens[tokenIndex++]);
+            }
+        }
+
+        return new ChangedFileSet(files);
+    }
+
+    // Both paths of a git-detected rename are glob-matched identically to any other changed path (see
+    // ResolveChangedFiles) -- there is no separate old->new pairing for TestSelector to consume.
+    internal sealed record ChangedFileSet(IReadOnlyCollection<string> Files);
 
     // Repo-relative, '/'-separated directories of every project in Aspire.slnx -- the universe the
     // Layer 1 graph walks. The selector treats a changed file under one of these dirs as
@@ -969,6 +1049,44 @@ internal static class Selection
         return $"`{member.Key}`";
     }
 
+    // Escapes bytes a `-z`-parsed path (see ParseNameStatusOutput) can legally contain but that would
+    // otherwise corrupt the Markdown this method renders into: `-z` intentionally preserves a path's raw
+    // bytes -- including a literal newline, carriage return, or backtick -- that git's older text-mode
+    // format would have quoted away. Left raw, such a path could inject extra lines/headings into the
+    // step summary or PR comment, or break out of its enclosing `code span`. Escaping is display-only;
+    // callers still match/attribute the unescaped path everywhere else.
+    private static string EscapeForDisplay(string value)
+    {
+        if (value.AsSpan().IndexOfAny('\r', '\n', '`') < 0)
+        {
+            return value;
+        }
+
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            switch (c)
+            {
+                case '\r':
+                    sb.Append("\\r");
+                    break;
+                case '\n':
+                    sb.Append("\\n");
+                    break;
+                case '`':
+                    // A raw backtick would close the enclosing inline code span early; substitute a
+                    // visually similar character that can't be confused with real path content.
+                    sb.Append('\'');
+                    break;
+                default:
+                    sb.Append(c);
+                    break;
+            }
+        }
+
+        return sb.ToString();
+    }
+
     // The trigger a cause groups under. Direct file matches and graph fan-out from the same seed file
     // share a "file:" key so they render under one heading; affected-project and derived-test causes
     // get their own keyed groups.
@@ -985,10 +1103,11 @@ internal static class Selection
     private static string CauseGroupHeader(string key)
     {
         var sep = key.IndexOf(':', StringComparison.Ordinal);
-        var (kind, value) = (key[..sep], key[(sep + 1)..]);
+        var (kind, rawValue) = (key[..sep], key[(sep + 1)..]);
+        var value = EscapeForDisplay(rawValue);
         return kind switch
         {
-            "file" => $"**{FileEmoji(value)} `{value}`** *({FileChangeKind(value)})*",
+            "file" => $"**{FileEmoji(rawValue)} `{value}`** *({FileChangeKind(rawValue)})*",
             "affected" => $"**📦 affected project `{value}`**",
             "derived" => $"**🧪 derived from test `{value}`**",
             _ => $"**`{value}`**",
@@ -999,7 +1118,8 @@ internal static class Selection
     private static string CauseGroupDescriptor(string key)
     {
         var sep = key.IndexOf(':', StringComparison.Ordinal);
-        var (kind, value) = (key[..sep], key[(sep + 1)..]);
+        var (kind, rawValue) = (key[..sep], key[(sep + 1)..]);
+        var value = EscapeForDisplay(rawValue);
         return kind switch
         {
             "file" => $"`{value}`",
@@ -1112,7 +1232,7 @@ internal static class Selection
         sb.AppendLine();
         foreach (var file in changedFiles.OrderBy(f => f, StringComparer.Ordinal))
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"- `{file}`");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- `{EscapeForDisplay(file)}`");
         }
         sb.AppendLine();
         sb.AppendLine("</details>");
@@ -1129,7 +1249,7 @@ internal static class Selection
             sb.AppendLine();
             foreach (var file in excludedFiles.OrderBy(f => f, StringComparer.Ordinal))
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{file}`");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{EscapeForDisplay(file)}`");
             }
             sb.AppendLine();
         }
@@ -1152,7 +1272,7 @@ internal static class Selection
             sb.AppendLine();
             foreach (var file in unmatched)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{file}`");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{EscapeForDisplay(file)}`");
             }
         }
         sb.AppendLine();
@@ -1282,9 +1402,9 @@ internal static class Selection
     // Terse, one-line cause for the PR comment (no rule reason text).
     private static string ShortCause(Cause cause) => cause.Kind switch
     {
-        CauseKind.Convention => $"`{cause.Trigger}`",
-        CauseKind.PathRule => $"`{cause.Trigger}`",
-        CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
+        CauseKind.Convention => $"`{EscapeForDisplay(cause.Trigger)}`",
+        CauseKind.PathRule => $"`{EscapeForDisplay(cause.Trigger)}`",
+        CauseKind.AffectedProject => $"affected project `{EscapeForDisplay(cause.Trigger)}`",
         // Name the seed changed file (and hop count) rather than the full chain, which the summary
         // carries -- the comment stays scannable. Falls back to a generic label when no path was tracked.
         CauseKind.Layer1Graph => Layer1ShortCause(cause),
@@ -1292,8 +1412,8 @@ internal static class Selection
         // derived_targets rule pulls this job in because that test project was selected. Phrasing it as a
         // noun -- not "derived from test X" -- avoids a dangling "from" that reads as if the line above it
         // in the job-reasons cell flows through this test.
-        CauseKind.DerivedFromTest => $"selected test `{cause.Trigger}`",
-        _ => cause.Trigger,
+        CauseKind.DerivedFromTest => $"selected test `{EscapeForDisplay(cause.Trigger)}`",
+        _ => EscapeForDisplay(cause.Trigger),
     };
 
     // "via graph from `seed.cs`" (+ "(N hops)" when the reverse-dependency chain is more than one edge).
@@ -1307,7 +1427,7 @@ internal static class Selection
         // path = [seedFile, project0, ..., affectedTest]; project edges = (count - 1 projects) - 1.
         var hops = path.Count - 2;
         var suffix = hops > 1 ? $" ({hops} hops)" : "";
-        return $"via graph from `{path[0]}`{suffix}";
+        return $"via graph from `{EscapeForDisplay(path[0])}`{suffix}";
     }
 
     // Full cause for the step summary, including the curated rule reason when present.
@@ -1315,16 +1435,16 @@ internal static class Selection
     {
         var head = cause.Kind switch
         {
-            CauseKind.Convention => $"convention match `{cause.Trigger}`",
-            CauseKind.PathRule => $"path rule `{cause.Trigger}`",
-            CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
+            CauseKind.Convention => $"convention match `{EscapeForDisplay(cause.Trigger)}`",
+            CauseKind.PathRule => $"path rule `{EscapeForDisplay(cause.Trigger)}`",
+            CauseKind.AffectedProject => $"affected project `{EscapeForDisplay(cause.Trigger)}`",
             // Render the full decision path (seed file -> ... -> affected test) when available, so the
             // summary explains HOW the change reached the test, not just THAT it did.
             CauseKind.Layer1Graph => cause.Path is { Count: > 0 } path
-                ? $"graph closure: {string.Join(" → ", path)}"
+                ? $"graph closure: {string.Join(" → ", path.Select(EscapeForDisplay))}"
                 : "affected by changed source (graph closure)",
-            CauseKind.DerivedFromTest => $"derived from selected test `{cause.Trigger}`",
-            _ => cause.Trigger,
+            CauseKind.DerivedFromTest => $"derived from selected test `{EscapeForDisplay(cause.Trigger)}`",
+            _ => EscapeForDisplay(cause.Trigger),
         };
 
         // Map reasons can be YAML folded scalars spanning lines; collapse to one line for the bullet.

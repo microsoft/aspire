@@ -149,6 +149,22 @@ public sealed class TestSelector
     /// cause carries the seed file + reverse-dependency chain so the summary can show the full path. Null
     /// when Layer 1 did not run or produced no paths.
     /// </param>
+    /// <remarks>
+    /// A git-detected rename's old and new paths (from a <c>git diff --name-status -M -z</c>
+    /// "R###\0old\0new\0" record) both flow into <paramref name="changedFiles"/> and are evaluated
+    /// identically to any other changed path here -- there is no rename-specific handling. In
+    /// particular, an old path that ends up matched by nothing forces the same run-all fallback below
+    /// as a plain deletion would. A rename does not guarantee its new path's evaluation "covers" the
+    /// old path's content: the old location may have been part of a directory-scoped Layer 1 glob or
+    /// Layer 2 rule shared by other consumers that the new location does not carry (e.g.
+    /// <c>tests/Shared/Logging/*.cs</c> is glob-compiled by several real test projects; moving one of
+    /// its files into a single destination project's own folder would make the new path Layer-1-owned
+    /// by only that one project), or the new path may land somewhere the caller's prefilter drops
+    /// before either layer ever evaluates it. An earlier version of this method exempted an unmatched
+    /// rename old path from the fallback when its new path was present in <paramref name="changedFiles"/>;
+    /// that exemption was removed after an audit found both failure modes above are reachable in
+    /// practice. See docs/ci/test-trigger-map.md for the rationale.
+    /// </remarks>
     public SelectionResult Select(
         IReadOnlyCollection<string> changedFiles,
         IReadOnlyCollection<string> layer1Affected,

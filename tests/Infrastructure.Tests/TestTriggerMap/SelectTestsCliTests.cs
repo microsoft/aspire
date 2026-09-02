@@ -963,13 +963,13 @@ public sealed class SelectTestsCliTests
     }
 
     // P1-6c. A rename must attribute BOTH sides so a file moved OUT of a mapped directory still runs
-    // that directory's tests. git's default rename detection reports only the destination, hiding the
-    // old path; the selector passes --no-renames so the diff decomposes into delete(old)+add(new).
-    // other.txt (-> Aspire.Cli.Tests) is renamed to renamed.txt, which the map ignores so the new side
-    // adds nothing and does not trip the run-all fallback -- isolating the assertion to the old side:
-    // the deletion of other.txt must still select Aspire.Cli.Tests. Failure mode: dropping --no-renames
-    // makes git hide other.txt, so only the ignored renamed.txt is seen, the rule never fires, and the
-    // move silently skips its tests.
+    // that directory's tests. The selector diffs with `-M -z` (git rename detection on, NUL-delimited),
+    // which reports a rename as one "R###\0old\0new\0" record carrying both paths; the selector globs
+    // each side against every rule rather than only the new path. other.txt (-> Aspire.Cli.Tests) is
+    // renamed to renamed.txt, which the map ignores so the new side adds nothing and does not trip the
+    // run-all fallback -- isolating the assertion to the old side: the move of other.txt must still
+    // select Aspire.Cli.Tests. Failure mode: matching only the rename's new path would see just the
+    // ignored renamed.txt, the rule would never fire, and the move would silently skip its tests.
     [Fact]
     public void RenameOutOfMappedPathStillSelectsItsTests()
     {
@@ -1001,15 +1001,168 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // Regression for the root cause behind PR #19486 (aspire-skills-bundle.common.ps1 renamed to
+    // aspire-skills-bundles.common.ps1, singular -> plural): an IN-PLACE rename where map.yml is
+    // updated, in the SAME commit, to reference only the new filename. Layer 2 reads map.yml from
+    // the checked-out worktree at HEAD, so by the time it runs, old.txt matches no path_rule at all
+    // -- not because nobody mapped it, but because the mapping moved with the file. This is the
+    // exact shape PR #19486 hit, and it forces the run-all fallback: an unmatched rename old path is
+    // not special-cased. An earlier version of this fix exempted it (trusting that new.txt's own
+    // rule already accounts for the moved content), but that exemption was removed after an audit
+    // found it could silently under-select tests for cross-directory moves out of a shared-glob
+    // directory, and for renames into a destination the prefilter drops before anything evaluates it
+    // (see docs/ci/test-trigger-map.md). Over-selecting ALL for this same-commit-rename case is the
+    // accepted, safe tradeoff. map.yml's own change is ignored here purely to isolate the rename
+    // under test from an unrelated map.yml-changed assertion -- this is a synthetic-map
+    // simplification, NOT a mirror of production: the real eng/github-ci/test-trigger-map.yml has no
+    // self-ignore entry and instead routes changes to itself to test:Infrastructure.Tests (see its
+    // own path_rules, "SelectTests acceptance/behavior tests...").
+    [Fact]
+    public void InPlaceRenameWithoutOwnMapEntryForcesRunAll()
+    {
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", """
+                version: 1
+                path_rules:
+                  - paths: [old.txt]
+                    targets: ["test:Aspire.Cli.Tests"]
+                ignore:
+                  - map.yml
+                """);
+            WriteFile(repoRoot, "old.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            RunGit(repoRoot, "mv", "old.txt", "new.txt");
+            // The map moves to the new name in the SAME commit as the rename -- exactly what PR
+            // #19486 did to eng/github-ci/test-trigger-map.yml alongside the script rename.
+            WriteFile(repoRoot, "map.yml", """
+                version: 1
+                path_rules:
+                  - paths: [new.txt]
+                    targets: ["test:Aspire.Cli.Tests"]
+                ignore:
+                  - map.yml
+                """);
+            GitCommitAll(repoRoot, "rename old.txt in place and move its map entry with it");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var jsonPath = Path.Combine(repoRoot, "selection.json");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+                Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+                using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                Assert.True(doc.RootElement.GetProperty("selectsAll").GetBoolean());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previous);
+            }
+        });
+    }
+
+    // Regression mapped to the audit's FN-02 finding (rename into an ignored/prefiltered destination):
+    // ChangedFileFilter's prefilter drops new.md before it ever reaches TestSelector.Select (e.g. a
+    // rename INTO a doc-only path matched by eng/github-ci/ci-skip-entirely-patterns.txt in
+    // production; skip-patterns.txt here), so nothing ever evaluates whether its content needs CI.
+    // old.txt is itself unmapped, so it still forces ALL through the same run-all fallback as any
+    // other unmatched leftover -- there is no rename-aware logic that could be fooled by the dropped
+    // destination into selecting nothing.
+    [Fact]
+    public void InPlaceRenameToPrefilteredDestinationForcesRunAll()
+    {
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", """
+                version: 1
+                prefilter:
+                  patterns_file: skip-patterns.txt
+                path_rules:
+                  - paths: [other.txt]
+                    targets: ["test:Aspire.Cli.Tests"]
+                """);
+            WriteFile(repoRoot, "skip-patterns.txt", "**.md\n");
+            WriteFile(repoRoot, "old.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            RunGit(repoRoot, "mv", "old.txt", "new.md");
+            GitCommitAll(repoRoot, "rename old.txt to a doc-only path the prefilter drops");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var jsonPath = Path.Combine(repoRoot, "selection.json");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+                Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+                using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                Assert.True(doc.RootElement.GetProperty("selectsAll").GetBoolean());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previous);
+            }
+        });
+    }
+
+    // Regression: renaming a file does not disturb ordinary rule matching for either side. Both
+    // old.txt and new.txt keep their own, unrelated path_rule targets across the rename (the map
+    // itself is untouched by the commit that does the rename), so both must still be selected --
+    // each path is glob-matched exactly like any other changed file, independent of the rename
+    // relationship between them.
+    [Fact]
+    public void RenameWhoseOldPathIncidentallyMatchesAnUnrelatedRuleStillAddsBothTargets()
+    {
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [old.txt]
+                targets: ["test:Aspire.Hosting.Tests"]
+              - paths: [new.txt]
+                targets: ["test:Aspire.Cli.Tests"]
+            """;
+
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", map);
+            WriteFile(repoRoot, "old.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            RunGit(repoRoot, "mv", "old.txt", "new.txt");
+            GitCommitAll(repoRoot, "rename old.txt to new.txt; map keeps both rules unchanged");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+            var props = File.ReadAllText(propsPath);
+            Assert.Contains("Aspire.Hosting.Tests", props);
+            Assert.Contains("Aspire.Cli.Tests", props);
+        });
+    }
+
     // Regression: a changed file whose repo-relative path contains non-ASCII bytes must still be
-    // attributed. git's default core.quotePath=true octal-escapes and double-quotes such paths
+    // attributed. git's default (text, non-"-z") output octal-escapes and double-quotes such paths
     // (e.g. "eng/\343\203\206.../trigger.cs"), which does not glob-equal the real path, so the rule
-    // never fires. The selector passes -c core.quotePath=false so git emits the literal UTF-8 path and
-    // the rule matches, putting Aspire.Hosting.Tests in the enforce props (asserted below). If the flag
-    // regressed, the mangled path would match no rule and fall to the run-all fallback, which writes NO
-    // restriction props -- so the assertion below would fail (props missing/empty) and catch it. A CJK
-    // dir name is used deliberately (no NFC/NFD decomposition) so the test is stable on case/normalizing
-    // filesystems while still exercising the non-ASCII path.
+    // never fires. The selector diffs with `-z` (NUL-terminated fields) instead, which git never quotes
+    // or escapes regardless of the path's contents, so the rule matches and Aspire.Hosting.Tests ends up
+    // in the enforce props (asserted below). If that regressed back to the default text format, the
+    // mangled path would match no rule and fall to the run-all fallback, which writes NO restriction
+    // props -- so the assertion below would fail (props missing/empty) and catch it. A CJK dir name is
+    // used deliberately (no NFC/NFD decomposition) so the test is stable on case/normalizing filesystems
+    // while still exercising the non-ASCII path.
     [Fact]
     public void NonAsciiChangedPathUnderAMappedDirStillSelectsItsTests()
     {
@@ -1037,6 +1190,93 @@ public sealed class SelectTestsCliTests
 
             Assert.Contains("Aspire.Hosting.Tests", File.ReadAllText(propsPath));
         });
+    }
+
+    // Regression: a same-commit rename whose path contains a literal tab byte must still be attributed
+    // correctly, not garbled by git's quoting. git's default (non-"-z") --name-status output
+    // C-style-escapes any path containing a tab, newline, double-quote, or backslash -- e.g. a literal
+    // tab in "old<TAB>name.txt" becomes the ASCII characters "old\tname.txt" (backslash + 't', not a
+    // real tab byte) inside surrounding double quotes. `-c core.quotePath=false` does NOT suppress this
+    // (it only stops the *non-ASCII-byte* octal-escaping, per
+    // NonAsciiChangedPathUnderAMappedDirStillSelectsItsTests above) -- only `-z` (NUL-terminated
+    // fields), which the selector now uses, makes git skip quoting entirely regardless of the path's
+    // bytes. Both the OLD and NEW tab-containing paths keep their own path_rule across the rename, so a
+    // quoting regression on either side would fail to glob-match its (mangled) rule and drop that
+    // side's target.
+    [Fact]
+    public void RenamedFileWithTabInPathIsAttributedCorrectlyNotGarbledByQuoting()
+    {
+        const string tab = "\t";
+        var map = $"""
+            version: 1
+            path_rules:
+              - paths: ["eng/old{tab}name.txt"]
+                targets: ["test:Aspire.Cli.Tests"]
+              - paths: ["eng/new{tab}name.txt"]
+                targets: ["test:Aspire.Hosting.Tests"]
+            """;
+
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", map);
+            WriteFile(repoRoot, $"eng/old{tab}name.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            RunGit(repoRoot, "mv", $"eng/old{tab}name.txt", $"eng/new{tab}name.txt");
+            GitCommitAll(repoRoot, "rename tab-containing file; map keeps both rules unchanged");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+            var props = File.ReadAllText(propsPath);
+            Assert.Contains("Aspire.Cli.Tests", props);
+            Assert.Contains("Aspire.Hosting.Tests", props);
+        });
+    }
+
+    // Regression for a fail-safe check in Selection.ParseNameStatusOutput: a `git diff --name-status
+    // -M -z` invocation that exits 0 but whose NUL-delimited stream ends mid-record (a rename/copy
+    // status token with no old/new path pair following it) must throw rather than silently return a
+    // partial, truncated changed-file set. Returning a partial set here could drop a path that would
+    // have matched a rule, under-selecting tests -- the opposite of this tool's fail-safe design. A
+    // real, successful `git diff` never produces this shape, so it can only be exercised synthetically
+    // against the parser directly.
+    [Fact]
+    public void ParseNameStatusOutputThrowsOnTruncatedRenameRecord()
+    {
+        // "R100\0old.txt\0" -- a rename status followed by only the old path, missing the new path.
+        var truncated = "R100\0old.txt\0";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Selection.ParseNameStatusOutput(truncated));
+        Assert.Contains("truncated rename/copy record", ex.Message, StringComparison.Ordinal);
+    }
+
+    // Same fail-safe check for a plain (non-rename/copy) status token with no path following it at all.
+    [Fact]
+    public void ParseNameStatusOutputThrowsOnTruncatedPlainRecord()
+    {
+        // "M\0" -- a modify status with no path token following it.
+        var truncated = "M\0";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Selection.ParseNameStatusOutput(truncated));
+        Assert.Contains("produced a truncated record", ex.Message, StringComparison.Ordinal);
+    }
+
+    // Regression: `Split('\0', ...)` doesn't require the string to end with the delimiter, so a stream
+    // truncated mid-path (the final field's terminating NUL never arrived -- e.g. a killed process or a
+    // partial pipe read) would otherwise parse as a shorter-but-plausible-looking path instead of failing
+    // loudly like the mid-record truncation cases above. "M\0src/Foo.cs" (missing the trailing NUL) looks
+    // exactly like a well-formed one-token record to a naive split and must still throw.
+    [Fact]
+    public void ParseNameStatusOutputThrowsOnMissingFinalTerminator()
+    {
+        var truncated = "M\0src/Foo.cs";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Selection.ParseNameStatusOutput(truncated));
+        Assert.Contains("truncated stream", ex.Message, StringComparison.Ordinal);
     }
 
     // P1-7. --changed-files trims surrounding whitespace and drops blank lines before glob matching.

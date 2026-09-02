@@ -224,6 +224,50 @@ public sealed class GraphAffectedProjectsTests
         Assert.Contains("Other", affected);
     }
 
+    // Failure mode: git's default text-mode `--name-status -M` output escapes a path containing a
+    // literal tab into a double-quoted, backslash-escaped literal (e.g. `"Other/da\tta.txt"`, nine
+    // literal characters, not one real tab byte) even with `core.quotePath=false` (that setting only
+    // suppresses non-ASCII-byte escaping, not tab/newline/quote/backslash escaping). The garbled string
+    // then fails to match Other's real directory prefix, so the new owner (Other) is silently dropped
+    // from the affected set even though the old owner (Core) and its dependents are still found via the
+    // unmangled old path. `-z` (shared with Layer 2's Selection.ParseNameStatusOutput) never escapes
+    // any byte, so both sides of the rename resolve correctly regardless of path content.
+    [Fact]
+    public void CrossProjectRenameIntoTabContainingPathAttributesTheNewOwner()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GitGraphFixture(workspace);
+
+        var affected = repo.RenameAcrossProjectsAndCompute("Core/data.txt", "Other/da\tta.txt");
+
+        Assert.Contains("Core", affected);
+        Assert.Contains("Mid", affected);
+        Assert.Contains("AppTests", affected);
+        Assert.Contains("Other", affected);
+    }
+
+    // Failure mode: a literal backslash is a legal filename byte on Unix, but git ALWAYS reports
+    // repo-relative paths with '/' separators regardless of host OS -- a '\' in a git-reported path can
+    // therefore never be a real directory separator to normalize; it can only be a literal character
+    // inside one path segment. ResolveChangedPaths previously ran an unconditional
+    // `rel.Replace('\\', '/')` over every changed path (git- or --changed-files-sourced), which turned a
+    // literal backslash into a fake directory boundary. A repo-root file literally named `Other\data.txt`
+    // (one segment, no real subdirectory) does not belong to the "Other" project -- but the corrupted
+    // "Other/data.txt" string satisfies Other's directory-containment prefix check, so the bug spuriously
+    // attributed a root-level, unrelated file to Other. Layer 2 makes no such rewrite (see
+    // Program.cs.ResolveChangedFiles), so Layer 1 must not either, or the two layers silently disagree on
+    // what a path even is.
+    [Fact]
+    public void BackslashContainingRootFileIsNotAttributedToSimilarlyNamedProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
+
+        var result = repo.ComputeResult("Other\\data.txt");
+
+        Assert.Empty(result.AffectedProjects);
+    }
+
     /// <summary>
     /// Creates a disposable temp directory containing a minimal but real MSBuild project graph plus an
     /// <c>Aspire.slnx</c>, and runs <see cref="GraphAffectedProjects.Compute"/> against it using a

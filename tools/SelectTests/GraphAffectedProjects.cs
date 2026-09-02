@@ -473,13 +473,18 @@ internal static class GraphAffectedProjects
         // attribution, so an excluded file (e.g. a packed README.md <None> item) never gets mapped to a
         // project and fanned out. The same filter is applied to the Layer 2 input in Program.cs, so both
         // layers see the identical post-exclude change set.
-        var normalized = relativePaths.Select(rel => rel.Replace('\\', '/'));
-        if (filter is not null)
-        {
-            normalized = normalized.Where(rel => !filter.IsExcluded(rel));
-        }
+        //
+        // No `\` -> `/` normalization here: git always reports repo-relative paths with `/` separators on
+        // every OS (see GetChangedPathsFromGit), and Layer 2's own --changed-files handling (Program.cs's
+        // ResolveChangedFiles) makes the identical assumption without normalizing. A literal `\` in either
+        // source is a real filename byte on Unix, not a separator -- rewriting it to `/` would silently
+        // desync this path from the byte-identical string Layer 2 and the map's path rules match against,
+        // so a change could be attributed to the wrong project (or none) without either layer noticing.
+        var filtered = filter is null
+            ? relativePaths
+            : relativePaths.Where(rel => !filter.IsExcluded(rel));
 
-        return normalized
+        return filtered
             .Select(rel => new ChangedPath(
                 rel,
                 NormalizeFullPath(Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar)))))
@@ -489,18 +494,25 @@ internal static class GraphAffectedProjects
 
     private static IEnumerable<string> GetChangedPathsFromGit(string repoRoot, string from, string? to)
     {
-        // --name-status -M output, one record per change. Examples (TAB-separated):
-        //   M\tsrc/Aspire.Hosting/Foo.cs
-        //   A\tsrc/Aspire.Hosting/Bar.cs
-        //   D\tsrc/Shared/Old.cs
-        //   R097\tsrc/A/Old.cs\tsrc/B/New.cs     (rename: status, old path, new path)
+        // --name-status -M -z output, one record per change, NUL-terminated fields:
+        //   M\0src/Aspire.Hosting/Foo.cs\0
+        //   A\0src/Aspire.Hosting/Bar.cs\0
+        //   D\0src/Shared/Old.cs\0
+        //   R097\0src/A/Old.cs\0src/B/New.cs\0     (rename: status, old path, new path)
         // For renames we take BOTH paths; for everything else the single path. -M detects renames so
         // the old path is reported as R..., not as separate D + A.
-        // -c core.quotePath=false so a non-ASCII path comes back as the literal UTF-8 repo-relative
-        // path, not git's default octal-escaped, double-quoted form (e.g. "src/caf\303\251.cs"). The
-        // quoted form would neither match the file index nor split correctly on TAB below, mis-attributing
-        // the change. (Program.cs's Layer 2 diff does the same.)
-        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-status", "-M" };
+        // -z NUL-terminates every field instead of git's default newline-per-record, tab-per-field text
+        // format, which quotes/escapes any path containing a byte >= 0x80, a tab, a newline, a
+        // double-quote, or a backslash (e.g. a literal tab in a name becomes the 8 characters
+        // "old\tname.txt", with a literal backslash-t, not a real tab byte) -- and `-c
+        // core.quotePath=false` only suppresses the non-ASCII-byte escaping, not the tab/newline/
+        // quote/backslash escaping. A quoted/escaped path never matches the evaluated-item index or
+        // directory containment check below, silently failing to attribute the change to its project.
+        // NUL can never appear in a valid path, so `-z` lets git skip quoting entirely, for every path,
+        // with no exceptions. Reuses Program.cs's Layer 2 parser (Selection.ParseNameStatusOutput) so
+        // both layers see byte-for-byte identical paths from a single, shared implementation instead of
+        // two parsers that could silently drift apart.
+        var args = new List<string> { "diff", "--name-status", "-M", "-z" };
         args.Add(from);
         if (to is not null)
         {
@@ -508,21 +520,7 @@ internal static class GraphAffectedProjects
         }
 
         var stdout = RunGit(repoRoot, args);
-        foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var fields = line.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (fields.Length < 2)
-            {
-                continue;
-            }
-
-            // fields[0] = status (M/A/D/Rxxx/Cxxx); fields[1..] = path(s). Renames/copies carry the old
-            // path at [1] and the new path at [2]; both should be attributed.
-            for (var i = 1; i < fields.Length; i++)
-            {
-                yield return fields[i];
-            }
-        }
+        return Selection.ParseNameStatusOutput(stdout).Files;
     }
 
     private static string RunGit(string repoRoot, IReadOnlyList<string> arguments)

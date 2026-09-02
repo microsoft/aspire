@@ -113,6 +113,102 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
+    // Failure mode: Layer 1's git-diff parser used to be text-mode (splitting on raw tab/newline
+    // bytes) while Layer 2's (Program.cs's Selection.ParseNameStatusOutput) was already `-z`
+    // (NUL-delimited). A path containing a literal tab is returned by git's default text-mode
+    // name-status output as an escaped, double-quoted literal -- e.g. `"src/Core/da\tta.txt"`, ten
+    // literal characters, not one real tab byte -- even with `core.quotePath=false` (which only
+    // suppresses non-ASCII-byte escaping). That garbled string never matches the real "src/Core/"
+    // directory prefix.
+    //
+    // Both sides of the rename below are deliberately placed under a project directory Layer 1 already
+    // knows (Mid, then Core): a changed path outside every project directory would be "unmatched" and
+    // trip the selector's separate, intentional any-unmatched-file -> ALL safety net (from the
+    // rename-exemption removal), which forces ALL regardless of whether the -z bug is present --
+    // masking the exact bug this test targets instead of exercising it. With both sides
+    // Layer-1-attributable, the change never escalates to ALL either way; the only thing the bug can
+    // affect is WHICH projects the (still non-ALL) selection reaches. Core.Direct.Tests references Core
+    // directly (bypassing Mid), so it is reachable only when the NEW (tab-containing) path is correctly
+    // attributed to Core -- before the fix, the garbled new path silently drops Core from the directly-
+    // changed set and Core.Direct.Tests goes unselected: real under-selection, not a fail-safe ALL. Since
+    // Layer 1 now shares Layer 2's `-z` parser, the tab-containing path is attributed correctly and the
+    // selection reaches Core.Direct.Tests too.
+    [Fact]
+    public void RenameIntoTabContainingPathIsAttributedByLayer1InsteadOfUnderSelecting()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace, withIntermediateProject: true);
+
+        // A second test project referencing Core directly, so Core's and Mid's reverse-dependency
+        // closures diverge: Mid's closure is {Mid, Core.Tests} (Core.Tests -> Mid); Core's closure is
+        // {Core, Mid, Core.Tests, Core.Direct.Tests} (Mid -> Core, Core.Direct.Tests -> Core). Only a
+        // change correctly attributed to Core reaches Core.Direct.Tests.
+        fixture.WriteFile("tests/Core.Direct.Tests/Core.Direct.Tests.cs",
+            "namespace Core.Direct.Tests; public class T(ITestOutputHelper outputHelper) { }");
+        fixture.WriteFile("tests/Core.Direct.Tests/Core.Direct.Tests.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="Core.Direct.Tests.cs" />
+                <ProjectReference Include="..\..\src\Core\Core.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFile("Aspire.slnx",
+            """
+            <Solution>
+              <Project Path="src/Core/Core.csproj" />
+              <Project Path="src/Mid/Mid.csproj" />
+              <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+              <Project Path="tests/Core.Direct.Tests/Core.Direct.Tests.csproj" />
+            </Solution>
+            """);
+
+        // A loose file under Mid's directory -- attributed to Mid via directory containment regardless
+        // of the -z bug, so the OLD side of the rename below is never "unmatched."
+        fixture.WriteFile("src/Mid/random.txt", "payload");
+        fixture.InitGit();
+        fixture.CommitAll("base");
+        var baseSha = fixture.Git("rev-parse", "HEAD");
+
+        // Rename from Mid's directory into Core's directory, with a literal tab byte in the new file
+        // name. Both directories are Layer-1-owned, so neither side is ever unmatched -- isolating
+        // exactly the -z parsing bug's effect on which projects the closure reaches.
+        fixture.Git("mv", "src/Mid/random.txt", "src/Core/da\tta.txt");
+        fixture.CommitAll("rename into tab-containing path under Core");
+        var headSha = fixture.Git("rev-parse", "HEAD");
+
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+        fixture.WithGitHubEnvRedirected(output =>
+        {
+            var exit = Selection.Run(new RunOptions(
+                RepoRoot: fixture.Path,
+                MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                From: baseSha,
+                To: headSha,
+                ChangedFilesPath: null,
+                SkipLayer1: false,
+                ForceAll: false,
+                Enforce: true,
+                BeforeBuildProps: propsPath));
+
+            Assert.Equal(0, exit);
+            // Mid (the rename's old side) is attributed regardless of the bug, so this never escalates
+            // to ALL -- the props file is always written. What the bug affects is its CONTENTS: before
+            // the fix, the garbled new path leaves Core unattributed, so Core.Direct.Tests (reachable
+            // only through Core) is silently missing even though the props file itself looks "healthy."
+            Assert.Equal(propsPath, output()["project_override_props"]);
+            var props = File.ReadAllText(propsPath);
+            Assert.Contains("tests/Core.Tests/Core.Tests.csproj", props);
+            Assert.Contains("tests/Core.Direct.Tests/Core.Direct.Tests.csproj", props);
+        });
+    }
+
     // Failure mode: the step summary reports THAT Core.Tests was selected but not HOW, so a reviewer
     // can't see the decision path. The Layer 1 cause must render the full chain -- seed file then the
     // reverse-dependency project chain -- so a change to src/Core/Core.cs shows as

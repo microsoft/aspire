@@ -62,10 +62,18 @@ When `--from` / `--to` are supplied, the selector first resolves the
 **merge-base** (the branch point) of the two refs and diffs FROM there:
 
 ```text
-from := git merge-base <from> <to>      # the base..head branch point
-git diff --name-status -M <from> <to>   # Layer 1
-git diff --name-only   --no-renames <from> <to>   # Layer 2
+from := git merge-base <from> <to>         # the base..head branch point
+git diff --name-status -M -z <from> <to>   # Layer 1 and Layer 2
 ```
+
+Both layers parse this output through the same `-z` (NUL-delimited) record
+parser (`Selection.ParseNameStatusOutput`), not git's default newline/tab text
+format. A path containing a tab, newline, double-quote, or backslash comes
+back from the default text format as an escaped, double-quoted literal (e.g.
+a real tab in a filename becomes the eight characters `\t`), which matches
+neither the evaluated-item index nor a directory-containment check — silently
+misattributing the change. NUL can never appear in a valid path, so `-z` lets
+git skip quoting/escaping entirely, for every path, with no exceptions.
 
 This makes a PR select on its **own** commits. A file changed on the base
 branch after the PR branched shares the merge-base, so it produces no diff and
@@ -81,10 +89,17 @@ GitHub's own PR path filters make; see [Prior art and comparison](#prior-art-and
 
 Deletes are included. Renames include both the old path and the new path, so a
 cross-project move marks both the project that lost the file and the project
-that gained it.
+that gained it. This is git's own rename detection (`-M`, default 50%
+content-similarity threshold): a delete+add pair below that threshold is
+reported as a plain delete and add, not a rename. Either way, both paths are
+evaluated as ordinary changed paths with no rename-specific behavior — see
+[Layer 2 — curated](#layer-2--curated) for why a rename's old path is treated
+like any other unmatched leftover for the run-all fallback.
 
 `--changed-files` is a path-only input for local/debug runs. It does not carry
-rename/delete status, so each line is treated as a present changed path.
+rename/delete status, so each line is treated as a present changed path; this
+matches production behavior, since a rename's paths are not treated specially
+there either.
 
 ### File → project attribution
 
@@ -295,7 +310,19 @@ Flow:
    `ignore`d, and matched by no rule. The fallback is location-independent (not
    `src/**`-only): a missed test is a silent regression, so any unmapped change
    fails safe to the full matrix. Files that genuinely need no CI are dropped by
-   the prefilter in step 1, so they never reach this fallback.
+   the prefilter in step 1, so they never reach this fallback. Renames are not
+   special-cased: both the old and new path of a git-detected rename are
+   evaluated exactly like any other changed path (see
+   [Changed paths](#changed-paths)), including against this fallback. An earlier
+   version of this rule exempted a rename's old path from forcing `ALL` when its
+   new path was present, on the theory that the new path's own evaluation
+   already accounted for the moved content. That exemption was removed: it could
+   silently under-select tests when the old path was consumed only through a
+   glob rule scoped to its (now-vacated) directory — a sibling file elsewhere in
+   that directory could still depend on the moved content, but with the old path
+   hidden from the fallback nothing would signal that. See the "Rename handling"
+   note under [Caveats](./test-trigger-map.md#caveats) in `test-trigger-map.md`
+   for the full failure mode and the accepted over-selection tradeoff.
 7. Emit the per-job booleans (as one `selection` JSON object), and — in enforce
    mode for a non-ALL selection — the `OverrideProjectToBuild` props restricting
    the downstream build.

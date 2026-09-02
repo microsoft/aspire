@@ -333,6 +333,51 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RenameOldPathUnmatchedForcesRunAllLikeAnyOtherLeftover()
+    {
+        // Renames are not special-cased: a rename's old and new paths are both plain changed files
+        // (see Program.ResolveChangedFiles / TestSelector.Select), and an old path matched by nothing
+        // forces the same run-all fallback as any other unmapped leftover -- exactly like
+        // LeftoverUnmatchedFileForcesRunAll above. This used to be exempted for an in-place rename
+        // whose map entry moved to the new name in the same commit (the PR #19486 motivating case), but
+        // that exemption was removed after an audit found it could silently under-select tests when the
+        // rename crossed directories into a shared-glob-consumed location, or landed on a destination
+        // the prefilter had already dropped before anything evaluated it (see
+        // docs/ci/test-trigger-map.md). The new path's own match, if any, is still unioned in
+        // additively; it just no longer suppresses the fallback for an unmatched old path.
+        var r = Select(["docs/architecture/notes.md", "src/CuratedThing/Renamed.cs"]);
+
+        Assert.True(r.SelectsAll);
+        Assert.Contains("docs/architecture/notes.md", r.UnmatchedFiles);
+        Assert.Contains("job:cjob", r.Jobs);
+    }
+
+    [Fact]
+    public void RenameWithBothUnmatchedPathsListsBothInUnmatchedFiles()
+    {
+        // Both the old and new sides of a rename are evaluated identically to any other changed file:
+        // if neither matches a rule, both are reported as unmatched leftovers (not just the new side),
+        // and the run-all fallback fires once for the pair.
+        var r = Select(["docs/architecture/notes.md", "docs/architecture/still-unmatched.md"]);
+
+        Assert.True(r.SelectsAll);
+        Assert.Contains("docs/architecture/notes.md", r.UnmatchedFiles);
+        Assert.Contains("docs/architecture/still-unmatched.md", r.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void RenameWhereBothPathsMatchTheirOwnRuleAddsTargetAdditively()
+    {
+        // A rename's old and new paths are ordinary changed files -- if both independently match a
+        // rule (here, both live under src/CuratedThing/**), both contribute to the same target set;
+        // nothing about the rename relationship suppresses or duplicates that matching.
+        var r = Select(["src/CuratedThing/Old.cs", "src/CuratedThing/New.cs"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("job:cjob", r.Jobs);
+    }
+
+    [Fact]
     public void Layer1AffectedProjectsAreUnionedIn()
     {
         var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["T1", "T2"], projectDirs: ["src/OwnedProj"]);
