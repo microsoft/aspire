@@ -492,7 +492,8 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(debugConfig.program, appHostPath);
         assert.strictEqual(debugConfig.noDebug, false);
-        assert.strictEqual(doesFileExistStub.calledOnceWithExactly(appHostPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
 
@@ -528,7 +529,47 @@ suite('Dotnet Debugger Extension Tests', () => {
             debugConfig);
 
         assert.strictEqual(debugConfig.program, appHostPath);
-        assert.strictEqual(doesFileExistStub.calledOnceWithExactly(appHostPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWithExactly('C:\\temp\\WinUIApp.csproj'), true);
+    });
+
+    test('unpackaged WinUI project builds when the managed target is missing', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Debug\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+        doesFileExistStub.withArgs(outputPath).resolves(false);
+        doesFileExistStub.withArgs(appHostPath).resolves(true);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\WinUIApp.csproj'
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, appHostPath);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
+        assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWithExactly('C:\\temp\\WinUIApp.csproj'), true);
     });
 

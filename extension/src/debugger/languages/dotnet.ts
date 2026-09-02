@@ -947,7 +947,11 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 if (debugProgram !== outputPath) {
                     extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
                 }
-                if ((!(await doesFileExist(debugProgram)) || launchOptions.forceBuild)) {
+                const outputExists = await doesFileExist(outputPath);
+                const debugProgramExists = debugProgram === outputPath
+                    ? outputExists
+                    : await doesFileExist(debugProgram);
+                if (!outputExists || !debugProgramExists || launchOptions.forceBuild) {
                     await dotNetService.buildDotNetProject(projectPath);
                 }
 
