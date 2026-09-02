@@ -153,33 +153,35 @@ class AspireAgentExecutor(AgentExecutor):
         self._running_tasks.add(task_id)
         logger.info("Processing A2A message %s for task %s.", user_message.message_id, task_id)
 
-        await event_queue.enqueue_event(
-            Task(
-                id=task_id,
-                context_id=context_id,
-                status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
-                history=[user_message],
+        try:
+            await event_queue.enqueue_event(
+                Task(
+                    id=task_id,
+                    context_id=context_id,
+                    status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+                    history=[user_message],
+                )
             )
-        )
 
-        updater = TaskUpdater(event_queue=event_queue, task_id=task_id, context_id=context_id)
-        await updater.start_work(
-            message=updater.new_agent_message(parts=[Part(text="Processing your message...")])
-        )
+            updater = TaskUpdater(event_queue=event_queue, task_id=task_id, context_id=context_id)
+            await updater.start_work(
+                message=updater.new_agent_message(parts=[Part(text="Processing your message...")])
+            )
 
-        query = context.get_user_input()
-        agent = self._get_agent()
-        response_text = await agent.answer(query)
-        if task_id not in self._running_tasks:
-            return
+            query = context.get_user_input()
+            agent = self._get_agent()
+            response_text = await agent.answer(query)
+            if task_id not in self._running_tasks:
+                return
 
-        await updater.add_artifact(
-            parts=[Part(text=response_text)],
-            name="response",
-            last_chunk=True,
-        )
-        await updater.complete()
-        self._running_tasks.discard(task_id)
+            await updater.add_artifact(
+                parts=[Part(text=response_text)],
+                name="response",
+                last_chunk=True,
+            )
+            await updater.complete()
+        finally:
+            self._running_tasks.discard(task_id)
 
     def _get_agent(self) -> LangChainAgent:
         if self._agent is None:

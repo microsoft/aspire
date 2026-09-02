@@ -396,7 +396,7 @@ public class WithMcpServerTests
     }
 
     [Fact]
-    public async Task WithMcpServer_InvokeCommandSkipsSseNotificationsBeforeResponse()
+    public async Task WithMcpServer_InvokeCommandSkipsSseRequestsAndNotificationsBeforeResponse()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();
 
@@ -793,6 +793,9 @@ public class WithMcpServerTests
                         $$$"""
                          event: message
                          data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}
+
+                         event: message
+                         data: {"jsonrpc":"2.0","id":"server-request","method":"ping"}
 
                          event: message
                          data: {{{payload.ToJsonString()}}}

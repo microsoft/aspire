@@ -386,7 +386,7 @@ public static class AgentResourceBuilderExtensions
                 Arguments = CreateAgentCommandArguments(agentName, "Hello, what can you do?"),
                 EndpointSelector = () => GetDefaultAgentEndpoint(builder.Resource, KnownNetworkIdentifiers.LocalhostNetwork),
                 PrepareRequest = ctx => PrepareAcpRunRequestAsync(ctx, agentName),
-                GetCommandResult = GetAgentCommandJsonResultAsync
+                GetCommandResult = GetAcpCommandResultAsync
             });
     }
 
@@ -443,8 +443,7 @@ public static class AgentResourceBuilderExtensions
                     ["method"] = GetA2AJsonRpcMethod(invocation.IsStreaming, isV03),
                     ["params"] = CreateA2ASendMessageRequest(
                         message,
-                        role: isV03 ? "user" : "ROLE_USER",
-                        partsPropertyName: "parts",
+                        isV03,
                         includeConfiguration: true)
                 }.ToString(),
                 Encoding.UTF8,
@@ -456,8 +455,7 @@ public static class AgentResourceBuilderExtensions
         ctx.Request.Content = new StringContent(
             CreateA2ASendMessageRequest(
                 message,
-                role: "ROLE_USER",
-                partsPropertyName: isHttpJsonV03 ? "content" : "parts",
+                isHttpJsonV03,
                 includeConfiguration: !isHttpJsonV03).ToString(),
             Encoding.UTF8,
             "application/a2a+json");
@@ -746,12 +744,13 @@ public static class AgentResourceBuilderExtensions
 
     private static Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(HttpCommandResultContext ctx)
     {
-        return GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: false);
+        return GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: false, validateAcpRunStatus: false);
     }
 
     private static async Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(
         HttpCommandResultContext ctx,
-        bool validateA2ATaskState)
+        bool validateA2ATaskState,
+        bool validateAcpRunStatus)
     {
         ctx.CancellationToken.ThrowIfCancellationRequested();
 
@@ -768,6 +767,14 @@ public static class AgentResourceBuilderExtensions
         if (responseJson is null)
         {
             return CommandResults.Failure("Agent returned an empty response.");
+        }
+
+        if (validateAcpRunStatus && TryGetAcpTerminalFailureStatus(responseJson, out var runStatus))
+        {
+            return CommandResults.Failure(
+                $"Agent run ended in the '{runStatus}' state.",
+                JsonSerializer.Serialize(responseJson["error"] ?? responseJson, s_indentedJsonOptions),
+                CommandResultFormat.Json);
         }
 
         if (responseJson["error"] is { } error)
@@ -880,10 +887,15 @@ public static class AgentResourceBuilderExtensions
     {
         return ctx.Response.Content.Headers.ContentType?.MediaType switch
         {
-            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: true),
+            "application/json" or "application/a2a+json" => GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: true, validateAcpRunStatus: false),
             "text/event-stream" => GetA2ACommandSseResultAsync(ctx),
             _ => GetAgentCommandTextResultAsync(ctx)
         };
+    }
+
+    private static Task<ExecuteCommandResult> GetAcpCommandResultAsync(HttpCommandResultContext ctx)
+    {
+        return GetAgentCommandJsonResultAsync(ctx, validateA2ATaskState: false, validateAcpRunStatus: true);
     }
 
     private static ExecuteCommandResult CreateA2ATaskFailure(JsonObject responseJson, string taskState)
@@ -916,6 +928,14 @@ public static class AgentResourceBuilderExtensions
     private static string? GetJsonString(JsonNode? node)
     {
         return node is JsonValue value && value.TryGetValue<string>(out var result) ? result : null;
+    }
+
+    private static bool TryGetAcpTerminalFailureStatus(JsonObject responseJson, [NotNullWhen(true)] out string? runStatus)
+    {
+        runStatus = GetJsonString(responseJson["status"]);
+        return runStatus is not null &&
+            (runStatus.Equals("failed", StringComparison.OrdinalIgnoreCase) ||
+             runStatus.Equals("cancelled", StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<JsonObject> GetSseJsonPayloads(string responseBody)
@@ -988,24 +1008,31 @@ public static class AgentResourceBuilderExtensions
 
     private static JsonObject CreateA2ASendMessageRequest(
         string message,
-        string role,
-        string partsPropertyName,
+        bool isV03,
         bool includeConfiguration)
     {
-        var request = new JsonObject
+        var messageObject = new JsonObject
         {
-            ["message"] = new JsonObject
+            ["messageId"] = Guid.NewGuid().ToString("N"),
+            ["role"] = isV03 ? "user" : "ROLE_USER",
+            ["parts"] = new JsonArray
             {
-                ["messageId"] = Guid.NewGuid().ToString("N"),
-                ["role"] = role,
-                [partsPropertyName] = new JsonArray
+                new JsonObject
                 {
-                    new JsonObject
-                    {
-                        ["text"] = message
-                    }
+                    ["text"] = message
                 }
             }
+        };
+
+        if (isV03)
+        {
+            messageObject["kind"] = "message";
+            messageObject["parts"]![0]!["kind"] = "text";
+        }
+
+        var request = new JsonObject
+        {
+            ["message"] = messageObject
         };
 
         if (includeConfiguration)

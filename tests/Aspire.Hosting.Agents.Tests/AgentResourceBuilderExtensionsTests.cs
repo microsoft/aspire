@@ -234,8 +234,8 @@ public class AgentResourceBuilderExtensionsTests
     [InlineData("JSONRPC", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "message/stream", "user", "parts")]
     [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
     [InlineData("HTTP+JSON", "1.0", true, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
-    [InlineData("HTTP+JSON", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "ROLE_USER", "content")]
-    [InlineData("HTTP+JSON", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "ROLE_USER", "content")]
+    [InlineData("HTTP+JSON", "0.3", false, A2AInvocationMode.NonStreaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:send", null, "user", "parts")]
+    [InlineData("HTTP+JSON", "0.3", true, A2AInvocationMode.Streaming, "http://localhost:8080/a2a", "http://localhost:8080/a2a/v1/message:stream", null, "user", "parts")]
     [InlineData("JSONRPC", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a", "SendMessage", "ROLE_USER", "parts")]
     [InlineData("HTTP+JSON", "1.0", false, A2AInvocationMode.NonStreaming, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a/message:send", null, "ROLE_USER", "parts")]
     public async Task InvokeA2AReadsAgentCardAndChoosesBinding(
@@ -286,6 +286,11 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Equal(expectedRole, requestBody?["message"]?["role"]?.GetValue<string>());
         Assert.NotNull(requestBody?["message"]?[expectedPartsPropertyName]);
         Assert.Equal("hello", requestBody?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
+        if (protocolVersion.StartsWith("0.", StringComparison.Ordinal))
+        {
+            Assert.Equal("message", requestBody?["message"]?["kind"]?.GetValue<string>());
+            Assert.Equal("text", requestBody?["message"]?["parts"]?[0]?["kind"]?.GetValue<string>());
+        }
         var expectedConfiguration = expectedJsonRpcMethod is not null || !protocolVersion.StartsWith("0.", StringComparison.Ordinal);
         Assert.Equal(expectedConfiguration, requestBody?["configuration"] is not null);
     }
@@ -459,6 +464,41 @@ public class AgentResourceBuilderExtensionsTests
 
         Assert.False(result.Success);
         Assert.Equal("Agent run returned a RUN_ERROR event.", result.Message);
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    public async Task InvokeAcpReportsTerminalRunFailure(string runStatus)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var response = new JsonObject
+        {
+            ["run_id"] = "run-id",
+            ["status"] = runStatus,
+            ["error"] = new JsonObject
+            {
+                ["code"] = "server_error",
+                ["message"] = "Agent failed."
+            }
+        }.ToJsonString();
+        var handler = new CaptureAgentCommandHandler(response);
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.Acp, agentName: "weather-agent");
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-acp-run");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-acp-run", CreateMessageArgument("hello")).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal($"Agent run ended in the '{runStatus}' state.", result.Message);
+        Assert.Contains("server_error", result.Data?.Value);
     }
 
     [Fact]
@@ -725,7 +765,7 @@ public class AgentResourceBuilderExtensionsTests
         }
     }
 
-    private sealed class CaptureAgentCommandHandler : HttpMessageHandler
+    private sealed class CaptureAgentCommandHandler(string responseBody = """{"ok":true}""") : HttpMessageHandler
     {
         public string? RequestBody { get; private set; }
 
@@ -737,7 +777,7 @@ public class AgentResourceBuilderExtensionsTests
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json")
+                Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
             };
         }
     }

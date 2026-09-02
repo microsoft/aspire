@@ -997,7 +997,8 @@ public static class McpServerResourceBuilderExtensions
         //   data: {"jsonrpc":"2.0","id":"...","result":{...}}
         // Join consecutive data lines within each event and return only a JSON-RPC response
         // whose id matches the request. When the caller does not have the request id, return
-        // the first response-shaped event and skip request/notification events without an id.
+        // the first response-shaped event and skip notifications without an id and server
+        // requests that contain both an id and a method.
         using var reader = new StringReader(responseBody);
         var builder = new StringBuilder();
         string? line;
@@ -1048,6 +1049,7 @@ public static class McpServerResourceBuilderExtensions
         {
             if (JsonNode.Parse(builder.ToString()) is not JsonObject payload ||
                 payload["id"] is null ||
+                payload["method"] is not null ||
                 expectedId is not null && !JsonNode.DeepEquals(payload["id"], expectedId))
             {
                 return false;
