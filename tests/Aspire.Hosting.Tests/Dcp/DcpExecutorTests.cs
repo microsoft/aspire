@@ -76,7 +76,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource, resource));
+        var projection = executable.Resource.GetEffectiveResource();
+        Assert.Collection(model.Resources, resource => Assert.Same(projection, resource));
+        Assert.Collection(model.GetResourceOwners(), resource => Assert.Same(executable.Resource, resource));
 
         var appExecutor = CreateAppExecutor(
             model,
@@ -91,6 +93,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("projected-image:latest", container.Spec.Image);
         Assert.Equal("projected-worker", container.Metadata.Name);
         Assert.Equal("projected-worker", container.Spec.ContainerName);
+        Assert.Contains(container.Spec.Ports!, port => port.ContainerPort == 8080);
         Assert.Equal("owner", Assert.Single(container.Spec.Env!, variable => variable.Name == "OWNER_SETTING").Value);
         Assert.Equal("projection", Assert.Single(container.Spec.Env!, variable => variable.Name == "PROJECTION_SETTING").Value);
         Assert.Equal(executable.Resource.Name, container.AppModelResourceName);

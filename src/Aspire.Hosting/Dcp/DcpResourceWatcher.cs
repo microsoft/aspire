@@ -98,7 +98,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         _profilingTelemetry = profilingTelemetry;
         _shutdownToken = shutdownToken;
 
-        _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
+        _resourceState = new(model.GetResourceOwners().ToDictionary(r => r.Name), appResources.Get());
         _snapshotBuilder = new(_resourceState);
         WatchResourceRetryPipeline = DcpPipelineBuilder.BuildWatchResourcePipeline(logger);
     }

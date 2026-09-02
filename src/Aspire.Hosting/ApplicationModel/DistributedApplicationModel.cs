@@ -8,11 +8,24 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a distributed application.
 /// </summary>
-/// <param name="resources">The resource collection used to initiate the model.</param>
 [DebuggerDisplay("Resources = {Resources.Count}")]
 [AspireExport]
-public class DistributedApplicationModel(IResourceCollection resources)
+public class DistributedApplicationModel
 {
+    private readonly IResourceCollection _resourceOwners;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DistributedApplicationModel"/> class with the specified resource collection.
+    /// </summary>
+    /// <param name="resources">The resources used to initiate the model.</param>
+    public DistributedApplicationModel(IResourceCollection resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+
+        _resourceOwners = resources;
+        Resources = new EffectiveResourceCollection(resources);
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="DistributedApplicationModel"/> class with the specified resource collection.
     /// </summary>
@@ -22,8 +35,15 @@ public class DistributedApplicationModel(IResourceCollection resources)
     public DistributedApplicationModel(IEnumerable<IResource> resources) : this(new ResourceCollection(resources)) { }
 
     /// <summary>
-    /// Gets the collection of resources associated with the distributed application.
+    /// Gets the effective resources associated with the distributed application.
     /// </summary>
+    /// <remarks>
+    /// A selected projection is returned in place of its canonical owner. Use
+    /// <see cref="DistributedApplicationModelExtensions.GetResourceOwners(DistributedApplicationModel)"/>
+    /// when identity-sensitive code needs the underlying model members.
+    /// </remarks>
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-    public IResourceCollection Resources { get; } = resources ?? throw new ArgumentNullException(nameof(resources));
+    public IResourceCollection Resources { get; }
+
+    internal IEnumerable<IResource> ResourceOwners => _resourceOwners;
 }

@@ -223,6 +223,13 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
 
     private EndpointAnnotation? GetEndpointAnnotation()
     {
+        var effectiveResource = ((IResource)Resource).GetEffectiveResource();
+        if (!ReferenceEquals(effectiveResource, Resource))
+        {
+            return effectiveResource.Annotations.OfType<EndpointAnnotation>()
+                .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
+        }
+
         if (_endpointAnnotation is not null)
         {
             return _endpointAnnotation;

@@ -656,7 +656,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 var effectiveResource = r.GetEffectiveResource(_executionContext);
                 return (
-                    ModelResource: r,
+                    ModelResource: r.GetOwnerOrSelf(),
                     EffectiveResource: effectiveResource,
                     Endpoints: effectiveResource.Annotations.OfType<EndpointAnnotation>().ToArray());
             })

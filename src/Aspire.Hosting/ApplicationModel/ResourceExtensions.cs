@@ -94,7 +94,13 @@ public static class ResourceExtensions
         return selectedProjection is not null;
     }
 
-    internal static IResource GetOwnerOrSelf(this IResource resource)
+    /// <summary>
+    /// Gets the canonical model resource represented by the specified resource.
+    /// </summary>
+    /// <param name="resource">The resource to canonicalize.</param>
+    /// <returns>The projection owner when <paramref name="resource"/> is a projection; otherwise, <paramref name="resource"/>.</returns>
+    [AspireExportIgnore(Reason = "Projection identity helper is not part of the ATS surface.")]
+    public static IResource GetOwnerOrSelf(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
@@ -171,21 +177,22 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsIncludingAncestorsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
-        if (resource is IResourceWithParent)
+        var owner = resource.GetOwnerOrSelf();
+        if (owner is IResourceWithParent)
         {
             List<T>? annotations = null;
 
             while (true)
             {
-                foreach (var annotation in resource.Annotations.OfType<T>())
+                foreach (var annotation in owner.GetEffectiveResource().Annotations.OfType<T>())
                 {
                     annotations ??= [];
                     annotations.Add(annotation);
                 }
 
-                if (resource is IResourceWithParent child)
+                if (owner is IResourceWithParent child)
                 {
-                    resource = child.Parent;
+                    owner = child.Parent.GetOwnerOrSelf();
                 }
                 else
                 {
@@ -197,7 +204,7 @@ public static class ResourceExtensions
             return annotations is not null;
         }
 
-        return TryGetAnnotationsOfType(resource, out result);
+        return TryGetAnnotationsOfType(owner.GetEffectiveResource(), out result);
     }
 
     /// <summary>
@@ -844,7 +851,8 @@ public static class ResourceExtensions
     {
         if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            return endpoints.Select(e => new EndpointReference(resource, e));
+            var owner = ((IResource)resource).GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
+            return endpoints.Select(e => new EndpointReference(owner, e));
         }
 
         return [];
@@ -861,7 +869,8 @@ public static class ResourceExtensions
     {
         if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            return endpoints.Select(e => new EndpointReference(resource, e, contextNetworkId));
+            var owner = ((IResource)resource).GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
+            return endpoints.Select(e => new EndpointReference(owner, e, contextNetworkId));
         }
 
         return [];
@@ -876,16 +885,17 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
+        var owner = ((IResource)resource).GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
-            return new EndpointReference(resource, endpointName);
+            return new EndpointReference(owner, endpointName);
         }
         else
         {
-            return new EndpointReference(resource, endpoint);
+            return new EndpointReference(owner, endpoint);
         }
     }
 
@@ -899,17 +909,17 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkId)
     {
-
+        var owner = ((IResource)resource).GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
-            return new EndpointReference(resource, endpointName, contextNetworkId);
+            return new EndpointReference(owner, endpointName, contextNetworkId);
         }
         else
         {
-            return new EndpointReference(resource, endpoint, contextNetworkId);
+            return new EndpointReference(owner, endpoint, contextNetworkId);
         }
     }
 

@@ -528,15 +528,16 @@ public class ResourceCommandService
 
     private static ResourceCommandAnnotation? ResolveCommandAnnotation(IResource resource, ref string commandName, ILogger? logger = null)
     {
+        var effectiveResource = resource.GetEffectiveResource();
         var requestedCommandName = commandName;
-        var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, requestedCommandName, StringComparisons.CommandName));
+        var annotation = effectiveResource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, requestedCommandName, StringComparisons.CommandName));
 
         // Backwards compatibility: if the command wasn't found and the caller used a legacy name
         // (e.g. "resource-start"), fall back to the current name (e.g. "start").
         if (annotation is null && s_legacyCommandNameMap.TryGetValue(commandName, out var mappedName))
         {
             logger?.LogDebug("Command '{CommandName}' not found, falling back to '{MappedName}'.", commandName, mappedName);
-            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, mappedName, StringComparisons.CommandName));
+            annotation = effectiveResource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, mappedName, StringComparisons.CommandName));
             if (annotation is not null)
             {
                 commandName = mappedName;
@@ -839,4 +840,3 @@ internal sealed class ResourceCommandExecutionOptions
 
     public bool NonInteractive { get; init; }
 }
-

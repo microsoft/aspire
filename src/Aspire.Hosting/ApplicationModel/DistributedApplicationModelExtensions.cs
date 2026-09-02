@@ -9,6 +9,19 @@ namespace Aspire.Hosting.ApplicationModel;
 public static class DistributedApplicationModelExtensions
 {
     /// <summary>
+    /// Returns the canonical model members without resolving projections.
+    /// </summary>
+    /// <param name="model">The distributed application model.</param>
+    /// <returns>The resources that own the effective resources exposed by <see cref="DistributedApplicationModel.Resources"/>.</returns>
+    [AspireExportIgnore(Reason = "Canonical resource enumeration is not part of the ATS surface.")]
+    public static IEnumerable<IResource> GetResourceOwners(this DistributedApplicationModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        return model.ResourceOwners;
+    }
+
+    /// <summary>
     /// Returns the compute resources from the <see cref="DistributedApplicationModel"/>.
     /// Compute resources are those that are either containers or project resources, and are not marked to be ignored by the manifest publishing callback annotation.
     /// </summary>

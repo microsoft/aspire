@@ -116,8 +116,9 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     {
         var cancellationToken = state.CancellationToken;
         var resource = state.LatestEvent.Resource;
+        var effectiveResource = resource.GetEffectiveResource();
 
-        if (!resource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out var annotations))
+        if (!effectiveResource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out var annotations))
         {
             // NOTE: If there are no health check annotations then there
             //       is currently nothing to monitor. At this point in time we don't

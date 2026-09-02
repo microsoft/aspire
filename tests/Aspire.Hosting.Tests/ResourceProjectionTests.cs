@@ -3,6 +3,7 @@
 
 using System.Collections.ObjectModel;
 using System.Reflection;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
@@ -36,14 +37,23 @@ public class ResourceProjectionTests
 
         var projection = Assert.IsType<ContainerResourceProjection<ExecutableResource>>(
             executable.Resource.GetEffectiveResource(builder.ExecutionContext));
+        var model = new DistributedApplicationModel(builder.Resources);
         Assert.True(executable.Resource.IsContainer());
         Assert.Collection(
-            new DistributedApplicationModel(builder.Resources).GetContainerResources(),
+            model.Resources,
+            resource => Assert.Same(projection, resource));
+        Assert.True(model.Resources.TryGetByName("worker", out var effectiveResource));
+        Assert.Same(projection, effectiveResource);
+        Assert.Collection(
+            model.GetResourceOwners(),
+            resource => Assert.Same(executable.Resource, resource));
+        Assert.Collection(
+            model.GetContainerResources(),
             resource => Assert.Same(projection, resource));
         Assert.Collection(
-            new DistributedApplicationModel(builder.Resources).GetComputeResources(),
+            model.GetComputeResources(),
             resource => Assert.Same(projection, resource));
-        Assert.Empty(new DistributedApplicationModel(builder.Resources).GetExecutableResources());
+        Assert.Empty(model.GetExecutableResources());
         Assert.True(builder.TryCreateResourceBuilder<ExecutableResource>("worker", out var ownerBuilder));
         Assert.Same(executable.Resource, ownerBuilder.Resource);
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
@@ -155,6 +165,109 @@ public class ResourceProjectionTests
         Assert.Same(executable.Resource, endpointReference.Resource);
         Assert.Same(endpoint, endpointReference.EndpointAnnotation);
         Assert.Same(endpoint, Assert.Single(executable.Resource.GetEndpoints()).EndpointAnnotation);
+    }
+
+    [Fact]
+    public void CanonicalEndpointReferencesUseProjectedConfigurationForExistingEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithHttpEndpoint(targetPort: 5000);
+        var endpointReference = executable.GetEndpoint("http");
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container
+                .WithImage("projected-image")
+                .WithEndpoint("http", endpoint => endpoint.TargetPort = 8080, createIfNotExists: false));
+
+        Assert.Same(executable.Resource, endpointReference.Resource);
+        Assert.Equal(8080, endpointReference.EndpointAnnotation.TargetPort);
+    }
+
+    [Fact]
+    public async Task ProjectionLocalResourceEventSubscriptionsUseOwnerIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        ContainerResource? callbackResource = null;
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .OnResourceReady((resource, _, _) =>
+                    {
+                        callbackResource = resource;
+                        return Task.CompletedTask;
+                    }));
+        var projection = Assert.IsAssignableFrom<ContainerResource>(
+            executable.Resource.GetEffectiveResource(builder.ExecutionContext));
+
+        await builder.Eventing.PublishAsync(
+            new ResourceReadyEvent(executable.Resource, TestServiceProvider.Instance),
+            TestContext.Current.CancellationToken);
+
+        Assert.Same(projection, callbackResource);
+    }
+
+    [Fact]
+    public async Task OwnerNotificationUsesEffectiveResourceShape()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile();
+        using var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(executable.Resource, state => state);
+
+        Assert.True(notificationService.TryGetCurrentState(executable.Resource.Name, out var resourceEvent));
+        Assert.Same(executable.Resource, resourceEvent.Resource);
+        Assert.Equal(KnownResourceTypes.Container, resourceEvent.Snapshot.ResourceType);
+    }
+
+    [Fact]
+    public async Task ProjectionLocalCommandsExecuteThroughCanonicalOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var invoked = false;
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithCommand(
+                        "projected-command",
+                        "Projected command",
+                        _ =>
+                        {
+                            invoked = true;
+                            return Task.FromResult(new ExecuteCommandResult { Success = true });
+                        }));
+        using var app = builder.Build();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            executable.Resource,
+            "projected-command",
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.True(invoked);
+    }
+
+    [Fact]
+    public void EffectiveModelCollectionMutationsPreserveOwnerMembership()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile();
+        var model = new DistributedApplicationModel(builder.Resources);
+        var projection = Assert.Single(model.Resources);
+
+        Assert.True(model.Resources.Contains(executable.Resource));
+        Assert.Equal(0, model.Resources.IndexOf(projection));
+        Assert.True(model.Resources.Remove(projection));
+        Assert.Empty(builder.Resources);
+        Assert.Empty(model.GetResourceOwners());
     }
 
     [Fact]
