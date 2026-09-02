@@ -65,13 +65,13 @@ public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDis
         _unsupportedPublishCallback = new ManifestPublishingCallbackAnnotation(_ =>
             Task.FromException(new DistributedApplicationException(GetUnsupportedPublishMessage(Name))));
 
-        // Explicit container projections and manifest callbacks are valid publish strategies. Only
-        // DotnetProjectResource owners that still use the unsupported default publisher should fail.
+        // PublishAsDockerFile, ExcludeFromManifest, and explicit manifest callbacks supersede the
+        // unsupported callback. Validate only resources where that callback remains effective.
         Annotations.Add(new PipelineStepAnnotation(context =>
         {
             var unsupportedResources = context.PipelineContext.Model.Resources
                 .OfType<DotnetProjectResource>()
-                .Where(static resource => !resource.IsContainer() && resource.RequiresPublishValidation())
+                .Where(static resource => resource.RequiresPublishValidation())
                 .ToArray();
 
             if (unsupportedResources.Length == 0 || !ReferenceEquals(context.Resource, unsupportedResources[0]))
