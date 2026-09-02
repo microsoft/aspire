@@ -462,19 +462,37 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             initialize.SessionId,
             """{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}""",
             cancellationToken);
-        var tools = await SendMcpRequestAsync(
-            client,
-            endpoint,
-            accessToken.Token,
-            initialize.SessionId,
-            """{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""",
-            cancellationToken);
+        using var discoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        discoveryCancellation.CancelAfter(TimeSpan.FromMinutes(2));
+        try
+        {
+            for (var requestId = 2; ; requestId++)
+            {
+                var tools = await SendMcpRequestAsync(
+                    client,
+                    endpoint,
+                    accessToken.Token,
+                    initialize.SessionId,
+                    $$$"""{"jsonrpc":"2.0","id":{{{requestId}}},"method":"tools/list","params":{}}""",
+                    discoveryCancellation.Token);
+                var toolNames = tools.Result.GetProperty("tools")
+                    .EnumerateArray()
+                    .Select(tool => tool.GetProperty("name").GetString()
+                        ?? throw new InvalidOperationException("A discovered MCP tool did not have a name."))
+                    .ToArray();
+                if (toolNames.Length > 0)
+                {
+                    return toolNames;
+                }
 
-        return tools.Result.GetProperty("tools")
-            .EnumerateArray()
-            .Select(tool => tool.GetProperty("name").GetString()
-                ?? throw new InvalidOperationException("A discovered MCP tool did not have a name."))
-            .ToArray();
+                // Toolbox tool discovery is eventually consistent immediately after provisioning.
+                await Task.Delay(TimeSpan.FromSeconds(5), discoveryCancellation.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("Foundry Toolbox tool discovery remained empty for two minutes.");
+        }
     }
 
     private static async Task<McpResponse> SendMcpRequestAsync(
