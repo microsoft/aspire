@@ -20,7 +20,13 @@ aspire add Aspire.Hosting.Azure.ConnectorNamespace
 
 ## Usage example
 
-Then, in the AppHost, add a Connector Namespace with a connection and an allow-listed managed MCP server:
+A Connector Namespace contains separately managed, reusable resources:
+
+* A **connection** is an authenticated binding to an external service such as Office 365 or SharePoint.
+* An **MCP server configuration** exposes selected connector operations as MCP tools.
+* `WithConnector` links the MCP server configuration to the connection it uses. The current service preview supports one connector per managed MCP server configuration.
+
+The following AppHost example adds a Connector Namespace with a connection and an allow-listed managed MCP server:
 
 **C#**
 

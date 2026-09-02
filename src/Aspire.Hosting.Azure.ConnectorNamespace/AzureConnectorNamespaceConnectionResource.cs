@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// Represents a connection child resource in an Azure Connector Namespace.
 /// </summary>
 [AspireExport]
-public sealed class AzureConnectorNamespaceConnectionResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>, IResourceWithoutLifetime
+public sealed class AzureConnectorNamespaceConnectionResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureConnectorNamespaceConnectionResource"/> class.

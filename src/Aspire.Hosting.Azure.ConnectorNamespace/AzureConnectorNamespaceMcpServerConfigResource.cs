@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// Represents a managed MCP server configuration child resource in an Azure Connector Namespace.
 /// </summary>
 [AspireExport]
-public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>, IResourceWithoutLifetime
+public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureConnectorNamespaceMcpServerConfigResource"/> class.

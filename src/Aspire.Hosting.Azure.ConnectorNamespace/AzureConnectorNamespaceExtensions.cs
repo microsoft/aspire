@@ -56,7 +56,7 @@ public static class AzureConnectorNamespaceExtensions
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
             var gatewayResource = (AzureConnectorNamespaceResource)infrastructure.AspireResource;
-            var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
+            var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.Gateway;
             var gateway = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
                 infrastructure,
                 (_, name) =>
@@ -101,7 +101,6 @@ public static class AzureConnectorNamespaceExtensions
                 connectionMap.Add(connectionResource, connection);
             }
 
-            var gatewayIdentity = new MemberExpression(new IdentifierExpression(gateway.BicepIdentifier), "identity");
             foreach (var connectionResource in gatewayResource.Connections)
             {
                 var connection = connectionMap[connectionResource];
@@ -201,24 +200,18 @@ public static class AzureConnectorNamespaceExtensions
 
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = gateway.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = gateway.Name.ToBicepExpression() });
-            if (gatewayResource.IsExisting())
+            infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
             {
-                // Existing Connector Namespaces can use a user-assigned identity, which has no
-                // principalId or tenantId fields. Keep the output contract safe and deterministic.
-                infrastructure.Add(new ProvisioningOutput("principalId", typeof(string)) { Value = string.Empty });
-                infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string)) { Value = string.Empty });
-            }
-            else
+                Value = gatewayResource.IsExisting()
+                    ? GetOptionalIdentityProperty(gateway, "principalId")
+                    : gateway.Identity.PrincipalId
+            });
+            infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string))
             {
-                infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
-                {
-                    Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "principalId")
-                });
-                infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string))
-                {
-                    Value = (BicepValue<string>)new MemberExpression(gatewayIdentity, "tenantId")
-                });
-            }
+                Value = gatewayResource.IsExisting()
+                    ? GetOptionalIdentityProperty(gateway, "tenantId")
+                    : gateway.Identity.TenantId
+            });
         }
 
         return builder.AddResource(new AzureConnectorNamespaceResource(name, ConfigureInfrastructure));
@@ -250,11 +243,6 @@ public static class AzureConnectorNamespaceExtensions
 
         var connectionName = options?.ConnectionName ?? name;
         ValidateConnectorResourceName(connectionName, nameof(options));
-        ValidateUniqueBicepIdentifier(
-            builder.Resource,
-            ConnectorNamespaceBicepIdentifiers.CreateConnection(builder.Resource.Name, name),
-            "Connector connection",
-            name);
         if (builder.Resource.Connections.Any(connection =>
             string.Equals(connection.ConnectionName, connectionName, StringComparison.OrdinalIgnoreCase)))
         {
@@ -402,11 +390,6 @@ public static class AzureConnectorNamespaceExtensions
 
         var configName = options?.ConfigName ?? name;
         ValidateConnectorResourceName(configName, nameof(options));
-        ValidateUniqueBicepIdentifier(
-            builder.Resource,
-            ConnectorNamespaceBicepIdentifiers.CreateMcpServerConfig(builder.Resource.Name, name),
-            "MCP server configuration",
-            name);
         if (builder.Resource.McpServerConfigs.Any(config =>
             string.Equals(config.ConfigName, configName, StringComparison.OrdinalIgnoreCase)))
         {
@@ -460,8 +443,11 @@ public static class AzureConnectorNamespaceExtensions
     /// <param name="options">The connector metadata and operation allow-list.</param>
     /// <returns>The MCP server configuration resource builder.</returns>
     /// <remarks>
-    /// Only the operations listed in <paramref name="options"/> are exposed as MCP tools. Operation
-    /// IDs are connector-specific and should be verified against the connector operation metadata.
+    /// Connections and MCP server configurations are separate Azure resources so a connection can be
+    /// reused independently. This method links the MCP server configuration to its underlying connection
+    /// and exposes only the operations listed in <paramref name="options"/> as MCP tools. Operation IDs
+    /// are connector-specific and should be verified against the connector operation metadata. The current
+    /// Connector Namespace preview supports one connector per managed MCP server configuration.
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -533,40 +519,18 @@ public static class AzureConnectorNamespaceExtensions
         return builder;
     }
 
-    private static IEnumerable<string> GetConnectorNamespaceBicepIdentifiers(AzureConnectorNamespaceResource connectorNamespace)
+    private static BicepValue<string> GetOptionalIdentityProperty(ConnectorGateway gateway, string propertyName)
     {
-        yield return ConnectorNamespaceBicepIdentifiers.CreateGateway();
-
-        foreach (var connection in connectorNamespace.Connections)
-        {
-            yield return connection.BicepIdentifier;
-
-            foreach (var accessPolicy in connection.AccessPolicies)
-            {
-                yield return accessPolicy.BicepIdentifier;
-            }
-        }
-
-        foreach (var mcpServerConfig in connectorNamespace.McpServerConfigs)
-        {
-            yield return mcpServerConfig.BicepIdentifier;
-        }
-    }
-
-    private static void ValidateUniqueBicepIdentifier(
-        AzureConnectorNamespaceResource connectorNamespace,
-        string bicepIdentifier,
-        string resourceType,
-        string resourceName)
-    {
-        if (GetConnectorNamespaceBicepIdentifiers(connectorNamespace).Contains(
-            bicepIdentifier,
-            StringComparer.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"{resourceType} resource '{resourceName}' generates a duplicate Bicep identifier on Connector Namespace " +
-                $"'{connectorNamespace.Name}'.");
-        }
+        // Existing namespaces can have no identity or a user-assigned-only identity. Safe member access
+        // preserves available system-assigned values without making output evaluation fail when absent.
+        var identity = new SafeMemberExpression(
+            new IdentifierExpression(gateway.BicepIdentifier),
+            "identity");
+        var value = new SafeMemberExpression(identity, propertyName);
+        return new BinaryExpression(
+            value,
+            BinaryBicepOperator.Coalesce,
+            new StringLiteralExpression(string.Empty));
     }
 
     private static string GetValidatedAccessPolicyResourceName(
@@ -591,12 +555,6 @@ public static class AzureConnectorNamespaceExtensions
             throw new InvalidOperationException(
                 $"Access policy '{policyName}' is already registered on connector connection '{connection.Name}'.");
         }
-
-        ValidateUniqueBicepIdentifier(
-            connection.Parent,
-            resourceName,
-            "Access policy",
-            name);
 
         return resourceName;
     }

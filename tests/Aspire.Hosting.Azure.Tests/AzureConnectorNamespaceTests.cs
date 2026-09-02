@@ -160,37 +160,44 @@ public class AzureConnectorNamespaceTests
             exception.Message);
     }
 
-    [Theory]
-    [InlineData("mail", "mail")]
-    public void ConnectorConnectionsRejectDuplicateBicepIdentifier(string firstName, string secondName)
+    [Fact]
+    public void ConnectorConnectionsRejectDuplicateAzureNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
-        gateway.AddConnection(firstName, "office365");
+        gateway.AddConnection(
+            "office365",
+            "office365",
+            new AzureConnectorNamespaceConnectionOptions { ConnectionName = "shared-connection" });
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => gateway.AddConnection(secondName, "sharepointonline"));
+        var exception = Assert.Throws<InvalidOperationException>(() => gateway.AddConnection(
+            "sharepoint",
+            "sharepointonline",
+            new AzureConnectorNamespaceConnectionOptions { ConnectionName = "shared-connection" }));
 
         Assert.Equal(
-            $"Connector connection resource '{secondName}' generates a duplicate Bicep identifier on Connector Namespace 'gateway'.",
+            "Connector connection 'shared-connection' is already registered on Connector Namespace 'gateway'.",
             exception.Message);
         Assert.Single(gateway.Resource.Connections);
     }
 
     [Fact]
-    public void ConnectorMcpServerConfigsRejectDuplicateBicepIdentifier()
+    public void ConnectorMcpServerConfigsRejectDuplicateAzureNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
-        gateway.AddMcpServerConfig("mail");
+        gateway.AddMcpServerConfig(
+            "first-mcp",
+            new AzureConnectorNamespaceMcpServerConfigOptions { ConfigName = "shared-mcp" });
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => gateway.AddMcpServerConfig("mail"));
+        var exception = Assert.Throws<InvalidOperationException>(() => gateway.AddMcpServerConfig(
+            "second-mcp",
+            new AzureConnectorNamespaceMcpServerConfigOptions { ConfigName = "shared-mcp" }));
 
         Assert.Equal(
-            "MCP server configuration resource 'mail' generates a duplicate Bicep identifier on Connector Namespace 'gateway'.",
+            "MCP server configuration 'shared-mcp' is already registered on Connector Namespace 'gateway'.",
             exception.Message);
         Assert.Single(gateway.Resource.McpServerConfigs);
     }
@@ -212,7 +219,7 @@ public class AzureConnectorNamespaceTests
                 Operations = [new AzureConnectorNamespaceMcpOperationOptions { Name = "GetEmailsV3" }]
             });
 
-        var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
+        var gatewayBicepIdentifier = ConnectorNamespaceBicepIdentifiers.Gateway;
         Assert.NotEqual(firstConnection.Resource.BicepIdentifier, secondConnection.Resource.BicepIdentifier);
         Assert.NotEqual(secondConnection.Resource.BicepIdentifier, mcp.Resource.BicepIdentifier);
         Assert.All(
@@ -487,7 +494,7 @@ public class AzureConnectorNamespaceTests
 
         var identifiers = new[]
         {
-            ConnectorNamespaceBicepIdentifiers.CreateGateway(),
+            ConnectorNamespaceBicepIdentifiers.Gateway,
             connection.Resource.BicepIdentifier,
             Assert.Single(connection.Resource.AccessPolicies).BicepIdentifier,
             mcp.Resource.BicepIdentifier

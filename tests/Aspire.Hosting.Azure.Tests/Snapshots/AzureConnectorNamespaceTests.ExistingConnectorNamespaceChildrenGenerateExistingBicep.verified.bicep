@@ -43,6 +43,6 @@ output id string = connectorGateway.id
 
 output name string = connectorGateway.name
 
-output principalId string = ''
+output principalId string = (connectorGateway.?identity.?principalId ?? '')
 
-output tenantId string = ''
+output tenantId string = (connectorGateway.?identity.?tenantId ?? '')

@@ -35,19 +35,11 @@ public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
     /// <summary>
     /// Gets the connector namespace system-assigned managed identity principal ID output reference.
     /// </summary>
-    /// <remarks>
-    /// This output is empty for an existing Connector Namespace because its identity type is not
-    /// controlled by Aspire and may be user-assigned.
-    /// </remarks>
     public BicepOutputReference PrincipalId => new("principalId", this);
 
     /// <summary>
     /// Gets the connector namespace system-assigned managed identity tenant ID output reference.
     /// </summary>
-    /// <remarks>
-    /// This output is empty for an existing Connector Namespace because its identity type is not
-    /// controlled by Aspire and may be user-assigned.
-    /// </remarks>
     public BicepOutputReference TenantId => new("tenantId", this);
 
     internal List<AzureConnectorNamespaceConnectionResource> Connections { get; } = [];
@@ -57,7 +49,7 @@ public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
     {
-        var bicepIdentifier = ConnectorNamespaceBicepIdentifiers.CreateGateway();
+        var bicepIdentifier = ConnectorNamespaceBicepIdentifiers.Gateway;
         var existing = infra.GetProvisionableResources()
             .OfType<ConnectorGateway>()
             .SingleOrDefault(gateway => gateway.BicepIdentifier == bicepIdentifier);

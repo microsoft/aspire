@@ -10,11 +10,10 @@ namespace Aspire.Hosting.Azure.ConnectorNamespace.Provisioning;
 
 internal static class ConnectorNamespaceBicepIdentifiers
 {
+    public const string Gateway = "connectorGateway";
+
     private const int ReadablePartLength = 16;
     private const int GatewayResourceNameReadablePartLength = 11;
-
-    public static string CreateGateway()
-        => "connectorGateway";
 
     public static string CreateGatewayResourceNamePrefix(string connectorNamespaceName)
     {
