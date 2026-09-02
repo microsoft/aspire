@@ -19,11 +19,13 @@ internal sealed class FoundryToolboxReadinessProbe(
         Uri endpoint,
         string accessToken,
         IReadOnlyCollection<string> requiredToolNames,
+        IReadOnlyCollection<string> requiredMcpServerLabels,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentException.ThrowIfNullOrEmpty(accessToken);
         ArgumentNullException.ThrowIfNull(requiredToolNames);
+        ArgumentNullException.ThrowIfNull(requiredMcpServerLabels);
 
         using var discoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         discoveryCancellation.CancelAfter(_timeout);
@@ -90,9 +92,16 @@ internal sealed class FoundryToolboxReadinessProbe(
                 }
                 while (!string.IsNullOrEmpty(cursor));
 
-                if (!retryDiscovery && (requiredToolNames.Count == 0
-                    ? discoveredToolNames.Count > 0
-                    : requiredToolNames.All(discoveredToolNames.Contains)))
+                var hasRequiredTools =
+                    requiredToolNames.All(discoveredToolNames.Contains) &&
+                    requiredMcpServerLabels.All(label =>
+                        discoveredToolNames.Any(name =>
+                            name.StartsWith($"{label}.", StringComparison.Ordinal)));
+                var hasConfiguredExpectations =
+                    requiredToolNames.Count > 0 || requiredMcpServerLabels.Count > 0;
+                if (!retryDiscovery &&
+                    hasRequiredTools &&
+                    (hasConfiguredExpectations || discoveredToolNames.Count > 0))
                 {
                     return discoveredToolNames.ToArray();
                 }
@@ -103,9 +112,13 @@ internal sealed class FoundryToolboxReadinessProbe(
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            var expected = requiredToolNames.Count == 0
+            var expectedTools = requiredToolNames
+                .Concat(requiredMcpServerLabels.Select(label => $"{label}.*"))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var expected = expectedTools.Length == 0
                 ? "any tool"
-                : string.Join(", ", requiredToolNames.Order(StringComparer.Ordinal));
+                : string.Join(", ", expectedTools);
             throw new TimeoutException(
                 $"Foundry Toolbox did not discover the required tools within {_timeout}: {expected}.");
         }

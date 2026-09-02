@@ -422,6 +422,7 @@ public class ToolboxTests
                 new Uri("https://project.example.com/toolboxes/field-tools/mcp?api-version=v1"),
                 "token",
                 ["knowledge-base"],
+                requiredMcpServerLabels: [],
                 CancellationToken.None);
 
         Assert.Equal(2, tools.Count);
@@ -443,6 +444,34 @@ public class ToolboxTests
             request => Assert.Equal("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""", request.Content),
             request => Assert.Equal("""{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}""", request.Content),
             request => Assert.Equal("""{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"cursor":"page-2"}}""", request.Content));
+    }
+
+    [Fact]
+    public async Task ReadinessProbe_WaitsForEveryConfiguredMcpServer()
+    {
+        var initialize = CreateJsonResponse(
+            """{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26"}}""");
+        using var handler = new SequenceHttpMessageHandler(
+            initialize,
+            new HttpResponseMessage(HttpStatusCode.Accepted),
+            CreateJsonResponse("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"web-search"}]}}"""),
+            CreateJsonResponse(
+               """{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"web-search"},{"name":"inventory.lookup"}]}}"""));
+        using var client = new HttpClient(handler);
+
+        var tools = await new FoundryToolboxReadinessProbe(
+            client,
+            timeout: TimeSpan.FromSeconds(1),
+            retryDelay: TimeSpan.Zero)
+            .WaitForToolsAsync(
+               new Uri("https://project.example.com/toolboxes/field-tools/mcp?api-version=v1"),
+               "token",
+               ["web-search"],
+               ["inventory"],
+               CancellationToken.None);
+
+        Assert.Equal(["inventory.lookup", "web-search"], tools.Order(StringComparer.Ordinal));
+        Assert.Equal(4, handler.Requests.Count);
     }
 
     [Fact]

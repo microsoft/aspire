@@ -431,11 +431,16 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
             .Where(tool => tool is not FoundryToolboxMcpToolDefinition)
             .Select(tool => tool.Name)
             .ToArray();
+        var requiredMcpServerLabels = _tools
+            .OfType<FoundryToolboxMcpToolDefinition>()
+            .Select(tool => tool.ServerLabel)
+            .ToArray();
         using var client = new HttpClient();
         await new FoundryToolboxReadinessProbe(client).WaitForToolsAsync(
             endpoint,
             accessToken.Token,
             requiredToolNames,
+            requiredMcpServerLabels,
             cancellationToken).ConfigureAwait(false);
     }
 
