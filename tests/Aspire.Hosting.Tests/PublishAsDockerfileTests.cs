@@ -204,6 +204,43 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectedManifestCallbacksReceiveOwnerResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+        var executable = builder.AddExecutable("worker", "worker", path);
+        IResource? argumentResource = null;
+        IResource? environmentResource = null;
+        IResource? dockerfileResource = null;
+
+        executable
+            .WithArgs(context =>
+            {
+                argumentResource = context.Resource;
+                context.Args.Add("--projected");
+            })
+            .WithEnvironment(context =>
+            {
+                environmentResource = context.Resource;
+                context.EnvironmentVariables["PROJECTED"] = "true";
+            })
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+            .PublishAsDockerFile(container => container.WithDockerfileBuilder(path, context =>
+            {
+                dockerfileResource = context.Resource;
+                context.Builder.From("scratch");
+            }));
+#pragma warning restore ASPIREDOCKERFILEBUILDER001
+
+        await ManifestUtils.GetManifest(executable.Resource, manifestDirectory: path).DefaultTimeout();
+
+        Assert.Same(executable.Resource, argumentResource);
+        Assert.Same(executable.Resource, environmentResource);
+        Assert.Same(executable.Resource, dockerfileResource);
+    }
+
+    [Fact]
     public async Task PublishProjectAsDockerFile()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
