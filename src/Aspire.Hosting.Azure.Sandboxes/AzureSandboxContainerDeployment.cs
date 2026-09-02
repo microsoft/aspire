@@ -1470,6 +1470,17 @@ internal static class AzureSandboxContainerDeployment
                 continue;
             }
 
+            if (resource.TargetResource is ProjectResource &&
+                string.Equals(resolvedEndpoint.Endpoint.UriScheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                !resolvedEndpoints.Any(candidate =>
+                    string.Equals(candidate.Endpoint.UriScheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                    candidate.TargetPort.Value == resolvedEndpoint.TargetPort.Value))
+            {
+                throw new NotSupportedException(
+                    $"Endpoint '{resolvedEndpoint.Endpoint.Name}' on project resource '{resource.TargetResource.Name}' is exposed through Azure sandbox ingress, which terminates TLS and forwards plaintext HTTP. " +
+                    "Add an HTTP endpoint that shares this endpoint's target port.");
+            }
+
             var targetPort = ResolveSandboxTargetPort(resource.TargetResource, resolvedEndpoint);
 
             if (targetPort is not int resolvedTargetPort)

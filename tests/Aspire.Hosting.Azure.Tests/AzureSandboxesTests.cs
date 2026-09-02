@@ -97,6 +97,33 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ExcludedAzureSandboxGroupDoesNotAddDashboardLinkToDeploymentSummary()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        var steps = await CreateStepsAsync(app, sandboxGroup.Resource);
+        var summaryStep = Assert.Single(steps, step => step.Name == "print-azure-sandboxes-dashboard-sandboxes");
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("summary");
+
+        await summaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        Assert.Empty(pipelineContext.Summary.Items);
+    }
+
+    [Fact]
     public void AzureSandboxDashboardUrlEscapesRouteSegments()
     {
         Assert.Equal(
@@ -2582,6 +2609,32 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal(5001, endpoint.TargetPort);
         Assert.Equal("Http", endpoint.Protocol);
         Assert.True(endpoint.IsExternal);
+    }
+
+    [Fact]
+    public async Task SandboxProjectRejectsExposedHttpsEndpointWithoutPlaintextHttpEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(
+            app.Services.GetRequiredService<DistributedApplicationModel>().GetProjectResources(),
+            resource => resource.Name == "frontend");
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var exception = Assert.Throws<NotSupportedException>(
+            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Equal(
+            "Endpoint 'https' on project resource 'frontend' is exposed through Azure sandbox ingress, which terminates TLS and forwards plaintext HTTP. Add an HTTP endpoint that shares this endpoint's target port.",
+            exception.Message);
     }
 
     [Fact]

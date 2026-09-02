@@ -165,6 +165,11 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
     private async Task AddDashboardToPipelineSummaryAsync(PipelineStepContext context)
     {
+        if (this.IsExcludedFromPublish())
+        {
+            return;
+        }
+
         var scope = AzureSandboxContainerDeployment.CreateDataPlaneScope(this);
         var dashboardUrl = GetDashboardUrl(scope.SubscriptionId, scope.ResourceGroupName, scope.SandboxGroupName);
         context.Summary.Add($"{Name} sandbox dashboard", new MarkdownString($"[{dashboardUrl}]({dashboardUrl})"));
