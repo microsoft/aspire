@@ -44,7 +44,8 @@ internal static class GitIgnoreMerger
                 && !ContainsCoveringEntry(existingUnanchoredEntries, existingAnchoredEntries, entry)
                 && !ContainsCoveringEntry(
                     existingNegatedEntries,
-                    RemoveRoot(IsNegated(entry) ? RemoveNegation(entry) : entry)))
+                    RemoveRoot(IsNegated(entry) ? RemoveNegation(entry) : entry))
+                && !ContainsConflictingNegatedDescendant(existingNegatedEntries, entry))
             .ToArray();
 
         if (missingEntries.Length == 0)
@@ -113,6 +114,35 @@ internal static class GitIgnoreMerger
         // a generated "foo" entry because it would leave a file named "foo" unignored.
         return scaffoldEntry.EndsWith('/') &&
             existingEntries.Contains(scaffoldEntry.TrimEnd('/'));
+    }
+
+    private static bool ContainsConflictingNegatedDescendant(
+        HashSet<string> existingNegatedEntries,
+        string scaffoldEntry)
+    {
+        if (IsNegated(scaffoldEntry))
+        {
+            return false;
+        }
+
+        var normalizedScaffoldEntry = RemoveRoot(scaffoldEntry);
+        if (!normalizedScaffoldEntry.EndsWith('/'))
+        {
+            return false;
+        }
+
+        var directoryPattern = normalizedScaffoldEntry.TrimEnd('/');
+        if (IsAnchored(scaffoldEntry))
+        {
+            return existingNegatedEntries.Any(entry =>
+                entry.Equals(directoryPattern, StringComparison.Ordinal) ||
+                entry.StartsWith(normalizedScaffoldEntry, StringComparison.Ordinal));
+        }
+
+        // Git cannot re-include a file when a later rule excludes its parent directory.
+        // See https://git-scm.com/docs/gitignore.
+        return existingNegatedEntries.Any(entry =>
+            entry.Split('/').Contains(directoryPattern, StringComparer.Ordinal));
     }
 
     private static string RemoveRoot(string entry)

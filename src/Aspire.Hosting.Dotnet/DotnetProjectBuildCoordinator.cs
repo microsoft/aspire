@@ -35,10 +35,17 @@ internal static class DotnetProjectBuildCoordinator
         }
 
         var state = s_states.GetValue(builder, static builder => new CoordinatorState(builder));
-        if (IsProjectFile(projectMetadata.ProjectPath))
+        if (IsSupportedPath(projectMetadata.ProjectPath))
         {
             projectMetadata.SuppressBuild = true;
-            projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
+            if (IsProjectFile(projectMetadata.ProjectPath))
+            {
+                projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
+            }
+            else
+            {
+                state.EnsureBuildResource(projectMetadata.BuildConfiguration);
+            }
         }
 
         return state;
@@ -174,7 +181,7 @@ internal static class DotnetProjectBuildCoordinator
         {
             var exitCode = buildEvent.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
             throw new DistributedApplicationException(
-                $"The coordinated .NET project build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.");
+                $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.");
         }
     }
 
@@ -235,6 +242,12 @@ internal static class DotnetProjectBuildCoordinator
             ObjectDisposedException.ThrowIf(_disposed, this);
             PrimaryBuildResource ??= CreateBuildResource(configuration);
             return PrimaryBuildResource.AddProject(projectPath);
+        }
+
+        public void EnsureBuildResource(string? configuration)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            PrimaryBuildResource ??= CreateBuildResource(configuration);
         }
 
         public void AddResource(DotnetProjectResource resource)
@@ -317,27 +330,26 @@ internal static class DotnetProjectBuildCoordinator
             {
                 throw new DistributedApplicationException(
                     $"The .NET resource '{unsupportedBuildEnvironmentEntry.Registration.Resource.Name}' uses " +
-                    "WithBuildEnvironment, which is supported only for project files. File-based apps build and run " +
-                    "in one process and cannot keep build environment variables out of the launched application.");
+                    "WithBuildEnvironment, which is supported only for project files.");
             }
 
-            var projectEntries = resourceEntries
-                .Where(entry => IsProjectFile(entry.Metadata.ProjectPath))
+            var buildEntries = resourceEntries
+                .Where(entry => IsSupportedPath(entry.Metadata.ProjectPath))
                 .ToArray();
-            var missingProjectEntries = projectEntries
+            var missingBuildEntries = buildEntries
                 .Where(entry => !File.Exists(entry.Metadata.ProjectPath))
                 .ToArray();
-            projectEntries = projectEntries
+            buildEntries = buildEntries
                 .Where(entry => File.Exists(entry.Metadata.ProjectPath))
                 .ToArray();
 
-            if (projectEntries.Length == 0)
+            if (buildEntries.Length == 0)
             {
-                foreach (var missingEntry in missingProjectEntries)
+                foreach (var missingEntry in missingBuildEntries)
                 {
-                    // Missing project files intentionally remain on the ordinary resource-start path so the
+                    // Missing paths intentionally remain on the ordinary resource-start path so the
                     // resulting dotnet error names only that resource instead of failing the shared build.
-                    ConfigureMissingProjectFallback(missingEntry);
+                    ConfigureMissingPathFallback(missingEntry);
                 }
 
                 RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
@@ -353,7 +365,7 @@ internal static class DotnetProjectBuildCoordinator
                 return Task.CompletedTask;
             }
 
-            var buildSteps = CreateBuildSteps(projectEntries);
+            var buildSteps = CreateBuildSteps(buildEntries);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
@@ -455,7 +467,7 @@ internal static class DotnetProjectBuildCoordinator
                     var resource = registration.Resource;
                     if (resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is { } metadata &&
                         IsSupportedPath(metadata.ProjectPath) &&
-                        (!IsProjectFile(metadata.ProjectPath) || File.Exists(metadata.ProjectPath)))
+                        File.Exists(metadata.ProjectPath))
                     {
                         if (AddBuildDependency(_builder, resource, finalBuildResource) is { } rollback)
                         {
@@ -464,15 +476,15 @@ internal static class DotnetProjectBuildCoordinator
                     }
                 }
 
-                foreach (var missingEntry in missingProjectEntries)
+                foreach (var missingEntry in missingBuildEntries)
                 {
                     // Do this only after every throwing plan mutation has succeeded, so a failed materialization can
-                    // be retried without leaving the missing project on a partially changed launch path.
-                    ConfigureMissingProjectFallback(missingEntry);
+                    // be retried without leaving the missing resource on a partially changed launch path.
+                    ConfigureMissingPathFallback(missingEntry);
                 }
 
                 RemoveEagerBuildDependencies(inactiveResources);
-                RemoveEagerBuildDependencies(missingProjectEntries.Select(entry => entry.Registration.Resource));
+                RemoveEagerBuildDependencies(missingBuildEntries.Select(entry => entry.Registration.Resource));
                 _materialized = true;
             }
             catch (Exception materializationException)
@@ -539,6 +551,14 @@ internal static class DotnetProjectBuildCoordinator
                 // Resource.WorkingDirectory is the launched process's cwd and can be overridden independently.
                 // SDK and global.json discovery must start at the project directory.
                 var projectDirectory = Path.GetDirectoryName(entry.Metadata.ProjectPath)!;
+                if (!IsProjectFile(entry.Metadata.ProjectPath))
+                {
+                    // File-based app artifacts are isolated, but their #:project references can share bin/obj
+                    // directories. Direct build steps are serialized so those references never build concurrently.
+                    steps.Add(BuildStep.CreateDirect(entry, projectDirectory));
+                    continue;
+                }
+
                 if (RequiresContextSpecificBuild(entry))
                 {
                     steps.Add(BuildStep.CreateDirect(entry, projectDirectory));
@@ -565,7 +585,7 @@ internal static class DotnetProjectBuildCoordinator
             return steps;
         }
 
-        private static void ConfigureMissingProjectFallback(ProjectEntry entry)
+        private static void ConfigureMissingPathFallback(ProjectEntry entry)
         {
             entry.Metadata.SuppressBuild = false;
             foreach (var annotation in entry.Registration.Resource.Annotations

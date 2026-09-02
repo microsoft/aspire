@@ -56,12 +56,12 @@ await builder.build().run();
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
 generated AppHost-local MSBuild traversal projects. Build groups run serially, while projects within
-each traversal group can build in parallel. Launch-profile and `WithEnvironment` values are runtime
-configuration and do not prevent projects from sharing a traversal build. Each project is then launched with
-the `RunCommand` and `RunArguments` resolved from the already-built project, so runtime environment
-variables cannot change which output is selected. File-based apps compile separately with
-`dotnet run --file <path> --no-cache`, but wait for every coordinated project build in mixed
-applications so shared project references don't race.
+each traversal group can build in parallel. File-based apps use serialized direct builds so their
+`#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
+values are runtime configuration and do not prevent projects from sharing a traversal build. Each
+traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
+already-built project, so runtime environment variables cannot change which output is selected.
+File-based apps launch with `dotnet run --file <path> --no-cache --no-build` after their direct build.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.

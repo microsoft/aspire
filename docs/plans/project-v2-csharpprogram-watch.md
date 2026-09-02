@@ -198,15 +198,15 @@ exclusion (mirrors `AddRebuilderResource`). One per app run (MVP). Includes a sm
 (ported from POC) and, optionally, a status-pipe monitor surfacing watch status into resource logs/state.
 
 ### 5.3 Coordinated build orchestrator (new, internal)
-An internal `DotnetProjectBuildCoordinator` collects all `DotnetProjectResource` `.csproj` paths and adds
-hidden, automatically-started `DotnetProjectBuildResource` instances. Projects with the same effective
-`global.json` root and no project-specific build environment share a content-addressed MSBuild traversal
-project under the AppHost's `.aspire/build` directory. The traversal invokes child projects through the
-MSBuild task with parallel scheduling, preserving direct-project properties while de-duplicating shared
-project references. Projects with distinct or opaque environments use direct builds from their own working
-directories. The build resources are serialized so different SDK/environment contexts cannot race shared
-outputs. File-based `.cs` apps compile individually, but wait for the complete build chain in mixed models
-so `#:project` references cannot race it.
+An internal `DotnetProjectBuildCoordinator` collects all `DotnetProjectResource` `.csproj` and `.cs` paths
+and adds hidden, automatically-started `DotnetProjectBuildResource` instances. Projects with the same
+effective `global.json` root and no project-specific build environment share a content-addressed MSBuild
+traversal project under the AppHost's `.aspire/build` directory. The traversal invokes child projects
+through the MSBuild task with parallel scheduling, preserving direct-project properties while de-duplicating
+shared project references. Projects with distinct or opaque environments use direct builds from their own
+working directories. File-based `.cs` apps also use direct builds and then launch with `--no-build`. The
+build resources are serialized so different SDK/environment contexts and file apps cannot race shared
+outputs through `#:project` references.
 
 ### 5.4 Generalized project-defaults wiring (core ↔ package)
 Today `WithProjectDefaults` / `SetAspNetCoreUrls` / rebuilder / launchSettings-endpoint logic are

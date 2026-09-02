@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
-/// Builds the traditional .NET projects in a distributed application before they start.
+/// Builds .NET projects and file-based apps in a distributed application before they start.
 /// </summary>
 internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposable
 {

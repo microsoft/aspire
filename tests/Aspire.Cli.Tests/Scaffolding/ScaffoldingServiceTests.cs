@@ -560,6 +560,29 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(existingContent, mergedContent);
     }
 
+    [Theory]
+    [InlineData(".aspire/*\n!.aspire/settings.json\n", ".aspire/\n")]
+    [InlineData("/.aspire/*\n!/.aspire/settings.json\n", "/.aspire/\n")]
+    [InlineData("src/.aspire/*\n!src/.aspire/settings.json\n", ".aspire/\n")]
+    public void GitIgnoreMerger_HonorsDescendantNegation(
+        string existingContent,
+        string scaffoldContent)
+    {
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
+
+        Assert.Equal(existingContent, mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_AppendsDirectoryWhenNegationIsUnrelated()
+    {
+        const string existingContent = ".config/*\n!.config/settings.json\n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
+
+        Assert.Equal(".config/*\n!.config/settings.json\n.aspire/\n", mergedContent);
+    }
+
     [Fact]
     public void GitIgnoreMerger_TreatsEscapedNegationAsLiteral()
     {

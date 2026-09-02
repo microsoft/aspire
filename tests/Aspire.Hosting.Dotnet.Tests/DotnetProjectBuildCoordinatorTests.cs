@@ -217,31 +217,53 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task FileOnlyModelDoesNotCreateCoordinatedBuild()
+    public async Task FileOnlyModelCreatesDirectCoordinatedBuild()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var filePath = Path.Combine(builder.AppHostDirectory, "worker.cs");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
         var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        AssertBuildDependency(file.Resource, buildResource);
+        await using var app = builder.Build();
 
-        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
-        Assert.Empty(file.Resource.Annotations.OfType<WaitAnnotation>());
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(file.Resource);
-        var expected = new List<string> { "run", "--file", filePath, "--no-cache" };
-        AddExpectedConfiguration(builder, expected);
-        expected.Add("--no-launch-profile");
-        Assert.Equal(expected, args);
+        Assert.Equal([NormalizeProjectPath(filePath)], buildResource.ProjectPaths);
+        Assert.Equal(
+            filePath,
+            await buildResource.GetBuildTargetPathAsync(
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken));
+        var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var expectedBuildArgs = new List<string> { "build", filePath };
+        AddExpectedConfiguration(builder, expectedBuildArgs);
+        Assert.Equal(expectedBuildArgs, buildArgs);
+
+        var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
+        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache", "--no-build" };
+        AddExpectedConfiguration(builder, expectedFileArgs);
+        expectedFileArgs.Add("--no-launch-profile");
+        Assert.Equal(expectedFileArgs, fileArgs);
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task MixedModelBuildsOnlyProjectsAndGatesFileApp(bool fileFirst)
+    public async Task MixedModelSerializesProjectAndFileBuilds(bool fileFirst)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var projectPath = Path.Combine(builder.AppHostDirectory, "Api", "Api.csproj");
-        var filePath = Path.Combine(builder.AppHostDirectory, "worker", "worker.cs");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var fileDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "worker"));
+        var filePath = Path.Combine(fileDirectory.FullName, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
         IResourceBuilder<DotnetProjectResource> project;
         IResourceBuilder<DotnetProjectResource> file;
@@ -256,19 +278,106 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
         }
 
-        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
-        Assert.Equal([NormalizeProjectPath(projectPath)], buildResource.ProjectPaths);
-        AssertBuildDependency(project.Resource, buildResource);
-        AssertBuildDependency(file.Resource, buildResource);
+        await using var app = builder.Build();
 
-        var projectArgs = await ArgumentEvaluator.GetArgumentListAsync(project.Resource);
-        Assert.Equal("--no-build", projectArgs[3]);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource);
-        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache" };
+        var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        var projectBuild = Assert.Single(
+            buildResources,
+            build => build.ProjectPaths.SequenceEqual([NormalizeProjectPath(projectPath)]));
+        var fileBuild = Assert.Single(
+            buildResources,
+            build => build.ProjectPaths.SequenceEqual([NormalizeProjectPath(filePath)]));
+        Assert.EndsWith(
+            ".proj",
+            await projectBuild.GetBuildTargetPathAsync(
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken),
+            StringComparison.Ordinal);
+        Assert.Equal(
+            filePath,
+            await fileBuild.GetBuildTargetPathAsync(
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken));
+        AssertBuildDependency(
+            fileFirst ? projectBuild : fileBuild,
+            fileFirst ? fileBuild : projectBuild);
+        var finalBuild = buildResources[^1];
+        AssertBuildDependency(project.Resource, finalBuild);
+        AssertBuildDependency(file.Resource, finalBuild);
+
+        var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
+        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-cache", "--no-build" };
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FileAppsWithSharedProjectReferenceUseSerializedDirectBuilds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var sharedProject = CreateProjectFile(workspace.Path, "Shared", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(sharedProject)!, "SharedValue.cs"), """
+            namespace Shared;
+
+            public static class SharedValue
+            {
+                public static string Value => "shared";
+            }
+            """);
+        var firstPath = CreateFileApp(workspace.Path, "First", sharedProject);
+        var secondPath = CreateFileApp(workspace.Path, "Second", sharedProject);
+        var first = builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true);
+        var second = builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await Task.WhenAll(
+                app.ResourceNotifications.WaitForResourceAsync("first", KnownResourceStates.Finished, completionCts.Token),
+                app.ResourceNotifications.WaitForResourceAsync("second", KnownResourceStates.Finished, completionCts.Token));
+        }
+
+        var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Collection(
+            buildResources,
+            build => Assert.Equal([NormalizeProjectPath(firstPath)], build.ProjectPaths),
+            build => Assert.Equal([NormalizeProjectPath(secondPath)], build.ProjectPaths));
+        var buildTargets = await Task.WhenAll(buildResources.Select(build =>
+            build.GetBuildTargetPathAsync(NullLogger.Instance, TestContext.Current.CancellationToken)));
+        Assert.Equal([firstPath, secondPath], buildTargets);
+        AssertBuildDependency(buildResources[1], buildResources[0]);
+        AssertBuildDependency(first.Resource, buildResources[1]);
+        AssertBuildDependency(second.Resource, buildResources[1]);
+
+        foreach (var (resource, path) in new[] { (first.Resource, firstPath), (second.Resource, secondPath) })
+        {
+            var args = await ArgumentEvaluator.GetArgumentListAsync(resource, app.Services);
+            var expected = new List<string> { "run", "--file", path, "--no-cache", "--no-build" };
+            AddExpectedConfiguration(builder, expected);
+            expected.Add("--no-launch-profile");
+            Assert.Equal(expected, args);
+        }
+
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
     }
 
     [Fact]
@@ -1194,7 +1303,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RemovingEveryProjectRemovesBuildResourceAndFileAppDependency()
+    public async Task RemovingEveryProjectKeepsFileAppCoordinatedBuild()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -1215,16 +1324,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Same(initialBuildResource, buildResource);
+        Assert.Equal([NormalizeProjectPath(filePath)], buildResource.ProjectPaths);
+        Assert.Equal(
+            filePath,
+            await buildResource.GetBuildTargetPathAsync(
+                NullLogger.Instance,
+                TestContext.Current.CancellationToken));
+        AssertBuildDependency(file.Resource, buildResource);
         Assert.Equal(
             Array.Empty<WaitAnnotation>(),
-            file.Resource.Annotations
+            project.Resource.Annotations
                 .OfType<WaitAnnotation>()
                 .Where(annotation => ReferenceEquals(annotation.Resource, initialBuildResource))
                 .ToArray());
         Assert.Equal(
             Array.Empty<ResourceRelationshipAnnotation>(),
-            file.Resource.Annotations
+            project.Resource.Annotations
                 .OfType<ResourceRelationshipAnnotation>()
                 .Where(annotation => ReferenceEquals(annotation.Resource, initialBuildResource))
                 .ToArray());
@@ -1865,8 +1982,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.StopAsync(stopCts.Token);
     }
 
-    [Fact]
-    public async Task MissingProjectInExternalBuildDebugSessionUsesProcessFallback()
+    [Theory]
+    [InlineData("csproj", "--project")]
+    [InlineData("cs", "--file")]
+    public async Task MissingPathInExternalBuildDebugSessionUsesProcessFallback(
+        string extension,
+        string pathOption)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -1878,10 +1999,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             ProtocolsSupported = ["test"],
             SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.ProjectWithExternalBuild]
         });
-        var missingProject = Path.Combine(workspace.Path, "Missing", "Missing.csproj");
+        var missingPath = Path.Combine(workspace.Path, "Missing", $"Missing.{extension}");
         var missing = builder.AddDotnetProject(
             "missing",
-            missingProject,
+            missingPath,
             options => options.ExcludeLaunchProfile = true);
         await using var app = builder.Build();
 
@@ -1894,7 +2015,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             annotation => annotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
         Assert.False(missing.Resource.SupportsDebugging(builder.Configuration, out _));
         var args = await ArgumentEvaluator.GetArgumentListAsync(missing.Resource, app.Services);
-        Assert.Equal(["run", "--project", missingProject], args.Take(3));
+        Assert.Equal(["run", pathOption, missingPath], args.Take(3));
         Assert.DoesNotContain("--no-build", args);
     }
 
@@ -2324,6 +2445,20 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(directory.FullName, $"{name}.csproj");
         File.WriteAllText(projectPath, contents);
         return projectPath;
+    }
+
+    private static string CreateFileApp(string root, string name, string sharedProject)
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(root, name));
+        var appPath = Path.Combine(directory.FullName, $"{name}.cs");
+        var relativeSharedProject = Path.GetRelativePath(directory.FullName, sharedProject)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        File.WriteAllText(appPath, $$"""
+            #:project {{relativeSharedProject}}
+
+            System.Console.WriteLine(Shared.SharedValue.Value);
+            """);
+        return appPath;
     }
 
     private static string GetBuildCountPath(string projectPath) =>
