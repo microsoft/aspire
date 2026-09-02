@@ -130,12 +130,12 @@ internal static class NuGetConfigComposer
         var itemName = first.Name.LocalName;
         if (string.Equals(itemName, "add", StringComparison.OrdinalIgnoreCase))
         {
-            return string.Equals(GetAttributeValue(first, "key"), GetAttributeValue(second, "key"), StringComparison.Ordinal);
+            return string.Equals(GetAttributeValue(first, "key"), GetAttributeValue(second, "key"), StringComparison.OrdinalIgnoreCase);
         }
 
         if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.OrdinalIgnoreCase))
         {
-            return string.Equals(itemName, second.Name.LocalName, StringComparison.Ordinal);
+            return string.Equals(itemName, second.Name.LocalName, StringComparison.OrdinalIgnoreCase);
         }
 
         if (string.Equals(sectionName, "packageSourceMapping", StringComparison.OrdinalIgnoreCase) &&
