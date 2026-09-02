@@ -159,6 +159,29 @@ public class RadiusDeployParametersTests
         Assert.Same(rabbit.Resource, annotation.RabbitMqUserNames[userName.Resource]);
     }
 
+    [Fact]
+    public void BuildOptions_DropsRabbitMqUserName_WhenCallbackRemovesTheResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(infra =>
+            {
+                var rabbit = infra.ResourceTypeInstances.Single(i => i.BicepIdentifier.Contains("rabbit", StringComparison.Ordinal));
+                infra.ResourceTypeInstances.Remove(rabbit);
+            });
+        builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Empty(annotation.RabbitMqUserNames);
+    }
+
     /// <summary>
     /// One secret parameter used by <em>both</em> a container env var and a type-scoped recipe
     /// parameter is a valid model, but each allocator used to declare its own Bicep <c>param</c>

@@ -553,7 +553,7 @@ internal sealed class RadiusInfrastructureBuilder
             options.RecipeParameterBindings[identifier] = parameter;
         }
 
-        RecordDeployParameters();
+        RecordDeployParameters(options);
 
         return options;
     }
@@ -562,7 +562,7 @@ internal sealed class RadiusInfrastructureBuilder
     // environment resource so the deploy step can resolve each value at deploy time and pass it
     // via `rad deploy --parameters`. Replaces any prior annotation so a re-publish (e.g. repeated
     // BuildAsync calls) stays idempotent rather than accumulating stale mappings.
-    private void RecordDeployParameters()
+    private void RecordDeployParameters(RadiusInfrastructureOptions options)
     {
         foreach (var existing in _environment.Annotations.OfType<RadiusDeployParametersAnnotation>().ToList())
         {
@@ -580,8 +580,43 @@ internal sealed class RadiusInfrastructureBuilder
 
         if (deployParameters.Count > 0)
         {
-            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(deployParameters, _rabbitMqUserNames));
+            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(
+                deployParameters,
+                BuildLiveRabbitMqUserNames(options)));
         }
+    }
+
+    // _rabbitMqUserNames is populated while the broker's recipe inputs are projected, which happens
+    // before ConfigureRadiusInfrastructure callbacks run. A callback is free to drop a broker from
+    // options.ResourceTypeInstances, and its user-name parameter can still reach the deploy step
+    // through another consumer (a container env var, say). Carrying the stale mapping forward would
+    // fail `aspire deploy` with ASPIRERADIUS082 naming a broker the deployment does not contain, so
+    // only brokers whose construct survived the callbacks are validated at deploy time.
+    //
+    // A callback that swaps the construct out for a different instance is treated as a removal here,
+    // matching how RebuildProjectedTypeProperties reads liveInstances. That fails open — the guest
+    // check is skipped for the replacement — which is the safe direction: the publisher no longer
+    // owns the substituted resource, so it cannot claim the user name it emitted is still the one
+    // being provisioned.
+    private Dictionary<ParameterResource, IResource> BuildLiveRabbitMqUserNames(RadiusInfrastructureOptions options)
+    {
+        var live = new Dictionary<ParameterResource, IResource>(ReferenceEqualityComparer.Instance);
+        if (_rabbitMqUserNames.Count == 0)
+        {
+            return live;
+        }
+
+        var liveInstances = new HashSet<RadiusResourceTypeConstruct>(options.ResourceTypeInstances);
+        foreach (var (parameter, resource) in _rabbitMqUserNames)
+        {
+            if (_typeInstancesByResourceName.TryGetValue(resource.Name, out var construct) &&
+                liveInstances.Contains(construct))
+            {
+                live[parameter] = resource;
+            }
+        }
+
+        return live;
     }
 
     /// <summary>
