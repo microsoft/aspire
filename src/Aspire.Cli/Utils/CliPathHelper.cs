@@ -130,10 +130,11 @@ internal static class CliPathHelper
     /// feeds share the same stable-shaped <c>(id, version)</c> tuple and would otherwise
     /// collide in NuGet's cache.
     ///
-    /// The URL is trimmed and lower-cased before hashing so harmless variations (trailing
-    /// whitespace from a config file, hostname casing) don't fragment the cache. Hashing the
-    /// URL with <see cref="XxHash3"/> (non-cryptographic but very high quality) keeps any
-    /// embedded credentials out of the on-disk directory name even when the feed URL itself
+    /// The URL is trimmed and HTTP(S) URLs are canonicalized through <see cref="Uri"/> before
+    /// hashing so harmless scheme and hostname casing variations don't fragment the cache. Path
+    /// and query casing remains significant because servers can use both to distinguish feeds.
+    /// Hashing the URL with <see cref="XxHash3"/> (non-cryptographic but very high quality) keeps
+    /// any embedded credentials out of the on-disk directory name even when the feed URL itself
     /// contains them.
     /// </remarks>
     internal static string? ComputeStagingFeedCacheKey(string? feedUrl, int length = DefaultStagingFeedCacheKeyLength)
@@ -143,7 +144,13 @@ internal static class CliPathHelper
             return null;
         }
 
-        var normalized = feedUrl.Trim().ToLowerInvariant();
+        var normalized = feedUrl.Trim();
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            normalized = uri.AbsoluteUri;
+        }
+
         var bytes = Encoding.UTF8.GetBytes(normalized);
         // XxHash3 emits 8 bytes (64 bits) -> 16 hex chars; truncate to the requested length.
         var hex = Convert.ToHexString(XxHash3.Hash(bytes)).ToLowerInvariant();
