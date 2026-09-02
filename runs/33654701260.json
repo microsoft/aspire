@@ -1,0 +1,29 @@
+{
+  "run_id": 33654701260,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33654701260",
+  "analyzed_at": "2026-09-02T16:59:04Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19820,
+    "title": "Detect GitHub Copilot App as an agent client",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-copilot-app-detection",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19820"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 100334482985,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33654701260/job/100334482985",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' on the 'Run extension E2E tests' step; job logs were unavailable and no TRX test failures were extracted. The PR only modifies Aspire.Cli Copilot agent-detection source and tests (AgentClientKind.cs, CopilotAgentEnvironmentScanner.cs, CopilotAppInstallationDetector.cs, telemetry hooks, resx/xlf), none of which touch the VS Code extension (extension/) codebase. This matches a previously identified recurring flaky pattern for this specific E2E shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
