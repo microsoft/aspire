@@ -353,8 +353,6 @@ internal sealed class AgentInitCommand : BaseCommand
 
         foreach (var location in selectedLocations)
         {
-            context.AddSkillBaseDirectory(location.RelativeSkillDirectory);
-
             foreach (var skill in selectedSkills)
             {
                 // Playwright CLI is installed via PlaywrightCliInstaller, not as a static skill file

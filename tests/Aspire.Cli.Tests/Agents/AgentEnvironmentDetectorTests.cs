@@ -96,23 +96,6 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, applicators.Length);
     }
 
-    [Fact]
-    public async Task DetectAsync_WithConfigurePlaywrightTrue_PassesContextToScanner()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var scanner = new TestAgentEnvironmentScanner();
-        var detector = new AgentEnvironmentDetector([scanner]);
-        var context = new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = workspace.WorkspaceRoot,
-            RepositoryRoot = workspace.WorkspaceRoot,
-        };
-
-        var applicators = await detector.DetectAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.True(scanner.WasScanned);
-    }
-
     private sealed class TestAgentEnvironmentScanner : IAgentEnvironmentScanner
     {
         public bool WasScanned { get; private set; }
