@@ -3,7 +3,9 @@
 
 using Aspire.SelectTests;
 using Microsoft.Extensions.FileSystemGlobbing;
+using System.Text.Json;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
@@ -741,32 +743,47 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void CliStarterValidationArchivePathsMatchConsumedWorkflowRids()
     {
-        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
-        var expectedArchivePaths = s_cliStarterValidationJobIds
-            .Select(jobId => JobBlock(testsYml, jobId))
-            .Select(jobBlock =>
-            {
-                Assert.NotNull(jobBlock);
-                var buildJobMatch = System.Text.RegularExpressions.Regex.Match(
-                    jobBlock,
-                    @"\bbuild_cli_archive_[a-z0-9_]+\b");
-                Assert.True(buildJobMatch.Success, $"Starter job has no native CLI archive dependency:{Environment.NewLine}{jobBlock}");
+        var workflow = new YamlStream();
+        using (var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"))))
+        {
+            workflow.Load(reader);
+        }
 
-                var buildJobBlock = JobBlock(testsYml, buildJobMatch.Value);
-                Assert.NotNull(buildJobBlock);
-                var ridMatch = System.Text.RegularExpressions.Regex.Match(buildJobBlock, @"""rids"": ""([^""]+)""");
-                Assert.True(ridMatch.Success, $"CLI archive build job has no RID target:{Environment.NewLine}{buildJobBlock}");
+        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
+        var expectedArchivePaths = new List<string>();
 
-                return $"eng/clipack/Aspire.Cli.{ridMatch.Groups[1].Value}.csproj";
-            })
-            .Order(StringComparer.Ordinal);
+        foreach (var jobId in s_cliStarterValidationJobIds)
+        {
+            var starterJob = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
+            var needs = Assert.IsType<YamlSequenceNode>(starterJob.Children[new YamlScalarNode("needs")]);
+            var archiveJobId = Assert.Single(
+                needs.Children.OfType<YamlScalarNode>(),
+                node => node.Value?.StartsWith("build_cli_archive_", StringComparison.Ordinal) is true).Value;
+            Assert.NotNull(archiveJobId);
+
+            var archiveJob = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(archiveJobId)]);
+            Assert.Equal("./.github/workflows/build-cli-native-archives.yml", archiveJob.Children[new YamlScalarNode("uses")].ToString());
+            var inputs = Assert.IsType<YamlMappingNode>(archiveJob.Children[new YamlScalarNode("with")]);
+            var targetsJson = Assert.IsType<YamlScalarNode>(inputs.Children[new YamlScalarNode("targets")]).Value;
+            Assert.False(string.IsNullOrWhiteSpace(targetsJson), $"CLI archive build job '{archiveJobId}' has no targets input.");
+
+            using var targets = JsonDocument.Parse(targetsJson);
+            var target = Assert.Single(targets.RootElement.EnumerateArray());
+            Assert.True(target.TryGetProperty("rids", out var rid), $"CLI archive build job '{archiveJobId}' has no RID target.");
+            var ridValue = rid.GetString();
+            Assert.False(string.IsNullOrWhiteSpace(ridValue), $"CLI archive build job '{archiveJobId}' has an empty RID target.");
+
+            expectedArchivePaths.Add($"eng/clipack/Aspire.Cli.{ridValue}.csproj");
+        }
+
         var archiveRule = Assert.Single(
             s_map.PathRules,
             rule => rule.Targets.Contains("job:cli-starter-validation", StringComparer.Ordinal)
                 && rule.Paths.Contains("eng/clipack/Common.projitems", StringComparer.Ordinal));
 
         Assert.Equal(
-            expectedArchivePaths,
+            expectedArchivePaths.Order(StringComparer.Ordinal),
             archiveRule.Paths
                 .Where(path => path != "eng/clipack/Common.projitems")
                 .Order(StringComparer.Ordinal));
