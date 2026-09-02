@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
+import { stat } from 'fs/promises';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { extensionLogOutputChannel } from './logging';
@@ -80,6 +81,7 @@ export type CliUpdateRecommendationOptions = Omit<CliVersionStatusOptions, 'time
 export interface CliVersionInfo {
     cliPath: string;
     version: string;
+    executableIdentity: string;
 }
 
 export type CliUpdateRecommendation =
@@ -88,7 +90,9 @@ export type CliUpdateRecommendation =
     | { status: 'ineligible'; currentVersion: string }
     | { status: 'unavailable' };
 
-interface CliVersionStatus extends CliVersionInfo {
+interface CliVersionStatus {
+    cliPath: string;
+    version: string;
     status: Exclude<CapabilityStatus, 'unavailable'>;
 }
 
@@ -261,7 +265,17 @@ export class ConfigInfoProvider {
         }
 
         const version = await this._probeCliVersion(cliPath, remainingTimeoutMs, options?.cancellationToken);
-        return version ? { cliPath, version: version.value } : null;
+        if (!version) {
+            return null;
+        }
+
+        const executableIdentity = await getCliExecutableIdentity(
+            cliPath,
+            timeoutMs - (Date.now() - startTime),
+            options?.cancellationToken);
+        return executableIdentity
+            ? { cliPath, version: version.value, executableIdentity }
+            : null;
     }
 
     /**
@@ -758,6 +772,38 @@ export class ConfigInfoProvider {
         if (!suppressErrors) {
             vscode.window.showErrorMessage(message);
         }
+    }
+}
+
+async function getCliExecutableIdentity(
+    cliPath: string,
+    timeoutMs: number,
+    cancellationToken?: vscode.CancellationToken,
+): Promise<string | undefined> {
+    if (timeoutMs <= 0 || cancellationToken?.isCancellationRequested) {
+        return undefined;
+    }
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let cancellation: vscode.Disposable | undefined;
+    const callerCompletion = new Promise<undefined>(resolve => {
+        timeout = setTimeout(() => resolve(undefined), timeoutMs);
+        cancellation = cancellationToken?.onCancellationRequested(() => resolve(undefined));
+    });
+    const fileIdentity = stat(cliPath, { bigint: true })
+        // Device/inode detects atomic replacement; size and timestamps also detect in-place rewrites.
+        .then(value =>
+            `${value.dev}:${value.ino}:${value.mode}:${value.size}:${value.mtimeNs}:${value.ctimeNs}`)
+        .catch(() => undefined);
+
+    try {
+        return await Promise.race([fileIdentity, callerCompletion]);
+    }
+    finally {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        cancellation?.dispose();
     }
 }
 

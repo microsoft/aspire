@@ -16,10 +16,13 @@ import {
 } from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliNotifier', () => {
+    const defaultExecutableIdentity = 'identity-1';
+
     class FakeVersionProvider {
         identity: CliVersionInfo | null = {
             cliPath: '/cli/aspire',
             version: '13.5.0',
+            executableIdentity: defaultExecutableIdentity,
         };
         identityPromise: Promise<CliVersionInfo | null> | undefined;
         currentVersion: CliVersionInfo | null | undefined;
@@ -113,6 +116,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.identity = {
             cliPath: '/workspace/a/.aspire/bin/aspire',
             version: '13.4.0',
+            executableIdentity: defaultExecutableIdentity,
         };
         versionProvider.recommendation = {
             status: 'available',
@@ -308,6 +312,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.identity = {
             cliPath: '/cli/aspire',
             version: '13.5.1',
+            executableIdentity: 'identity-2',
         };
         versionProvider.recommendation = {
             status: 'none',
@@ -316,6 +321,33 @@ suite('outdatedCliNotifier', () => {
         await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
 
         assert.strictEqual(versionProvider.recommendationCalls.length, 4);
+        notifier.dispose();
+    });
+
+    test('refreshes the recommendation when the executable changes without a version change', async () => {
+        let now = 0;
+        const { notifier, versionProvider, surface } = createNotifier(() => now);
+        versionProvider.recommendation = {
+            status: 'ineligible',
+            currentVersion: '13.5.0',
+        };
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        now = 5 * 60 * 1_000;
+        versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.5.0',
+            executableIdentity: 'identity-2',
+        };
+        versionProvider.recommendation = {
+            status: 'available',
+            currentVersion: '13.5.0',
+            version: '13.6.0',
+        };
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(versionProvider.recommendationCalls.length, 2);
+        assert.strictEqual(surface.warnings.length, 1);
         notifier.dispose();
     });
 
@@ -333,6 +365,7 @@ suite('outdatedCliNotifier', () => {
                 resolve({
                     cliPath: options?.cliPath ?? '/cli/aspire',
                     version: '13.5.0',
+                    executableIdentity: options?.cliPath ?? defaultExecutableIdentity,
                 });
             }));
         };
@@ -392,6 +425,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.identity = {
             cliPath: '/shared/aspire',
             version: '13.5.0',
+            executableIdentity: defaultExecutableIdentity,
         };
         versionProvider.getCliUpdateRecommendation = async options => {
             versionProvider.recommendationCalls.push(options);
@@ -432,6 +466,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.identity = {
             cliPath: '/shared/aspire',
             version: '13.5.0',
+            executableIdentity: defaultExecutableIdentity,
         };
         versionProvider.getCliUpdateRecommendation = async options => {
             versionProvider.recommendationCalls.push(options);
@@ -465,6 +500,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.identity = {
             cliPath: '/cli/aspire',
             version: '13.7.0-preview.1',
+            executableIdentity: defaultExecutableIdentity,
         };
         versionProvider.recommendation = {
             status: 'available',
@@ -494,12 +530,14 @@ suite('outdatedCliNotifier', () => {
                     releaseOlderProbe = () => resolve({
                         cliPath: '/cli/aspire',
                         version: '13.5.0',
+                        executableIdentity: defaultExecutableIdentity,
                     });
                 });
             }
             return {
                 cliPath: '/cli/aspire',
-                version: '13.5.1',
+                version: '13.5.0',
+                executableIdentity: 'identity-2',
             };
         };
         const backgroundCheck = notifier.notifyIfOutdated(
@@ -516,6 +554,19 @@ suite('outdatedCliNotifier', () => {
         await Promise.all([notification, backgroundCheck]);
 
         assert.strictEqual(versionProvider.versionCalls.length, 2);
+        assert.deepStrictEqual(surface.commands, []);
+
+        surface.selectionPromise = undefined;
+        surface.selection = undefined;
+        await notifier.notifyIfOutdated(
+            workspaceFolderCliPathTarget({
+                uri: vscode.Uri.file('/replacement'),
+                name: 'replacement',
+                index: 0,
+            }),
+            '/cli/aspire');
+        assert.strictEqual(surface.warnings.length, 2);
+        assert.strictEqual(versionProvider.versionCalls.length, 3);
         assert.deepStrictEqual(surface.commands, []);
 
         const second = createNotifier();

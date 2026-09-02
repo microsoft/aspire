@@ -109,11 +109,12 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
-        if (this._notifiedCliVersions.has(notificationKey) ||
+        const sessionNotificationKey = getSessionNotificationKey(notification.cli);
+        if (this._notifiedCliVersions.has(sessionNotificationKey) ||
             this._persistentlySuppressedCliVersions.has(notificationKey)) {
             return;
         }
-        this._notifiedCliVersions.add(notificationKey);
+        this._notifiedCliVersions.add(sessionNotificationKey);
 
         let claim: OutdatedCliNotificationClaim | undefined;
         if (this._suppressionStore) {
@@ -121,7 +122,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
                 claim = await this._suppressionStore.tryClaimNotification(notificationKey);
             }
             catch (error) {
-                this._notifiedCliVersions.delete(notificationKey);
+                this._notifiedCliVersions.delete(sessionNotificationKey);
                 extensionLogOutputChannel.warn(`Unable to claim Aspire CLI update notification: ${String(error)}`);
                 this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
                 return;
@@ -132,14 +133,14 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             }
             try {
                 if (!claim.isValid()) {
-                    this._notifiedCliVersions.delete(notificationKey);
+                    this._notifiedCliVersions.delete(sessionNotificationKey);
                     this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
                     await this._releaseNotificationClaim(claim);
                     return;
                 }
             }
             catch (error) {
-                this._notifiedCliVersions.delete(notificationKey);
+                this._notifiedCliVersions.delete(sessionNotificationKey);
                 extensionLogOutputChannel.warn(`Unable to validate Aspire CLI update notification claim: ${String(error)}`);
                 this._invalidateRecommendationAfterSuppressionFailure(checkKey, notification.cli);
                 await this._releaseNotificationClaim(claim);
@@ -184,7 +185,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         if (this._disposed) {
             return;
         }
-        if (!currentVersionProbe || currentVersionProbe.version !== notification.cli.version) {
+        if (!currentVersionProbe || !areCliIdentitiesEqual(currentVersionProbe, notification.cli)) {
             return;
         }
 
@@ -400,6 +401,10 @@ function getNotificationKey(cliPath: string, version: string): string {
     return `${getComparisonKey(path.normalize(cliPath))}\u0000${version}`;
 }
 
+function getSessionNotificationKey(cli: CliVersionInfo): string {
+    return `${getNotificationKey(cli.cliPath, cli.version)}\u0000${cli.executableIdentity}`;
+}
+
 function getCliCheckKey(
     target: CliPathResolutionTarget,
     cliPath: string,
@@ -409,7 +414,8 @@ function getCliCheckKey(
 }
 
 function areCliIdentitiesEqual(left: CliVersionInfo | undefined, right: CliVersionInfo): boolean {
-    return left?.version === right.version;
+    return left?.version === right.version &&
+        left.executableIdentity === right.executableIdentity;
 }
 
 class AsyncSerialQueue {

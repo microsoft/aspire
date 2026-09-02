@@ -4,6 +4,9 @@ import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
+import { mkdtemp, rename, rm, writeFile } from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import { ConfigInfoProvider, getConfigInfo, parseCliUpdateRecommendationOutput, parseConfigInfoOutput } from '../utils/configInfoProvider';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../utils/process/cliProcess';
@@ -394,6 +397,40 @@ suite('configInfoProvider tests', () => {
             ['doctor', '--format', 'json'],
         ]);
         assert.strictEqual(showErrorMessage.callCount, 0);
+    });
+
+    test('getCliVersion identifies an executable replaced with the same version', async () => {
+        const directory = await mkdtemp(path.join(os.tmpdir(), 'aspire-cli-version-'));
+        const cliPath = path.join(directory, 'aspire');
+        const replacementPath = path.join(directory, 'replacement');
+        await writeFile(cliPath, 'first executable');
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => cliPath,
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, cliPath);
+            assert.deepStrictEqual(args, ['--version']);
+            options?.stdoutCallback?.('13.5.0');
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const first = await provider.getCliVersion({ cliPath });
+            await writeFile(replacementPath, 'replacement executable');
+            await rename(replacementPath, cliPath);
+            const second = await provider.getCliVersion({ cliPath });
+
+            assert.strictEqual(first?.version, '13.5.0');
+            assert.strictEqual(second?.version, '13.5.0');
+            assert.notStrictEqual(first?.executableIdentity, second?.executableIdentity);
+            assert.strictEqual(spawnStub.callCount, 2);
+        }
+        finally {
+            await rm(directory, { recursive: true, force: true });
+        }
     });
 
     test('version and update probes do not settle before cancellation termination completes', async () => {
