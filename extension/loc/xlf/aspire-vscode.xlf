@@ -85,11 +85,17 @@
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireTerminalClosedBeforeProcessStarted">
+      <source xml:lang="en">Aspire terminal closed before its process started.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.terminalCommandArgumentControlCharacters">
       <source xml:lang="en">Aspire terminal command arguments cannot contain control characters.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.terminalCommandUnsafeLiteral">
       <source xml:lang="en">Aspire terminal command syntax can only contain command names and flags.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireTerminalProcessFailedToStart">
+      <source xml:lang="en">Aspire terminal process failed to start.</source>
     </trans-unit>
     <trans-unit id="extension.debug.defaultConfiguration.name">
       <source xml:lang="en">Aspire: Launch default AppHost</source>
@@ -219,6 +225,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoInspectorAddressUnavailable">
+      <source xml:lang="en">Could not reserve a loopback address for the Deno inspector.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.createNewAspireAppLabel">
       <source xml:lang="en">Create a new Aspire app</source>
@@ -924,6 +933,9 @@
     </trans-unit>
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoAppHostRunCommandMissing">
+      <source xml:lang="en">The Deno AppHost command does not contain the required &apos;run&apos; subcommand.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.javaAppHostCommandNotRecognized">
       <source xml:lang="en">The Java AppHost launch command was not recognized and cannot be debugged.</source>
