@@ -4,7 +4,10 @@ This document explains how the automatic CI rerun system works and how to config
 
 ## How it works at a glance
 
-When a `CI` pull request run fails on GitHub Actions, a companion workflow automatically analyzes the failure, determines whether it was caused by transient infrastructure or test issues, and — if safe — requests GitHub to rerun the failed jobs. It also posts a comment on the PR explaining what it did and why.
+The companion workflow handles two `CI` failure scenarios:
+
+- **Pull requests:** analyze the failure, determine whether it is retry-safe, rerun the failed jobs, and post a PR comment.
+- **Rolling main builds:** unconditionally rerun the failed jobs once, provided main still points at the failed run's commit.
 
 **Scheduled `Outerloop Tests` runs use a separate, simpler workflow.** Outerloop runs have no associated PR, so they are rerun unconditionally (no analysis, no PR comment) with the same attempt cadence. See [Auto-rerun outerloop failures](auto-rerun-outerloop-failures.md).
 
@@ -49,9 +52,25 @@ Passes 1–2 are hardcoded because they target well-known infrastructure signatu
 | Trigger | Behavior |
 |---------|----------|
 | **Automatic** (`workflow_run` on `CI` completion) | Runs whenever a `CI` pull request workflow concludes with failure. No manual action needed. |
+| **Rolling main** (`workflow_run` on `CI` completion) | Gives the first failed attempt for the current main commit one unconditional rerun. |
 | **Manual** (`workflow_dispatch`) | Enter a `CI` run ID to analyze. Supports a `dry_run` option that produces the analysis summary without actually requesting a rerun. |
 
-Both trigger paths use the same analysis and safety rails. The only difference is how the source run is identified.
+The automatic PR and manual paths use the same analysis and PR safety rails. The rolling-main path is a separate job in the same workflow and does not perform PR-specific analysis or comments.
+
+## Rolling main builds
+
+A failed `push` run for `main` gets one automatic rerun:
+
+1. Only attempt 1 is eligible, so the run can have at most 2 total attempts.
+2. Immediately before requesting the rerun, the workflow reads the current `main` ref.
+3. If `main` no longer points at the failed run's commit, the rerun is skipped.
+4. Otherwise, GitHub reruns all failed jobs and their dependent jobs.
+
+The live ref check protects the main concurrency queue. A rerun is another attempt of the original workflow run and participates in the same concurrency group. GitHub keeps at most one running and one pending run in a concurrency group, and a newly queued run replaces the existing pending run. Retrying a stale failure could therefore cancel a newer pending main build.
+
+The `ci_failure_tracker` job in [`ci.yml`](../../.github/workflows/ci.yml) coordinates issue reporting with this retry. A failure on main attempt 1 is not reported. Because GitHub reruns dependent jobs, the tracker runs again on attempt 2: it files or updates the red-main issue if the retry still fails, or closes an existing issue when the retry succeeds. Release branches do not use this rolling retry and remain reportable on attempt 1.
+
+If the retry job fails, is cancelled, or is unexpectedly skipped, a dependent fallback job reports the source failure. This preserves red-main visibility when the retry automation fails.
 
 ## Configuring test failure retry patterns
 
@@ -177,7 +196,7 @@ To test how the workflow would analyze a specific failed CI run without triggeri
 3. Check **dry_run**
 4. Inspect the workflow summary for matched jobs, matched tests, and whether a rerun would have been requested
 
-## Safety rails
+## PR safety rails
 
 The workflow is intentionally conservative. All of these conditions must be met for a rerun to be requested:
 
@@ -224,22 +243,24 @@ The workflow identifies the associated PR from the `workflow_run` event payload.
 |------|------|
 | [`.github/workflows/auto-rerun-transient-ci-failures.yml`](../../.github/workflows/auto-rerun-transient-ci-failures.yml) | YAML workflow: orchestration, GitHub API calls, artifact download, TRX file I/O |
 | [`.github/workflows/auto-rerun-transient-ci-failures.js`](../../.github/workflows/auto-rerun-transient-ci-failures.js) | JavaScript module: all testable logic — pattern matching, job classification, TRX parsing, promotion, summary formatting |
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Defers main failure issue creation until the rolling retry attempt fails |
 | [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) | Configuration: test failure and job failure patterns |
 | [`tests/.../auto-rerun-transient-ci-failures.harness.js`](../../tests/Infrastructure.Tests/WorkflowScripts/auto-rerun-transient-ci-failures.harness.js) | Node.js test harness: bridges C# xUnit tests to the JS module functions |
 | [`tests/.../AutoRerunTransientCiFailuresTests.cs`](../../tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs) | C# test class: behavior-focused tests covering all matcher logic |
+| [`tests/.../ExtensionReleaseFastPathWorkflowTests.cs`](../../tests/Infrastructure.Tests/WorkflowScripts/ExtensionReleaseFastPathWorkflowTests.cs) | C# YAML contract test for deferred main failure reporting |
 
 The JS module is intentionally separated from the YAML workflow so that all classification, matching, and formatting logic can be tested via the Node.js harness without mocking GitHub APIs. The YAML workflow only handles orchestration: fetching jobs, downloading artifacts, and calling the GitHub rerun API.
 
 ## Tests
 
-The automated tests live in `tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs`.
+The automated tests live in `tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs` and `ExtensionReleaseFastPathWorkflowTests.cs`.
 
 They are intentionally behavior-focused rather than regex-focused:
 
 - they use representative fixtures for each supported behavior
 - they keep representative job and step fixtures anchored to the current CI workflow names so matcher coverage does not drift from the implementation
 - they cover the mixed-failure veto and ignored-step override explicitly
-- they keep only a minimal set of YAML contract checks for safety rails such as the optional manual `dry_run` override, up-to-three-attempt automatic reruns, enabling manual reruns through `workflow_dispatch`, and gating the rerun job on `rerun_execution_eligible`
+- they keep YAML contract checks for PR safety rails, the rolling-main one-retry/current-commit gate, and deferred main failure reporting
 - they validate the `eng/test-retry-patterns.json` config structure and regex compilation in Node.js (V8)
 - they test pattern matching functions (substring, regex, AND/OR logic, disabled rules)
 - they test TRX parsing, output capping, XML entity decoding, and the `analyzeTrxFiles` deduplication
@@ -251,7 +272,8 @@ They are intentionally behavior-focused rather than regex-focused:
 ```bash
 dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj --no-launch-profile -- \
   --filter-class "*.AutoRerunTransientCiFailuresTests" \
+  --filter-class "*.ExtensionReleaseFastPathWorkflowTests" \
   --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
-These tests require Node.js to be installed (the harness invokes `node` to run the JS module).
+The auto-rerun tests require Node.js to be installed (the harness invokes `node` to run the JS module).

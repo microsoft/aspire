@@ -942,6 +942,23 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     }
 
     [Fact]
+    public async Task WorkflowYamlRetriesOnlyFirstFailureForCurrentMainPush()
+    {
+        string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
+
+        Assert.Contains("rerun-rolling-ci-failure:", workflowText);
+        Assert.Contains("github.event.workflow_run.event == 'push'", workflowText);
+        Assert.Contains("github.event.workflow_run.head_branch == 'main'", workflowText);
+        Assert.Contains("github.event.workflow_run.conclusion == 'failure'", workflowText);
+        Assert.Contains("github.event.workflow_run.run_attempt == 1", workflowText);
+        Assert.Contains("const currentMain = await github.rest.git.getRef({", workflowText);
+        Assert.Contains("currentMain.data.object.sha !== sourceRun.head_sha", workflowText);
+        Assert.Contains("report-unretried-rolling-ci-failure:", workflowText);
+        Assert.Contains("needs.rerun-rolling-ci-failure.result != 'success'", workflowText);
+        Assert.Contains("report-ci-failure.js').reportFailure({", workflowText);
+    }
+
+    [Fact]
     [RequiresTools(["node"])]
     public async Task WriteAnalysisSummaryUsesExplicitOutcomeHeadingAndClickableAnalyzedRunLink()
     {

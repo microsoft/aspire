@@ -1,5 +1,6 @@
-# Analyzes failed CI PR runs for retry-safe transient failures and requests reruns for
-# the matched jobs through GitHub's job-rerun API, which also reruns dependent jobs.
+# Retries failed CI runs through GitHub's job-rerun API, which also reruns dependent
+# jobs. PR runs use the transient-failure analysis below. A current main push gets one
+# unconditional retry without PR-specific analysis or comments.
 # For the supported behaviors and safety rails, see
 # docs/ci/auto-rerun-transient-ci-failures.md.
 name: Auto rerun transient CI failures
@@ -26,6 +27,92 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rerun-rolling-ci-failure:
+    name: Rerun rolling CI failure
+    # Rolling CI gets one retry (attempt 1 -> attempt 2). Before requesting it, the
+    # step verifies that main still points at this run's commit. Retrying a stale run
+    # can replace a newer pending run in GitHub's concurrency group.
+    if: >-
+      ${{
+          github.repository_owner == 'microsoft' &&
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.conclusion == 'failure' &&
+          github.event.workflow_run.run_attempt == 1
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Rerun failed jobs if main has not advanced
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const sourceRun = context.payload.workflow_run;
+            const currentMain = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/main',
+            });
+
+            if (currentMain.data.object.sha !== sourceRun.head_sha) {
+              core.notice(`Skipping retry for ${sourceRun.head_sha}: main is now ${currentMain.data.object.sha}.`);
+              return;
+            }
+
+            await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: sourceRun.id,
+            });
+
+  report-unretried-rolling-ci-failure:
+    name: Report rolling CI failure when retry is unavailable
+    needs: [rerun-rolling-ci-failure]
+    # The source run deliberately suppresses its attempt-1 issue because the job
+    # above owns the retry. If that job fails, is cancelled, or is unexpectedly
+    # skipped, report the source failure so main cannot remain silently red.
+    if: >-
+      ${{
+          always() &&
+          github.repository_owner == 'microsoft' &&
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.conclusion == 'failure' &&
+          github.event.workflow_run.run_attempt == 1 &&
+          needs.rerun-rolling-ci-failure.result != 'success'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout failure reporting code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Report source CI failure
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const sourceRun = context.payload.workflow_run;
+            process.env.REF = 'main';
+
+            await require('./.github/workflows/report-ci-failure.js').reportFailure({
+              github,
+              context: {
+                repo: context.repo,
+                runId: sourceRun.id,
+                runNumber: sourceRun.run_number,
+                sha: sourceRun.head_sha,
+              },
+              core,
+            });
+
   analyze-transient-failures:
     name: Analyze transient CI failures
     if: >-

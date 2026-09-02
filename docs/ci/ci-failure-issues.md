@@ -1,11 +1,11 @@
 # Red-main CI failure issues
 
 The `CI` workflow ([`ci.yml`](../../.github/workflows/ci.yml)) runs on every push
-to a protected branch (`main`, `release/**`). When such a push fails CI the branch
-is "red", and — unlike a PR failure, which the author sees in their own checks —
-nobody necessarily owns it. This mechanism files a single deduplicated GitHub
-issue per branch when a push is red, and **closes it automatically** when a later
-push to the same branch is green.
+to a protected branch (`main`, `release/**`). When such a push remains red after
+its applicable retry policy, and — unlike a PR failure, which the author sees in
+their own checks — nobody necessarily owns it, this mechanism files a single
+deduplicated GitHub issue per branch. It **closes the issue automatically** when a
+later push to the same branch is green.
 
 It is a consumer of the shared, repo-agnostic tracking-issue engine
 ([`tracking-issue.js`](../../.github/workflows/tracking-issue.js)), alongside the
@@ -32,7 +32,7 @@ embeds the ref and each branch gets its own issue:
 
 ## What gets filed
 
-When a push to a protected branch fails CI:
+When a push to a protected branch has a reportable CI failure:
 
 - **Title:** `CI failing on <ref>`, with the ref in backticks — for example, a
   red `main` produces the title ``CI failing on `main` ``.
@@ -51,9 +51,26 @@ the same run.
 
 `ci.yml` runs on every push, so a green push to the branch is the most timely
 signal that it is no longer red — there is no need to wait for an external poll.
-The same `ci_failure_tracker` job that files the issue also closes the branch's
-open issue (with a "CI is green again" comment) when a later push to the same
-branch passes CI.
+The `ci_failure_tracker` job normally files the issue and also closes the
+branch's open issue (with a "CI is green again" comment) when a later push to the
+same branch passes CI. The rolling retry workflow calls the same reporter
+directly only when it cannot queue the retry.
+
+## Main retry coordination
+
+The [automatic CI rerun workflow](auto-rerun-transient-ci-failures.md) gives a
+failed rolling build for the current `main` commit one retry. The failure tracker
+uses `github.run_attempt` to avoid reporting the first failed attempt:
+
+- A failed main attempt 1 is not reported while the external workflow requests the retry.
+- If attempt 2 still fails, the rerun API reruns the dependent failure tracker and it files or updates the issue.
+- If attempt 2 succeeds, the rerun tracker closes any existing issue.
+- If the external retry job does not complete successfully, a dependent fallback job reports the attempt 1 failure.
+- Release branches have no automatic rolling retry, so their failures remain reportable on attempt 1.
+
+If `main` has advanced before the retry is requested, the external workflow skips
+the stale retry so it cannot replace a newer pending main build. The newer build
+becomes the authoritative branch signal.
 
 The `autoClose:true` body stamp records this policy on the issue itself, so the
 scheduled [watchdog](monitor-scheduled-workflows.md) can also close it as a
@@ -63,11 +80,11 @@ such stamp.
 
 ### Why explicit `needs.*.result` checks
 
-A single job (`ci_failure_tracker`) handles both filing and closing: it runs on
-every push (`if: always()`) and the script opens or closes based on the aggregate
-CI result the workflow passes in env:
+The `ci_failure_tracker` job handles normal filing and closing: it runs on every
+push (`if: always()`) and the script opens or closes based on the aggregate CI
+result the workflow passes in env:
 
-- `CI_RED` = `contains(needs.*.result, 'failure')` — file/update the issue.
+- `CI_RED` = a dependency failed and either the branch is not `main` or this is a retry attempt — file/update the issue.
 - `CI_GREEN` = `prepare_for_ci`, `tests`, and `stabilization_check` all `success`
   — close the issue.
 
