@@ -342,8 +342,13 @@ public static class AzureConnectorNamespaceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.ObjectId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.TenantId);
+        ValidateEntraPrincipalIds(
+            options.ObjectId,
+            options.TenantId,
+            "connection access policy",
+            nameof(options.ObjectId),
+            nameof(options.TenantId),
+            nameof(options));
         if (builder.Resource.IsExisting)
         {
             throw new InvalidOperationException(
@@ -666,23 +671,40 @@ public static class AzureConnectorNamespaceExtensions
 
     private static void ValidateMcpAccessPolicyOptions(AzureConnectorNamespaceMcpAccessPolicyOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.ObjectId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.TenantId);
-        if (!Guid.TryParse(options.ObjectId, out _))
-        {
-            throw new ArgumentException("The MCP access policy object ID must be a valid GUID.", nameof(options));
-        }
-
-        if (!Guid.TryParse(options.TenantId, out _))
-        {
-            throw new ArgumentException("The MCP access policy tenant ID must be a valid GUID.", nameof(options));
-        }
+        ValidateEntraPrincipalIds(
+            options.ObjectId,
+            options.TenantId,
+            "MCP access policy",
+            nameof(options.ObjectId),
+            nameof(options.TenantId),
+            nameof(options));
 
         if (!Enum.IsDefined(options.PrincipalType))
         {
             throw new ArgumentException(
                 $"'{options.PrincipalType}' is not a supported MCP access policy principal type.",
                 nameof(options));
+        }
+    }
+
+    private static void ValidateEntraPrincipalIds(
+        string objectId,
+        string tenantId,
+        string policyDescription,
+        string objectIdParamName,
+        string tenantIdParamName,
+        string paramName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(objectId, objectIdParamName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId, tenantIdParamName);
+        if (!Guid.TryParse(objectId, out _))
+        {
+            throw new ArgumentException($"The {policyDescription} object ID must be a valid GUID.", paramName);
+        }
+
+        if (!Guid.TryParse(tenantId, out _))
+        {
+            throw new ArgumentException($"The {policyDescription} tenant ID must be a valid GUID.", paramName);
         }
     }
 

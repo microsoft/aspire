@@ -105,6 +105,8 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 * `WithAccessPolicy` on an MCP server configuration grants an Entra user or group permission to call its MCP endpoint. MCP access policies do not currently support managed identities or service principals.
 * Do not put credentials, tokens, or other secrets in MCP descriptions or operation metadata.
 
+Aspire provisions Connector Namespace resources through incremental ARM deployments. Removing a connection access policy, MCP access policy, or MCP server configuration from the AppHost does not delete a previously deployed Azure child resource. To revoke access or retire a configuration, delete it explicitly in Azure or tear down the provisioning environment.
+
 Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting` and `AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references.
 
 When adding a new access policy beneath an existing Connector Namespace, configure the Azure deployment location to match the existing namespace location. Bicep cannot read an existing resource's location early enough to assign the child resource location automatically.

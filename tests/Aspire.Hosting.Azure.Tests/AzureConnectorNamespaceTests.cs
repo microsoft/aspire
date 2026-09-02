@@ -484,6 +484,68 @@ public class AzureConnectorNamespaceTests
         Assert.False(connection.Resource.IsExisting);
     }
 
+    [Theory]
+    [InlineData(
+        "not-a-guid",
+        "22222222-2222-2222-2222-222222222222",
+        "The connection access policy object ID must be a valid GUID. (Parameter 'options')")]
+    [InlineData(
+        "11111111-1111-1111-1111-111111111111",
+        "not-a-guid",
+        "The connection access policy tenant ID must be a valid GUID. (Parameter 'options')")]
+    public void ConnectionAccessPolicyRejectsInvalidPrincipalIds(
+        string objectId,
+        string tenantId,
+        string expectedMessage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorNamespace("gateway")
+            .AddConnection("office365", "office365");
+
+        var exception = Assert.Throws<ArgumentException>(() => connection.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceAccessPolicyOptions
+            {
+                ObjectId = objectId,
+                TenantId = tenantId
+            }));
+
+        Assert.Equal(expectedMessage, exception.Message);
+        Assert.Empty(connection.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void AccessPoliciesIdentifyEmptyPrincipalIdOptions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        var mcp = gateway.AddMcpServerConfig("mcp");
+
+        var connectionException = Assert.Throws<ArgumentException>(() => connection.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceAccessPolicyOptions
+            {
+                ObjectId = string.Empty,
+                TenantId = "22222222-2222-2222-2222-222222222222"
+            }));
+        var mcpException = Assert.Throws<ArgumentException>(() => mcp.WithAccessPolicy(
+            "reader",
+            new AzureConnectorNamespaceMcpAccessPolicyOptions
+            {
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = string.Empty,
+                PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
+            }));
+
+        Assert.Equal(nameof(AzureConnectorNamespaceAccessPolicyOptions.ObjectId), connectionException.ParamName);
+        Assert.Equal(nameof(AzureConnectorNamespaceMcpAccessPolicyOptions.TenantId), mcpException.ParamName);
+        Assert.Empty(connection.Resource.AccessPolicies);
+        Assert.Empty(mcp.Resource.AccessPolicies);
+    }
+
     [Fact]
     public void ExistingConnectorConnectionRejectsExplicitAccessPolicy()
     {
