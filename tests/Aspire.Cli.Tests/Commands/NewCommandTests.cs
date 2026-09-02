@@ -244,7 +244,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var starterTestFrameworkOption = starterTemplate.Options.Single(option => option.Name == "--test-framework");
 
         Assert.Equal("The path to the Aspire AppHost project file", appHostOption.Description);
-        Assert.Equal("Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.net.", integrationTestFrameworkOption.Description);
+        Assert.Equal("Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.", integrationTestFrameworkOption.Description);
         Assert.Equal("Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.", starterTestFrameworkOption.Description);
     }
 
