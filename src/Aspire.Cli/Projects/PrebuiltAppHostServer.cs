@@ -1494,7 +1494,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 }
                 throw;
             }
-            }
         }
 
         public void Dispose()
