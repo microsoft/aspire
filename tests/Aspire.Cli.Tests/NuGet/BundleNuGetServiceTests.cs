@@ -7,6 +7,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -496,6 +497,70 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             "integration-package-probe-manifest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
         File.WriteAllText(manifestPath, "{ invalid json");
+
+        List<string[]> invocations = [];
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) =>
+            {
+                invocations.Add(args.ToArray());
+                if (args.Contains("manifest"))
+                {
+                    File.WriteAllText(manifestPath, """{"managedAssemblies":[],"nativeLibraries":[]}""");
+                }
+            }
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(manifestPath, result.ManifestPath);
+        Assert.Equal(2, invocations.Count);
+        Assert.Equal("restore", invocations[0][1]);
+        Assert.Equal("manifest", invocations[1][1]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RestorePackagesAsync_RegeneratesCachedManifestWhenReferencedAssetIsMissing(bool managedAsset)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
+        var packageHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", null, managedPath);
+        var manifestPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            packageHash,
+            IntegrationPackageProbeManifest.FileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+
+        var missingAssetPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cleared-packages", "missing.dll");
+        var staleManifest = managedAsset
+            ? IntegrationPackageProbeManifest.Create(
+                [new IntegrationPackageManagedAssembly { Name = "Missing", Path = missingAssetPath }],
+                [])
+            : IntegrationPackageProbeManifest.Create(
+                [],
+                [new IntegrationPackageNativeLibrary { FileName = "missing.dll", Path = missingAssetPath }]);
+        await IntegrationPackageProbeManifest.WriteAsync(manifestPath, staleManifest);
 
         List<string[]> invocations = [];
         var executionFactory = new TestProcessExecutionFactory
