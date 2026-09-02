@@ -287,7 +287,20 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             File.Exists(lockFilePath),
             $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} install to create '{lockFilePath}'.");
 
-        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev"));
+        var watchCommand = TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev");
+        if (toolchain == "deno")
+        {
+            // Keep Deno and Node available for the task and the local tsc binary, but deliberately
+            // exclude npm so this verifies the generated convenience alias is toolchain-neutral.
+            watchCommand = """
+                mkdir -p /tmp/deno-task-path &&
+                ln -sf "$(command -v deno)" /tmp/deno-task-path/deno &&
+                ln -sf "$(command -v node)" /tmp/deno-task-path/node &&
+                PATH=/tmp/deno-task-path deno task watch
+                """.ReplaceLineEndings(" ");
+        }
+
+        await auto.TypeAsync(watchCommand);
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText(TypeScriptAppHostToolchainTestHelpers.GetWatchModeReadyText(toolchain)),

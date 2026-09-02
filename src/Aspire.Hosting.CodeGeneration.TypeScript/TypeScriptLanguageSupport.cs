@@ -153,12 +153,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         if (!hasExistingPackageJson)
         {
-            scripts["lint"] = "npm run aspire:lint";
-            scripts["predev"] = "npm run aspire:lint";
-            scripts["dev"] = "npm run aspire:start";
-            scripts["prebuild"] = "npm run aspire:lint";
-            scripts["build"] = "npm run aspire:build";
-            scripts["watch"] = "npm run aspire:dev";
+            // These aliases are emitted before the CLI resolves the package manager, so invoke the
+            // underlying commands directly instead of assuming npm is installed.
+            scripts["lint"] = "eslint apphost.mts";
+            scripts["predev"] = "eslint apphost.mts";
+            scripts["dev"] = "aspire run";
+            scripts["prebuild"] = "eslint apphost.mts";
+            scripts["build"] = $"tsc -p {AppHostTsConfigFileName}";
+            scripts["watch"] = $"tsc --watch -p {AppHostTsConfigFileName}";
         }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
