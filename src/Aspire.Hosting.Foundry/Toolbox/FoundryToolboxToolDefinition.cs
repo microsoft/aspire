@@ -215,8 +215,8 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
 
 internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
     FoundryToolboxMcpGlobalApprovalMode? Global,
-    IReadOnlyList<string> AlwaysRequireApprovalFor,
-    IReadOnlyList<string> NeverRequireApprovalFor)
+    ResolvedFoundryToolboxMcpApprovalFilter? Always,
+    ResolvedFoundryToolboxMcpApprovalFilter? Never)
 {
     public static ResolvedFoundryToolboxMcpApprovalPolicy? Create(
         FoundryToolboxMcpApprovalPolicy? policy)
@@ -226,24 +226,24 @@ internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
             return null;
         }
 
-        var always = NormalizeToolNames(
-            policy.AlwaysRequireApprovalFor,
-            nameof(policy.AlwaysRequireApprovalFor));
-        var never = NormalizeToolNames(
-            policy.NeverRequireApprovalFor,
-            nameof(policy.NeverRequireApprovalFor));
+        var always = ResolvedFoundryToolboxMcpApprovalFilter.Create(
+            policy.Always,
+            nameof(policy.Always));
+        var never = ResolvedFoundryToolboxMcpApprovalFilter.Create(
+            policy.Never,
+            nameof(policy.Never));
 
-        if (policy.Global is not null && (always.Count > 0 || never.Count > 0))
+        if (policy.Global is not null && (always is not null || never is not null))
         {
             throw new ArgumentException(
-                "A global MCP approval policy cannot be combined with custom tool-name filters.",
+                "A global MCP approval policy cannot be combined with custom filters.",
                 nameof(policy));
         }
 
-        if (policy.Global is null && always.Count == 0 && never.Count == 0)
+        if (policy.Global is null && always is null && never is null)
         {
             throw new ArgumentException(
-                "An MCP approval policy must specify a global mode or at least one custom tool-name filter.",
+                "An MCP approval policy must specify a global mode or at least one custom filter.",
                 nameof(policy));
         }
 
@@ -257,11 +257,20 @@ internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
                 "The global MCP approval mode is not supported.");
         }
 
-        var overlap = always.Intersect(never, StringComparer.Ordinal).FirstOrDefault();
+        var overlap = always?.ToolNames
+            .Intersect(never?.ToolNames ?? [], StringComparer.Ordinal)
+            .FirstOrDefault();
         if (overlap is not null)
         {
             throw new ArgumentException(
                 $"MCP tool '{overlap}' cannot both always and never require approval.",
+                nameof(policy));
+        }
+
+        if (always?.ReadOnly is { } alwaysReadOnly && never?.ReadOnly == alwaysReadOnly)
+        {
+            throw new ArgumentException(
+                $"MCP tools with read_only set to '{alwaysReadOnly.ToString().ToLowerInvariant()}' cannot both always and never require approval.",
                 nameof(policy));
         }
 
@@ -282,21 +291,26 @@ internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
         }
 
         writer.WriteStartObject();
-        WriteToolFilter(writer, "always", AlwaysRequireApprovalFor);
-        WriteToolFilter(writer, "never", NeverRequireApprovalFor);
+        Always?.WriteTo(writer, "always");
+        Never?.WriteTo(writer, "never");
         writer.WriteEndObject();
     }
+}
 
-    private static IReadOnlyList<string> NormalizeToolNames(
-        IEnumerable<string>? names,
+internal sealed record ResolvedFoundryToolboxMcpApprovalFilter(
+    IReadOnlyList<string> ToolNames,
+    bool? ReadOnly)
+{
+    public static ResolvedFoundryToolboxMcpApprovalFilter? Create(
+        FoundryToolboxMcpApprovalFilter? filter,
         string parameterName)
     {
-        if (names is null)
+        if (filter is null)
         {
-            return [];
+            return null;
         }
 
-        var normalized = names
+        var toolNames = (filter.ToolNames ?? [])
             .Select(name =>
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(name, parameterName);
@@ -306,26 +320,34 @@ internal sealed record ResolvedFoundryToolboxMcpApprovalPolicy(
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        return normalized;
+        if (toolNames.Length == 0 && filter.ReadOnly is null)
+        {
+            throw new ArgumentException(
+                "An MCP approval filter must specify at least one tool name or a read-only value.",
+                parameterName);
+        }
+
+        return new(toolNames, filter.ReadOnly);
     }
 
-    private static void WriteToolFilter(
-        Utf8JsonWriter writer,
-        string propertyName,
-        IReadOnlyList<string> toolNames)
+    public void WriteTo(Utf8JsonWriter writer, string propertyName)
     {
-        if (toolNames.Count == 0)
+        writer.WriteStartObject(propertyName);
+        if (ToolNames.Count > 0)
         {
-            return;
+            writer.WriteStartArray("tool_names");
+            foreach (var toolName in ToolNames)
+            {
+                writer.WriteStringValue(toolName);
+            }
+            writer.WriteEndArray();
         }
 
-        writer.WriteStartObject(propertyName);
-        writer.WriteStartArray("tool_names");
-        foreach (var toolName in toolNames)
+        if (ReadOnly is { } readOnly)
         {
-            writer.WriteStringValue(toolName);
+            writer.WriteBoolean("read_only", readOnly);
         }
-        writer.WriteEndArray();
+
         writer.WriteEndObject();
     }
 }

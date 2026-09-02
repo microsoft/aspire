@@ -217,8 +217,16 @@ individual MCP tool names:
 ```csharp
 new FoundryToolboxMcpApprovalPolicy
 {
-    AlwaysRequireApprovalFor = ["delete-item", "update-item"],
-    NeverRequireApprovalFor = ["get-item"]
+    Always = new()
+    {
+        ToolNames = ["delete-item", "update-item"],
+        ReadOnly = false
+    },
+    Never = new()
+    {
+        ToolNames = ["get-item"],
+        ReadOnly = true
+    }
 }
 ```
 

@@ -97,8 +97,14 @@ await toolbox.withMcpTool('inventory', 'https://inventory.example.com/mcp', {
 });
 await toolbox.withMcpTool('inventory-custom', 'https://inventory.example.com/mcp', {
     approvalPolicy: {
-        alwaysRequireApprovalFor: ['delete-item'],
-        neverRequireApprovalFor: ['get-item']
+        always: {
+            toolNames: ['delete-item'],
+            readOnly: false
+        },
+        never: {
+            toolNames: ['get-item'],
+            readOnly: true
+        }
     }
 });
 await toolbox.withAISearchTool('knowledge-base', search, 'docs');

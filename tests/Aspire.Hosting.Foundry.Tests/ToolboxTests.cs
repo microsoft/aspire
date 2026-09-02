@@ -384,8 +384,16 @@ public class ToolboxTests
                 {
                     ApprovalPolicy = new()
                     {
-                        AlwaysRequireApprovalFor = ["write", "delete", "write"],
-                        NeverRequireApprovalFor = ["read"]
+                        Always = new()
+                        {
+                            ToolNames = ["write", "delete", "write"],
+                            ReadOnly = false
+                        },
+                        Never = new()
+                        {
+                            ToolNames = ["read"],
+                            ReadOnly = true
+                        }
                     }
                 });
         var definition = Assert.IsType<FoundryToolboxMcpToolDefinition>(
@@ -398,7 +406,7 @@ public class ToolboxTests
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default);
         Assert.Equal(
-            """{"type":"mcp","server_label":"inventory","server_url":"https://inventory.example.com/mcp","require_approval":{"always":{"tool_names":["delete","write"]},"never":{"tool_names":["read"]}}}""",
+            """{"type":"mcp","server_label":"inventory","server_url":"https://inventory.example.com/mcp","require_approval":{"always":{"tool_names":["delete","write"],"read_only":false},"never":{"tool_names":["read"],"read_only":true}}}""",
             json.ToString());
     }
 
@@ -419,12 +427,41 @@ public class ToolboxTests
                         ApprovalPolicy = new()
                         {
                             Global = FoundryToolboxMcpGlobalApprovalMode.Always,
-                            NeverRequireApprovalFor = ["read"]
+                            Never = new()
+                            {
+                                ToolNames = ["read"]
+                            }
                         }
                     }));
 
         Assert.Contains(
-            "cannot be combined with custom tool-name filters",
+            "cannot be combined with custom filters",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithMcpTool_RejectsEmptyCustomApprovalFilter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => project.AddToolbox("field-tools")
+                .WithMcpTool(
+                    "inventory",
+                    "https://inventory.example.com/mcp",
+                    new FoundryToolboxMcpToolOptions
+                    {
+                        ApprovalPolicy = new()
+                        {
+                            Always = new()
+                        }
+                    }));
+
+        Assert.Contains(
+            "must specify at least one tool name or a read-only value",
             exception.Message,
             StringComparison.Ordinal);
     }
