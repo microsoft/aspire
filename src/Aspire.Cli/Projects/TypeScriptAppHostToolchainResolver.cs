@@ -370,10 +370,10 @@ internal static class TypeScriptAppHostToolchainResolver
                     throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }
 
-                if (toolchain == TypeScriptAppHostToolchain.Deno && IsDenoV1PackageManager(packageManager))
+                if (toolchain == TypeScriptAppHostToolchain.Deno && IsDenoPreV2PackageManager(packageManager))
                 {
                     throw new DenoVersionNotSupportedException(
-                        $"Deno 1 is not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. " +
+                        $"Deno versions earlier than 2 are not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. " +
                         $"Upgrade '{packageManager}' in {packageJsonPath} to Deno 2 or later.");
                 }
 
@@ -422,7 +422,7 @@ internal static class TypeScriptAppHostToolchainResolver
             (version.Length == 1 || !char.IsAsciiDigit(version[1]));
     }
 
-    private static bool IsDenoV1PackageManager(string packageManager)
+    private static bool IsDenoPreV2PackageManager(string packageManager)
     {
         const string denoPackageManagerPrefix = "deno@";
 
@@ -432,9 +432,9 @@ internal static class TypeScriptAppHostToolchainResolver
         }
 
         var version = packageManager[denoPackageManagerPrefix.Length..];
-        return version.Length > 0 &&
-            version[0] == '1' &&
-            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+        var majorEnd = version.IndexOfAny('.', '-', '+');
+        var majorText = majorEnd >= 0 ? version[..majorEnd] : version;
+        return int.TryParse(majorText, out var majorVersion) && majorVersion < 2;
     }
 
     private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)

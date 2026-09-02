@@ -171,21 +171,23 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.Equal("Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.", result.Fix);
     }
 
-    [Fact]
-    public async Task CheckAsync_ReturnsFail_WhenConfiguredPackageManagerIsDenoV1()
+    [Theory]
+    [InlineData("deno@0.224.0")]
+    [InlineData("deno@1.46.3")]
+    public async Task CheckAsync_ReturnsFail_WhenConfiguredPackageManagerIsPreV2Deno(string packageManager)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"packageManager\": \"deno@1.46.3\" }");
+        var appHostFile = CreateTypeScriptAppHost(workspace, $$"""{ "packageManager": "{{packageManager}}" }""");
         var check = CreateCheck(
             workspace,
             appHostFile,
             commandResolver: _ => "/usr/bin/deno",
-            denoVersionResolver: (_, _) => Task.FromResult<string?>("deno 1.46.3\nv8 12.9.202.6\ntypescript 5.5.2"));
+            denoVersionResolver: (_, _) => Task.FromResult<string?>("deno 2.9.0\nv8 14.0.365.5-rusty\ntypescript 5.9.2"));
 
         var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
 
         AssertDenoVersionFailure(result);
-        Assert.Contains("deno@1.46.3", result.Details);
+        Assert.Contains(packageManager, result.Details);
     }
 
     [Theory]

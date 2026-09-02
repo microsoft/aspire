@@ -98,8 +98,8 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
     /// <summary>
     /// Gets the console text that indicates watch mode is active for a toolchain.
-    /// The E2E path runs the scaffolded <c>aspire:dev</c> package script for every toolchain,
-    /// so readiness comes from <c>tsc --watch</c>.
+    /// The E2E path runs a generated compiler-watch task for every toolchain, so readiness
+    /// comes from <c>tsc --watch</c>.
     /// </summary>
     internal static string GetWatchModeReadyText(string toolchain)
     {
