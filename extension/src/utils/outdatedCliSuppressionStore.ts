@@ -56,7 +56,7 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
             notificationKey,
             processId: process.pid,
             createdAt,
-        });
+        }, createdAt);
         let released = false;
         const claim: OutdatedCliNotificationClaim = {
             isValid: () => isLeaseCurrent(createdAt),
@@ -178,9 +178,13 @@ export class FileSystemOutdatedCliSuppressionStore implements OutdatedCliSuppres
         }
     }
 
-    private async _publishMarker(prefix: string, value: unknown): Promise<string> {
+    private async _publishMarker(
+        prefix: string,
+        value: unknown,
+        createdAt = Date.now(),
+    ): Promise<string> {
         await mkdir(this._directoryPath, { recursive: true });
-        const generation = `${Date.now()}-${process.pid}-${markerSequence++}`;
+        const generation = `${createdAt}-${process.pid}-${markerSequence++}`;
         const fileName = `${prefix}${generation}${markerFileSuffix}`;
         const temporaryPath = path.join(this._directoryPath, `.${fileName}.tmp`);
         const finalPath = path.join(this._directoryPath, fileName);
