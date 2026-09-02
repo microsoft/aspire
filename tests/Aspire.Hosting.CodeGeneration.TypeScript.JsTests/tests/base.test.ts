@@ -160,7 +160,7 @@ describe('FluentPromise', () => {
                 await Promise.allSettled([...pendingPromises]);
             },
         } as AspireClient;
-        const TestApplicationPromiseImpl = createFluentPromiseClass<TestApplication, TestApplicationPromise>(() => ({
+        const TestApplicationPromiseImpl = createFluentPromiseClass<TestApplication, TestApplicationPromise>((): FluentPromiseTransitions => ({
             run: () => TestApplicationPromiseImpl,
         }));
         const TestBuilderPromiseImpl = createFluentPromiseClass<TestBuilder, TestBuilderPromise>(() => ({
