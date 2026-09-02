@@ -71,7 +71,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "TypeScript AppHost does not support Yarn Classic.",
                     Details = ex.Message,
-                    Fix = "Upgrade to Yarn 4 or later, or switch to npm, pnpm, or Bun, then rerun 'aspire doctor'.",
+                    Fix = "Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.",
                     Link = "https://yarnpkg.com/getting-started/install",
                     Metadata = new JsonObject
                     {

@@ -146,7 +146,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.Equal("TypeScript AppHost does not support Yarn Classic.", result.Message);
         Assert.Contains("Yarn Classic is not supported", result.Details ?? string.Empty);
         Assert.Contains("yarn@1.22.22", result.Details ?? string.Empty);
-        Assert.Contains("Yarn 4", result.Fix ?? string.Empty);
+        Assert.Equal("Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.", result.Fix);
     }
 
     [Fact]
@@ -168,6 +168,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
         Assert.Contains("yarn.lock", result.Details ?? string.Empty);
+        Assert.Equal("Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.", result.Fix);
     }
 
     private static FileInfo CreateTypeScriptAppHost(TemporaryWorkspace workspace, string packageJsonContent)

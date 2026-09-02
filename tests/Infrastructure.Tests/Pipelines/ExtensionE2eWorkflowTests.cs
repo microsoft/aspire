@@ -52,6 +52,28 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
+    public void DenoIsInstalledOnlyForLaunchProfileShards()
+    {
+        var job = LoadExtensionE2eJob();
+        var rows = MatrixIncludeRows(job).ToList();
+        var denoRows = rows
+            .Where(row => Scalar(row, "installDeno") == "true")
+            .ToList();
+
+        Assert.Equal(2, denoRows.Count);
+        Assert.All(denoRows, row => Assert.Equal("launch-profiles", Scalar(row, "shardName")));
+        Assert.Equal(["Linux", "Windows"], denoRows.Select(row => Scalar(row, "name")!).Order().ToArray());
+
+        var installDenoStep = Assert.Single(
+            ExtensionE2eWorkflow.Steps(job),
+            step => Scalar(step, "name") == "Install Deno");
+        Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
+        Assert.Equal(
+            "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+            Scalar(installDenoStep, "uses"));
+    }
+
+    [Fact]
     public void SelectedExtensionE2eWorkflowMustRun()
     {
         var yaml = new YamlStream();

@@ -74,6 +74,46 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(debugConfig.program, '/workspace/app/server.js');
         assert.deepStrictEqual(debugConfig.args, []);
     });
+
+    test('opens the Deno inspector when debugging an AppHost', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'deno',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        const inspectorPort = debugConfig.attachSimplePort;
+        assert.ok(typeof inspectorPort === 'number' && inspectorPort > 0);
+        assert.strictEqual(debugConfig.runtimeExecutable, 'deno');
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${inspectorPort}`, '-A', '--sloppy-imports', '/workspace/app/apphost.mts']);
+    });
+
+    test('does not open the Deno inspector when running an AppHost without debugging', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'deno',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts'],
+            [],
+            { debug: false, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', '-A', '--sloppy-imports', '/workspace/app/apphost.mts']);
+        assert.strictEqual(debugConfig.attachSimplePort, undefined);
+    });
 });
 
 function createDebugConfig(): AspireResourceExtendedDebugConfiguration {

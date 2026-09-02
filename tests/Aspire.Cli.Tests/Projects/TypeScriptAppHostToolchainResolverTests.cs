@@ -93,7 +93,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]

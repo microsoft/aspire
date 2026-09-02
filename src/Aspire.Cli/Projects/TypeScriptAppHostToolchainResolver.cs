@@ -416,7 +416,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
     {
         return new YarnClassicNotSupportedException(
-            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.");
     }
 
     private static bool IsYarnClassicLockFile(string yarnLockFilePath)

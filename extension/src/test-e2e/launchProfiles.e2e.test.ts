@@ -1,11 +1,12 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { NodeLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
-import { waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, writeFileWithRetry } from './helpers/fixtures';
+import type { ProjectLaunchConfiguration } from '../dcp/types';
+import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { runProcess } from './helpers/process';
 import { getProcessEntry } from './helpers/processArguments';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView } from './helpers/vscode';
 
 suite('Aspire launch profiles E2E', function () {
@@ -16,6 +17,8 @@ suite('Aspire launch profiles E2E', function () {
     const launchSettingsDirectory = path.join(appHostDirectory, 'Properties');
     const launchSettingsPath = path.join(launchSettingsDirectory, 'launchSettings.json');
     const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
+    const denoAppHostDirectory = path.join(getWorkspaceRoot(), 'DenoAppHost');
+    const denoAppHostPath = path.join(denoAppHostDirectory, 'apphost.mts');
     let originalLaunchSettings: FileSnapshot | undefined;
     let originalLaunchJson: FileSnapshot | undefined;
     let launchSettingsDirectoryExisted: boolean | undefined;
@@ -25,39 +28,40 @@ suite('Aspire launch profiles E2E', function () {
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
+            () => fs.existsSync(denoAppHostPath) ? stopAppHostIfRunning(denoAppHostPath) : undefined,
+            () => fs.existsSync(denoAppHostPath) ? waitForNoRunningAppHost(90000, denoAppHostPath) : undefined,
+            () => restoreWorkspaceAppHostConfig(),
+            () => removePath(denoAppHostDirectory, { recursive: true, force: true }),
             () => restoreFile(launchSettingsPath, originalLaunchSettings),
             () => restoreFile(launchJsonPath, originalLaunchJson),
             () => removeDirectoryIfCreated(launchSettingsDirectory, launchSettingsDirectoryExisted),
         ], 'Launch profiles E2E teardown failed.');
     });
 
-    test('maps the Deno runtime through the built-in JavaScript debugger', async () => {
+    test('debugs a Deno AppHost through the built-in JavaScript debugger', async function () {
+        this.timeout(600000);
+
+        fs.mkdirSync(denoAppHostDirectory, { recursive: true });
+        await runProcess(
+            getCliPath(),
+            ['init', '--language', 'typescript', '--non-interactive', '--suppress-agent-init'],
+            { cwd: denoAppHostDirectory, timeoutMs: 180000 });
+        const packageJsonPath = path.join(denoAppHostDirectory, 'package.json');
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+        packageJson.packageManager = 'deno@2.9.0';
+        writeFileWithRetry(packageJsonPath, JSON.stringify(packageJson, undefined, 2));
+        await runProcess('deno', ['install'], { cwd: denoAppHostDirectory, timeoutMs: 180000 });
+
+        writeWorkspaceAppHostConfigForPath(denoAppHostPath);
         await openAspireView();
+        await waitForSelectedWorkspaceAppHost(denoAppHostPath, 180000);
 
-        const workspaceRoot = getWorkspaceRoot();
-        const appHostPath = path.join(workspaceRoot, 'apphost.mts');
-        const launchConfig: NodeLaunchConfiguration = {
-            type: 'node',
-            script_path: appHostPath,
-            working_directory: workspaceRoot,
-            runtime_executable: 'deno',
-        };
-
-        const controlStatus = await executeE2eControlCommand({
-            name: 'createResourceDebugConfiguration',
-            launchConfig,
-            args: ['run', '-A', '--sloppy-imports', appHostPath],
-            debug: true,
-            isApphost: true,
-        });
-        const debugConfiguration = controlStatus.result as PreparedDebugConfiguration;
-
-        assert.strictEqual(debugConfiguration.type, 'pwa-node');
-        assert.strictEqual(debugConfiguration.request, 'launch');
-        assert.strictEqual(debugConfiguration.runtimeExecutable, 'deno');
-        assert.strictEqual(debugConfiguration.runtimeArgs, '<redacted>');
-        assert.strictEqual(debugConfiguration.program, undefined);
-        assert.strictEqual(debugConfiguration.args, undefined);
+        const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath: denoAppHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
+        // Deno's --inspect-wait blocks before evaluating apphost.mts, so AppHost startup proves
+        // that pwa-node connected to the inspector and allowed execution to continue.
+        await waitForDebugSessionStartup(denoAppHostPath, 300000);
     });
 
     test('uses the AppHost launch profile selected by launch.json', async () => {
@@ -220,12 +224,6 @@ suite('Aspire launch profiles E2E', function () {
 
 interface PreparedDebugConfiguration {
     environment: Record<string, string | undefined>;
-    type?: string;
-    request?: string;
-    runtimeExecutable?: string;
-    runtimeArgs?: string;
-    program?: string;
-    args?: string[];
 }
 
 interface LifecycleToolResult {

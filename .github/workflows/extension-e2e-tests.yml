@@ -368,6 +368,7 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            installDeno: true
           - name: Windows
             shardName: launch-profiles
             spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
@@ -376,6 +377,7 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+            installDeno: true
           - name: Linux
             shardName: azure-functions
             advisoryIssue: https://github.com/microsoft/aspire/issues/19639
@@ -774,6 +776,12 @@ jobs:
           if (-not (Test-Path '${{ matrix.spec }}')) {
             throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
           }
+
+      - name: Install Deno
+        if: ${{ matrix.installDeno }}
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.0
 
       - name: Install E2E recorder
         if: ${{ matrix.useXvfb }}
