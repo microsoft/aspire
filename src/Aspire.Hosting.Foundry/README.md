@@ -159,7 +159,7 @@ var search = builder.AddAzureSearch("search");
 var toolbox = project.AddToolbox("field-tools")
     .WithDescription("Tools for field technicians.")
     .WithWebSearchTool("web-search", "Search the public web.")
-    .WithAISearchTool("knowledge-base", search, "docs")
+    .WithAISearchTool("knowledge-base", search, "docs", "Search the internal knowledge base.")
     .WithMcpTool(
         "inventory",
         "https://inventory.example.com/mcp",
@@ -192,7 +192,11 @@ await toolbox.withWebSearchTool({
     name: "web-search",
     description: "Search the public web."
 });
-await toolbox.withAISearchTool("knowledge-base", search, "docs");
+await toolbox.withAISearchTool(
+    "knowledge-base",
+    search,
+    "docs",
+    "Search the internal knowledge base.");
 await toolbox.withMcpTool("inventory", "https://inventory.example.com/mcp", {
     serverDescription: "Inventory MCP server.",
     approvalPolicy: {

@@ -23,7 +23,8 @@ internal sealed class FoundryToolboxOptions
 public sealed class FoundryToolboxMcpToolOptions
 {
     /// <summary>
-    /// Gets or sets the label sent to the MCP server. The Toolbox tool name is used when unset.
+    /// Gets or sets the label that identifies the MCP server in the Toolbox and prefixes its
+    /// discovered tool names. The Toolbox tool name is used when unset.
     /// </summary>
     public string? ServerLabel { get; set; }
 

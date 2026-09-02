@@ -361,7 +361,8 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
         string name,
         AzureSearchResource searchResource,
         AzureCognitiveServicesProjectConnectionResource connection,
-        string indexName)
+        string indexName,
+        string? description)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(searchResource);
@@ -370,6 +371,7 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
         SearchResource = searchResource;
         Connection = connection;
         IndexName = indexName;
+        Description = description;
     }
 
     /// <summary>
@@ -386,6 +388,8 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
     /// Gets the Azure AI Search index name.
     /// </summary>
     public string IndexName { get; }
+
+    public string? Description { get; }
 
     internal override async ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken)
     {
@@ -421,6 +425,10 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
                 property.WriteTo(writer);
             }
             writer.WriteString("name", Name);
+            if (Description is not null)
+            {
+                writer.WriteString("description", Description);
+            }
             writer.WriteEndObject();
         }
 

@@ -148,7 +148,11 @@ public class ToolboxTests
             .WithDescription("Tools for field technicians.")
             .WithWebSearchTool()
             .WithMcpTool("inventory", "https://inventory.example.com/mcp")
-            .WithAISearchTool("knowledge-base", search, "docs");
+            .WithAISearchTool(
+                "knowledge-base",
+                search,
+                "docs",
+                "Search the internal knowledge base.");
 
         Assert.Collection(
             toolbox.Resource.Tools,
@@ -169,6 +173,7 @@ public class ToolboxTests
                 Assert.Equal("knowledge-base", aiSearch.Name);
                 Assert.Same(search.Resource, aiSearch.SearchResource);
                 Assert.Equal("docs", aiSearch.IndexName);
+                Assert.Equal("Search the internal knowledge base.", aiSearch.Description);
                 Assert.NotNull(aiSearch.Connection);
             });
     }
@@ -363,7 +368,11 @@ public class ToolboxTests
         var search = builder.AddAzureSearch("search");
 
         var toolbox = project.AddToolbox("field-tools")
-            .WithAISearchTool("knowledge-base", search, "docs");
+            .WithAISearchTool(
+                "knowledge-base",
+                search,
+                "docs",
+                "Search the internal knowledge base.");
 
         // Pre-seed the connection's bicep output so the tool conversion can resolve it without
         // running real provisioning.
@@ -380,7 +389,10 @@ public class ToolboxTests
             projectTool,
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default);
-        Assert.Contains("\"name\":\"knowledge-base\"", json.ToString(), StringComparison.Ordinal);
+        Assert.Contains(
+            "\"name\":\"knowledge-base\",\"description\":\"Search the internal knowledge base.\"",
+            json.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]

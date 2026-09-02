@@ -122,7 +122,11 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                                 Global = FoundryToolboxMcpGlobalApprovalMode.Always
                             }
                         })
-                    .WithAISearchTool("knowledge-base", search, "docs");
+                    .WithAISearchTool(
+                        "knowledge-base",
+                        search,
+                        "docs",
+                        "Search the internal knowledge base.");
 
                 builder.Build().Run();
                 """);
@@ -470,14 +474,27 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         {
             for (var requestId = 2; ; requestId++)
             {
-                var tools = await SendMcpRequestAsync(
-                    client,
-                    endpoint,
-                    accessToken.Token,
-                    initialize.SessionId,
-                    negotiatedProtocol,
-                    $$$"""{"jsonrpc":"2.0","id":{{{requestId}}},"method":"tools/list","params":{}}""",
-                    discoveryCancellation.Token);
+                McpResponse tools;
+                try
+                {
+                    tools = await SendMcpRequestAsync(
+                        client,
+                        endpoint,
+                        accessToken.Token,
+                        initialize.SessionId,
+                        negotiatedProtocol,
+                        $$$"""{"jsonrpc":"2.0","id":{{{requestId}}},"method":"tools/list","params":{}}""",
+                        discoveryCancellation.Token);
+                }
+                catch (HttpRequestException ex)
+                    when (ex.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+                {
+                    // Foundry documents HTTP 500 from tools/list as transient while tool
+                    // discovery converges immediately after Toolbox provisioning.
+                    // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#troubleshooting.
+                    await Task.Delay(TimeSpan.FromSeconds(5), discoveryCancellation.Token);
+                    continue;
+                }
                 var toolNames = tools.Result.GetProperty("tools")
                     .EnumerateArray()
                     .Select(tool => tool.GetProperty("name").GetString()

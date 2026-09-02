@@ -300,6 +300,7 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="name">The tool name.</param>
     /// <param name="search">The Azure AI Search resource backing the tool.</param>
     /// <param name="indexName">The search index name.</param>
+    /// <param name="description">An optional description of the Azure AI Search tool.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -307,12 +308,17 @@ public static class FoundryToolboxBuilderExtensions
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
         IResourceBuilder<AzureSearchResource> search,
-        string indexName)
+        string indexName,
+        string? description = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(search);
         ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
+        if (description is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        }
 
         if (builder.Resource.IsExisting)
         {
@@ -330,7 +336,8 @@ public static class FoundryToolboxBuilderExtensions
             name,
             search.Resource,
             connection.Resource,
-            indexName));
+            indexName,
+            description));
 
         return builder;
     }
