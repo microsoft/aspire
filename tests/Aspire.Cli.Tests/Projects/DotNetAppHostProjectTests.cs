@@ -8,6 +8,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -2337,6 +2338,100 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void ConfigureSingleFileRunEnvironment_AppliesProfileForFilesystemEquivalentAppHostPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        var appHostFile = CreateSingleFileAppHost();
+        var appHostSymlink = Path.Combine(appHostFile.DirectoryName!, "apphost-link.cs");
+        TestSymlinkHelper.TryCreateSymlink(appHostSymlink, appHostFile.FullName, isDirectory: false);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost-link.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://from-equivalent-path:17050"
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://from-equivalent-path:17050", env[KnownAspNetCoreConfigNames.Urls]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_LoadsProfileBesideSelectedSymlink()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        var realDirectory = _workspace.CreateDirectory("real");
+        var targetAppHostFile = new FileInfo(Path.Combine(realDirectory.FullName, "apphost.cs"));
+        File.WriteAllText(targetAppHostFile.FullName, "// target AppHost");
+
+        var selectedDirectory = _workspace.CreateDirectory("selected");
+        var selectedAppHostPath = Path.Combine(selectedDirectory.FullName, "apphost.cs");
+        TestSymlinkHelper.TryCreateSymlink(selectedAppHostPath, targetAppHostFile.FullName, isDirectory: false);
+        var selectedAppHostFile = new FileInfo(selectedAppHostPath);
+        WriteAspireConfigJson(selectedDirectory.FullName, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://beside-selected-link:17050"
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            selectedAppHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://beside-selected-link:17050", env[KnownAspNetCoreConfigNames.Urls]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_DoesNotApplyProfileForCaseDistinctAppHostPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows filesystem paths are compared case-insensitively.");
+
+        var configuredAppHostFile = CreateSingleFileAppHost();
+        var selectedAppHostFile = new FileInfo(Path.Combine(configuredAppHostFile.DirectoryName!, "AppHost.cs"));
+        Assert.SkipWhen(selectedAppHostFile.Exists,
+            "This test requires a case-sensitive filesystem.");
+        File.WriteAllText(selectedAppHostFile.FullName, "// distinct AppHost");
+        WriteAspireConfigJson(configuredAppHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://wrong-apphost:17050"
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            selectedAppHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
+    }
+
+    [Fact]
     public void ConfigureSingleFilePublishEnvironment_AppliesProfileFromAspireConfigJson()
     {
         var appHostFile = CreateSingleFileAppHost();
@@ -2548,7 +2643,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Directory.CreateDirectory(backchannelsDir);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

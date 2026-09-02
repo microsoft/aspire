@@ -313,6 +313,16 @@ jobs:
             useXvfb: true
             installJava: true
           - name: Linux
+            shardName: java-starter-project-model
+            spec: out/test-e2e/test-e2e/javaStarterProjectModel.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
             shardName: workspace-target-proof
             spec: out/test-e2e/test-e2e/workspaceTargetProof.e2e.test.js
             runner: ubuntu-latest
@@ -386,6 +396,15 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          - name: Linux
+            shardName: deno-debugger
+            spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
     defaults:
       run:
         shell: pwsh
@@ -442,6 +461,10 @@ jobs:
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           global-json-file: global.json
+
+      - name: Setup Deno
+        if: ${{ matrix.installDeno }}
+        uses: ./.github/actions/setup-deno
 
       - name: Download VSIX
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -579,7 +602,7 @@ jobs:
           # to rotate when the Maven version changes. Otherwise the key would still hit exactly after a
           # version bump, actions/cache would skip the save, and the newly downloaded distribution would
           # never make it into the cache.
-          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties') }}
+          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties', 'src/Aspire.Cli/Templating/Templates/java-starter/api/build.gradle', 'src/Aspire.Cli/Templating/Templates/java-starter/api/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             java-e2e-${{ runner.os }}-
 

@@ -241,6 +241,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
+    | { name: 'getDefinitions'; filePath: string; line: number; character: number }
+    | { name: 'getJavaProjects' }
     | { name: 'getCodeLenses'; filePath: string }
     | { name: 'snapshotClipboard' }
     | { name: 'restoreClipboardSnapshot' }
@@ -272,4 +274,5 @@ export type AspireExtensionE2EControlCommand =
         environmentKeys?: readonly string[];
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
-    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };
+    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number }
+    | { name: 'proveDenoResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

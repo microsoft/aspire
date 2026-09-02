@@ -321,6 +321,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("TestCatalog", exportedValue.GetProperty("PathSegments")[0].GetString());
         Assert.Equal("Default", exportedValue.GetProperty("PathSegments")[1].GetString());
         Assert.Equal("你好", exportedValue.GetProperty("Value").GetString());
+        Assert.True(exportedValue.GetProperty("Type").GetProperty("IsNullable").GetBoolean());
     }
 
     [Fact]
@@ -366,7 +367,8 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                     Type = new TypeRefInfo
                     {
                         TypeId = "test/string",
-                        Category = "Primitive"
+                        Category = "Primitive",
+                        IsNullable = true
                     },
                     Value = JsonValue.Create("你好"),
                     Description = "Greeting"

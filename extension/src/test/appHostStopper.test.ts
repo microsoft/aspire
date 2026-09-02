@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { stopExternalAppHost } from '../services/AppHostStopper';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 suite('AppHostStopper', () => {
     test('waits for aspire stop to exit successfully', async () => {
@@ -53,6 +54,8 @@ suite('AppHostStopper', () => {
             createEnvironment: () => ({}),
             sendAspireCommandToAspireTerminal: async () => { },
         } as unknown as AspireTerminalProvider;
+        const resolutions: Array<{ target: unknown; cliPath: string }> = [];
+        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
 
         try {
             const stopping = stopExternalAppHost(
@@ -62,12 +65,17 @@ suite('AppHostStopper', () => {
             await new Promise(resolve => setImmediate(resolve));
 
             assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+            assert.deepStrictEqual(resolutions, [{
+                target: workspaceFolderCliPathTarget(folder),
+                cliPath: '/repo/bin/aspire',
+            }]);
 
             childState.exitCode = 0;
             child.emit('close', 0);
             await stopping;
         }
         finally {
+            subscription.dispose();
             getWorkspaceFolderStub.restore();
             (nodeChildProcess.spawn as sinon.SinonStub).restore();
         }

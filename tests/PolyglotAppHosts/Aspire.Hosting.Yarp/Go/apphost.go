@@ -21,8 +21,8 @@ func main() {
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
-		WithHostPort(8080).
-		WithHostHttpsPort(8443).
+		WithHostPort(aspire.Float64Ptr(8080)).
+		WithHostHttpsPort(aspire.Float64Ptr(8443)).
 		WithEndpointProxySupport(true).
 		WithDockerfile("./context").
 		WithImageSHA256("abc123def456").
@@ -46,40 +46,40 @@ func main() {
 			WithForwarderRequestConfig(&aspire.YarpForwarderRequestConfig{
 				ActivityTimeout:        aspire.Float64Ptr(30_000_000),
 				AllowResponseBuffering: aspire.BoolPtr(true),
-				Version:                "2.0",
+				Version:                aspire.StringPtr("2.0"),
 			}).
 			WithHttpClientConfig(&aspire.YarpHttpClientConfig{
 				DangerousAcceptAnyServerCertificate: aspire.BoolPtr(true),
 				EnableMultipleHttp2Connections:      aspire.BoolPtr(true),
 				MaxConnectionsPerServer:             aspire.Float64Ptr(10),
-				RequestHeaderEncoding:               "utf-8",
-				ResponseHeaderEncoding:              "utf-8",
+				RequestHeaderEncoding:               aspire.StringPtr("utf-8"),
+				ResponseHeaderEncoding:              aspire.StringPtr("utf-8"),
 			}).
 			WithSessionAffinityConfig(&aspire.YarpSessionAffinityConfig{
-				AffinityKeyName: ".Aspire.Affinity",
+				AffinityKeyName: aspire.StringPtr(".Aspire.Affinity"),
 				Enabled:         aspire.BoolPtr(true),
-				FailurePolicy:   "Redistribute",
-				Policy:          "Cookie",
+				FailurePolicy:   aspire.StringPtr("Redistribute"),
+				Policy:          aspire.StringPtr("Cookie"),
 				Cookie: &aspire.YarpSessionAffinityCookieConfig{
-					Domain:      "example.com",
+					Domain:      aspire.StringPtr("example.com"),
 					HttpOnly:    aspire.BoolPtr(true),
 					IsEssential: aspire.BoolPtr(true),
-					Path:        "/",
+					Path:        aspire.StringPtr("/"),
 				},
 			}).
 			WithHealthCheckConfig(&aspire.YarpHealthCheckConfig{
-				AvailableDestinationsPolicy: "HealthyOrPanic",
+				AvailableDestinationsPolicy: aspire.StringPtr("HealthyOrPanic"),
 				Active: &aspire.YarpActiveHealthCheckConfig{
 					Enabled:  aspire.BoolPtr(true),
 					Interval: aspire.Float64Ptr(50_000_000),
-					Path:     "/health",
-					Policy:   "ConsecutiveFailures",
-					Query:    "probe=1",
+					Path:     aspire.StringPtr("/health"),
+					Policy:   aspire.StringPtr("ConsecutiveFailures"),
+					Query:    aspire.StringPtr("probe=1"),
 					Timeout:  aspire.Float64Ptr(20_000_000),
 				},
 				Passive: &aspire.YarpPassiveHealthCheckConfig{
 					Enabled:            aspire.BoolPtr(true),
-					Policy:             "TransportFailureRateHealthPolicy",
+					Policy:             aspire.StringPtr("TransportFailureRateHealthPolicy"),
 					ReactivationPeriod: aspire.Float64Ptr(100_000_000),
 				},
 			})
@@ -121,7 +121,7 @@ func main() {
 
 		fromEndpointRoute := config.AddRoute("/from-endpoint/{**catchall}", endpoint).
 			WithMatch(&aspire.YarpRouteMatch{
-				Path:    "/from-endpoint/{**catchall}",
+				Path:    aspire.StringPtr("/from-endpoint/{**catchall}"),
 				Methods: []string{"GET", "POST"},
 				Hosts:   []string{"endpoint.example.com"},
 			}).

@@ -21,6 +21,10 @@
 #   - Aspire MCP prefix: aspire-<tool>            (e.g. aspire-list_resources)
 #   - Detection: COPILOT_CLI=1, or a "toolArgs" field present
 #
+# GitHub Copilot App:
+#   - Uses the Copilot CLI payload shape
+#   - Detection: AI_AGENT=github_copilot_app_agent
+#
 # Claude Code:
 #   - Field names: snake_case (tool_name, session_id, tool_input, hook_event_name)
 #   - Tool names: PascalCase (Skill, Read, Edit)
@@ -146,8 +150,11 @@ sessionId=$(extract_json_field "$rawInput" "sessionId")
 
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Detect the client (used only for a low-cardinality client-name tag).
-if [ "$COPILOT_CLI" = "1" ]; then
+# Detect the client (used only for a low-cardinality client-name tag). Keep the App marker before
+# COPILOT_CLI because App sessions also set COPILOT_CLI=1.
+if [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
+    clientName="copilot-app"
+elif [ "$COPILOT_CLI" = "1" ]; then
     clientName="copilot-cli"
 elif printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
     toolUseId=$(extract_json_field "$rawInput" "tool_use_id")

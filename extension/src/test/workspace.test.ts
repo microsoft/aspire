@@ -6,6 +6,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
 import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
 import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
 import * as cliPathModule from '../utils/cliPath';
@@ -51,6 +52,29 @@ suite('utils/workspace tests', () => {
             assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
             assert.ok(tryExecuteCliStub.calledOnceWithExactly('/repo/a/bin/aspire'));
             assert.strictEqual(resolveCliPathStub.called, false);
+        });
+
+        test('reports the exact CLI selected for an active command or debug operation', async () => {
+            const target = workspaceFolderCliPathTarget(createWorkspaceFolder('a', '/repo/a'));
+            sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+                cliPath: '/repo/a/bin/aspire',
+                available: true,
+                source: 'configured',
+            });
+            const resolutions: Array<{ target: typeof target; cliPath: string }> = [];
+            const disposable = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
+
+            try {
+                await checkCliAvailableOrRedirect('debug_gate', target);
+
+                assert.deepStrictEqual(resolutions, [{
+                    target,
+                    cliPath: '/repo/a/bin/aspire',
+                }]);
+            }
+            finally {
+                disposable.dispose();
+            }
         });
     });
 
