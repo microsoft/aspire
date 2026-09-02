@@ -154,12 +154,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         if (!hasExistingPackageJson)
         {
             // These aliases are emitted before the CLI resolves the package manager, so invoke the
-            // underlying commands directly instead of assuming npm is installed.
+            // underlying commands directly instead of assuming npm lifecycle hooks are available.
             scripts["lint"] = "eslint apphost.mts";
-            scripts["predev"] = "eslint apphost.mts";
-            scripts["dev"] = "aspire run";
-            scripts["prebuild"] = "eslint apphost.mts";
-            scripts["build"] = $"tsc -p {AppHostTsConfigFileName}";
+            scripts["dev"] = "eslint apphost.mts && aspire run";
+            scripts["build"] = $"eslint apphost.mts && tsc -p {AppHostTsConfigFileName}";
             scripts["watch"] = $"tsc --watch -p {AppHostTsConfigFileName}";
         }
 

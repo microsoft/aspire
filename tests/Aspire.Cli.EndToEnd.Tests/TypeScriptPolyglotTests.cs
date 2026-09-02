@@ -287,17 +287,25 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             File.Exists(lockFilePath),
             $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} install to create '{lockFilePath}'.");
 
-        var watchCommand = TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev");
         if (toolchain == "deno")
         {
-            // Keep Deno and Node available for the task and the local tsc binary, but deliberately
-            // exclude npm so this verifies the generated convenience alias is toolchain-neutral.
-            watchCommand = """
+            // Keep Deno and Node available for package tasks and local npm-package binaries, but
+            // deliberately exclude npm. A successful build proves the convenience task runs both
+            // ESLint and tsc without relying on npm lifecycle hooks.
+            await auto.TypeAsync("""
                 mkdir -p /tmp/deno-task-path &&
                 ln -sf "$(command -v deno)" /tmp/deno-task-path/deno &&
                 ln -sf "$(command -v node)" /tmp/deno-task-path/node &&
-                PATH=/tmp/deno-task-path deno task watch
-                """.ReplaceLineEndings(" ");
+                PATH=/tmp/deno-task-path deno task build
+                """.ReplaceLineEndings(" "));
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        }
+
+        var watchCommand = TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev");
+        if (toolchain == "deno")
+        {
+            watchCommand = "PATH=/tmp/deno-task-path deno task watch";
         }
 
         await auto.TypeAsync(watchCommand);

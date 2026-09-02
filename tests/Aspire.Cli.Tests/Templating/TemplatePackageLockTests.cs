@@ -23,10 +23,8 @@ public class TemplatePackageLockTests
         var scripts = packageJson.RootElement.GetProperty("scripts");
 
         Assert.Equal("eslint apphost.mts", scripts.GetProperty("lint").GetString());
-        Assert.Equal("eslint apphost.mts", scripts.GetProperty("predev").GetString());
-        Assert.Equal("aspire run", scripts.GetProperty("dev").GetString());
-        Assert.Equal("eslint apphost.mts", scripts.GetProperty("prebuild").GetString());
-        Assert.Equal("tsc -p tsconfig.apphost.json", scripts.GetProperty("build").GetString());
+        Assert.Equal("eslint apphost.mts && aspire run", scripts.GetProperty("dev").GetString());
+        Assert.Equal("eslint apphost.mts && tsc -p tsconfig.apphost.json", scripts.GetProperty("build").GetString());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts.GetProperty("watch").GetString());
     }
 
