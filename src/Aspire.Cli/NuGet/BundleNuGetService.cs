@@ -30,6 +30,7 @@ internal interface INuGetService
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
+    /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The package probe manifest and ownership of any temporary restore artifacts.</returns>
     Task<PackageRestoreResult> RestorePackagesAsync(
@@ -39,6 +40,7 @@ internal interface INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? nugetConfigPath = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default);
 }
 
@@ -80,6 +82,7 @@ internal sealed class BundleNuGetService : INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? nugetConfigPath = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -128,7 +131,7 @@ internal sealed class BundleNuGetService : INuGetService
                     managedPath,
                     sourceList,
                     nugetConfigInspection.CacheIdentity,
-                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment)));
+                    globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment)));
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
@@ -215,6 +218,12 @@ internal sealed class BundleNuGetService : INuGetService
             }
 
             var environmentVariables = new Dictionary<string, string>();
+            if (globalPackagesFolderOverride is not null)
+            {
+                // NUGET_PACKAGES takes precedence over globalPackagesFolder in NuGet.config, so set
+                // the child environment explicitly when staging requires a feed-keyed package cache.
+                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolderOverride;
+            }
             NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
             layoutLease?.AddEnvironment(environmentVariables);
 
@@ -228,8 +237,8 @@ internal sealed class BundleNuGetService : INuGetService
             killOnParentExit: true,
             ct: ct);
 
-            var redactedError = RedactSensitiveSources(error, sensitiveSources);
-            var redactedOutput = RedactSensitiveSources(output, sensitiveSources);
+            var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+            var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
 
             // NuGet errors often repeat the feed URL. Redact helper output separately from the
             // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
@@ -281,8 +290,8 @@ internal sealed class BundleNuGetService : INuGetService
             killOnParentExit: true,
             ct: ct);
 
-            redactedError = RedactSensitiveSources(error, sensitiveSources);
-            redactedOutput = RedactSensitiveSources(output, sensitiveSources);
+            redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+            redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
             if (!string.IsNullOrWhiteSpace(redactedError))
             {
                 _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
@@ -478,29 +487,12 @@ internal sealed class BundleNuGetService : INuGetService
         var document = await XDocument.LoadAsync(reader, LoadOptions.None, cancellationToken).ConfigureAwait(false);
 
         var containsCredentialMaterial = TemporaryNuGetConfig.DocumentContainsCredentialMaterial(document);
-        var credentialBearingSources = document
-            .Descendants()
-            .SelectMany(static element => element.Attributes())
-            .Where(static attribute => string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))
-            .Select(static attribute => attribute.Value)
-            .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var credentialBearingSources = TemporaryNuGetConfig.GetCredentialBearingSources(document);
 
         return new NuGetConfigInspection(
             containsCredentialMaterial ? null : document.ToString(SaveOptions.DisableFormatting),
             containsCredentialMaterial,
             credentialBearingSources);
-    }
-
-    private static string RedactSensitiveSources(string value, IReadOnlyList<string> sensitiveSources)
-    {
-        foreach (var source in sensitiveSources.OrderByDescending(static source => source.Length))
-        {
-            value = value.Replace(source, PackageSourceRedactor.RedactForDisplay(source), StringComparison.Ordinal);
-        }
-
-        return value;
     }
 
     private static void TryDeleteDirectory(string path, ILogger logger)

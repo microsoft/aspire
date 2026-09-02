@@ -992,5 +992,11 @@ internal class NuGetConfigMerger
             globalPackagesFolderAdd.SetAttributeValue("value", globalPackagesFolderValue ?? DefaultGlobalPackagesFolderValue);
             config.Add(globalPackagesFolderAdd);
         }
+        else if (globalPackagesFolderValue is not null)
+        {
+            // Generated staging configs supply a feed-keyed absolute cache path. It must replace an
+            // inherited value or same-version packages from different staging feeds can collide.
+            existingGlobalPackagesFolder.SetAttributeValue("value", globalPackagesFolderValue);
+        }
     }
 }

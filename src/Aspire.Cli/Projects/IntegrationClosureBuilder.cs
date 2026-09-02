@@ -136,12 +136,14 @@ internal static class IntegrationClosureBuilder
     {
         ArgumentNullException.ThrowIfNull(appHostDirectory);
 
+        // Workspace ownership follows the lexical path used for configuration discovery, while the
+        // hash uses the physical AppHost identity so aliases within a workspace share one cache.
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(appHostDirectory);
+        var integrationCacheFullPath = PathNormalizer.ResolveToFilesystemPath(integrationCacheDirectory.FullName);
         var appHostFullPath = PathNormalizer.ResolveToFilesystemPath(appHostDirectory.FullName);
-        var normalizedAppHostDirectory = new DirectoryInfo(appHostFullPath);
-        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(normalizedAppHostDirectory);
         var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(appHostFullPath));
         var hashFragment = Convert.ToHexString(hash)[..12].ToLowerInvariant();
-        var path = Path.Combine(integrationCacheDirectory.FullName, "apphosts", hashFragment);
+        var path = Path.Combine(integrationCacheFullPath, "apphosts", hashFragment);
 
         return new DirectoryInfo(path);
     }

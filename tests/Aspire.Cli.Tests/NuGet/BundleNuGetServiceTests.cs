@@ -127,6 +127,46 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestorePackagesAsync_ExplicitGlobalPackagesFolderOverridesInheritedEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var inheritedPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "inherited-packages");
+        var stagingPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "staging-packages");
+        var environmentVariables = new Dictionary<string, string?>
+        {
+            [CliPathHelper.NuGetPackagesEnvironmentVariable] = inheritedPackagesFolder
+        };
+        var executionFactory = new TestProcessExecutionFactory();
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(environmentVariables),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var firstResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName,
+            globalPackagesFolderOverride: stagingPackagesFolder);
+        environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] =
+            Path.Combine(workspace.WorkspaceRoot.FullName, "different-inherited-packages");
+        using var secondResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName,
+            globalPackagesFolderOverride: stagingPackagesFolder);
+
+        Assert.Equal(firstResult.ManifestPath, secondResult.ManifestPath);
+        Assert.Equal(stagingPackagesFolder, executionFactory.LastEnvironmentVariables?[CliPathHelper.NuGetPackagesEnvironmentVariable]);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentNuGetConfigs()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
