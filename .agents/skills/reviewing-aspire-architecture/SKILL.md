@@ -1,6 +1,6 @@
 ---
 name: reviewing-aspire-architecture
-description: "Triggers deep architectural review across 15 Aspire-specific dimensions. Activated by requests for deep review, architectural review, pattern review, or PRs touching hosting core, Azure integrations, dashboard, CLI, or components."
+description: "Reviews an existing PR or diff for Aspire-specific architectural concerns. Use only when the user explicitly requests deep architectural or pattern review, or when a generic review identifies a concrete Aspire-domain question that requires specialist analysis. Do not use merely because changed files are in hosting core, Azure integrations, dashboard, CLI, or components."
 ---
 
 # Aspire Architectural Review
@@ -9,13 +9,32 @@ Aspire-specific architectural review via the `reviewing-aspire-architecture` age
 
 ## When to Use
 
-**Use**: "deep review," "architectural review," "pattern review," PRs touching hosting core, Azure integrations, dashboard, CLI, components, new resource types, app model changes, deployment behavior.
+**Use only when** at least one of these conditions is true:
 
-**Don't use**: doc/config-only PRs → `code-review` · generic PR review → `code-review` · CI failures → `ci-test-failures` · flaky tests → `fix-flaky-test` · API surface → `api-review`
+- The user explicitly asks for a deep architectural review, Aspire pattern review, or equivalent domain-focused review of an existing PR or diff.
+- A generic review has already found a concrete question that cannot be resolved without Aspire-specific architectural knowledge. The reviewer must state the unresolved question and why its normal review cannot answer it; invoke this skill with only that focused question. Do not escalate merely for additional confidence or a second opinion.
+
+Changed file location is routing information after this skill is selected, not a reason to select it. A PR touching hosting core, Azure integrations, dashboard, CLI, components, resource types, the app model, or deployment behavior does not by itself qualify.
+
+**Don't use** this skill for implementation, debugging, testing, routine code changes, post-change validation, design brainstorming without a review target, generic PR review, doc/config-only PRs, CI failures, flaky tests, or API surface review. Use `code-review`, `ci-test-failures`, `fix-flaky-test`, or `api-review` where appropriate.
+
+## Invocation Guard
+
+- A parent may load this skill once and launch one `reviewing-aspire-architecture` agent for a user review request and change-set revision.
+- If this skill context is already loaded, do not invoke the skill again.
+- If the current agent is `reviewing-aspire-architecture`, do not invoke this skill or launch another `reviewing-aspire-architecture` agent.
+- Continue follow-up work in the existing agent conversation. Do not launch a replacement agent for refinements or narrower follow-up questions.
+- Completing or modifying code does not automatically trigger another architectural review. Re-run only when the user explicitly requests it for a materially changed diff.
 
 ## Relationship to code-review
 
-`code-review` covers generic bugs, security, perf, concurrency, and error handling. This skill covers only checks requiring Aspire domain knowledge. Some topic areas (Security, Performance, Error Handling) exist in both, but the checks are disjoint: generic patterns belong to `code-review`, Aspire-specific patterns belong here. Run `code-review` first for breadth, then this for domain depth.
+`code-review` covers generic bugs, security, perf, concurrency, and error handling and is sufficient for ordinary PR reviews. This skill covers only checks requiring Aspire domain knowledge. Some topic areas (Security, Performance, Error Handling) exist in both, but the checks are disjoint: generic patterns belong to `code-review`, Aspire-specific patterns belong here.
+
+Do not run this skill automatically after `code-review`. Escalate only a concrete unresolved Aspire-domain question, or run a full architectural pass when the user explicitly requests one.
+
+## Review Scope
+
+For an explicit full architectural review, inspect the PR context and only the dimensions selected by the changed-file routing below. For an escalation from another review, inspect only the supplied question, relevant diff, surrounding code, and existing comments needed to avoid duplication. Do not expand a focused escalation into a full PR review or repository-wide inventory.
 
 ## Folder → Dimension Routing
 
