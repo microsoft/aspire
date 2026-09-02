@@ -350,8 +350,8 @@ path_rules:
     reason: AppHostSdkTargetsTests asserts the per-RID orchestration package reference; TerminalHost exercises packaged DCP
   - paths:
       - src/Aspire.ProjectTemplates/**
-    targets: [test:Aspire.Templates.Tests]
-    reason: Templates.Tests installs the template hive from src/Aspire.ProjectTemplates
+    targets: [test:Aspire.Templates.Tests, test:Aspire.Cli.EndToEnd.Tests]
+    reason: Templates.Tests installs the template hive; CLI EndToEnd tests exercise the packaged templates through an installed CLI
   - paths:
       - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
       - src/Aspire.ProjectTemplates/templates/aspire-starter/**
