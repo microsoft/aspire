@@ -1,0 +1,17 @@
+{
+  "id": "vscode-e2e-linux-deno-debugger-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Linux, deno-debugger) shard fails with generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (Linux, deno-debugger)",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies .agents/skills/backport-pr/SKILL.md and docs/release-process.md, unrelated to VS Code extension code.",
+  "occurrences": [
+    {
+      "run_id": 33669706128,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33669706128",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19872,
+      "observed_at": "2026-09-02T19:25:04Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19875"
+}
