@@ -1198,9 +1198,10 @@ function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName)
   }
 }
 
-function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = process.env[environmentVariable];
+function resolveRequiredVsixPath(environmentVariable) {
+  const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
-    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+    throw new Error(`${environmentVariable} is required when a debugger-backed E2E shard is enabled.`);
   }
 
   const resolvedPath = path.resolve(configuredPath);

@@ -567,6 +567,8 @@ suite('E2E launch profile', () => {
         assert.ok(workflow.includes('ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a'));
         assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true'));
         assert.ok(runner.includes("const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';"));
+        assert.ok(runner.includes('is required when a debugger-backed E2E shard is enabled.'));
+        assert.ok(!runner.includes('is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.'));
         assert.ok(runner.includes('<WindowsPackageType>None</WindowsPackageType>'));
         assert.ok(runner.includes('<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>'));
         assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
