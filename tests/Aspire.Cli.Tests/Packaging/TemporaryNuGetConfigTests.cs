@@ -323,4 +323,50 @@ public class TemporaryNuGetConfigTests
             ["https://workspace.example.com/v3/index.json", "https://channel.example.com/v3/index.json"],
             packageSources.Select(element => element.Attribute("value")!.Value).ToArray());
     }
+
+    [Fact]
+    public async Task CreateComposedAsync_MergesTrustedRepositoriesByServiceIndex()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var userConfigPath = Path.Combine(workspace.CreateDirectory("user").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(userConfigPath, """
+            <configuration>
+              <trustedSigners>
+                <repository name="inherited" serviceIndex="https://packages.example.com/v3/index.json">
+                  <certificate fingerprint="INHERITED" hashAlgorithm="SHA256" allowUntrustedRoot="false" />
+                </repository>
+                <repository name="case-variant" serviceIndex="https://PACKAGES.example.com/v3/index.json">
+                  <certificate fingerprint="CASE-VARIANT" hashAlgorithm="SHA256" allowUntrustedRoot="false" />
+                </repository>
+              </trustedSigners>
+            </configuration>
+            """);
+        var workspaceConfigPath = Path.Combine(workspace.CreateDirectory("repo").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(workspaceConfigPath, """
+            <configuration>
+              <trustedSigners>
+                <repository name="renamed" serviceIndex="https://packages.example.com/v3/index.json">
+                  <certificate fingerprint="REPLACEMENT" hashAlgorithm="SHA256" allowUntrustedRoot="false" />
+                </repository>
+              </trustedSigners>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [workspaceConfigPath, userConfigPath],
+            []);
+
+        var repositories = XDocument.Load(config.ConfigFile.FullName)
+            .Descendants("trustedSigners")
+            .Elements("repository")
+            .ToArray();
+        Assert.Collection(
+            repositories,
+            repository =>
+            {
+                Assert.Equal("renamed", repository.Attribute("name")?.Value);
+                Assert.Equal("REPLACEMENT", repository.Element("certificate")?.Attribute("fingerprint")?.Value);
+            },
+            repository => Assert.Equal("case-variant", repository.Attribute("name")?.Value));
+    }
 }
