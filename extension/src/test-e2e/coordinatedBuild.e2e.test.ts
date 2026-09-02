@@ -70,6 +70,65 @@ suite('Aspire coordinated build E2E', function () {
         }
     });
 
+    test('honors custom run properties without rebuilding the project', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+
+        const projectDirectory = path.join(getWorkspaceRoot(), 'CoordinatedCustomRunProject');
+        const projectPath = path.join(projectDirectory, 'CoordinatedCustomRunProject.csproj');
+        const programPath = path.join(projectDirectory, 'Program.cs');
+        fs.mkdirSync(projectDirectory, { recursive: true });
+
+        try {
+            writeFileWithRetry(projectPath, `
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                  </PropertyGroup>
+                  <Target Name="CustomizeRunCommand" AfterTargets="ComputeRunArguments">
+                    <PropertyGroup>
+                      <RunCommand>custom-launcher</RunCommand>
+                      <RunArguments>--from-msbuild</RunArguments>
+                      <RunWorkingDirectory>relative-run-directory</RunWorkingDirectory>
+                    </PropertyGroup>
+                  </Target>
+                </Project>
+            `);
+            writeFileWithRetry(programPath, 'System.Console.WriteLine("coordinated");\n');
+            execFileSync('dotnet', ['build', projectPath, '--nologo'], {
+                cwd: projectDirectory,
+                stdio: 'pipe',
+            });
+
+            writeFileWithRetry(programPath, 'this does not compile\n');
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                build_working_directory: projectDirectory,
+                suppress_build: true,
+            };
+            const controlStatus = await executeE2eControlCommand({
+                name: 'createResourceDebugConfiguration',
+                launchConfig,
+                args: ['--from-session'],
+                debug: true,
+                isApphost: true,
+            }, { timeoutMs: 180000 });
+            const debugConfiguration = controlStatus.result as {
+                program?: string;
+                cwd?: string;
+                noDebug?: boolean;
+            };
+
+            assert.strictEqual(debugConfiguration.program, 'custom-launcher');
+            assert.strictEqual(debugConfiguration.cwd, path.join(projectDirectory, 'relative-run-directory'));
+            assert.strictEqual(debugConfiguration.noDebug, true);
+        } finally {
+            fs.rmSync(projectDirectory, { recursive: true, force: true });
+        }
+    });
+
     test('uses the requested file-app configuration instead of a source Configuration property', async () => {
         await openAspireView();
         await waitForRepositoryIdle();

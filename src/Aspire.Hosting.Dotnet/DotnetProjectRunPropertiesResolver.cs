@@ -125,15 +125,18 @@ internal static class DotnetProjectRunPropertiesResolver
                 var arguments = properties.GetProperty("RunArguments").GetString() ?? string.Empty;
                 var runWorkingDirectory = properties.GetProperty("RunWorkingDirectory").GetString();
                 var normalizedCommand = command?.Trim().Trim('"');
+                var normalizedWorkingDirectory = string.IsNullOrEmpty(runWorkingDirectory)
+                    ? null
+                    : Path.GetFullPath(runWorkingDirectory, Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
                 if (string.IsNullOrWhiteSpace(normalizedCommand))
                 {
                     throw new DistributedApplicationException(
                         $"dotnet msbuild returned an empty run command for project '{projectPath}'.");
                 }
 
-                return new(normalizedCommand, arguments, runWorkingDirectory);
+                return new(normalizedCommand, arguments, normalizedWorkingDirectory);
             }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException or IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException or KeyNotFoundException or IOException or UnauthorizedAccessException)
             {
                 throw new DistributedApplicationException(
                     $"dotnet msbuild returned an invalid run-command response for project '{projectPath}'.",

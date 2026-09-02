@@ -48,6 +48,7 @@ interface DotNetFileAppRunProperties {
 }
 
 interface DotNetProjectRunProperties extends DotNetFileAppRunProperties {
+    targetPath: string;
     runWorkingDirectory?: string;
 }
 
@@ -195,7 +196,7 @@ export class DotNetService implements IDotNetService {
                 projectFile,
                 '-nologo',
                 '-target:ComputeRunArguments',
-                '-getProperty:RunCommand,RunArguments,RunWorkingDirectory',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory',
                 `-getResultOutputFile:${resultOutputPath}`,
                 '-v:q'
             ];
@@ -216,24 +217,35 @@ export class DotNetService implements IDotNetService {
                 });
 
                 // Multiple -getProperty values produce:
-                //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "..." } }
+                //   { "Properties": { "TargetPath": "...", "RunCommand": "...",
+                //     "RunArguments": "...", "RunWorkingDirectory": "..." } }
                 // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
                 const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
                 const properties = JSON.parse(resultOutput).Properties as Record<string, unknown> | undefined;
+                const targetPath = typeof properties?.TargetPath === 'string'
+                    ? properties.TargetPath.trim()
+                    : '';
                 const runCommand = typeof properties?.RunCommand === 'string'
                     ? properties.RunCommand.trim().replace(/^"+|"+$/g, '')
                     : '';
                 if (!properties ||
+                    !targetPath ||
                     !runCommand ||
                     typeof properties.RunArguments !== 'string' ||
                     typeof properties.RunWorkingDirectory !== 'string') {
                     throw new Error(invalidMsBuildRunCommandResponse);
                 }
 
+                const runWorkingDirectory = properties.RunWorkingDirectory || undefined;
                 return {
+                    targetPath,
                     runCommand,
                     runArguments: properties.RunArguments,
-                    runWorkingDirectory: properties.RunWorkingDirectory || undefined
+                    // ComputeRunArguments extensions can replace the SDK-normalized value with a relative path.
+                    // MSBuild interprets that path from the project directory, not the SDK-discovery directory.
+                    runWorkingDirectory: runWorkingDirectory
+                        ? path.resolve(path.dirname(projectFile), runWorkingDirectory)
+                        : undefined
                 };
             } catch (err) {
                 throw new Error(failedToGetProjectRunProperties(projectFile, formatDotNetProcessError(err)));
@@ -523,7 +535,7 @@ function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
     return error;
 }
 
-async function shouldUseResolvedProjectRunCommand(outputPath: string): Promise<boolean> {
+async function isFrameworklessProjectOutput(outputPath: string): Promise<boolean> {
     if (path.extname(outputPath).toLowerCase() !== '.dll') {
         return false;
     }
@@ -549,6 +561,43 @@ async function shouldUseResolvedProjectRunCommand(outputPath: string): Promise<b
 
         throw new Error(failedToInspectRuntimeConfig(outputPath, String(err)));
     }
+}
+
+function pathsEqual(left: string, right: string): boolean {
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
+    return process.platform === 'win32'
+        ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+        : normalizedLeft === normalizedRight;
+}
+
+function canDebugResolvedProjectRunCommand(
+    outputPath: string,
+    runProperties: DotNetProjectRunProperties): boolean {
+    if (pathsEqual(runProperties.runCommand, outputPath)) {
+        return true;
+    }
+
+    const output = path.parse(outputPath);
+    const appHostPath = path.join(
+        output.dir,
+        `${output.name}${process.platform === 'win32' ? '.exe' : ''}`);
+    if (pathsEqual(runProperties.runCommand, appHostPath)) {
+        return true;
+    }
+
+    if (!isDotnetLauncher(runProperties.runCommand)) {
+        return false;
+    }
+
+    // The SDK's framework-dependent form is:
+    //   dotnet exec "/workspace/bin/Debug/net10.0/app.dll"
+    // CoreCLR can debug that host directly. Arbitrary dotnet subcommands can spawn a different process,
+    // so they must use the no-debug fallback to preserve the resolved launch contract.
+    const runArguments = parseSdkSerializedArguments(runProperties.runArguments);
+    return runArguments[0]?.toLowerCase() === 'exec' &&
+        runArguments.length > 1 &&
+        pathsEqual(runArguments[1], outputPath);
 }
 
 export function quoteCommandLineArgument(argument: string): string {
@@ -1158,7 +1207,15 @@ export function createProjectDebuggerExtension(
             }
             else if (!isFileBasedProject) {
                 const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-                const outputPath = await dotNetService.getDotNetTargetPath(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
+                let runProperties = launchConfig.type === 'project-with-external-build.v1'
+                    ? await dotNetService.getDotNetProjectRunProperties(
+                        projectPath,
+                        buildConfiguration,
+                        buildEnvironment,
+                        buildWorkingDirectory)
+                    : undefined;
+                const outputPath = runProperties?.targetPath ??
+                    await dotNetService.getDotNetTargetPath(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 const outputExists = await doesFileExist(outputPath);
                 if (!outputExists && suppressBuild) {
                     throw new Error(prebuiltProjectOutputMissing(projectPath, outputPath));
@@ -1168,23 +1225,30 @@ export function createProjectDebuggerExtension(
                     await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 }
 
-                if (await shouldUseResolvedProjectRunCommand(outputPath)) {
-                    const fallbackMessage = resolvedRunCommandDisablesDebugger(outputPath, projectPath);
-                    extensionLogOutputChannel.warn(fallbackMessage);
-                    if (launchOptions.debug) {
-                        vscode.window.showInformationMessage(fallbackMessage);
-                    }
-
-                    const runProperties = await dotNetService.getDotNetProjectRunProperties(
+                const frameworklessOutput = await isFrameworklessProjectOutput(outputPath);
+                if (!runProperties && frameworklessOutput) {
+                    runProperties = await dotNetService.getDotNetProjectRunProperties(
                         projectPath,
                         buildConfiguration,
                         buildEnvironment,
                         buildWorkingDirectory);
+                }
+
+                if (runProperties) {
+                    if (frameworklessOutput || !canDebugResolvedProjectRunCommand(outputPath, runProperties)) {
+                        const fallbackMessage = resolvedRunCommandDisablesDebugger(outputPath, projectPath);
+                        extensionLogOutputChannel.warn(fallbackMessage);
+                        if (launchOptions.debug) {
+                            vscode.window.showInformationMessage(fallbackMessage);
+                        }
+
+                        debugConfiguration.noDebug = true;
+                    }
+
                     debugConfiguration.program = runProperties.runCommand;
                     resolvedArguments = combineRunApiArguments(runProperties.runArguments, resolvedArguments);
                     debugConfiguration.args = resolvedArguments;
                     debugConfiguration.executablePath = undefined;
-                    debugConfiguration.noDebug = true;
                     if (!workingDirectoryProfile) {
                         debugConfiguration.cwd = runProperties.runWorkingDirectory ?? debugConfiguration.cwd;
                     }

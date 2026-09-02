@@ -345,28 +345,35 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(buildProjectPath));
     }
 
-    [Fact]
-    public void CaseVariantProjectPathsFollowFilesystemIdentity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CaseVariantProjectPathsFollowFilesystemIdentity(bool addCaseVariantFirst)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var buildResource = new DotnetProjectBuildResource(
             DotnetProjectBuildCoordinator.BuildResourceName,
             workspace.Path,
             TimeProvider.System);
-        var firstPath = CreateProject(workspace.Path, "Service", "App.csproj");
+        var projectPath = CreateProject(workspace.Path, "Service", "App.csproj");
         var caseVariantPath = Path.Combine(workspace.Path, "service", "app.CSPROJ");
-
-        buildResource.AddProject(firstPath);
-
-        if (File.Exists(caseVariantPath))
+        var caseInsensitive = File.Exists(caseVariantPath);
+        if (!caseInsensitive)
         {
-            buildResource.AddProject(caseVariantPath);
+            CreateProject(workspace.Path, "service", "app.CSPROJ");
+        }
+
+        var firstPath = addCaseVariantFirst ? caseVariantPath : projectPath;
+        var secondPath = addCaseVariantFirst ? projectPath : caseVariantPath;
+        buildResource.AddProject(firstPath);
+        buildResource.AddProject(secondPath);
+
+        if (caseInsensitive)
+        {
             Assert.Equal([NormalizeProjectPath(firstPath)], buildResource.ProjectPaths);
         }
         else
         {
-            var secondPath = CreateProject(workspace.Path, "service", "app.CSPROJ");
-            buildResource.AddProject(secondPath);
             Assert.Equal([NormalizeProjectPath(firstPath), NormalizeProjectPath(secondPath)], buildResource.ProjectPaths);
         }
     }

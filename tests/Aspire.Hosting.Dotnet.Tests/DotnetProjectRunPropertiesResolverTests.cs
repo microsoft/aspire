@@ -74,6 +74,6 @@ public class DotnetProjectRunPropertiesResolverTests(ITestOutputHelper outputHel
             NullLogger.Instance,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(new("dotnet", "exec app.dll", "bin"), result);
+        Assert.Equal(new("dotnet", "exec app.dll", Path.Combine(workspace.Path, "bin")), result);
     }
 }

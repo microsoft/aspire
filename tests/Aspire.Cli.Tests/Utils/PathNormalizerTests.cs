@@ -46,7 +46,9 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
             Assert.Skip("The test volume is case-sensitive.");
         }
 
-        Assert.Equal(file.FullName, PathNormalizer.ResolveToFilesystemPath(caseVariantPath));
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(file.FullName),
+            PathNormalizer.ResolveToFilesystemPath(caseVariantPath));
     }
 
     [Fact]
@@ -63,16 +65,22 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
             Assert.Skip("The test volume is case-insensitive.");
         }
 
-        Assert.Equal(file.FullName, PathNormalizer.ResolveToFilesystemPath(file.FullName));
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(file.FullName),
+            PathNormalizer.ResolveToFilesystemPath(file.FullName));
     }
 
     [Fact]
-    public void ResolveToFilesystemPath_ReturnsMissingPathUnchanged()
+    public void ResolveToFilesystemPath_CanonicalizesExistingPrefix_WhenPathIsMissing()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing", "App.csproj");
+        var expectedPath = Path.Combine(
+            PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName),
+            "Missing",
+            "App.csproj");
 
-        Assert.Equal(missingPath, PathNormalizer.ResolveToFilesystemPath(missingPath));
+        Assert.Equal(expectedPath, PathNormalizer.ResolveToFilesystemPath(missingPath));
     }
 
     [Fact]

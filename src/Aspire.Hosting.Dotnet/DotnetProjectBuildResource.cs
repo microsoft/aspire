@@ -76,12 +76,12 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     /// </summary>
     public string AddProject(string projectPath)
     {
-        var fullPath = PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(projectPath));
+        var fullPath = Path.GetFullPath(projectPath);
         // Keep the first path spelling in the traversal project so it stays relative to the AppHost directory,
         // but deduplicate by physical identity so a symlink alias cannot build the same project twice.
         // Every resource for that identity must launch this returned path so MSBuild uses the same
         // project directory, intermediate outputs, and final output that the coordinated build used.
-        var projectIdentity = PathNormalizer.ResolveSymlinks(fullPath);
+        var projectIdentity = PathNormalizer.ResolveToFilesystemPath(fullPath);
 
         lock (_lock)
         {

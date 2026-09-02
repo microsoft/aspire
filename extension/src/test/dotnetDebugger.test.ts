@@ -34,12 +34,13 @@ class TestDotNetService {
     public fileAppRunProperties = { runCommand: 'dotnet', runArguments: '' };
     public fileAppRunBuildConfiguration: string | undefined;
     public fileAppRunEnvironment: NodeJS.ProcessEnv | undefined;
-    public projectRunProperties: { runCommand: string, runArguments: string, runWorkingDirectory?: string };
+    public projectRunProperties: { targetPath: string, runCommand: string, runArguments: string, runWorkingDirectory?: string };
 
     constructor(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean) {
         this.getDotNetTargetPathStub = sinon.stub();
         this.getDotNetTargetPathStub.resolves(outputPath);
         this.projectRunProperties = {
+            targetPath: outputPath,
             runCommand: 'dotnet',
             runArguments: `exec "${outputPath}"`,
             runWorkingDirectory: nodePath.dirname(outputPath)
@@ -61,7 +62,7 @@ class TestDotNetService {
         return this.getDotNetTargetPathStub(projectFile, buildConfiguration, environment, workingDirectory);
     }
 
-    getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<{ runCommand: string, runArguments: string, runWorkingDirectory?: string }> {
+    getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<{ targetPath: string, runCommand: string, runArguments: string, runWorkingDirectory?: string }> {
         return this.getDotNetProjectRunPropertiesStub(projectFile, buildConfiguration, environment, workingDirectory);
     }
 
@@ -107,6 +108,33 @@ suite('Dotnet Debugger Extension Tests', () => {
     function createDebuggerExtension(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean, doesOutputFileExist: boolean): { dotNetService: TestDotNetService, extension: ResourceDebuggerExtension, doesFileExistStub: sinon.SinonStub } {
         const fakeDotNetService = new TestDotNetService(outputPath, rejectBuild, hasDevKit);
         return { dotNetService: fakeDotNetService, extension: createProjectDebuggerExtension(() => fakeDotNetService), doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist) };
+    }
+
+    function createRunnableProjectOutput(testName: string): {
+        tempRoot: string;
+        projectPath: string;
+        outputPath: string;
+        outputDirectory: string;
+    } {
+        const tempRoot = nodePath.join(process.cwd(), '.test-temp', `${testName}-${process.pid}-${Date.now()}`);
+        const projectDirectory = nodePath.join(tempRoot, 'Project');
+        const outputDirectory = nodePath.join(projectDirectory, 'bin', 'Debug', 'net10.0');
+        const projectPath = nodePath.join(projectDirectory, 'Project.csproj');
+        const outputPath = nodePath.join(outputDirectory, 'Project.dll');
+        nodeFs.mkdirSync(outputDirectory, { recursive: true });
+        nodeFs.writeFileSync(projectPath, '<Project></Project>');
+        nodeFs.writeFileSync(outputPath, '');
+        nodeFs.writeFileSync(nodePath.join(outputDirectory, 'Project.runtimeconfig.json'), JSON.stringify({
+            runtimeOptions: {
+                tfm: 'net10.0',
+                framework: {
+                    name: 'Microsoft.NETCore.App',
+                    version: '10.0.0'
+                }
+            }
+        }));
+
+        return { tempRoot, projectPath, outputPath, outputDirectory };
     }
 
     function restoreEnvironmentVariable(name: string, value: string | undefined): void {
@@ -771,9 +799,10 @@ suite('Dotnet Debugger Extension Tests', () => {
             resultOutputPath = getMsBuildResultOutputPath(args);
             nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
                 Properties: {
+                    TargetPath: '/workspace/bin/app.dll',
                     RunCommand: '"/workspace/bin/app"',
                     RunArguments: '--host-arg',
-                    RunWorkingDirectory: '/workspace/app'
+                    RunWorkingDirectory: 'relative-run-directory'
                 }
             }));
             callArgs.at(-1)(null, {
@@ -791,9 +820,10 @@ suite('Dotnet Debugger Extension Tests', () => {
             '/workspace/sdk-root');
 
         assert.deepStrictEqual(result, {
+            targetPath: '/workspace/bin/app.dll',
             runCommand: '/workspace/bin/app',
             runArguments: '--host-arg',
-            runWorkingDirectory: '/workspace/app'
+            runWorkingDirectory: nodePath.resolve('/workspace', 'relative-run-directory')
         });
         assert.strictEqual(execFileStub.firstCall.args[2]?.cwd, '/workspace/sdk-root');
         const runPropertyArgs = execFileStub.firstCall.args[1];
@@ -804,7 +834,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 !arg.startsWith('-getResultOutputFile:')).slice(-5),
             [
                 '-target:ComputeRunArguments',
-                '-getProperty:RunCommand,RunArguments,RunWorkingDirectory',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory',
                 '-v:q',
                 '-property:Configuration=Release',
                 '-property:GenerateFullPaths=true'
@@ -3308,6 +3338,177 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.noDebug, true);
     });
 
+    test('externally built project honors a custom run command and disables debugger attach', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-custom-run-command');
+        const projectDirectory = nodePath.dirname(projectPath);
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const runWorkingDirectory = nodePath.join(projectDirectory, 'custom-working-directory');
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: 'custom-launcher',
+                runArguments: '--from-msbuild "value with spaces"',
+                runWorkingDirectory
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'custom-launcher');
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', 'value with spaces', '--from-session']);
+            assert.strictEqual(debugConfig.cwd, runWorkingDirectory);
+            assert.strictEqual(debugConfig.noDebug, true);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+            assert.strictEqual(dotNetService.buildDotNetProjectStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for the SDK dotnet exec command', async () => {
+        const { tempRoot, projectPath, outputPath, outputDirectory } = createRunnableProjectOutput('dotnet-debugger-dotnet-exec');
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, ['exec', outputPath, '--from-session']);
+            assert.strictEqual(debugConfig.cwd, outputDirectory);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for a direct target command', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-direct-target');
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: outputPath,
+                runArguments: '--from-msbuild',
+                runWorkingDirectory: nodePath.dirname(projectPath)
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, outputPath);
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', '--from-session']);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
+    test('externally built project keeps debugger attach for the SDK apphost command', async () => {
+        const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-apphost');
+        const output = nodePath.parse(outputPath);
+        const appHostPath = nodePath.join(
+            output.dir,
+            `${output.name}${process.platform === 'win32' ? '.exe' : ''}`);
+
+        try {
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            dotNetService.projectRunProperties = {
+                targetPath: outputPath,
+                runCommand: appHostPath,
+                runArguments: '--from-msbuild',
+                runWorkingDirectory: nodePath.dirname(projectPath)
+            };
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project-with-external-build.v1',
+                project_path: projectPath,
+                suppress_build: true
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['--from-session'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            assert.strictEqual(debugConfig.program, appHostPath);
+            assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', '--from-session']);
+            assert.strictEqual(debugConfig.noDebug, undefined);
+            assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
+            assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
+        } finally {
+            removeDirectorySafely(tempRoot);
+        }
+    });
+
     test('uses dotnet CLI when project runtimeconfig has no runnable framework', async () => {
         const fs = require('fs');
         const path = require('path');
@@ -3497,6 +3698,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
             const buildWorkingDirectory = path.join(tempRoot, 'sdk-root');
             dotNetService.projectRunProperties = {
+                targetPath: outputPath,
                 runCommand: 'dotnet',
                 runArguments: `exec "${outputPath}"`,
                 runWorkingDirectory: projectDir
