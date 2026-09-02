@@ -68,9 +68,11 @@ public sealed class ExtensionE2eWorkflowTests
             ExtensionE2eWorkflow.Steps(job),
             step => Scalar(step, "name") == "Install Deno");
         Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
-        Assert.Equal(
-            "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
-            Scalar(installDenoStep, "uses"));
+        Assert.Equal("pwsh", Scalar(installDenoStep, "shell"));
+        var installScript = Scalar(installDenoStep, "run") ?? string.Empty;
+        Assert.Contains("https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip", installScript, StringComparison.Ordinal);
+        Assert.Contains("$installDirectory | Out-File -FilePath $env:GITHUB_PATH", installScript, StringComparison.Ordinal);
+        Assert.Contains("--version", installScript, StringComparison.Ordinal);
     }
 
     [Fact]

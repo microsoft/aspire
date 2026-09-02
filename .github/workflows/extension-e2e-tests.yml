@@ -779,9 +779,24 @@ jobs:
 
       - name: Install Deno
         if: ${{ matrix.installDeno }}
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          deno-version: v2.9.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = if ('${{ runner.os }}' -eq 'Windows') {
+            'x86_64-pc-windows-msvc'
+          } else {
+            'x86_64-unknown-linux-gnu'
+          }
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'deno'
+          $archivePath = Join-Path $env:RUNNER_TEMP "deno-$target.zip"
+          New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+          Invoke-WebRequest "https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip" -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $installDirectory -Force
+          if ('${{ runner.os }}' -ne 'Windows') {
+            chmod +x (Join-Path $installDirectory 'deno')
+          }
+          $installDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $installDirectory '${{ runner.os == 'Windows' && 'deno.exe' || 'deno' }}') --version
 
       - name: Install E2E recorder
         if: ${{ matrix.useXvfb }}
