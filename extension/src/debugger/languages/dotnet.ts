@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildResponseFile } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -92,7 +92,7 @@ export class DotNetService implements IDotNetService {
     }
 
     async buildDotNetProject(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<void> {
-        await withMsBuildResponseFile(environment, async responseFileArgument => {
+        await withMsBuildTemporaryFiles(environment, async responseFileArgument => {
             const args = ['build', projectFile];
             if (buildConfiguration) {
                 args.push('--configuration', buildConfiguration);
@@ -152,7 +152,7 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string> {
-        return withMsBuildResponseFile(environment, async responseFileArgument => {
+        return withMsBuildTemporaryFiles(environment, async responseFileArgument => {
             const args = [
                 'msbuild',
                 projectFile,
@@ -188,13 +188,15 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties> {
-        return withMsBuildResponseFile(environment, async responseFileArgument => {
+        return withMsBuildTemporaryFiles(environment, async (responseFileArgument, temporaryDirectory) => {
+            const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
             const args = [
                 'msbuild',
                 projectFile,
                 '-nologo',
                 '-target:ComputeRunArguments',
                 '-getProperty:RunCommand,RunArguments,RunWorkingDirectory',
+                `-getResultOutputFile:${resultOutputPath}`,
                 '-v:q'
             ];
             if (buildConfiguration) {
@@ -207,7 +209,7 @@ export class DotNetService implements IDotNetService {
 
             try {
                 const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
-                const { stdout } = await this.execFileAsync('dotnet', args, {
+                await this.execFileAsync('dotnet', args, {
                     cwd: workingDirectory ?? path.dirname(projectFile),
                     encoding: 'utf8',
                     env: createDotNetProcessEnvironment(cliPath, environment)
@@ -215,7 +217,9 @@ export class DotNetService implements IDotNetService {
 
                 // Multiple -getProperty values produce:
                 //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "..." } }
-                const properties = JSON.parse(stdout).Properties as Record<string, unknown> | undefined;
+                // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
+                const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
+                const properties = JSON.parse(resultOutput).Properties as Record<string, unknown> | undefined;
                 const runCommand = typeof properties?.RunCommand === 'string'
                     ? properties.RunCommand.trim().replace(/^"+|"+$/g, '')
                     : '';
@@ -238,59 +242,58 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties> {
-        const args = [
-            'build',
-            projectFile,
-            '--configuration',
-            buildConfiguration,
-            '--nologo',
-            '--verbosity',
-            'quiet',
-            '-getProperty:RunCommand,RunArguments'
-        ];
+        return withMsBuildTemporaryFiles(undefined, async (_, temporaryDirectory) => {
+            const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
+            const args = [
+                'build',
+                projectFile,
+                '--configuration',
+                buildConfiguration,
+                '--nologo',
+                '--verbosity',
+                'quiet',
+                '-getProperty:RunCommand,RunArguments',
+                `-getResultOutputFile:${resultOutputPath}`
+            ];
 
-        let stdout: string;
-        try {
-            const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
-            ({ stdout } = await this.execFileAsync('dotnet', args, {
-                cwd: path.dirname(projectFile),
-                encoding: 'utf8',
-                env: createDotNetProcessEnvironment(cliPath, environment)
-            }));
-        } catch (err) {
-            throw new Error(buildFailedForProjectWithError(projectFile, formatDotNetProcessError(err)));
-        }
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                await this.execFileAsync('dotnet', args, {
+                    cwd: path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+            } catch (err) {
+                throw new Error(buildFailedForProjectWithError(projectFile, formatDotNetProcessError(err)));
+            }
 
-        const output = stdout.trim();
-        if (!output) {
-            throw new Error(noOutputFromMsbuild);
-        }
-
-        // `dotnet build -getProperty:RunCommand,RunArguments` emits:
-        //   { "Properties": { "RunCommand": "/workspace/bin/Debug/app", "RunArguments": "" } }
-        // RunArguments may legitimately be empty, but both properties must be present as strings.
-        let parsed: {
-            Properties?: {
-                RunCommand?: unknown;
-                RunArguments?: unknown;
+            // `dotnet build -getProperty:RunCommand,RunArguments -getResultOutputFile:<path>` writes:
+            //   { "Properties": { "RunCommand": "/workspace/bin/Debug/app", "RunArguments": "" } }
+            // RunArguments may legitimately be empty, but both properties must be present as strings.
+            let parsed: {
+                Properties?: {
+                    RunCommand?: unknown;
+                    RunArguments?: unknown;
+                };
             };
-        };
-        try {
-            parsed = JSON.parse(output);
-        } catch {
-            throw new Error(invalidLaunchConfiguration(projectFile));
-        }
+            try {
+                const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
+                parsed = JSON.parse(resultOutput);
+            } catch {
+                throw new Error(invalidLaunchConfiguration(projectFile));
+            }
 
-        if (typeof parsed.Properties?.RunCommand !== 'string'
-            || !parsed.Properties.RunCommand
-            || typeof parsed.Properties.RunArguments !== 'string') {
-            throw new Error(invalidLaunchConfiguration(projectFile));
-        }
+            if (typeof parsed.Properties?.RunCommand !== 'string'
+                || !parsed.Properties.RunCommand
+                || typeof parsed.Properties.RunArguments !== 'string') {
+                throw new Error(invalidLaunchConfiguration(projectFile));
+            }
 
-        return {
-            runCommand: parsed.Properties.RunCommand,
-            runArguments: parsed.Properties.RunArguments
-        };
+            return {
+                runCommand: parsed.Properties.RunCommand,
+                runArguments: parsed.Properties.RunArguments
+            };
+        });
     }
 
     async getDotNetRunApiOutput(projectPath: string, environment?: NodeJS.ProcessEnv): Promise<string> {
@@ -603,29 +606,29 @@ function createDotNetRunBaseArguments(projectPath: string, options: DotNetRunOpt
     return dotnetRunArgs;
 }
 
-async function withMsBuildResponseFile<T>(
+async function withMsBuildTemporaryFiles<T>(
     buildProperties: NodeJS.ProcessEnv | undefined,
-    action: (responseFileArgument: string | undefined) => Promise<T>): Promise<T> {
+    action: (responseFileArgument: string | undefined, temporaryDirectory: string) => Promise<T>): Promise<T> {
     const propertyArguments = Object.entries(buildProperties ?? {})
         .filter((entry): entry is [string, string] => entry[1] !== undefined)
         // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quote the complete switch,
         // while percent escaping embedded quotes, backslashes, and line-breaking whitespace.
         .map(([name, value]) => `"--property:${escapeMsBuildPropertyValue(name)}=${escapeMsBuildPropertyValue(value)}"`);
-    if (propertyArguments.length === 0) {
-        return action(undefined);
-    }
-
     const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aspire-msbuild-'));
     const responseFilePath = path.join(directory, 'build-properties.rsp');
     let handle: fs.promises.FileHandle | undefined;
     try {
-        // Passing the final mode to open avoids a window in which another local user could read the values.
-        handle = await fs.promises.open(responseFilePath, 'wx', 0o600);
-        await handle.writeFile(`${propertyArguments.join(os.EOL)}${os.EOL}`, 'utf8');
-        await handle.close();
-        handle = undefined;
+        let responseFileArgument: string | undefined;
+        if (propertyArguments.length > 0) {
+            // Passing the final mode to open avoids a window in which another local user could read the values.
+            handle = await fs.promises.open(responseFilePath, 'wx', 0o600);
+            await handle.writeFile(`${propertyArguments.join(os.EOL)}${os.EOL}`, 'utf8');
+            await handle.close();
+            handle = undefined;
+            responseFileArgument = `@${responseFilePath}`;
+        }
 
-        return await action(`@${responseFilePath}`);
+        return await action(responseFileArgument, directory);
     } finally {
         let cleanupError: unknown;
         try {
@@ -639,8 +642,8 @@ async function withMsBuildResponseFile<T>(
             cleanupError ??= err;
         }
         if (cleanupError) {
-            extensionLogOutputChannel.warn(failedToCleanUpMsBuildResponseFile(
-                responseFilePath,
+            extensionLogOutputChannel.warn(failedToCleanUpMsBuildTemporaryDirectory(
+                directory,
                 cleanupError instanceof Error ? cleanupError.message : String(cleanupError)));
         }
     }

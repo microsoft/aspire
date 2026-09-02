@@ -295,20 +295,9 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         var originalConfigContent = await File.ReadAllTextAsync(configPath);
 
-        var scaffoldingService = new ScaffoldingService(
-            appHostServerProjectFactory: new TestAppHostServerProjectFactory
-            {
-                CreateAsyncCallback = (path, _) =>
-                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
-            },
-            serverSessionFactory: FakeAppHostServerSessionFactory.CreateForScaffolding(
-                new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" }),
-            languageDiscovery: new TestLanguageDiscovery(s_typeScriptLanguage),
-            interactionService: new TestInteractionService(),
-            environment: new TestEnvironment(),
-            logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext(),
-            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+        var scaffoldingService = CreateScaffoldingService(
+            workspace,
+            new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" });
         var context = new ScaffoldContext(
             Language: s_typeScriptLanguage,
             TargetDirectory: workspace.WorkspaceRoot,
@@ -322,6 +311,47 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(originalConfigContent, await File.ReadAllTextAsync(configPath));
         Assert.NotNull(new FileInfo(gitIgnorePath).LinkTarget);
         Assert.Equal("custom/\n", await File.ReadAllTextAsync(targetPath));
+    }
+
+    [Fact]
+    public async Task ScaffoldAsync_ReplacesExistingGitIgnoreAtomically()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows does not permit replacing the held-open destination used to observe file identity.");
+        }
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
+        const string existingContent = "custom/\n";
+        await File.WriteAllTextAsync(gitIgnorePath, existingContent);
+        // On Unix, an atomic rename leaves an existing handle attached to the old file. An in-place
+        // write changes the content seen through this handle, so this verifies the scaffolding call site.
+        await using var originalFile = new FileStream(
+            gitIgnorePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: 1,
+            FileOptions.Asynchronous);
+        var scaffoldingService = CreateScaffoldingService(
+            workspace,
+            new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" });
+        var context = new ScaffoldContext(
+            Language: s_typeScriptLanguage,
+            TargetDirectory: workspace.WorkspaceRoot,
+            ProjectName: "test",
+            SdkVersion: "13.4.0",
+            Channel: "daily");
+
+        var result = await scaffoldingService.ScaffoldAsync(context, TestContext.Current.CancellationToken);
+
+        Assert.True(result);
+        Assert.Equal("custom/\n.aspire/\n", await File.ReadAllTextAsync(gitIgnorePath));
+        originalFile.Position = 0;
+        using var reader = new StreamReader(originalFile, leaveOpen: true);
+        Assert.Equal(existingContent, await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, ".gitignore.tmp-*"));
     }
 
     [Fact]
@@ -551,5 +581,24 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("node_modules/\n.vscode/*\n!.vscode/extensions.json\n", firstMerge);
         Assert.Equal(firstMerge, secondMerge);
+    }
+
+    private static ScaffoldingService CreateScaffoldingService(
+        TemporaryWorkspace workspace,
+        IReadOnlyDictionary<string, string> scaffoldFiles)
+    {
+        return new ScaffoldingService(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) =>
+                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            },
+            serverSessionFactory: FakeAppHostServerSessionFactory.CreateForScaffolding(scaffoldFiles),
+            languageDiscovery: new TestLanguageDiscovery(s_typeScriptLanguage),
+            interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 }

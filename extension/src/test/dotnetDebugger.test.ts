@@ -757,24 +757,27 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('project run properties use the coordinated build context', async () => {
+    test('project run properties use the coordinated build context and parse a dedicated result file', async () => {
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
         const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment')
             .returns({ RESOLVED: 'environment' });
         let responseFilePath: string | undefined;
         let responseFileContents: string | undefined;
+        let resultOutputPath: string | undefined;
         const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
             const args = callArgs[1] as string[];
             responseFilePath = getMsBuildResponseFilePath(args);
             responseFileContents = nodeFs.readFileSync(responseFilePath, 'utf8');
+            resultOutputPath = getMsBuildResultOutputPath(args);
+            nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
+                Properties: {
+                    RunCommand: '"/workspace/bin/app"',
+                    RunArguments: '--host-arg',
+                    RunWorkingDirectory: '/workspace/app'
+                }
+            }));
             callArgs.at(-1)(null, {
-                stdout: JSON.stringify({
-                    Properties: {
-                        RunCommand: '"/workspace/bin/app"',
-                        RunArguments: '--host-arg',
-                        RunWorkingDirectory: '/workspace/app'
-                    }
-                }),
+                stdout: 'A successful MSBuild diagnostic.\n',
                 stderr: ''
             });
             return {} as childProcess.ChildProcess;
@@ -796,7 +799,9 @@ suite('Dotnet Debugger Extension Tests', () => {
         const runPropertyArgs = execFileStub.firstCall.args[1];
         assert.ok(Array.isArray(runPropertyArgs));
         assert.deepStrictEqual(
-            runPropertyArgs.filter((arg: string) => !arg.startsWith('@')).slice(-5),
+            runPropertyArgs.filter((arg: string) =>
+                !arg.startsWith('@') &&
+                !arg.startsWith('-getResultOutputFile:')).slice(-5),
             [
                 '-target:ComputeRunArguments',
                 '-getProperty:RunCommand,RunArguments,RunWorkingDirectory',
@@ -808,6 +813,8 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.ok(!runPropertyArgs.some((arg: string) => arg.includes('custom\u2003"flavor";\r\n\tvalue%') || arg.includes('custom\u2003%22flavor%22%3B%0D%0A%09value%25')));
         assert.ok(responseFilePath);
         assert.strictEqual(nodeFs.existsSync(responseFilePath), false);
+        assert.ok(resultOutputPath);
+        assert.strictEqual(nodeFs.existsSync(resultOutputPath), false);
         assert.strictEqual(createResolvedEnvStub.firstCall.args[1]?.BUILD_FLAVOR, 'custom\u2003"flavor";\r\n\tvalue%');
     });
 
@@ -1145,19 +1152,26 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('file-app run properties use build configuration as a global property and parse the machine-readable response', async () => {
+    test('file-app run properties use build configuration and parse a dedicated result file', async () => {
         const projectPath = nodePath.join(process.cwd(), '.test-temp', 'configured-file-app', 'app.cs');
         const resolvedEnv = { MARKER: 'resolved-env' } as unknown as NodeJS.ProcessEnv;
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
         const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns(resolvedEnv);
-        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, {
-            stdout: JSON.stringify({
+        let resultOutputPath: string | undefined;
+        const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            const args = callArgs[1] as string[];
+            resultOutputPath = getMsBuildResultOutputPath(args);
+            nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
                 Properties: {
                     RunCommand: '/workspace/bin/Debug/app',
                     RunArguments: 'exec "/workspace/bin/Debug/app.dll"'
                 }
-            }),
-            stderr: ''
+            }));
+            callArgs.at(-1)(null, {
+                stdout: 'A successful build diagnostic.\n',
+                stderr: ''
+            });
+            return {} as childProcess.ChildProcess;
         });
         const service = new DotNetService({} as AspireDebugSession);
 
@@ -1178,10 +1192,13 @@ suite('Dotnet Debugger Extension Tests', () => {
             '--nologo',
             '--verbosity',
             'quiet',
-            '-getProperty:RunCommand,RunArguments'
+            '-getProperty:RunCommand,RunArguments',
+            `-getResultOutputFile:${resultOutputPath}`
         ]);
         assert.strictEqual(execFileStub.firstCall.args[2]?.cwd, nodePath.dirname(projectPath));
         assert.strictEqual(execFileStub.firstCall.args[2]?.env, resolvedEnv);
+        assert.ok(resultOutputPath);
+        assert.strictEqual(nodeFs.existsSync(resultOutputPath), false);
         assert.strictEqual(createResolvedEnvStub.firstCall.args[0], '/resolved/aspire');
         assert.strictEqual(
             createResolvedEnvStub.firstCall.args[1]?.ASPIRE_SUPPRESS_CLI_RUN_HOOK,
@@ -1203,14 +1220,16 @@ suite('Dotnet Debugger Extension Tests', () => {
         try {
             sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
             const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns({});
-            sinon.stub(childProcess, 'execFile').yields(null, {
-                stdout: JSON.stringify({
+            sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+                const resultOutputPath = getMsBuildResultOutputPath(callArgs[1] as string[]);
+                nodeFs.writeFileSync(resultOutputPath, JSON.stringify({
                     Properties: {
                         RunCommand: '/workspace/bin/Debug/app',
                         RunArguments: ''
                     }
-                }),
-                stderr: ''
+                }));
+                callArgs.at(-1)(null, { stdout: '', stderr: '' });
+                return {} as childProcess.ChildProcess;
             });
             const service = new DotNetService({} as AspireDebugSession);
 
@@ -1238,11 +1257,18 @@ suite('Dotnet Debugger Extension Tests', () => {
     test('file-app run properties reject missing and malformed machine-readable responses', async () => {
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
         const execFileStub = sinon.stub(childProcess, 'execFile');
-        execFileStub.onFirstCall().yields(null, {
-            stdout: JSON.stringify({ Properties: { RunCommand: '/workspace/bin/Debug/app' } }),
-            stderr: ''
+        execFileStub.onFirstCall().callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(
+                getMsBuildResultOutputPath(callArgs[1] as string[]),
+                JSON.stringify({ Properties: { RunCommand: '/workspace/bin/Debug/app' } }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
         });
-        execFileStub.onSecondCall().yields(null, { stdout: 'not-json', stderr: '' });
+        execFileStub.onSecondCall().callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(getMsBuildResultOutputPath(callArgs[1] as string[]), 'not-json');
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
         const service = new DotNetService({} as AspireDebugSession);
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
@@ -1279,9 +1305,12 @@ suite('Dotnet Debugger Extension Tests', () => {
 
     test('project run properties use the localized invalid-response message', async () => {
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
-        sinon.stub(childProcess, 'execFile').yields(null, {
-            stdout: JSON.stringify({ Properties: { RunCommand: '/workspace/bin/app' } }),
-            stderr: ''
+        sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            nodeFs.writeFileSync(
+                getMsBuildResultOutputPath(callArgs[1] as string[]),
+                JSON.stringify({ Properties: { RunCommand: '/workspace/bin/app' } }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
         });
         const service = new DotNetService({} as AspireDebugSession);
 
@@ -4237,6 +4266,13 @@ function getMsBuildResponseFilePath(args: string[]): string {
     const responseFileArgument = args.find(arg => arg.startsWith('@'));
     assert.ok(responseFileArgument, `Expected an MSBuild response-file argument in ${JSON.stringify(args)}.`);
     return responseFileArgument.slice(1);
+}
+
+function getMsBuildResultOutputPath(args: string[]): string {
+    const prefix = '-getResultOutputFile:';
+    const resultOutputArgument = args.find(arg => arg.startsWith(prefix));
+    assert.ok(resultOutputArgument, `Expected an MSBuild result-output argument in ${JSON.stringify(args)}.`);
+    return resultOutputArgument.slice(prefix.length);
 }
 
 function dotnetCallFor(stub: sinon.SinonStub, projectPath: string, description: string): sinon.SinonSpyCall<any[], any> {

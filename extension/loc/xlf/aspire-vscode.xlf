@@ -391,8 +391,8 @@
     <trans-unit id="aspire-vscode.strings.denoInspectorPortAllocationFailed">
       <source xml:lang="en">Failed to allocate a Deno inspector port.</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.failedToCleanUpMsBuildResponseFile">
-      <source xml:lang="en">Failed to clean up temporary MSBuild response file &apos;{0}&apos;: {1}</source>
+    <trans-unit id="aspire-vscode.strings.failedToCleanUpMsBuildTemporaryDirectory">
+      <source xml:lang="en">Failed to clean up temporary MSBuild directory &apos;{0}&apos;: {1}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToConfigureLaunchJson">
       <source xml:lang="en">Failed to configure launch.json: {0}.</source>
@@ -1161,6 +1161,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustBuildProducedMultipleExecutables">
       <source xml:lang="en">cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.invalidMsBuildRunCommandResponse">
+      <source xml:lang="en">dotnet msbuild returned an invalid run-command response.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>

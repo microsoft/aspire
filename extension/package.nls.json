@@ -183,7 +183,7 @@
   "aspire-vscode.strings.invalidLaunchConfiguration": "Invalid launch configuration for {0}.",
   "aspire-vscode.strings.denoInspectorAddressUnavailable": "Could not reserve a loopback address for the Deno inspector.",
   "aspire-vscode.strings.denoAppHostRunCommandMissing": "The Deno AppHost command does not contain the required 'run' subcommand.",
-  "aspire-vscode.strings.failedToCleanUpMsBuildResponseFile": "Failed to clean up temporary MSBuild response file '{0}': {1}",
+  "aspire-vscode.strings.failedToCleanUpMsBuildTemporaryDirectory": "Failed to clean up temporary MSBuild directory '{0}': {1}",
   "aspire-vscode.strings.unsupportedBrowserDebugTarget": "Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.",
   "aspire-vscode.strings.unsupportedBrowserDebugTargetWithoutUrl": "Browser '{0}' cannot be debugged. Supported browsers are: {1}.",
   "aspire-vscode.strings.noAppHostInWorkspace": "No AppHost found in the Aspire settings file.",

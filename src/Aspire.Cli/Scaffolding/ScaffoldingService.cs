@@ -176,7 +176,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         var symlinkedGitIgnorePath = scaffoldFiles.Keys
             .Where(IsGitIgnoreFile)
             .Select(fileName => Path.Combine(scaffoldDirectory.FullName, fileName))
-            .FirstOrDefault(GitIgnoreMerger.IsSymbolicLink);
+            .FirstOrDefault(GitIgnoreFile.IsSymbolicLink);
         if (symlinkedGitIgnorePath is not null)
         {
             _interactionService.DisplayError(string.Format(
@@ -224,7 +224,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
                 contentToWrite = MergeVsCodeSettingsContent(existingContent, content, _logger);
             }
 
-            await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
+            if (IsGitIgnoreFile(fileName))
+            {
+                await GitIgnoreFile.WriteAllTextAtomicallyAsync(filePath, contentToWrite, cancellationToken);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
+            }
         }
 
         _logger.LogDebug("Wrote {Count} scaffold files", scaffoldFiles.Count);

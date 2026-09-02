@@ -130,9 +130,4 @@ internal static class GitIgnoreMerger
         return entry.StartsWith('/') || pattern.Contains('/');
     }
 
-    internal static bool IsSymbolicLink(string path)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(path);
-        return new FileInfo(path).LinkTarget is not null;
-    }
 }
