@@ -1,9 +1,9 @@
 {
   "id": "aspire-dashboard-otlphttpservicetests-connectionreset",
   "type": "flaky-test",
-  "title": "Flaky: OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure fails with 'Connection reset by peer' socket error",
+  "title": "Flaky: OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure fails with connection reset socket error",
   "test_name": "Aspire.Dashboard.Tests.Integration.OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure",
-  "error_pattern": "System.Net.Http.HttpRequestException : Error while copying content to a stream.\n---- System.IO.IOException : Unable to write data to the transport connection: Connection reset by peer.\n-------- System.Net.Sockets.SocketException : Connection reset by peer",
+  "error_pattern": "System.Net.Http.HttpRequestException : An error occurred while sending the request.\n---- System.IO.IOException : Unable to read data from the transport connection: An existing connection was forcibly closed by the remote host..\n-------- System.Net.Sockets.SocketException : An existing connection was forcibly closed by the remote host.",
   "occurrences": [
     {
       "run_id": 32909638198,
@@ -11,6 +11,13 @@
       "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
       "pr_number": 19677,
       "observed_at": "2026-08-26T00:03:04Z"
+    },
+    {
+      "run_id": 33671638017,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33671638017",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Sdk.Tests, Hosting.Sdk, Hosting.Sdk, tests/Aspire.Hosti... / Hosting.Sdk (windows-latest)",
+      "pr_number": 19403,
+      "observed_at": "2026-09-02T19:54:49Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19696"

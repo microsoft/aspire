@@ -1,0 +1,16 @@
+{
+  "id": "artifact-upload-etimedout",
+  "type": "infra-failure",
+  "title": "GitHub artifact upload fails with ETIMEDOUT network timeout",
+  "error_pattern": "Failed to CreateArtifact: Unable to make request: ETIMEDOUT\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints",
+  "occurrences": [
+    {
+      "run_id": 33671638017,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33671638017",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Sdk.Tests, Hosting.Sdk, Hosting.Sdk, tests/Aspire.Hosti... / Hosting.Sdk (windows-latest)",
+      "pr_number": 19403,
+      "observed_at": "2026-09-02T19:54:49Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19876"
+}

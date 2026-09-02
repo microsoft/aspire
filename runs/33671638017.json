@@ -1,0 +1,48 @@
+{
+  "run_id": 33671638017,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33671638017",
+  "analyzed_at": "2026-09-02T19:54:49Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19403,
+    "title": "Fix enum values in YARP environment configuration",
+    "author": "air-hand",
+    "state": "closed",
+    "head_branch": "fix/yarp-forwarder-config-version-policy",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19403"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Sdk.Tests, Hosting.Sdk, Hosting.Sdk, tests/Aspire.Hosti... / Hosting.Sdk (windows-latest)",
+      "id": 100390632905,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33671638017/job/100390632905",
+      "classification": "transient-infra",
+      "reason": "Failed to CreateArtifact: Unable to make request: ETIMEDOUT — a GitHub Actions artifact upload network timeout unrelated to the PR's YARP config generator changes.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "id": 100390660363,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33671638017/job/100390660363",
+      "classification": "flaky-test",
+      "reason": "OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure fails with a socket-level connection reset, matching a known intermittent failure in Aspire.Dashboard.Tests unrelated to the PR's Yarp hosting changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Integration.OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Tests, Dashboard, Dashboard, tests/Aspire.Dashboard.T... / Dashboard (windows-latest)",
+      "error": "System.Net.Http.HttpRequestException : An error occurred while sending the request.\n---- System.IO.IOException : Unable to read data from the transport connection: An existing connection was forcibly closed by the remote host..\n-------- System.Net.Sockets.SocketException : An existing connection was forcibly closed by the remote host.",
+      "stack_trace": "at System.Net.Http.HttpConnection.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)\n   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)\n   at Aspire.Dashboard.Tests.Integration.OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure() in /_/tests/Aspire.Dashboard.Tests/Integration/OtlpHttpServiceTests.cs:line 79",
+      "classification": "flaky",
+      "reason": "This is a known intermittent socket connection-reset failure in the OTLP HTTP integration test, not related to files changed by this PR (only Yarp hosting files were touched).",
+      "cause": "aspire-dashboard-otlphttpservicetests-connectionreset"
+    }
+  ],
+  "causes": ["aspire-dashboard-otlphttpservicetests-connectionreset", "artifact-upload-etimedout"]
+}
