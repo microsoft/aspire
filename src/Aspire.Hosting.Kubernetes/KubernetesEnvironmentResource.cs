@@ -9,7 +9,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
-using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -30,7 +29,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// Kubernetes cluster.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource
+public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
@@ -494,33 +493,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
 
             // Configure OTLP for resources if dashboard is enabled
-            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboardResource)
             {
-                ConfigureOtlp(r, otlpGrpcEndpoint);
-            }
-
-            // Fail the publish if this workload binds a persistent volume owned by a
-            // different Kubernetes environment. The two charts would render into
-            // separate namespaces/clusters, so the workload's claimName reference would
-            // resolve to a PVC that does not exist alongside it — Kubernetes would fail
-            // to schedule the pod with "persistentvolumeclaim not found". Detect and
-            // surface it here where we have both the resolved workload compute
-            // environment and the annotated PV.
-            if (r.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var pvBindings))
-            {
-                foreach (var binding in pvBindings)
-                {
-                    if (binding.Volume.Parent != this)
-                    {
-                        throw new InvalidOperationException(
-                            $"Resource '{r.Name}' is assigned to Kubernetes environment '{Name}' but binds " +
-                            $"persistent volume '{binding.Volume.Name}' which belongs to environment " +
-                            $"'{binding.Volume.Parent.Name}'. A workload can only bind persistent volumes " +
-                            $"declared on its own environment. Move the AddPersistentVolume call to " +
-                            $"'{Name}', or assign the workload to '{binding.Volume.Parent.Name}' with " +
-                            $"WithComputeEnvironment.");
-                    }
-                }
+                ConfigureOtlp(r, dashboardResource);
             }
 
             // Create a Kubernetes compute resource for the resource
@@ -567,19 +542,48 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         return null;
     }
 
-    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    private static void ConfigureOtlp(IResource resource, KubernetesAspireDashboardResource dashboard)
     {
-        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        var otlpExporter = GetEffectiveOtlpExporterAnnotation(resource);
+
+        if (resource is IResourceWithEnvironment resourceWithEnv &&
+            otlpExporter is not null)
         {
+            var (otlpEndpoint, protocol) = otlpExporter.RequiredProtocol switch
+            {
+                OtlpProtocol.HttpProtobuf => (dashboard.OtlpHttpEndpoint, "http/protobuf"),
+                OtlpProtocol.HttpJson => (dashboard.OtlpHttpEndpoint, "http/json"),
+                _ => (dashboard.OtlpGrpcEndpoint, "grpc"),
+            };
+
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
-                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
                 return Task.CompletedTask;
             }));
         }
     }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     /// <summary>
     /// Resolves a <see cref="ReferenceExpression"/> at deploy time. Used by pipeline steps

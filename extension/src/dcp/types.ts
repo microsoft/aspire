@@ -73,7 +73,7 @@ export function isRustLaunchConfiguration(obj: any): obj is RustLaunchConfigurat
 }
 
 export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
-    type: "node" | "bun";
+    type: "node" | "bun" | "deno";
     script_path?: string;
     runtime_executable?: string;
     working_directory?: string;
@@ -84,7 +84,7 @@ export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchCo
 }
 
 export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {
-    return obj && (obj.type === 'node' || obj.type === 'bun');
+    return obj && (obj.type === 'node' || obj.type === 'bun' || obj.type === 'deno');
 }
 
 export type NodeLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "node" };
@@ -97,6 +97,12 @@ export type BunLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { ty
 
 export function isBunLaunchConfiguration(obj: any): obj is BunLaunchConfiguration {
     return obj && obj.type === 'bun';
+}
+
+export type DenoLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "deno" };
+
+export function isDenoLaunchConfiguration(obj: any): obj is DenoLaunchConfiguration {
+    return obj && obj.type === 'deno';
 }
 
 export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -138,6 +144,8 @@ export interface JavaLaunchConfiguration extends ExecutableLaunchConfiguration {
     type: "java";
     request?: "launch" | "attach";
     working_directory?: string;
+    // Absolute JVM launcher selected by the CLI. Absent for older CLIs that only send "java".
+    java_exec?: string;
     // A fully qualified class name, optionally prefixed with a Java module name
     // ("[module/]com.example.Api"), or the path of the .java source file declaring main. Absent when
     // the IDE should resolve the entry point itself. A JAR path is never valid here; an executable

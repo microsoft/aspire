@@ -200,6 +200,19 @@ When code is moved from one file to another (e.g., extracting a class), treat th
 - **Diff old vs. new behavior.** When a type/class is deleted and replaced, explicitly compare the old and new implementations. Look for: removed overrides, changed exception behavior, relaxed validation, lost invariant checks.
 - **Check callers of removed types.** If `OldClass` is removed and replaced by `NewClass<T>`, verify that all call sites that depended on `OldClass`-specific behavior still work correctly.
 
+### Aspire-domain escalation
+
+Complete the generic review before considering `reviewing-aspire-architecture`. Never invoke that specialist first merely because the PR touches hosting core, Azure integrations, dashboard, CLI, components, resource types, the app model, or deployment behavior.
+
+After the generic pass, use a focused architectural escalation when all of these are true:
+
+1. The diff provides concrete evidence of a potential correctness issue.
+2. Resolving it depends on a named Aspire-specific contract or lifecycle rule outside this skill's review rules.
+3. The generic review cannot determine whether the behavior is correct from the diff, surrounding code, tests, and existing comments.
+4. The escalation can be expressed as one focused question with the relevant files, evidence, impact if incorrect, and reason specialist knowledge is required.
+
+Do not escalate a concern that is already a concrete generic finding, merely high-risk code, a request for a second opinion, or a broad desire for more confidence. Preserve the completed generic findings, run at most one focused escalation for the change-set revision, and merge only net-new high-confidence specialist findings. Do not rerun the generic review after the specialist returns.
+
 ## Step 5: Present Findings to the User
 
 **Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. Order by potential impact.

@@ -13,7 +13,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Tests;
-using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
@@ -67,57 +66,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
         Assert.Matches("^cli_20260212T180000000_detach-child_[0-9a-f]{32}\\.log$", fileName);
-    }
-
-    [Fact]
-    public void ComputeDetachedMatchHashes_ResolvesSymlinkForPrimaryHash_AndKeepsRawHashInFallback()
-    {
-        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
-            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
-
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var homeDirectory = workspace.WorkspaceRoot.FullName;
-
-        // Reference the same AppHost through a directory symlink ("link" -> "real"). This mirrors the
-        // macOS temp-path shape (/var/folders/... is a symlink to /private/var/folders/...) that made
-        // detached `aspire start` wait on a hash the AppHost never used.
-        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
-        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
-        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
-
-        var realProjectPath = Path.Combine(realDirectory.FullName, "AppHost.csproj");
-        File.WriteAllText(realProjectPath, "<Project />");
-        var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "AppHost.csproj");
-
-        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPathViaSymlink);
-        // The test is only meaningful when resolution actually rewrites the path.
-        Assert.NotEqual(appHostPathViaSymlink, resolvedPath);
-
-        var resolvedPathHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedPath, homeDirectory))!;
-        var rawPathHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPathViaSymlink, homeDirectory))!;
-        var rawFallbackHashes = AppHostHelper.ComputeLegacyHashes(appHostPathViaSymlink);
-        var resolvedFallbackHashes = AppHostHelper.ComputeLegacyHashes(resolvedPath);
-
-        var (expectedHash, fallbackHashes) = AppHostLauncher.ComputeDetachedMatchHashes(appHostPathViaSymlink, homeDirectory);
-
-        // The primary hash is computed from the resolved path — the value the AppHost actually keys
-        // its socket on — and therefore differs from the raw-path hash the buggy code waited on.
-        Assert.Equal(resolvedPathHash, expectedHash);
-        Assert.NotEqual(rawPathHash, expectedHash);
-
-        // The fallback set keeps the raw path's compact hash so an AppHost still keyed on the
-        // unresolved path continues to match, plus the legacy hex hashes of both paths.
-        Assert.Contains(rawPathHash, fallbackHashes);
-        Assert.Contains(rawFallbackHashes[0], fallbackHashes);
-        Assert.Contains(resolvedFallbackHashes[0], fallbackHashes);
-
-        // Cross-side agreement: the AppHost builds its socket file name with the same shared code,
-        // keyed on the resolved path (AuxiliaryBackchannelService resolves symlinks before naming the
-        // socket via ComputeSocketPath, which embeds ComputeAppHostId(resolvedPath)). The CLI's
-        // primary hash must equal that embedded id so it waits on exactly the AppHost's socket.
-        Assert.Equal(BackchannelConstants.ComputeAppHostId(resolvedPath), expectedHash);
     }
 
     [Fact]
@@ -309,6 +257,44 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_AppHostLocatedThroughSymlink_AdoptsConnectionReportingRealPath()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Creating symlinks on Windows requires elevation or developer mode.");
+
+        // The launcher matches the AppHost it spawned by path. The located path and the path the
+        // AppHost reports are produced independently, so a symlinked checkout only matches if both
+        // sides are canonicalized. Without that, the launcher never adopts its own AppHost and falls
+        // through to the launch-timeout path.
+        using var harness = AppHostLauncherHarness.CreateWithSymlinkedAppHostPath(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        Assert.NotEqual(
+            harness.LocatedAppHostFile.FullName,
+            PathNormalizer.ResolveToFilesystemPath(harness.LocatedAppHostFile.FullName));
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.LocatedAppHostFile,
+            format: null,
+            isolated: null,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 15,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
     }
 
     [Fact]
@@ -1120,6 +1106,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             FileLoggerProvider fileLoggerProvider,
             AppHostLauncher launcher,
             FileInfo appHostFile,
+            FileInfo locatedAppHostFile,
             TestInteractionService interactionService,
             TestAuxiliaryBackchannelMonitor monitor,
             TestDetachedProcessFactory processFactory)
@@ -1129,6 +1116,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             _fileLoggerProvider = fileLoggerProvider;
             Launcher = launcher;
             AppHostFile = appHostFile;
+            LocatedAppHostFile = locatedAppHostFile;
             InteractionService = interactionService;
             Monitor = monitor;
             ProcessFactory = processFactory;
@@ -1136,7 +1124,16 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public AppHostLauncher Launcher { get; }
 
+        /// <summary>
+        /// Gets the AppHost file as it exists on disk after symlink resolution.
+        /// </summary>
         public FileInfo AppHostFile { get; }
+
+        /// <summary>
+        /// Gets the spelling of the AppHost file that project location hands to the launcher. This
+        /// differs from <see cref="AppHostFile"/> only for the symlinked harness variant.
+        /// </summary>
+        public FileInfo LocatedAppHostFile { get; }
 
         public TestInteractionService InteractionService { get; }
 
@@ -1152,10 +1149,25 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted: false);
         }
 
+        /// <summary>
+        /// Creates a harness where project location resolves the AppHost through a directory symlink
+        /// while the running AppHost reports its real path, which is how the launcher sees an AppHost
+        /// started from a symlinked checkout.
+        /// </summary>
+        public static AppHostLauncherHarness CreateWithSymlinkedAppHostPath(ITestOutputHelper outputHelper) =>
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, locateThroughSymlink: true);
+
         public static AppHostLauncherHarness Create(
             ITestOutputHelper outputHelper,
             string? appHostSelectionOrigin,
-            bool selectionWasPrompted)
+            bool selectionWasPrompted) =>
+            Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, locateThroughSymlink: false);
+
+        private static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted,
+            bool locateThroughSymlink)
         {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
@@ -1163,8 +1175,19 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var cacheDirectory = workspace.WorkspaceRoot.CreateSubdirectory("cache");
             var sdkDirectory = workspace.WorkspaceRoot.CreateSubdirectory("sdks");
             var logsDirectory = workspace.WorkspaceRoot.CreateSubdirectory("logs");
-            var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+            var appHostDirectory = locateThroughSymlink
+                ? workspace.WorkspaceRoot.CreateSubdirectory("real")
+                : workspace.WorkspaceRoot;
+            var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
             File.WriteAllText(appHostFile.FullName, "<Project />");
+
+            var locatedAppHostFile = appHostFile;
+            if (locateThroughSymlink)
+            {
+                var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+                Directory.CreateSymbolicLink(linkPath, appHostDirectory.FullName);
+                locatedAppHostFile = new FileInfo(Path.Combine(linkPath, "AppHost.csproj"));
+            }
 
             var executionContext = new CliExecutionContext(
                 workspace.WorkspaceRoot,
@@ -1189,7 +1212,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var projectLocator = new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile])
+                    Task.FromResult(new AppHostProjectSearchResult(locatedAppHostFile, [locatedAppHostFile])
                     {
                         WasExplicitDirectorySelectionPrompted = selectionWasPrompted
                     })
@@ -1217,6 +1240,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 fileLoggerProvider,
                 launcher,
                 appHostFile,
+                locatedAppHostFile,
                 interactionService,
                 monitor,
                 processFactory);
@@ -1224,9 +1248,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public void AddConnection(TestAppHostAuxiliaryBackchannel connection)
         {
-            var socketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(AppHostFile.FullName, _homeDirectory.FullName);
-            var hash = AppHostHelper.ExtractHashFromSocketPath(socketPrefix) ?? throw new InvalidOperationException("Expected socket hash.");
-            connection.Hash = hash;
+            var socketPath = CreateMatchingSocketFile(Environment.ProcessId);
             connection.AppHostInfo ??= new AppHostInformation
             {
                 AppHostPath = AppHostFile.FullName,
@@ -1234,7 +1256,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 StartedAt = DateTimeOffset.UtcNow
             };
 
-            Monitor.AddConnection(hash, $"{socketPrefix}.sock", connection);
+            Monitor.AddConnection(socketPath, connection);
         }
 
         public void SetLinkedWorktree()
@@ -1249,8 +1271,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
             Directory.CreateDirectory(backchannelsDir);
 
-            var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(AppHostFile.FullName);
-            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
+            var resolvedAppHostPath = PathNormalizer.ResolveToFilesystemPath(AppHostFile.FullName);
+            var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
             var appHostId = Path.GetFileName(prefix);
             var socketPath = Path.Combine(
                 backchannelsDir,
@@ -1585,6 +1607,178 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public bool IsBundleModeAvailable(string? projectDirectory = null) => false;
     }
+
+    [Fact]
+    public void IsLaunchedByChildCli_StableStartTimeMatches_ReturnsTrue()
+    {
+        var childPid = Environment.ProcessId;
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid);
+        Assert.NotNull(childStableStartedAt);
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt.Value),
+            },
+        };
+
+        Assert.True(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_StableStartTimeMismatch_ReturnsFalse()
+    {
+        // An AppHost outlives the CLI that launched it and keeps reporting that CLI's PID. Once the OS
+        // recycles the PID onto our freshly launched child, the PID alone matches a completely unrelated
+        // orphan, so the launcher would adopt it and report its dashboard URLs.
+        var childPid = Environment.ProcessId;
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid);
+        Assert.NotNull(childStableStartedAt);
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/OtherAppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt.Value - 60_000),
+            },
+        };
+
+        Assert.False(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_OlderAppHostWithoutStableStartTime_ReturnsTrue()
+    {
+        // AppHosts launched by older CLIs never report CliStableStartedAt. Falling back to the PID-only
+        // match keeps them discoverable rather than making every pre-upgrade AppHost unreachable.
+        var childPid = Environment.ProcessId;
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = null,
+            },
+        };
+
+        Assert.True(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid)));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_DifferentCliProcessId_ReturnsFalse()
+    {
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId + 1,
+            },
+        };
+
+        Assert.False(AppHostLauncher.IsLaunchedByChildCli(candidate, Environment.ProcessId, childStableStartedAt: null));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_MatchingPathWithoutCliProcessId_ReturnsTrue()
+    {
+        // The fallback exists for AppHosts too old to report which CLI launched them. Narrowing it
+        // must not make that population unlaunchable.
+        var candidate = CreateCandidate("/tmp/AppHost.csproj", cliProcessId: null, stableStartedAt: null);
+
+        Assert.True(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_DifferentCliProcessId_ReturnsFalse()
+    {
+        // StopExistingInstancesAsync only finds sockets keyed on a spelling derived from the caller's
+        // path, so a previously launched AppHost at this path can still be running. It is already
+        // listening while the AppHost we just spawned is still starting, so it would win this match and
+        // the launcher would report its dashboard while leaving the new AppHost running unattended.
+        var candidate = CreateCandidate("/tmp/AppHost.csproj", cliProcessId: 4243, stableStartedAt: null);
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_StartedBeforeChild_ReturnsFalse()
+    {
+        // Same stale-instance scenario, but for an AppHost old enough that it never reports a launching
+        // CLI. It cannot be ours because it was already running before our child existed.
+        var childStableStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var candidate = CreateCandidate(
+            "/tmp/AppHost.csproj",
+            cliProcessId: null,
+            stableStartedAt: DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt - 60_000));
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_StartedAfterChild_ReturnsTrue()
+    {
+        // The AppHost our child launches necessarily starts after it, so the ordering check must not
+        // reject the instance we are actually waiting for.
+        var childStableStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var candidate = CreateCandidate(
+            "/tmp/AppHost.csproj",
+            cliProcessId: null,
+            stableStartedAt: DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt + 500));
+
+        Assert.True(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_DifferentPath_ReturnsFalse()
+    {
+        var candidate = CreateCandidate("/tmp/OtherAppHost.csproj", cliProcessId: null, stableStartedAt: null);
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    private static TestAppHostAuxiliaryBackchannel CreateCandidate(string appHostPath, int? cliProcessId, DateTimeOffset? stableStartedAt)
+        => new()
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = 4444,
+                CliProcessId = cliProcessId,
+                StableStartedAt = stableStartedAt,
+            },
+        };
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {

@@ -13,6 +13,8 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestExtensionInteractionService(IServiceProvider serviceProvider) : IExtensionInteractionService
 {
+    private readonly object _displayLock = new();
+
     public ConsoleOutput Console { get; set; }
     public bool SupportsLinks { get; set; }
     public Action<string>? DisplayErrorCallback { get; set; }
@@ -25,11 +27,16 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Action<string, bool, string?>? WriteDebugSessionMessageCallback { get; set; }
     public Action<ExtensionAppHostLogEntry>? WriteAppHostLogEntryCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
+    public Func<string?, string, string?, CancellationToken, Task<bool>>? TryDisplayCommandFailureAsyncCallback { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Func<string, Func<string, ValidationResult>?, bool, bool, PromptBinding<string?>?, CancellationToken, Task<string>>? PromptForStringCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
     public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
+    public List<string> DisplayedErrors { get; } = [];
+    public List<(string ErrorMessage, IReadOnlyList<InteractionMessageAction> Actions)> DisplayedErrorsWithActions { get; } = [];
+    public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
+    public List<(KnownEmoji Emoji, string Message, IReadOnlyList<InteractionMessageAction> Actions, ConsoleOutput? ConsoleOverride)> DisplayedMessagesWithActions { get; } = [];
     public bool FlushAsyncCalled { get; private set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
@@ -113,11 +120,36 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            DisplayedErrors.Add(errorMessage);
+        }
+        DisplayErrorCallback?.Invoke(errorMessage);
+    }
+
+    public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false)
+    {
+        lock (_displayLock)
+        {
+            DisplayedErrorsWithActions.Add((errorMessage, actions));
+        }
         DisplayErrorCallback?.Invoke(errorMessage);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
+        lock (_displayLock)
+        {
+            DisplayedMessages.Add((emoji, message, consoleOverride));
+        }
+    }
+
+    public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
+    {
+        lock (_displayLock)
+        {
+            DisplayedMessagesWithActions.Add((emoji, message, actions, consoleOverride));
+        }
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -132,6 +164,16 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public void NotifyAppHostStartupCompleted()
     {
         NotifyAppHostStartupCompletedCallback?.Invoke();
+    }
+
+    public Task<bool> TryDisplayCommandFailureAsync(
+        string? errorMessage,
+        string cliLogFilePath,
+        string? appHostCliLogFilePath,
+        CancellationToken cancellationToken)
+    {
+        return TryDisplayCommandFailureAsyncCallback?.Invoke(errorMessage, cliLogFilePath, appHostCliLogFilePath, cancellationToken)
+            ?? Task.FromResult(false);
     }
 
     public void DisplayConsolePlainText(string message)

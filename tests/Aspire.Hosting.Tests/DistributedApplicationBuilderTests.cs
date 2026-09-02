@@ -10,12 +10,14 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Security.Cryptography;
 using System.Text;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
@@ -26,7 +28,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class DistributedApplicationBuilderTests
+public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
 
@@ -110,6 +112,90 @@ public class DistributedApplicationBuilderTests
 
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(appHostDirectory, config["AppHost:Directory"]);
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderLoadsAppSettingsFromProjectDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.json"),
+            """
+            {
+              "Validation": {
+                "BaseOnly": "base",
+                "Override": "base"
+              },
+              "Logging": {
+                "LogLevel": {
+                  "Microsoft.AspNetCore": "Debug",
+                  "Aspire.Hosting.Dcp": "Trace"
+                }
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.PolyglotTest.json"),
+            """
+            {
+              "Validation": {
+                "Override": "environment"
+              }
+            }
+            """);
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            Args = ["--environment", "PolyglotTest"],
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+
+        Assert.Equal(projectDirectory, appBuilder.Environment.ContentRootPath);
+        Assert.Equal("base", appBuilder.Configuration["Validation:BaseOnly"]);
+        Assert.Equal("environment", appBuilder.Configuration["Validation:Override"]);
+        Assert.Equal("Debug", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Trace", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderPreservesManagedLoggingDefaultsAndAllowsAppSettingsOverrides()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.json"),
+            """
+            {
+              "Logging": {
+                "LogLevel": {
+                  "Aspire.Hosting.Dcp": "Trace"
+                }
+              }
+            }
+            """);
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+        using var app = appBuilder.Build();
+        var filterOptions = app.Services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value;
+
+        Assert.Equal(
+            [LogLevel.Warning, LogLevel.Warning],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Microsoft.AspNetCore")
+                .Select(rule => rule.LogLevel));
+        Assert.Equal(
+            [LogLevel.Trace, LogLevel.Trace],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp")
+                .Select(rule => rule.LogLevel));
     }
 
     [Fact]
@@ -440,6 +526,44 @@ public class DistributedApplicationBuilderTests
                     lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
                     upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
             }
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostDeploymentStateIdentityDoesNotResolveSymlinks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-deployment-path-");
+        try
+        {
+            var realDirectory = projectDirectory.CreateSubdirectory("real");
+            var appHostPath = Path.Combine(realDirectory.FullName, "apphost.ts");
+            File.WriteAllText(appHostPath, string.Empty);
+
+            var symlinkDirectory = Path.Combine(projectDirectory.FullName, "link");
+            Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+            var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "apphost.ts");
+
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = appHostPathViaSymlink,
+                Args = []
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+            var previousIdentityPath = PathNormalizer.ResolvePathCasing(Path.GetFullPath(appHostPathViaSymlink));
+            var expectedSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(previousIdentityPath)));
+
+            Assert.NotEqual(PathNormalizer.ResolveToFilesystemPath(appHostPathViaSymlink), previousIdentityPath);
+            Assert.Equal(expectedSha, builder.Configuration["AppHost:DeploymentStatePathSha256"]);
         }
         finally
         {

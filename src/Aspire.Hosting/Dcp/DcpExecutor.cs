@@ -178,6 +178,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     containers = _containerCreator.PrepareObjects().ToArray();
                     _containerCreator.PrepareContainerExecutables();
                     executables = _executableCreator.PrepareObjects(ct).ToArray();
+                    AllocateExecutableTargetPorts(executables);
 
                     prepareResourcesActivity.SetDcpPreparedResourceCounts(containers.Length, executables.Length);
                 }
@@ -672,6 +673,13 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(persistedPort);
                 }
+
+                if (sp.ModelResource is IComputeResource &&
+                    !sp.ModelResource.IsContainer() &&
+                    EndpointAnnotation.NormalizePort(endpoint.TargetPort) is int fixedTargetPort)
+                {
+                    _proxylessEndpointPortAllocator.ExcludePort(fixedTargetPort);
+                }
             }
         }
 
@@ -764,6 +772,49 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return !resource.HasPersistentLifetime();
     }
 
+    private void AllocateExecutableTargetPorts(IEnumerable<RenderedModelResource<Executable>> executables)
+    {
+        // Allocate per rendered executable so replicas receive distinct target ports.
+        foreach (var executable in executables)
+        {
+            if (!executable.DcpResource.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(
+                CustomResource.ServiceProducerAnnotation,
+                out var serviceProducerAnnotations))
+            {
+                continue;
+            }
+
+            var annotationsByServiceName = serviceProducerAnnotations.ToDictionary(a => a.ServiceName, StringComparer.Ordinal);
+            var annotationsChanged = false;
+
+            foreach (var serviceProducer in executable.ServicesProduced)
+            {
+                var endpoint = serviceProducer.EndpointAnnotation;
+                if (!endpoint.IsProxied ||
+                    EndpointAnnotation.NormalizePort(endpoint.TargetPort) is not null)
+                {
+                    continue;
+                }
+
+                var annotation = annotationsByServiceName[serviceProducer.Service.Metadata.Name];
+
+                // DCP's dynamic producer-port allocation probes an ephemeral port, releases it, and
+                // later passes it to the child process. Allocate from Aspire's non-ephemeral range
+                // instead so unrelated outbound connections cannot claim the port during that gap.
+                annotation.Port = _proxylessEndpointPortAllocator.AllocatePort(endpoint.Protocol);
+                annotationsChanged = true;
+            }
+
+            if (annotationsChanged)
+            {
+                // Annotation lists are deserialized copies, so persist the allocated ports back to the DCP resource.
+                executable.DcpResource.SetAnnotationAsObjectList(
+                    CustomResource.ServiceProducerAnnotation,
+                    serviceProducerAnnotations);
+            }
+        }
+    }
+
     /// <summary>
     /// Determines whether an endpoint definition has a fixed public port DCP should reserve or pre-exclude.
     /// </summary>
@@ -817,7 +868,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             publicPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
             _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", publicPort, endpoint.Name, resource.Name);
 
-            if (resource.HasPersistentLifetime())
+            if (resource.HasPersistentLifetime() && !_options.Value.RandomizePorts)
             {
                 var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
                 if (!_userSecretsManager.TrySetSecret(secretKey, publicPort.ToString(CultureInfo.InvariantCulture)))
@@ -845,7 +896,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
-        if (!resource.HasPersistentLifetime() || !NeedsPublicPort(resource, endpoint))
+        if (_options.Value.RandomizePorts ||
+            !resource.HasPersistentLifetime() ||
+            !NeedsPublicPort(resource, endpoint))
         {
             return null;
         }

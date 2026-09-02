@@ -17,7 +17,8 @@
 #   job:polyglot               tests.yml -> polyglot-validation.yml (py/go/java/rust/ts)
 #   job:typescript-sdk         tests.yml -> typescript-sdk-tests.yml
 #   job:typescript-api-compat  tests.yml -> typescript-api-compat.yml
-#   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux
+#   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux,
+#                              with unit/package steps in extension-unit-tests.yml
 #   job:extension-e2e          tests.yml -> extension-e2e-tests.yml
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
@@ -212,6 +213,7 @@ path_rules:
       - .vscode/launch.json
       - .vscode/tasks.json
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
+      - .github/workflows/extension-unit-tests.yml
     targets: [job:extension-unit]
     reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
   - paths:
@@ -224,6 +226,7 @@ path_rules:
       - tests/Aspire.Hosting.Tests/Cli/**
       - eng/scripts/get-aspire-cli*
       - .github/workflows/tests.yml
+      - .github/workflows/extension-unit-tests.yml
       - .github/workflows/extension-e2e-tests.yml
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml

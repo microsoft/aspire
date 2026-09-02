@@ -64,6 +64,46 @@ internal sealed class EnvVar
 }
 
 /// <summary>
+/// Describes an action that an extension can attach to an interaction message.
+/// </summary>
+internal sealed class InteractionMessageAction
+{
+    private InteractionMessageAction(string displayName, string? command, string? filePath)
+    {
+        DisplayName = displayName;
+        Command = command;
+        FilePath = filePath;
+    }
+
+    [JsonPropertyName("displayName")]
+    public string DisplayName { get; }
+
+    [JsonPropertyName("command")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Command { get; }
+
+    [JsonPropertyName("filePath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FilePath { get; }
+
+    public static InteractionMessageAction ExecuteCommand(string displayName, string command)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+
+        return new(displayName, command, filePath: null);
+    }
+
+    public static InteractionMessageAction OpenFile(string displayName, string filePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        return new(displayName, command: null, filePath);
+    }
+}
+
+/// <summary>
 /// Options passed when starting a debug session from the CLI to the extension.
 /// </summary>
 internal sealed class DebugSessionOptions

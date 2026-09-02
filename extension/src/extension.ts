@@ -39,6 +39,9 @@ import { registerTreeViewCommands } from './activation/registerTreeViewCommands'
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
 import { InternalMicrosoftTelemetryProvider } from './utils/internalMicrosoftTelemetry';
+import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
+import { onDidResolveCliForOperation } from './utils/cliOperationResolution';
+import { FileSystemOutdatedCliSuppressionStore } from './utils/outdatedCliSuppressionStore';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -115,6 +118,17 @@ export async function activate(context: vscode.ExtensionContext) {
   terminalProvider.closeAllOpenAspireTerminals();
 
   const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+  const outdatedCliNotifier = new OutdatedCliNotifier(
+    configInfoProvider,
+    undefined,
+    Date.now,
+    new FileSystemOutdatedCliSuppressionStore(context.globalStorageUri.fsPath));
+  context.subscriptions.push(outdatedCliNotifier);
+  context.subscriptions.push(onDidResolveCliForOperation(({ target, cliPath }) => {
+    void outdatedCliNotifier.notifyIfOutdated(target, cliPath).catch(error => {
+      extensionLogOutputChannel.warn(`Unable to check Aspire CLI version: ${String(error)}`);
+    });
+  }));
   const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
   context.subscriptions.push(appHostDiscoveryService);
 

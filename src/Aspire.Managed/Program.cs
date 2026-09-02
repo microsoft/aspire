@@ -77,7 +77,6 @@ static async Task<int> RunNuGet(string[] args)
         var rootCommand = new RootCommand("Aspire NuGet Helper - Package operations for Aspire CLI bundle");
         rootCommand.Subcommands.Add(SearchCommand.Create());
         rootCommand.Subcommands.Add(RestoreCommand.Create());
-        rootCommand.Subcommands.Add(LayoutCommand.Create());
         rootCommand.Subcommands.Add(ManifestCommand.Create());
         return await rootCommand.Parse(args).InvokeAsync(cancellationToken: operationCts.Token).ConfigureAwait(false);
     }

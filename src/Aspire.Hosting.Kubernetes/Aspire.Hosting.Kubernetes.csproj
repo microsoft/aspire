@@ -20,9 +20,11 @@
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" LinkBase="Process" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)VolumeMountPathResolver.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Yaml\*.cs" LinkBase="Shared\Yaml" />
   </ItemGroup>
 
