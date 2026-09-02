@@ -70,6 +70,8 @@ export const launchingWithAppHost = (sessionType: 'run' | 'debug', appHostPath: 
 export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire debug session... Child processes will be stopped.');
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
+export const denoInspectorPortAllocationFailed = vscode.l10n.t('Failed to allocate a Deno inspector port.');
+export const denoTaskDebuggingUnsupported = vscode.l10n.t('Deno task launches cannot be debugged automatically because Deno does not accept inspector flags on the task subcommand. Use a direct Deno entrypoint for Aspire debugging, or configure and launch a Deno task that starts with an inspector flag manually.');
 export const csharpSupportNotEnabled = vscode.l10n.t('C# support is not enabled in this workspace. This project should have started through the Aspire CLI.');
 export const failedToStartProject = (errorMessage: string) => vscode.l10n.t('Failed to start project: {0}.', errorMessage);
 export const dcpServerNotInitialized = vscode.l10n.t('DCP server not initialized - cannot forward debug output.');
@@ -185,6 +187,8 @@ export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed
 export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
 export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
 export const configInfoTimedOut = (seconds: number) => vscode.l10n.t('Aspire config info timed out after {0} seconds.', seconds);
+export const outdatedAspireCliWarning = (version: string, cliPath: string, recommendedVersion: string) => vscode.l10n.t('Aspire CLI {0} at {1} has a newer version available for its current channel: {2}.', version, cliPath, recommendedVersion);
+export const updateAspireCliAction = vscode.l10n.t({ message: 'Update Aspire CLI', comment: 'Button label that updates the installed Aspire CLI.' });
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
@@ -205,6 +209,8 @@ export const rustWindowsGnuDebuggerUnsupported = (target: string) => vscode.l10n
 export const rustDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Rust AppHosts require native debugger support. Set up {0} in the Extensions view, then start the AppHost again.', extensionId);
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
+export const denoDisplayName = (script: string) => `Deno: ${script}`;
+export const denoLabel = 'Deno';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
 // Neutral wording: a required extension that is installed but disabled is absent from

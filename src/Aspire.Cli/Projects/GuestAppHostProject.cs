@@ -18,7 +18,9 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Shared.UserSecrets;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -338,7 +340,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             cancellationToken);
 
         // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-        await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: true, cancellationToken: cancellationToken);
+        await InstallDependenciesAsync(
+            directory,
+            rpcClient,
+            environmentVariables: new Dictionary<string, string>(),
+            treatMissingJavaScriptToolAsWarning: true,
+            cancellationToken);
 
         return true;
     }
@@ -592,9 +599,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             IGuestProcessLauncher? launcher = null;
             using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
+                // Pass the launch profile and certificate environment variables to both dependency
+                // installation and the guest AppHost so they use the same selected toolchain.
+                var environmentVariables = CreateGuestEnvironmentVariables(
+                    context.EnvironmentVariables,
+                    launchProfileEnvironmentVariables,
+                    certEnvVars,
+                    defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+                    args: context.UnmatchedTokens);
+
                 // Step 7: Install dependencies (using GuestRuntime)
                 // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-                var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
+                var installResult = await InstallDependenciesAsync(
+                    directory,
+                    rpcClient,
+                    environmentVariables,
+                    treatMissingJavaScriptToolAsWarning: false,
+                    cancellationToken);
                 if (installResult != 0)
                 {
                     context.BackchannelCompletionSource?.TrySetException(
@@ -606,14 +627,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 // Step 8: Execute the guest apphost
 
-                // Pass the launch profile and certificate environment variables through to the guest AppHost
-                // so it sees the same dashboard and resource service endpoints as the temporary .NET server.
-                var environmentVariables = CreateGuestEnvironmentVariables(
-                    context.EnvironmentVariables,
-                    launchProfileEnvironmentVariables,
-                    certEnvVars,
-                    defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-                    args: context.UnmatchedTokens);
                 environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
                 environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
                 environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
@@ -1166,9 +1179,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             OutputCollector? guestOutput;
             using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
+                // Publish excludes launch-profile environment selection, but dependency installation
+                // still needs the same effective toolchain environment as the guest AppHost.
+                var environmentVariables = CreateGuestEnvironmentVariables(
+                    context.EnvironmentVariables,
+                    launchProfileEnvironmentVariables,
+                    defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+                    includeLaunchProfileEnvironmentVariables: false,
+                    args: context.Arguments);
+
                 // Step 5: Install dependencies if needed (using GuestRuntime)
                 // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-                var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
+                var installResult = await InstallDependenciesAsync(
+                    directory,
+                    rpcClient,
+                    environmentVariables,
+                    treatMissingJavaScriptToolAsWarning: false,
+                    cancellationToken);
                 if (installResult != 0)
                 {
                     context.BackchannelCompletionSource?.TrySetException(
@@ -1179,14 +1206,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return installResult;
                 }
 
-                // Pass the launch profile environment variables through to the guest AppHost so publish mode
-                // uses the same dashboard and resource service endpoints as the temporary .NET server.
-                var environmentVariables = CreateGuestEnvironmentVariables(
-                    context.EnvironmentVariables,
-                    launchProfileEnvironmentVariables,
-                    defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
-                    includeLaunchProfileEnvironmentVariables: false,
-                    args: context.Arguments);
                 environmentVariables[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
                 environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
                 environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
@@ -1592,21 +1611,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost
-        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var matchingSockets = AppHostSocketManager.FindSockets(
             genericAppHostPath,
             homeDirectory.FullName,
             Environment.ProcessId,
             _logger);
 
         // Check if any socket files exist
-        if (matchingSockets.Length == 0)
+        if (matchingSockets.Count == 0)
         {
             return RunningInstanceResult.NoRunningInstance; // No running instance, continue
         }
 
         // Stop all running instances
-        var stopTasks = matchingSockets.Select(socketPath =>
-            _runningInstanceManager.StopRunningInstanceAsync(socketPath, cancellationToken));
+        var stopTasks = matchingSockets.Select(socket =>
+            _runningInstanceManager.StopRunningInstanceAsync(socket, cancellationToken));
         var results = await Task.WhenAll(stopTasks);
         return results.All(r => r) ? RunningInstanceResult.InstanceStopped : RunningInstanceResult.StopFailed;
     }
@@ -2047,6 +2066,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(_resolvedLanguage.LanguageId, cancellationToken);
+            CommandSpec[]? installDependencies = null;
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
                 var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
@@ -2056,11 +2076,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 var resolution = JavaAppHostToolchainResolver.Resolve(directory, _logger);
                 await JavaAppHostToolchainResolver.EnsureToolchainFilesExistAsync(resolution, cancellationToken);
-                runtimeSpec = JavaAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, resolution, directory);
+                runtimeSpec = JavaAppHostToolchainResolver.ApplyToRuntimeSpec(
+                    runtimeSpec,
+                    resolution,
+                    directory,
+                    out installDependencies);
                 _javaToolchainResolution = resolution;
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _fileLoggerProvider);
+            _guestRuntime = new GuestRuntime(
+                runtimeSpec,
+                _logger,
+                _environment,
+                _profilingTelemetry,
+                _fileLoggerProvider,
+                installDependencies);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,
@@ -2079,6 +2109,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private async Task<int> InstallDependenciesAsync(
         DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
+        IDictionary<string, string> environmentVariables,
         bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
@@ -2111,7 +2142,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             JavaAppHostToolchainResolver.ClearStagedDependencies(javaToolchain);
         }
 
-        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, cancellationToken);
+        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, environmentVariables, cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();

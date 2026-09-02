@@ -192,7 +192,7 @@ export interface AddTestChildDatabaseOptions {
 }
 
 export interface AddTestRedisOptions {
-    port?: number;
+    port?: number | null;
 }
 
 export interface GetStatusAsyncOptions {
@@ -210,12 +210,12 @@ export interface WithDataVolumeOptions {
 
 export interface WithMergeLoggingOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithMergeLoggingPathOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithOptionalCallbackOptions {
@@ -723,7 +723,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
+    async _addTestRedisInternal(name: string, port?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (port !== undefined) rpcArgs.port = port;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -1314,7 +1314,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -1336,7 +1336,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -2358,7 +2358,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -2380,7 +2380,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -3102,7 +3102,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -3124,7 +3124,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -3728,7 +3728,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -3750,7 +3750,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;

@@ -884,6 +884,24 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.False(r.SelectsAll);
     }
 
+    [Fact]
+    public void RealMapExtensionReleaseFilesSelectUnitAndE2eWithoutDotNetTests()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            ["extension/package.json", "extension/CHANGELOG.md"],
+            [],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.Equal(
+            ["job:extension-e2e", "job:extension-unit"],
+            r.Jobs.Order(StringComparer.Ordinal));
+    }
+
     // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
     // same surface the per-language polyglot playground scripts regenerate and compile
     // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that

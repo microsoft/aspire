@@ -21,12 +21,14 @@ export type Capability =
     | 'node' // Support for running Node.js projects
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
+    | 'deno' // Support for running Deno projects (built-in to VS Code via js-debug)
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
     | 'java' // Support for running Java projects
     | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
     | 'azure-functions' // Support for running Azure Functions projects
+    | 'message-actions.v1' // Support structured actions on interaction-service notifications
     | 'apphost-log-output.v1'; // Support structured AppHost log correlation in the debug console
 
 export type Capabilities = Capability[];
@@ -110,7 +112,7 @@ export function isJavaInstalled(extensionInstalled: (extensionId: string) => boo
 }
 
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
-    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
+    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'message-actions.v1', 'build-dotnet-using-cli'];
 
     capabilities.push('apphost-log-output.v1');
 
@@ -155,6 +157,9 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
     }
+
+    // Deno debugging uses VS Code's built-in js-debug, so no extension probe is required.
+    capabilities.push("deno");
 
     if (isMauiInstalled()) {
         capabilities.push("maui");

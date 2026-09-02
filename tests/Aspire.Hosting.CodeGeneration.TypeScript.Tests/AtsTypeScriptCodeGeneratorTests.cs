@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECOMPUTE002
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
@@ -773,6 +775,62 @@ public class AtsTypeScriptCodeGeneratorTests
         var aspireTs = files["aspire.mts"];
 
         Assert.Contains("withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>)", aspireTs);
+    }
+
+    [Fact]
+    public void Generate_NullableNumericArrayElements_AreGrouped()
+    {
+        var nullableNumberType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            Category = AtsTypeCategory.Primitive,
+            IsNullable = true
+        };
+        var nullableNumberArrayType = new AtsTypeRef
+        {
+            TypeId = $"{AtsConstants.Number}[]",
+            Category = AtsTypeCategory.Array,
+            ElementType = nullableNumberType
+        };
+        var capability = CreateVoidEntryPointCapability(
+            "inspectNullableNumberArray",
+            new AtsParameterInfo
+            {
+                Name = "values",
+                Type = nullableNumberArrayType
+            });
+        var nullableNumberArrayDto = new AtsDtoTypeInfo
+        {
+            TypeId = "Aspire.Hosting.CodeGeneration.TypeScript.Tests/NullableNumberArrayDto",
+            Name = "NullableNumberArrayDto",
+            Properties =
+            [
+                new AtsDtoPropertyInfo
+                {
+                    Name = "Values",
+                    Type = nullableNumberArrayType
+                }
+            ]
+        };
+        var scannedContext = CreateContextFromTestAssembly();
+        var atsContext = new AtsContext
+        {
+            Capabilities = [.. scannedContext.Capabilities, capability],
+            HandleTypes = scannedContext.HandleTypes,
+            DtoTypes = [.. scannedContext.DtoTypes, nullableNumberArrayDto],
+            EnumTypes = scannedContext.EnumTypes,
+            ExportedValues = scannedContext.ExportedValues,
+            Diagnostics = scannedContext.Diagnostics
+        };
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains(
+            "export async function inspectNullableNumberArray(client: AspireClientRpc, values: (number | null)[]): Promise<void>",
+            aspireTs);
+        Assert.Contains("values?: (number | null)[];", aspireTs);
+        Assert.DoesNotContain("number | null[]", aspireTs);
     }
 
     [Fact]
@@ -2353,6 +2411,38 @@ public class AtsTypeScriptCodeGeneratorTests
                && !id.Contains("ViteApp", StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DenoPublicApis_AreExperimental()
+    {
+        var denoMethods = typeof(JavaScriptHostingExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp) ||
+                method.Name.StartsWith("WithDeno", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(denoMethods);
+        Assert.Contains(denoMethods, method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp));
+        Assert.Contains(denoMethods, method => method.Name.StartsWith("WithDeno", StringComparison.Ordinal));
+
+        Assert.All(denoMethods, method =>
+        {
+            var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        });
+
+        foreach (var type in new[]
+        {
+            typeof(Aspire.Hosting.JavaScript.DenoAppResource),
+            typeof(Aspire.Hosting.JavaScript.DenoInspectMode),
+            typeof(Aspire.Hosting.JavaScript.DenoNodeModulesDirMode),
+            typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
+        })
+        {
+            var experimental = Assert.Single(type.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        }
     }
 
     private const string ApiExportPackageName = "Aspire.Hosting.CodeGeneration.TypeScript.Tests";

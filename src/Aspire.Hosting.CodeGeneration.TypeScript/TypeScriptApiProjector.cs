@@ -1689,7 +1689,7 @@ internal sealed partial class TypeScriptApiProjector
             AtsTypeCategory.Handle => GetWrapperOrHandleName(typeRef.TypeId),
             AtsTypeCategory.Dto => GetDtoInterfaceName(typeRef.TypeId),
             AtsTypeCategory.Callback => "Function",  // Callbacks handled separately with full signature
-            AtsTypeCategory.Array => $"{MapTypeRefToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Array => FormatArrayType(typeRef.ElementType, MapTypeRefToTypeScript(typeRef.ElementType)),
             AtsTypeCategory.List => $"AspireList<{MapTypeRefToTypeScript(typeRef.ElementType)}>",
             AtsTypeCategory.Dict => typeRef.IsReadOnly
                 ? $"Record<{MapTypeRefToTypeScript(typeRef.KeyType)}, {MapTypeRefToTypeScript(typeRef.ValueType)}>"
@@ -1722,11 +1722,19 @@ internal sealed partial class TypeScriptApiProjector
 
         return typeRef.Category switch
         {
-            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Array or AtsTypeCategory.List => FormatArrayType(typeRef.ElementType, MapDtoPropertyTypeToTypeScript(typeRef.ElementType)),
             AtsTypeCategory.Dict => $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>",
             AtsTypeCategory.Union => MapDtoUnionTypeToTypeScript(typeRef),
             _ => MapTypeRefToTypeScript(typeRef)
         };
+    }
+
+    private static string FormatArrayType(AtsTypeRef? elementType, string mappedElementType)
+    {
+        var requiresGrouping = elementType?.Category == AtsTypeCategory.Union ||
+            elementType is { IsNullable: true, Category: AtsTypeCategory.Primitive or AtsTypeCategory.Enum };
+
+        return requiresGrouping ? $"({mappedElementType})[]" : $"{mappedElementType}[]";
     }
 
     internal string MapDtoUnionTypeToTypeScript(AtsTypeRef typeRef)

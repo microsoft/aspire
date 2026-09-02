@@ -26,6 +26,9 @@ from contextlib import AbstractContextManager
 
 _logger = logging.getLogger(__name__)
 
+# Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+_ASPIRE_UNSET = object()
+
 # Maximum allowed message size (64 MB) to prevent memory exhaustion from malicious Content-Length
 _MAX_MESSAGE_SIZE = 64 * 1024 * 1024
 
@@ -1584,7 +1587,7 @@ class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
 
 
 class HiddenOnCompletionParameters(typing.TypedDict, total=False):
-    exit_code: int
+    exit_code: int | None
     exit_codes: typing.Iterable[int]
 
 
@@ -1612,7 +1615,7 @@ class MergeLoggingParameters(typing.TypedDict, total=False):
     log_level: typing.Required[str]
     log_path: str
     enable_console: bool
-    max_files: int
+    max_files: int | None
 
 
 class MergeRouteParameters(typing.TypedDict, total=False):
@@ -1696,35 +1699,35 @@ class HttpsEndpointCallbackParameters(typing.TypedDict, total=False):
 
 
 class EndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     scheme: str
     name: str
     env: str
-    is_proxied: bool
-    is_external: bool
-    protocol: ProtocolType
+    is_proxied: bool | None
+    is_external: bool | None
+    protocol: ProtocolType | None
 
 
 class HttpEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     name: str
     env: str
-    is_proxied: bool
+    is_proxied: bool | None
 
 
 class HttpsEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     name: str
     env: str
-    is_proxied: bool
+    is_proxied: bool | None
 
 
 class HttpHealthCheckParameters(typing.TypedDict, total=False):
     path: str
-    status_code: int
+    status_code: int | None
     endpoint_name: str
 
 
@@ -1737,11 +1740,11 @@ class HttpCommandParameters(typing.TypedDict, total=False):
 class HttpProbeParameters(typing.TypedDict, total=False):
     probe_type: typing.Required[ProbeType]
     path: str
-    initial_delay_seconds: int
-    period_seconds: int
-    timeout_seconds: int
-    failure_threshold: int
-    success_threshold: int
+    initial_delay_seconds: int | None
+    period_seconds: int | None
+    timeout_seconds: int | None
+    failure_threshold: int | None
+    success_threshold: int | None
     endpoint_name: str
 
 
@@ -9003,7 +9006,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     publish_as_connection_string: typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
@@ -9020,8 +9023,8 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
@@ -9999,15 +10002,15 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _publish_as_connection_string := kwargs.pop("publish_as_connection_string", None):
             if _publish_as_connection_string is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10173,25 +10176,25 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10354,7 +10357,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     """ProjectResource options."""
 
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     replicas: int
     disable_forwarded_headers: typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
@@ -10374,8 +10377,8 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
     publish_with_container_files: tuple[AbstractResourceWithContainerFiles, str]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
@@ -10961,15 +10964,15 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _replicas := kwargs.pop("replicas", None):
             if _validate_type(_replicas, int):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11160,25 +11163,25 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11368,7 +11371,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     executable_command: str
     working_dir: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
@@ -11384,8 +11387,8 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
@@ -11968,15 +11971,15 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _env := kwargs.pop("env", None):
             if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -12136,25 +12139,25 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

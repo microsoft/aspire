@@ -1754,8 +1754,14 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.NotNull(httpEndpoint);
     }
 
-    [Fact]
-    public async Task Dashboard_OtlpConfigured_ForComputeResources()
+    [Theory]
+    [InlineData(OtlpProtocol.Grpc, 18889, "grpc")]
+    [InlineData(OtlpProtocol.HttpProtobuf, 18890, "http/protobuf")]
+    [InlineData(OtlpProtocol.HttpJson, 18890, "http/json")]
+    public async Task Dashboard_HonorsRequiredOtlpProtocol(
+        OtlpProtocol protocol,
+        int expectedPort,
+        string expectedProtocol)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -1770,22 +1776,25 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
 
-        // Use a project resource — projects get OtlpExporterAnnotation by default
-        builder.AddProject<Projects.ServiceA>("api");
+        builder.AddProject<Projects.ServiceA>("api")
+            .WithOtlpExporter(protocol);
 
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Check that values.yaml contains OTLP configuration for the project resource
         var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath));
         var content = await File.ReadAllTextAsync(valuesPath);
         outputHelper.WriteLine(content);
 
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
-        Assert.Contains("env-dashboard-service:18889", content);
+        Assert.Contains($"env-dashboard-service:{expectedPort}", content);
         Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL", content);
+        Assert.Contains(expectedProtocol, content);
         Assert.Contains("OTEL_SERVICE_NAME", content);
+
+        await Verify(content, "yaml")
+            .UseParameters(protocol);
     }
 
     [Fact]
@@ -1821,6 +1830,77 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("OTEL_SERVICE_NAME", content);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dashboard_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+        outputHelper.WriteLine(content);
+
+        var hasEndpoint = content.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = content.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task Dashboard_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", content);
+        Assert.False(content.Contains("OTEL_DENO", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Dashboard_ResourceHasCorrectEndpoints()
     {
@@ -1831,8 +1911,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(dashboard.PrimaryEndpoint);
         Assert.NotNull(dashboard.OtlpGrpcEndpoint);
+        Assert.NotNull(dashboard.OtlpHttpEndpoint);
         Assert.Equal("http", dashboard.PrimaryEndpoint.EndpointName);
         Assert.Equal("otlp-grpc", dashboard.OtlpGrpcEndpoint.EndpointName);
+        Assert.Equal("otlp-http", dashboard.OtlpHttpEndpoint.EndpointName);
     }
 
     [Fact]
