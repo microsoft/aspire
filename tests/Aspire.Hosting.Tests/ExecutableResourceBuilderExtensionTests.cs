@@ -381,15 +381,13 @@ public class ExecutableResourceBuilderExtensionTests
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .PublishAsDockerFile();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(executable.Resource.GetEffectiveResource());
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(container);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Empty(args);
 
         var processedArgs = new List<string>();
 #pragma warning disable CS0618 // Type or member is obsolete
-        await container.ProcessArgumentValuesAsync(
+        await executable.Resource.ProcessArgumentValuesAsync(
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
             (_, value, exception, _) =>
             {

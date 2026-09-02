@@ -146,16 +146,18 @@ public static class ExecutableResourceBuilderExtensions
             return builder;
         }
 
-        if (!hasProjection)
-        {
-            // Executable arguments often contain host paths, so hide the arguments visible when the
-            // projection is created. Arguments added later explicitly target the projected shape.
-            containerProjection.Annotations.RemoveAnnotations<CommandLineArgsCallbackAnnotation>();
-        }
-
-        return builder.WithContainerProjection(
+        builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            container => configure?.Invoke(container));
+            container =>
+            {
+                // The image entrypoint replaces the host executable, so arguments configured before
+                // this conversion often contain host-only paths and must not reach the container.
+                container.WithArgs(context => context.Args.Clear());
+                configure?.Invoke(container);
+            });
+
+        return builder.WithManifestPublishingCallback(
+            context => context.WriteContainerAsync(containerProjection));
     }
 
     /// <summary>

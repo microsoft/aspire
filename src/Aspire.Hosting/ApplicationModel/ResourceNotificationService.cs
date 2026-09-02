@@ -475,7 +475,7 @@ public class ResourceNotificationService : IDisposable
     /// <exception cref="DistributedApplicationException"></exception>
     public async Task WaitForDependenciesAsync(IResource resource, CancellationToken cancellationToken)
     {
-        if (!resource.GetEffectiveResource().TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations))
+        if (!resource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations))
         {
             return;
         }
@@ -1091,7 +1091,7 @@ public class ResourceNotificationService : IDisposable
     {
         ImmutableArray<ResourceCommandSnapshot>.Builder? builder = null;
 
-        foreach (var annotation in resource.GetEffectiveResource().Annotations.OfType<ResourceCommandAnnotation>())
+        foreach (var annotation in resource.Annotations.OfType<ResourceCommandAnnotation>())
         {
             var existingCommand = FindByName(previousState.Commands, annotation.Name);
 
@@ -1238,11 +1238,10 @@ public class ResourceNotificationService : IDisposable
     private static CustomResourceSnapshot GetCurrentSnapshot(IResource resource, ResourceNotificationState notificationState)
     {
         var previousState = notificationState.LastSnapshot;
-        var effectiveResource = resource.GetEffectiveResource();
 
         if (previousState is null)
         {
-            if (effectiveResource.Annotations.OfType<ResourceSnapshotAnnotation>().LastOrDefault() is { } annotation)
+            if (resource.Annotations.OfType<ResourceSnapshotAnnotation>().LastOrDefault() is { } annotation)
             {
                 previousState = annotation.InitialSnapshot;
             }
@@ -1250,9 +1249,9 @@ public class ResourceNotificationService : IDisposable
             // If there is no initial snapshot, create an empty one.
             previousState ??= new CustomResourceSnapshot()
             {
-                ResourceType = effectiveResource.GetResourceType(),
+                ResourceType = resource.GetResourceType(),
                 Properties = [],
-                Relationships = ResourceSnapshotBuilder.BuildRelationships(effectiveResource)
+                Relationships = ResourceSnapshotBuilder.BuildRelationships(resource)
             };
 
             previousState = previousState with

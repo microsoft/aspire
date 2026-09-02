@@ -161,7 +161,7 @@ public static class AzureFunctionsProjectResourceExtensions
             var removeStorage = true;
             // Look at all of the resources and if none of them use the default storage, then we can remove it.
             // This is because we're unable to cleanly add a resource to the builder from within a callback.
-            foreach (var item in data.Model.GetResourceOwners().OfType<AzureFunctionsProjectResource>())
+            foreach (var item in data.Model.Resources.OfType<AzureFunctionsProjectResource>())
             {
                 if (item.HostStorage == storage)
                 {

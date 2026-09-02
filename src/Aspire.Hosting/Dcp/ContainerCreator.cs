@@ -108,7 +108,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     internal void PrepareContainerNetworks()
     {
-        var containerResources = _model.GetContainerResources().ToArray();
+        var containerResources = _model.Resources.Where(mr => mr.IsContainer());
         if (!containerResources.Any()) { return; }
 
         var network = ContainerNetwork.Create(KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
@@ -140,14 +140,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         foreach (var container in modelContainerResources)
         {
-            var owner = container.GetOwnerOrSelf();
-
             if (!container.TryGetContainerImageName(out var containerImageName))
             {
                 throw new InvalidOperationException();
             }
 
-            EnsureRequiredAnnotations(owner, container);
+            EnsureRequiredAnnotations(container);
 
             var containerObjectInstance = DcpExecutor.GetDcpInstance(container, instanceIndex: 0);
             var ctr = Container.Create(containerObjectInstance.Name, containerImageName);
@@ -200,9 +198,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ctr.Spec.Start = false;
             }
 
-            // DCP configuration comes from the selected projection, but the rendered resource keeps
-            // the owner so events, notifications, references, and commands retain canonical identity.
-            var containerAppResource = new RenderedModelResource<Container>(owner, ctr, container);
+            var containerAppResource = new RenderedModelResource<Container>(container, ctr);
             DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
@@ -255,12 +251,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
     {
-        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.EffectiveResource, resource.DcpResource.Spec.Start);
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        var hostDependencies = (await GetHostDependenciesAsync(cr.EffectiveResource, cancellationToken).ConfigureAwait(false)).ToImmutableArray();
+        var hostDependencies = (await GetHostDependenciesAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false)).ToImmutableArray();
 
         if (hostDependencies.Any())
         {
@@ -304,15 +300,15 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         cToken.ThrowIfCancellationRequested();
 
         var dcpContainer = cr.DcpResource;
-        var modelContainer = cr.EffectiveResource;
+        var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, modelContainer, _executionContext, logger, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
 
-        spec.VolumeMounts = BuildContainerMounts(modelContainer);
+        spec.VolumeMounts = BuildContainerMounts(cr.ModelResource);
 
-        var (runArgs, failedToApplyRunArgs) = await BuildRunArgsAsync(logger, modelContainer, cToken).ConfigureAwait(false);
+        var (runArgs, failedToApplyRunArgs) = await BuildRunArgsAsync(logger, cr.ModelResource, cToken).ConfigureAwait(false);
         if (failedToApplyRunArgs)
         {
             throw new FailedToApplyEnvironmentException();
@@ -334,7 +330,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         var args = configuration.Arguments.ToList();
-        if (modelContainer is ContainerResource { ShellExecution: true })
+        var projectedContainer = modelContainer.Annotations
+            .OfType<ContainerResourceProjectionAnnotation>()
+            .LastOrDefault();
+        var shellExecution = modelContainer is ContainerResource { ShellExecution: true } ||
+            projectedContainer?.ShellExecution is true;
+        if (shellExecution)
         {
             spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
         }
@@ -343,17 +344,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             spec.Args = args.Select(a => a.Value).ToList();
         }
 
-        var appLaunchArgumentAnnotations = modelContainer is ContainerResource { ShellExecution: true }
+        var appLaunchArgumentAnnotations = shellExecution
             ? args.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive))
             : args.Select((a, index) => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: index));
         dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, appLaunchArgumentAnnotations);
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;
-        if (modelContainer is ContainerResource containerResource)
-        {
-            spec.Command = containerResource.Entrypoint;
-        }
+        spec.Command = modelContainer is ContainerResource containerResource
+            ? containerResource.Entrypoint
+            : projectedContainer?.Entrypoint;
         spec.PemCertificates = pemCertificates;
 
         // Configure the terminal spec if the resource has a TerminalAnnotation.
@@ -693,9 +693,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var bundlePaths = ContainerCertificatePathsAnnotation.DefaultCertificateBundlePaths.ToList();
         var certificateDirsPaths = ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths.ToList();
 
-        var effectiveResource = cr.EffectiveResource;
-
-        if (effectiveResource.TryGetLastAnnotation<ContainerCertificatePathsAnnotation>(out var pathsAnnotation))
+        if (cr.ModelResource.TryGetLastAnnotation<ContainerCertificatePathsAnnotation>(out var pathsAnnotation))
         {
             certificatesDestination = pathsAnnotation.CustomCertificatesDestination ?? certificatesDestination;
             bundlePaths = pathsAnnotation.DefaultCertificateBundles ?? bundlePaths;
@@ -704,7 +702,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         var serverAuthCertificatesBasePath = $"{certificatesDestination}/private";
 
-        var configuration = await ExecutionConfigurationBuilder.Create(effectiveResource)
+        var configuration = await ExecutionConfigurationBuilder.Create(cr.ModelResource)
             .WithArgumentsConfig()
             .WithEnvironmentVariablesConfig()
             .WithCertificateTrustConfig(scope =>
@@ -768,7 +766,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         var buildCreateFilesContext = new BuildCreateFilesContext
         {
-            Resource = effectiveResource,
+            Resource = cr.ModelResource,
             CertificateTrustScope = certificateTrustConfiguration?.Scope ?? CertificateTrustScope.None,
             CertificateTrustBundlePath = $"{certificatesDestination}/cert.pem",
         };
@@ -1087,12 +1085,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     {
         resource.AddLifeCycleCommands();
         _nameGenerator.EnsureDcpInstancesPopulated(resource);
-    }
-
-    private void EnsureRequiredAnnotations(IResource owner, IResource effectiveResource)
-    {
-        owner.AddLifeCycleCommands();
-        _nameGenerator.EnsureDcpInstancesPopulated(owner, effectiveResource);
     }
 
     private class BuildCreateFilesContext

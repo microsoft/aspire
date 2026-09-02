@@ -126,8 +126,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         app.Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var logger = app.Services.GetRequiredService<ILogger<AddRustAppPublishTests>>();
         var buildOptions = await container.ProcessContainerBuildOptionsCallbackAsync(
             app.Services,
@@ -257,8 +256,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         app.Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var logger = app.Services.GetRequiredService<ILogger<AddRustAppPublishTests>>();
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => container.ProcessContainerBuildOptionsCallbackAsync(
@@ -288,8 +286,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
                 ResourceAnnotationMutationBehavior.Replace));
         builder.Build().Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
 
         Assert.Same(pipelineSteps, Assert.Single(container.Annotations.OfType<PipelineStepAnnotation>()));
     }
@@ -539,8 +536,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile(container => container.WithDockerfile(customContext.FullName, "Dockerfile.prod"));
         builder.Build().Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
 
         Assert.Equal(customContext.FullName, dockerfile.ContextPath);
@@ -563,8 +559,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
                 _ => Task.FromResult("FROM scratch\n")));
         builder.Build().Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
         var content = await File.ReadAllTextAsync(
             Path.Combine(outputDir.FullName, "api.Dockerfile"),
@@ -1019,14 +1014,12 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
         builder.Services.AddSingleton<ICargoMetadataReader>(reader);
         builder.AddRustApp("api", sourceDir.FullName).WithWorkingDirectory(relocatedDir.FullName);
-        var initialContainer = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var initialContainer = builder.Resources.Single(resource => resource.Name == "api");
         var initialDockerfile = Assert.Single(initialContainer.Annotations.OfType<DockerfileBuildAnnotation>());
         initialDockerfile.BuildContextIgnoreContent = "custom-ignore\n";
         builder.Build().Run();
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
 
         Assert.Equal(relocatedDir.FullName, dockerfile.ContextPath);

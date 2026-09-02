@@ -1006,16 +1006,22 @@ public static class ProjectResourceBuilderExtensions
             return builder;
         }
 
-        if (!hasProjection)
-        {
-            // Project launch arguments describe the host process, so hide the arguments visible when
-            // the projection is created. Arguments added later explicitly target the projected shape.
-            containerProjection.Annotations.RemoveAnnotations<CommandLineArgsCallbackAnnotation>();
-        }
-
-        return builder.WithContainerProjection(
+        builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            container => configure?.Invoke(container));
+            container =>
+            {
+                if (!hasProjection)
+                {
+                    // The image entrypoint replaces dotnet run, so arguments configured before the
+                    // first conversion often contain host-only paths and must not reach the container.
+                    container.WithArgs(context => context.Args.Clear());
+                }
+
+                configure?.Invoke(container);
+            });
+
+        return builder.WithManifestPublishingCallback(
+            context => context.WriteContainerAsync(containerProjection));
     }
 
     private static IConfiguration GetConfiguration(IResource projectResource)

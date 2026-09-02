@@ -746,7 +746,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("env");
         var api = builder.AddExecutable("api", "node", ".")
-            .PublishAsDockerFile()
+            .PublishAsDockerFile(container => container.WithEntrypoint("/app/api"))
             .WithHttpEndpoint(env: "PORT");
         builder.AddContainer("gateway", "nginx")
             .WithHttpEndpoint(targetPort: 8080)

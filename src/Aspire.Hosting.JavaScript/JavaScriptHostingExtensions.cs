@@ -1661,7 +1661,6 @@ public static partial class JavaScriptHostingExtensions
         string runScriptName,
         Action<CommandLineArgsCallbackContext>? argsCallback = null) where TResource : JavaScriptAppResource
     {
-        IResourceBuilder<ContainerResource>? publishContainerBuilder = null;
         var resourceBuilder = builder.AddResource(resource)
             .WithNodeDefaults()
             .WithArgs(c =>
@@ -1688,8 +1687,6 @@ public static partial class JavaScriptHostingExtensions
             .WithNpm()
             .PublishAsDockerFile(c =>
             {
-                publishContainerBuilder = c;
-
                 // Only generate a Dockerfile if one doesn't already exist in the app directory
                 if (File.Exists(Path.Combine(appDirectory, "Dockerfile")))
                 {
@@ -1908,26 +1905,31 @@ public static partial class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
-        if (publishContainerBuilder is { } containerBuilder)
+        if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
+            var publishContainer = resource.Annotations
+                .OfType<ManifestPublishingCallbackAnnotation>()
+                .Last()
+                .Callback ?? throw new InvalidOperationException(
+                    $"The published JavaScript app '{resource.Name}' does not have a container manifest callback.");
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
-                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
-                return context.WriteContainerAsync(containerBuilder.Resource);
+                ValidateExistingDockerfileRunScript(resource, resource);
+                return publishContainer(context);
             }
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            resourceBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
             {
                 Name = validationStepName,
                 Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
                 RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
+                Resource = resource,
                 Action = _ =>
                 {
-                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    ValidateExistingDockerfileRunScript(resource, resource);
                     return Task.CompletedTask;
                 }
             }));
@@ -1952,9 +1954,13 @@ public static partial class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
-    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, IResource containerResource)
     {
-        if (containerResource.Entrypoint is not null ||
+        var entrypoint = containerResource is ContainerResource container
+            ? container.Entrypoint
+            : containerResource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault()?.Entrypoint;
+
+        if (entrypoint is not null ||
             !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
             dockerfileBuildAnnotation.DockerfileFactory is not null ||
             !containerResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript))

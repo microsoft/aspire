@@ -10,8 +10,7 @@ internal static class ResourceBuilderTestExtensions
     internal static DockerfileBuildAnnotation GetDockerfileBuildAnnotation<TResource>(this IResourceBuilder<TResource> builder)
         where TResource : IResource
     {
-        return builder.Resource.GetEffectiveResource()
-            .Annotations
+        return builder.Resource.Annotations
             .OfType<DockerfileBuildAnnotation>()
             .Single();
     }

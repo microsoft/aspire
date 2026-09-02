@@ -21,7 +21,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 
         foreach (var container in beforeStartEvent.Model.GetContainerResources())
         {
-            nameGenerator.EnsureDcpInstancesPopulated(container.GetOwnerOrSelf(), container);
+            nameGenerator.EnsureDcpInstancesPopulated(container);
         }
 
         foreach (var executable in beforeStartEvent.Model.GetExecutableResources())
@@ -72,7 +72,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
     {
         var resourcesWithContainerImages = @event.Model.Resources.SelectMany(
             r => r.Annotations.OfType<ContainerImageAnnotation>()
-                .Select(cia => new { Resource = r, Annotation = cia })
+                              .Select(cia => new { Resource = r, Annotation = cia })
             );
 
         foreach (var resourceWithContainerImage in resourcesWithContainerImages)

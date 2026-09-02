@@ -9,19 +9,6 @@ namespace Aspire.Hosting.ApplicationModel;
 public static class DistributedApplicationModelExtensions
 {
     /// <summary>
-    /// Returns the canonical model members without resolving projections.
-    /// </summary>
-    /// <param name="model">The distributed application model.</param>
-    /// <returns>The resources that own the effective resources exposed by <see cref="DistributedApplicationModel.Resources"/>.</returns>
-    [AspireExportIgnore(Reason = "Canonical resource enumeration is not part of the ATS surface.")]
-    public static IEnumerable<IResource> GetResourceOwners(this DistributedApplicationModel model)
-    {
-        ArgumentNullException.ThrowIfNull(model);
-
-        return model.ResourceOwners;
-    }
-
-    /// <summary>
     /// Returns the compute resources from the <see cref="DistributedApplicationModel"/>.
     /// Compute resources are those that are either containers or project resources, and are not marked to be ignored by the manifest publishing callback annotation.
     /// </summary>
@@ -30,24 +17,24 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetComputeResources(this DistributedApplicationModel model)
     {
-        foreach (var resource in model.Resources)
+        foreach (var r in model.Resources)
         {
-            if (resource.IsExcludedFromPublish())
+            if (r.IsExcludedFromPublish())
             {
                 continue;
             }
 
-            if (!resource.IsContainer() && !resource.IsEmulator() && resource is not ProjectResource)
+            if (!r.IsContainer() && !r.IsEmulator() && r is not ProjectResource)
             {
                 continue;
             }
 
-            if (resource.IsBuildOnlyContainer())
+            if (r.IsBuildOnlyContainer())
             {
                 continue;
             }
 
-            yield return resource;
+            yield return r;
         }
     }
 
@@ -60,11 +47,11 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildResources(this DistributedApplicationModel model)
     {
-        foreach (var resource in model.Resources)
+        foreach (var r in model.Resources)
         {
-            if (resource.RequiresImageBuild())
+            if (r.RequiresImageBuild())
             {
-                yield return resource;
+                yield return r;
             }
         }
     }
@@ -78,11 +65,11 @@ public static class DistributedApplicationModelExtensions
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildAndPushResources(this DistributedApplicationModel model)
     {
-        foreach (var resource in model.Resources)
+        foreach (var r in model.Resources)
         {
-            if (resource.RequiresImageBuildAndPush())
+            if (r.RequiresImageBuildAndPush())
             {
-                yield return resource;
+                yield return r;
             }
         }
     }

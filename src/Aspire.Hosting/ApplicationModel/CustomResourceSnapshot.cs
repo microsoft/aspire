@@ -564,15 +564,13 @@ internal static class ResourceSnapshotBuilder
     public static ImmutableArray<RelationshipSnapshot> BuildRelationships(IResource resource)
     {
         var relationships = ImmutableArray.CreateBuilder<RelationshipSnapshot>();
-        var owner = resource.GetOwnerOrSelf();
-        var effectiveResource = owner.GetEffectiveResource();
 
-        if (owner is IResourceWithParent resourceWithParent)
+        if (resource is IResourceWithParent resourceWithParent)
         {
             relationships.Add(new(resourceWithParent.Parent.Name, KnownRelationshipTypes.Parent));
         }
 
-        foreach (var annotation in effectiveResource.Annotations.OfType<ResourceRelationshipAnnotation>())
+        foreach (var annotation in resource.Annotations.OfType<ResourceRelationshipAnnotation>())
         {
             relationships.Add(new(annotation.Resource.Name, annotation.Type));
         }

@@ -51,8 +51,9 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
         // Launch tool arguments describe how a local tool (the resource's executable command) invokes the program.
         // A container invokes the program through the image's ENTRYPOINT instead, so the prefix must not be repeated
         // in its arguments. This matters for executables published as a Dockerfile (Go, Python, JavaScript), where
-        // the selected container projection inherits application arguments but must not inherit the local tool's
-        // invocation prefix. Return before recording that separately evaluated segment.
+        // PublishAsDockerFile() reuses the executable's annotations for the generated container resource. Note that
+        // the container's own `WithArgs(c => c.Args.Clear())` cannot undo a launch prefix because it is evaluated
+        // separately, so return before recording that segment.
         if (resource.IsContainer())
         {
             return;

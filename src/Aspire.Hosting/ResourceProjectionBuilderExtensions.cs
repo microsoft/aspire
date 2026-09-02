@@ -33,12 +33,12 @@ internal static class ResourceProjectionBuilderExtensions
                     $"Resource '{builder.Resource.Name}' already has a non-container projection selected for the '{operation}' operation.");
             }
 
-            containerProjection.Annotations.MaterializeInheritedAnnotations<EndpointAnnotation>(
-                CloneEndpoint,
-                endpoint => endpoint.Name);
-
+            var existingProjectionAnnotation = builder.Resource.Annotations
+                .OfType<ContainerResourceProjectionAnnotation>()
+                .Single();
             var existingProjectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(containerProjection);
-            containerProjection.Annotations.ConfigureProjection(() => configure(existingProjectionBuilder));
+            configure(existingProjectionBuilder);
+            SynchronizeProperties(containerProjection, existingProjectionAnnotation);
             return builder;
         }
 
@@ -47,55 +47,29 @@ internal static class ResourceProjectionBuilderExtensions
         // using the canonical object identity established before projection registration.
         var projection = new ContainerResourceProjection<T>(builder.Resource);
         var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder<ContainerResource>(projection);
+        var projectionAnnotation = new ContainerResourceProjectionAnnotation();
+        var sourceAnnotation = new ResourceProjectionAnnotation(
+            new OperationResourceProjectionSource(operation, projection));
 
-        projection.Annotations.MaterializeInheritedAnnotations<EndpointAnnotation>(
-            CloneEndpoint,
-            endpoint => endpoint.Name);
-
-        // Container image annotations discriminate the effective shape. A container projection
-        // must define its own image without exposing or mutating an owner-level legacy discriminator.
-        projection.Annotations.SuppressInheritedAnnotations<ContainerImageAnnotation>();
-        // Hide callbacks present at registration because they describe the owner's legacy shape.
-        // Later callbacks remain visible so APIs such as ExcludeFromManifest retain call ordering.
-        projection.Annotations.RemoveAnnotations<ManifestPublishingCallbackAnnotation>();
-
-        // Configuration callbacks must never observe mutable owner annotation instances. Known
-        // annotations that support in-place container configuration are materialized above; all
-        // other inherited annotations remain hidden until configuration completes.
-        projection.Annotations.ConfigureProjection(() => configure(projectionBuilder));
-
-        builder.Resource.Annotations.Add(new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(operation, projection)));
+        // Register before configuration so APIs invoked by the callback can resolve the typed view
+        // by name. The projection itself is never added to the logical resource collection.
+        builder.Resource.Annotations.Add(projectionAnnotation);
+        builder.Resource.Annotations.Add(sourceAnnotation);
+        configure(projectionBuilder);
+        SynchronizeProperties(projection, projectionAnnotation);
 
         return builder;
     }
 
-    private static EndpointAnnotation CloneEndpoint(EndpointAnnotation endpoint)
+    private static void SynchronizeProperties(
+        ContainerResource projection,
+        ContainerResourceProjectionAnnotation annotation)
     {
-        // Projection registration happens while building the model, before endpoint allocation.
-        // Clone model-time endpoint configuration so container callbacks can adapt the selected
-        // shape without changing endpoint semantics on the canonical owner.
-        var clone = new EndpointAnnotation(
-            endpoint.Protocol,
-            endpoint.DefaultNetworkID,
-            endpoint.UriScheme,
-            endpoint.Transport,
-            endpoint.Name,
-            endpoint.SpecifiedPort,
-            endpoint.TargetPort,
-            endpoint.IsExternal,
-            endpoint.IsExplicitlyProxied)
-        {
-            ExcludeReferenceEndpoint = endpoint.ExcludeReferenceEndpoint,
-            FromLaunchProfile = endpoint.FromLaunchProfile,
-            TargetHost = endpoint.TargetHost,
-            TargetPortEnvironmentVariable = endpoint.TargetPortEnvironmentVariable,
-            TlsEnabled = endpoint.TlsEnabled
-        };
-
-        // Endpoint references retain the owner, so both shapes must complete the same allocation
-        // snapshots even though model-time endpoint configuration is independently mutable.
-        clone.ShareAllocationStateWith(endpoint);
-        return clone;
+        // Most container configuration is annotation-based and therefore writes directly to the
+        // owner. Preserve the two legacy ContainerResource properties in the same owner-side model.
+        annotation.Entrypoint = projection.Entrypoint;
+#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+        annotation.ShellExecution = projection.ShellExecution;
+#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
     }
 }

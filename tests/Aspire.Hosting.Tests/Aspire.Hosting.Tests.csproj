@@ -40,12 +40,14 @@
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="Verify.XunitV3" />
+    <PackageDownload Include="Aspire.Hosting" Version="[13.5.3]" />
   </ItemGroup>
 
   <ItemGroup>
@@ -68,6 +70,10 @@
   <ItemGroup>
     <Content Include="$(RepoRoot)src\Schema\aspire-8.0.json" Link="Schema\aspire-8.0.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(NuGetPackageRoot)aspire.hosting/13.5.3/lib/net8.0/Aspire.Hosting.dll"
+             Link="TestAssets/Aspire.Hosting.13.5.3.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 

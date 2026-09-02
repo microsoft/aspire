@@ -169,7 +169,9 @@ public static class KubernetesEnvironmentExtensions
                 item => item.Annotation.Volume.Name,
                 StringComparer.OrdinalIgnoreCase))
             {
-                var containers = volumeGroup.Where(item => item.Resource is ContainerResource).ToArray();
+                var containers = volumeGroup.Where(item =>
+                    item.Resource is ContainerResource ||
+                    item.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>()).ToArray();
 
                 // Only host processes that asked for the environment path materialize an IAspireStore
                 // directory. A project or executable bound to a publish-only volume consumes no local
@@ -180,6 +182,7 @@ public static class KubernetesEnvironmentExtensions
                 // runs here rather than when either builder method was called.
                 var hostProcesses = volumeGroup.Where(item =>
                     item.Resource is ProjectResource or ExecutableResource &&
+                    !item.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>() &&
                     GetLocalPathEnvironmentVariableName(item.Resource, item.Annotation) is not null).ToArray();
 
                 if (containers.Length > 0 && hostProcesses.Length > 0)
@@ -255,7 +258,9 @@ public static class KubernetesEnvironmentExtensions
         IResource resource,
         KubernetesPersistentVolumeBindingAnnotation binding)
     {
-        if (resource is not ContainerResource || binding.RunModeContainerVolumeName is not { } localVolumeName)
+        if ((resource is not ContainerResource &&
+             !resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>()) ||
+            binding.RunModeContainerVolumeName is not { } localVolumeName)
         {
             return;
         }

@@ -449,6 +449,7 @@ public class HostedAgentExtensionTests
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         SetFoundryProjectOutputs(project.Resource);
 
+        Assert.Same(agent.Resource, hostedAgent.Target);
         var relationship = Assert.Single(
             hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(),
             annotation => annotation.Type == "Reference");

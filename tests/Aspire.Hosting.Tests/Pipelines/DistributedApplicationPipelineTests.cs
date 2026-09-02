@@ -316,10 +316,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         Assert.True(stepExecuted);
         Assert.True(configurationCallbackInvoked);
-        var projectedResource = Assert.IsAssignableFrom<ContainerResource>(factoryResource);
-        Assert.NotSame(owner.Resource, projectedResource);
-        Assert.Collection(context.Model.GetResourceOwners(), resource => Assert.Same(owner.Resource, resource));
-        Assert.Collection(context.Model.Resources, resource => Assert.Same(projectedResource, resource));
+        Assert.Same(owner.Resource, factoryResource);
+        Assert.Collection(context.Model.Resources, resource => Assert.Same(owner.Resource, resource));
     }
 
     [Fact]

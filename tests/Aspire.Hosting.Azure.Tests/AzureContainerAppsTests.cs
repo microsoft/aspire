@@ -521,7 +521,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddExecutable("api", "node", ".")
-            .PublishAsDockerFile()
+            .PublishAsDockerFile(container => container.WithEntrypoint("/app/api"))
             .WithHttpEndpoint(env: "PORT");
 
         using var app = builder.Build();

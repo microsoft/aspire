@@ -120,7 +120,7 @@ internal sealed class ApplicationOrchestrator
         // A resource without wait annotations can never be put into "Waiting", so there is nothing to do.
         // WaitForDependenciesAsync makes the same check, but it has to be repeated here because the watcher
         // below has to be subscribed before that call is made (see below).
-        if (!@event.Resource.GetEffectiveResource().HasAnnotationOfType<WaitAnnotation>())
+        if (!@event.Resource.HasAnnotationOfType<WaitAnnotation>())
         {
             return;
         }
@@ -717,16 +717,14 @@ internal sealed class ApplicationOrchestrator
         // Publish the initial state of the resources that have a snapshot annotation.
         foreach (var resource in _model.Resources)
         {
-            var owner = resource.GetOwnerOrSelf();
-
             // Process relationships for the resource.
             var relationships = ApplicationModel.ResourceSnapshotBuilder.BuildRelationships(resource);
-            var parent = owner is IResourceWithParent hasParent
+            var parent = resource is IResourceWithParent hasParent
                 ? hasParent.Parent
                 : resource.Annotations.OfType<ResourceRelationshipAnnotation>().LastOrDefault(r => r.Type == KnownRelationshipTypes.Parent)?.Resource;
             var urls = GetResourceUrls(resource);
 
-            await _notificationService.PublishUpdateAsync(owner, s =>
+            await _notificationService.PublishUpdateAsync(resource, s =>
             {
                 return s with
                 {
@@ -738,7 +736,7 @@ internal sealed class ApplicationOrchestrator
             }).ConfigureAwait(false);
 
             // Notify resources that they need to initialize themselves.
-            var initializeEvent = new InitializeResourceEvent(owner, _eventing, _loggerService, _notificationService, _serviceProvider);
+            var initializeEvent = new InitializeResourceEvent(resource, _eventing, _loggerService, _notificationService, _serviceProvider);
             await _eventing.PublishAsync(initializeEvent, EventDispatchBehavior.NonBlockingConcurrent, cancellationToken).ConfigureAwait(false);
         }
     }

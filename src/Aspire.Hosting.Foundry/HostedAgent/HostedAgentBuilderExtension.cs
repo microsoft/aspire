@@ -469,22 +469,16 @@ public static class HostedAgentResourceBuilderExtensions
         {
             target = containerResource;
         }
-        else if (builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerResourceBuilder))
-        {
-            target = containerResourceBuilder.Resource;
-        }
         else if (resource is ExecutableResource executableResource)
         {
-            // Ensure we have a container resource to deploy.
-            builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
-                .PublishAsDockerFile();
-
-            if (!builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerProjection))
+            if (!builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out _))
             {
-                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be projected as a container resource.");
+                // Ensure container APIs configure the executable's publish annotations.
+                builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
+                    .PublishAsDockerFile();
             }
 
-            target = containerProjection.Resource;
+            target = executableResource;
         }
         else if (resource is ProjectResource)
         {
@@ -524,7 +518,7 @@ public static class HostedAgentResourceBuilderExtensions
 
         builder.ApplicationBuilder.AddResource(hostedAgent)
             .WithIconName("Agents")
-            .WithReferenceRelationship(target.GetOwnerOrSelf());
+            .WithReferenceRelationship(target);
 
         // Referencing a hosted agent (its node app) only injects the agent's service-discovery URL.
         // Unlike referencing a first-class Azure resource, it does not give the consumer a managed

@@ -88,7 +88,6 @@ public static class RustHostingExtensions
         // reader by registering one before or after AddRustApp.
         builder.Services.TryAddSingleton<ICargoMetadataReader, CargoMetadataReader>();
 
-        IResourceBuilder<ContainerResource>? containerBuilder = null;
         var resourceBuilder = builder.AddResource(resource)
             .WithRequiredCommand("cargo", "https://www.rust-lang.org/tools/install")
             .WithRustDefaults()
@@ -128,11 +127,10 @@ public static class RustHostingExtensions
                 context.Args.Add("--");
             }, ownedByLaunchConfigurationType: "rust")
             .WithVSCodeDebugging()
-            .PublishAsDockerFile(container => containerBuilder = container);
+            .PublishAsDockerFile();
 
         // The generated image copies files out of each container files source, so those sources have to be
-        // built first. Pipeline collection resolves the owner's effective projection, and step lookup matches
-        // resources by name so owner-authored dependencies still find the projection's build steps.
+        // built first. Projection APIs add their pipeline annotations directly to this owner builder.
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
@@ -147,15 +145,14 @@ public static class RustHostingExtensions
 
         if (builder.ExecutionContext.IsPublishMode)
         {
-            if (containerBuilder is null
-                || !containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var provisionalDockerfile))
+            if (!resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var provisionalDockerfile))
             {
                 throw new InvalidOperationException(
                     $"The published Rust app '{resource.Name}' was not converted to a Dockerfile container resource.");
             }
 
             var publishState = new RustPublishState();
-            containerBuilder.WithContainerBuildOptions(context =>
+            resourceBuilder.WithContainerBuildOptions(context =>
             {
                 if (publishState.TargetPlatform is { } targetPlatform)
                 {
@@ -165,7 +162,7 @@ public static class RustHostingExtensions
 
             builder.OnBeforeStart((_, _) =>
             {
-                FinalizePublishDockerfile(containerBuilder, resource, provisionalDockerfile, publishState);
+                FinalizePublishDockerfile(resourceBuilder, resource, provisionalDockerfile, publishState);
                 return Task.CompletedTask;
             });
         }
@@ -718,13 +715,13 @@ public static class RustHostingExtensions
     }
 
     private static void FinalizePublishDockerfile(
-        IResourceBuilder<ContainerResource> containerBuilder,
+        IResourceBuilder<RustAppResource> resourceBuilder,
         RustAppResource resource,
         DockerfileBuildAnnotation provisionalDockerfile,
         RustPublishState publishState)
     {
-        var annotations = containerBuilder.Resource.Annotations;
-        if (!containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var activeDockerfile)
+        var annotations = resourceBuilder.Resource.Annotations;
+        if (!resourceBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var activeDockerfile)
             || !ReferenceEquals(activeDockerfile, provisionalDockerfile))
         {
             // PublishAsDockerFile is idempotent, so callers can replace the integration's provisional
@@ -744,7 +741,7 @@ public static class RustHostingExtensions
         // the directory cargo inspects and the directory Docker copies together.
         if (File.Exists(Path.Combine(workingDirectory, "Dockerfile")))
         {
-            containerBuilder.WithAnnotation(
+            resourceBuilder.WithAnnotation(
                 new DockerfileBuildAnnotation(
                     workingDirectory,
                     Path.Combine(workingDirectory, "Dockerfile"),
@@ -753,11 +750,11 @@ public static class RustHostingExtensions
         }
         else
         {
-            targetPlatform = ResolveContainerTargetPlatform(resource, containerBuilder.Resource);
+            targetPlatform = ResolveContainerTargetPlatform(resource);
             publishState.TargetPlatform = targetPlatform;
-            containerBuilder.WithAnnotation(
+            resourceBuilder.WithAnnotation(
                 CreateGeneratedDockerfileAnnotation(
-                    containerBuilder.ApplicationBuilder,
+                    resourceBuilder.ApplicationBuilder,
                     resource,
                     workingDirectory,
                     provisionalDockerfile.Stage),
@@ -786,7 +783,7 @@ public static class RustHostingExtensions
                 ? options.Target
                 : null;
 
-            containerBuilder.WithContainerBuildOptions(context =>
+            resourceBuilder.WithContainerBuildOptions(context =>
             {
                 if (context.TargetPlatform is { } configuredPlatform && configuredPlatform != platform)
                 {
@@ -844,9 +841,7 @@ public static class RustHostingExtensions
         };
     }
 
-    private static ContainerTargetPlatform? ResolveContainerTargetPlatform(
-        RustAppResource resource,
-        ContainerResource container)
+    private static ContainerTargetPlatform? ResolveContainerTargetPlatform(RustAppResource resource)
     {
         var target = resource.TryGetLastAnnotation<RustCargoOptionsAnnotation>(out var options)
             ? options.Target
@@ -888,8 +883,7 @@ public static class RustHostingExtensions
             ? targetEnvironment is "musleabi" or "musleabihf"
             : string.Equals(targetEnvironment, "musl", StringComparison.Ordinal);
 
-        var baseImages = container.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault()
-            ?? resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault();
+        var baseImages = resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault();
         var customBuildImageConfigured = baseImages?.BuildImage is not null;
         var customRuntimeImageConfigured = baseImages?.RuntimeImage is not null;
 

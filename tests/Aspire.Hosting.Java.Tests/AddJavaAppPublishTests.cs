@@ -115,8 +115,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
             .WithJvmArgs("-Xmx128m", "-javaagent:/app/coverage-agent.jar")
             .WithOtelAgent("target/agent/opentelemetry-javaagent.jar");
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "worker").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "worker");
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             container, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
 
@@ -447,8 +446,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
                .WithMavenGoal("spring-boot:run")
                .WithOtelAgent("target/otel/javaagent.jar");
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -479,8 +477,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
                .WithMavenGoal("spring-boot:run")
                .WithOtelAgent("/opt/otel/javaagent.jar");
 
-        var container = Assert.IsAssignableFrom<ContainerResource>(
-            builder.Resources.Single(resource => resource.Name == "api").GetEffectiveResource());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             container, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
 
@@ -1238,8 +1235,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var published = Assert.IsAssignableFrom<ContainerResource>(
-            model.Resources.Single(resource => resource.Name == "worker").GetEffectiveResource());
+        var published = model.Resources.Single(resource => resource.Name == "worker");
         var args = await ArgumentEvaluator.GetArgumentListAsync(published, app.Services);
 
         // PublishAsDockerFile clears the arguments because they routinely contain host paths, and it does so

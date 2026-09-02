@@ -51,7 +51,7 @@ internal sealed class ContainerResourceProjection<TOwner>(TOwner owner)
 {
     public TOwner Owner { get; } = owner;
 
-    public override ResourceAnnotationCollection Annotations { get; } = new(owner.Annotations);
+    public override ResourceAnnotationCollection Annotations => Owner.Annotations;
 
     IResource IResourceProjection.Owner => Owner;
 }

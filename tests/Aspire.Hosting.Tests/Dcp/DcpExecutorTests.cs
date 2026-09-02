@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECONTAINERSHELLEXECUTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 using System.Collections.Concurrent;
@@ -52,11 +53,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .WithEnvironment("OWNER_SETTING", "owner")
             .WithContainerProjection(
                 DistributedApplicationOperation.Run,
-                container => container
-                    .WithImage("projected-image:latest")
-                    .WithContainerName("projected-worker")
-                    .WithPersistentLifetime()
-                    .WithEnvironment("PROJECTION_SETTING", "projection"));
+                container =>
+                {
+                    container
+                        .WithImage("projected-image:latest")
+                        .WithContainerName("projected-worker")
+                        .WithEntrypoint("/app/worker")
+                        .WithArgs("--serve")
+                        .WithPersistentLifetime()
+                        .WithEnvironment("PROJECTION_SETTING", "projection");
+                    container.Resource.ShellExecution = true;
+                });
         var kubernetesService = new TestKubernetesService();
         IResource? startingResource = null;
         var events = new DcpExecutorEvents();
@@ -76,9 +83,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var projection = executable.Resource.GetEffectiveResource();
-        Assert.Collection(model.Resources, resource => Assert.Same(projection, resource));
-        Assert.Collection(model.GetResourceOwners(), resource => Assert.Same(executable.Resource, resource));
+        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource, resource));
 
         var appExecutor = CreateAppExecutor(
             model,
@@ -93,6 +98,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("projected-image:latest", container.Spec.Image);
         Assert.Equal("projected-worker", container.Metadata.Name);
         Assert.Equal("projected-worker", container.Spec.ContainerName);
+        Assert.Equal("/app/worker", container.Spec.Command);
+        Assert.Equal(["-c", "--serve"], container.Spec.Args);
         Assert.Contains(container.Spec.Ports!, port => port.ContainerPort == 8080);
         Assert.Equal("owner", Assert.Single(container.Spec.Env!, variable => variable.Name == "OWNER_SETTING").Value);
         Assert.Equal("projection", Assert.Single(container.Spec.Env!, variable => variable.Name == "PROJECTION_SETTING").Value);
