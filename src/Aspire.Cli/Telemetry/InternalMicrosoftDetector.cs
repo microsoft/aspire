@@ -733,52 +733,31 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackDomain: null);
     }
 
-    private async Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
+    private Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
+        => CheckGhCliExecutableAsync("gh", cancellationToken);
+
+    private Task<InternalMicrosoftProbeResult> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
+        => CheckGhCliExecutableAsync("gh.exe", cancellationToken);
+
+    internal async Task<InternalMicrosoftProbeResult> CheckGhCliExecutableAsync(string executable, CancellationToken cancellationToken)
     {
         if (IsCIEnvironment())
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        if (!CommandExists("gh"))
+        if (!CommandExists(executable))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var tokenResult = await RunProcessAsync("gh", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
-        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: false) is { } processFailure)
+        var tokenResult = await RunProcessAsync(executable, ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
+        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: true) is { } processFailure)
         {
             return processFailure;
         }
 
-        if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
-        {
-            return InternalMicrosoftProbeResult.NotDetected;
-        }
-
-        using var http = CreateGitHubHttpClient();
-        return ToProbeResult(await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false));
-    }
-
-    private async Task<InternalMicrosoftProbeResult> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
-    {
-        if (IsCIEnvironment())
-        {
-            return InternalMicrosoftProbeResult.NotDetected;
-        }
-
-        if (!CommandExists("gh.exe"))
-        {
-            return InternalMicrosoftProbeResult.NotDetected;
-        }
-
-        var tokenResult = await RunProcessAsync("gh.exe", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
-        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: false) is { } processFailure)
-        {
-            return processFailure;
-        }
-
-        if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
+        if (string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
