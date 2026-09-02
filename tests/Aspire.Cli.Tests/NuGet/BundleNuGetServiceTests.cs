@@ -89,6 +89,94 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentNuGetConfigs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var firstConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "first.config");
+        var secondConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "second.config");
+        await File.WriteAllTextAsync(firstConfigPath, """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="shared"><package pattern="Aspire.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        await File.WriteAllTextAsync(secondConfigPath, """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="shared"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var resultA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: ["https://example.com/shared/index.json"],
+            nugetConfigPath: firstConfigPath,
+            workingDirectory: appHostDirectory.FullName);
+        var resultB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: ["https://example.com/shared/index.json"],
+            nugetConfigPath: secondConfigPath,
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(resultA, resultB);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_DoesNotReuseCredentialBearingNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "credentialed.config");
+        await File.WriteAllTextAsync(configPath, """
+            <configuration>
+              <config>
+                <add key="http_proxy" value="https://user:password@example.invalid" />
+              </config>
+            </configuration>
+            """);
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var firstResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            nugetConfigPath: configPath,
+            workingDirectory: appHostDirectory.FullName);
+        var secondResult = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            nugetConfigPath: configPath,
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(firstResult, secondResult);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

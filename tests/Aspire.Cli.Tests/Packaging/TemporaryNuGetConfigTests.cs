@@ -425,6 +425,24 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_DetectsCredentialBearingConfigValue()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, """
+            <configuration>
+              <config>
+                <add key="http_proxy" value="https://user:password@example.invalid" />
+              </config>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync([configPath], []);
+
+        Assert.True(config.ContainsCredentialMaterial);
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MergesTrustedRepositoriesByServiceIndex()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
