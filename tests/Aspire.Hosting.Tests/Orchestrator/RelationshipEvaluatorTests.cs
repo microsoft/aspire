@@ -136,8 +136,22 @@ public class RelationshipEvaluatorTests
         Assert.Single(parentChildLookup[parentResource.Resource], childResource.Resource);
     }
 
-    private sealed class CustomChildResource(string name, IResource parent) : Resource(name), IResourceWithParent
+    [Fact]
+    public void ResourceWithNullParentIsExcludedFromLookup()
     {
-        public IResource Parent => parent;
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddResource(new CustomChildResource("child", null));
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var parentChildLookup = RelationshipEvaluator.GetParentChildLookup(appModel);
+
+        Assert.Empty(parentChildLookup);
+    }
+
+    private sealed class CustomChildResource(string name, IResource? parent) : Resource(name), IResourceWithParent
+    {
+        public IResource Parent => parent!;
     }
 }
