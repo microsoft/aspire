@@ -96,8 +96,8 @@ internal static partial class RustDockerfileGenerator
         ValidateDockerfileValue(target.ProfileDirectory, "resolved Cargo profile directory", resource.Name);
         ValidateDockerfileValue(target.Target, "resolved Cargo target triple directory", resource.Name);
 
-        // Read from the canonical Rust resource because target resolution depends on Rust-specific state;
-        // context.Resource is the selected container projection used for container-specific configuration.
+        // Use the captured Rust resource because target resolution requires Rust-specific state that is not
+        // exposed by context.Resource. Both references identify the canonical owner.
         var cargoArgs = await ResolvePublishCargoArgsAsync(resource, context.CancellationToken).ConfigureAwait(false);
 
         if (options.ManifestPath is { } path && containerManifestPath is { } containerPath)

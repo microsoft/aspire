@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
@@ -148,6 +149,23 @@ public class RelationshipEvaluatorTests
         var parentChildLookup = RelationshipEvaluator.GetParentChildLookup(appModel);
 
         Assert.Empty(parentChildLookup);
+    }
+
+    [Fact]
+    public void ResourceWithProjectionParentUsesCanonicalOwnerInLookup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var parent = builder.AddExecutable("parent", "parent", ".")
+            .WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
+        Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("parent", out var projectionBuilder));
+        var child = builder.AddResource(new CustomChildResource("child", projectionBuilder.Resource));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var parentChildLookup = RelationshipEvaluator.GetParentChildLookup(model);
+
+        Assert.Single(parentChildLookup[parent.Resource], child.Resource);
+        Assert.Empty(parentChildLookup[projectionBuilder.Resource]);
     }
 
     private sealed class CustomChildResource(string name, IResource? parent) : Resource(name), IResourceWithParent

@@ -15,10 +15,10 @@ internal static class RelationshipEvaluator
         // parent -> children lookup
         // Built from IResourceWithParent first, then from annotations.
         return model.Resources.OfType<IResourceWithParent>()
-                              .Select(x => (Child: (IResource)x, Parent: x.Parent))
                               .Where(x => x.Parent is not null)
+                              .Select(x => (Child: (IResource)x, Parent: x.Parent!.GetOwnerOrSelf()))
                               .Concat(GetParentChildRelationshipsFromAnnotations(model))
-                              .ToLookup(x => x.Parent!, x => x.Child);
+                              .ToLookup(x => x.Parent, x => x.Child);
     }
 
     private static IEnumerable<(IResource Child, IResource Parent)> GetParentChildRelationshipsFromAnnotations(DistributedApplicationModel model)

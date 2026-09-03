@@ -321,6 +321,29 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithProjectedDockerfileBuildStep_UsesOwnerResource()
+    {
+        using var builder = CreatePipelineTestBuilder(step: "build-test-resource");
+        var imageBuilder = new MockImageBuilder();
+        builder.Services.AddSingleton<IResourceContainerImageManager>(imageBuilder);
+        var owner = builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("test-resource")
+                    .WithDockerfile("."));
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        var buildStep = Assert.Single(steps, step => step.Name == "build-test-resource");
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Same(owner.Resource, buildStep.Resource);
+        Assert.Same(owner.Resource, Assert.Single(imageBuilder.BuildImageResources));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
         using var builder = CreatePipelineTestBuilder();

@@ -51,44 +51,47 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     internal static IResourceBuilder<T> EnsureBuildAndPushPipelineAnnotations<T>(this IResourceBuilder<T> builder) where T : ContainerResource
     {
+        var resource = ((IResource)builder.Resource).GetOwnerOrSelf();
+
         builder.WithAnnotation(new PipelineStepAnnotation((factoryContext) =>
         {
+            var factoryResource = factoryContext.Resource.GetOwnerOrSelf();
             var steps = new List<PipelineStep>();
 
-            if (builder.Resource.IsExcludedFromPublish())
+            if (factoryResource.IsExcludedFromPublish())
             {
                 return steps;
             }
 
-            if (builder.Resource.RequiresImageBuild())
+            if (factoryResource.RequiresImageBuild())
             {
                 var buildStep = new PipelineStep
                 {
-                    Name = $"build-{builder.Resource.Name}",
+                    Name = $"build-{factoryResource.Name}",
                     Action = async ctx =>
                     {
                         var containerImageBuilder = ctx.Services.GetRequiredService<IResourceContainerImageManager>();
                         await containerImageBuilder.BuildImageAsync(
-                            builder.Resource,
+                            factoryResource,
                             ctx.CancellationToken).ConfigureAwait(false);
                     },
                     Tags = [WellKnownPipelineTags.BuildCompute],
                     RequiredBySteps = [WellKnownPipelineSteps.Build],
                     DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
-                    Resource = builder.Resource
+                    Resource = factoryResource
                 };
                 steps.Add(buildStep);
             }
 
-            if (builder.Resource.RequiresImageBuildAndPush())
+            if (factoryResource.RequiresImageBuildAndPush())
             {
                 var pushStep = new PipelineStep
                 {
-                    Name = $"push-{builder.Resource.Name}",
-                    Action = ctx => PipelineStepHelpers.PushImageToRegistryAsync(builder.Resource, ctx),
+                    Name = $"push-{factoryResource.Name}",
+                    Action = ctx => PipelineStepHelpers.PushImageToRegistryAsync(factoryResource, ctx),
                     Tags = [WellKnownPipelineTags.PushContainerImage],
                     RequiredBySteps = [WellKnownPipelineSteps.Push],
-                    Resource = builder.Resource
+                    Resource = factoryResource
                 };
                 steps.Add(pushStep);
             }
@@ -98,8 +101,8 @@ public static class ContainerResourceBuilderExtensions
 
         return builder.WithAnnotation(new PipelineConfigurationAnnotation(context =>
         {
-            var buildSteps = context.GetSteps(builder.Resource, WellKnownPipelineTags.BuildCompute);
-            var pushSteps = context.GetSteps(builder.Resource, WellKnownPipelineTags.PushContainerImage);
+            var buildSteps = context.GetSteps(resource, WellKnownPipelineTags.BuildCompute);
+            var pushSteps = context.GetSteps(resource, WellKnownPipelineTags.PushContainerImage);
 
             pushSteps.DependsOn(buildSteps);
             pushSteps.DependsOn(WellKnownPipelineSteps.PushPrereq);

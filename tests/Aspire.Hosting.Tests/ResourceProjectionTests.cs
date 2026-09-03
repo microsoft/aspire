@@ -76,12 +76,11 @@ public class ResourceProjectionTests
         projectionBuilder.Resource.Entrypoint = "/app/worker";
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
         projectionBuilder.Resource.ShellExecution = true;
-#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
 
-        var projection = Assert.Single(
-            executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        var projection = Assert.IsAssignableFrom<ContainerResource>(executable.Resource.AsContainer());
         Assert.Equal("/app/worker", projection.Entrypoint);
         Assert.True(projection.ShellExecution);
+#pragma warning restore ASPIRECONTAINERSHELLEXECUTION001
     }
 
     [Fact]
@@ -476,6 +475,20 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void ProjectionCannotBypassSelfWaitValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
+        Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
+
+        Assert.Throws<DistributedApplicationException>(() => executable.WaitFor(projectionBuilder));
+        Assert.Throws<DistributedApplicationException>(() => executable.WaitForStart(projectionBuilder));
+        Assert.Throws<DistributedApplicationException>(() => executable.WaitForCompletion(projectionBuilder));
+        Assert.Empty(executable.Resource.Annotations.OfType<WaitAnnotation>());
+    }
+
+    [Fact]
     public void RunProjectionUsesContainerVolumeMountPath()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -547,8 +560,8 @@ public class ResourceProjectionTests
         // Integrations compiled against earlier Aspire versions reference Collection<T>.Add and
         // friends through method tokens on the base class, and reference IResource.Annotations by
         // its exact property type. Changing either shape breaks those call sites at runtime, so
-        // guard the shape cheaply here. End-to-end validation against a previously shipped package
-        // is a one-time exercise during review rather than a per-build test.
+        // guard the shape cheaply here. ResourceProjectionBinaryCompatibilityTests also compiles
+        // against a previously shipped package and loads it against the current build on every run.
         Assert.Equal(
             typeof(Collection<IResourceAnnotation>),
             typeof(ResourceAnnotationCollection).BaseType);

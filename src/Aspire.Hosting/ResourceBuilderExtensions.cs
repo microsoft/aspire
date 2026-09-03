@@ -2431,33 +2431,37 @@ public static class ResourceBuilderExtensions
 
     private static IResourceBuilder<T> WaitForCore<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior? waitBehavior, bool addRelationship) where T : IResourceWithWaitSupport
     {
-        if (builder.Resource as IResource == dependency.Resource)
+        var resource = ((IResource)builder.Resource).GetOwnerOrSelf();
+        var dependencyResource = dependency.Resource.GetOwnerOrSelf();
+
+        if (ReferenceEquals(resource, dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for itself.");
         }
 
-        if (builder.Resource is IResourceWithParent resourceWithParent && resourceWithParent.Parent == dependency.Resource)
+        if (resource is IResourceWithParent { Parent: { } parent } &&
+            ReferenceEquals(parent.GetOwnerOrSelf(), dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for its parent '{dependency.Resource.Name}'.");
         }
 
-        if (dependency.Resource is IResourceWithParent dependencyResourceWithParent)
+        if (dependencyResource is IResourceWithParent { Parent: { } dependencyParent })
         {
             // If the dependency resource is a child resource we automatically apply
             // the WaitFor to the parent resource. This caters for situations where
             // the child resource itself does not have any health checks setup.
-            var parentBuilder = builder.ApplicationBuilder.CreateResourceBuilder(dependencyResourceWithParent.Parent);
+            var parentBuilder = builder.ApplicationBuilder.CreateResourceBuilder(dependencyParent.GetOwnerOrSelf());
 
-            // Waiting for the parent is an internal implementaiton detail. Don't add a relationship here.
+            // Waiting for the parent is an internal implementation detail. Don't add a relationship here.
             builder.WaitForCore(parentBuilder, waitBehavior, addRelationship: false);
         }
 
         if (addRelationship)
         {
-            builder.WithRelationship(dependency.Resource, KnownRelationshipTypes.WaitFor);
+            builder.WithRelationship(dependencyResource, KnownRelationshipTypes.WaitFor);
         }
 
-        return builder.WithAnnotation(new WaitAnnotation(dependency.Resource, WaitType.WaitUntilHealthy) { WaitBehavior = waitBehavior });
+        return builder.WithAnnotation(new WaitAnnotation(dependencyResource, WaitType.WaitUntilHealthy) { WaitBehavior = waitBehavior });
     }
 
     /// <summary>
@@ -2554,29 +2558,33 @@ public static class ResourceBuilderExtensions
 
     private static IResourceBuilder<T> WaitForStartCore<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior? waitBehavior, bool addRelationship) where T : IResourceWithWaitSupport
     {
-        if (builder.Resource as IResource == dependency.Resource)
+        var resource = ((IResource)builder.Resource).GetOwnerOrSelf();
+        var dependencyResource = dependency.Resource.GetOwnerOrSelf();
+
+        if (ReferenceEquals(resource, dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for itself.");
         }
 
-        if (builder.Resource is IResourceWithParent resourceWithParent && resourceWithParent.Parent == dependency.Resource)
+        if (resource is IResourceWithParent { Parent: { } parent } &&
+            ReferenceEquals(parent.GetOwnerOrSelf(), dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for its parent '{dependency.Resource.Name}'.");
         }
 
-        if (dependency.Resource is IResourceWithParent dependencyResourceWithParent)
+        if (dependencyResource is IResourceWithParent { Parent: { } dependencyParent })
         {
             // If the dependency resource is a child resource we automatically apply
             // the WaitForStart to the parent resource. This caters for situations where
             // the child resource itself does not have any health checks setup.
-            var parentBuilder = builder.ApplicationBuilder.CreateResourceBuilder(dependencyResourceWithParent.Parent);
+            var parentBuilder = builder.ApplicationBuilder.CreateResourceBuilder(dependencyParent.GetOwnerOrSelf());
 
             // Waiting for the parent is an internal implementation detail. Don't add a relationship here.
             builder.WaitForStartCore(parentBuilder, waitBehavior, addRelationship: false);
         }
 
         // Wait for any referenced resources in the connection string.
-        if (dependency.Resource is ConnectionStringResource cs)
+        if (dependencyResource is ConnectionStringResource cs)
         {
             // We only look at top level resources with the assumption that they are transitive themselves.
             foreach (var referencedResource in cs.ConnectionStringExpression.ValueProviders.OfType<IResource>())
@@ -2587,10 +2595,10 @@ public static class ResourceBuilderExtensions
 
         if (addRelationship)
         {
-            builder.WithRelationship(dependency.Resource, KnownRelationshipTypes.WaitFor);
+            builder.WithRelationship(dependencyResource, KnownRelationshipTypes.WaitFor);
         }
 
-        return builder.WithAnnotation(new WaitAnnotation(dependency.Resource, WaitType.WaitUntilStarted) { WaitBehavior = waitBehavior });
+        return builder.WithAnnotation(new WaitAnnotation(dependencyResource, WaitType.WaitUntilStarted) { WaitBehavior = waitBehavior });
     }
 
     /// <summary>
@@ -2657,19 +2665,23 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(dependency);
 
-        if (builder.Resource as IResource == dependency.Resource)
+        var resource = ((IResource)builder.Resource).GetOwnerOrSelf();
+        var dependencyResource = dependency.Resource.GetOwnerOrSelf();
+
+        if (ReferenceEquals(resource, dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for itself.");
         }
 
-        if (builder.Resource is IResourceWithParent resourceWithParent && resourceWithParent.Parent == dependency.Resource)
+        if (resource is IResourceWithParent { Parent: { } parent } &&
+            ReferenceEquals(parent.GetOwnerOrSelf(), dependencyResource))
         {
             throw new DistributedApplicationException($"The '{builder.Resource.Name}' resource cannot wait for its parent '{dependency.Resource.Name}'.");
         }
 
-        builder.WithRelationship(dependency.Resource, KnownRelationshipTypes.WaitFor);
+        builder.WithRelationship(dependencyResource, KnownRelationshipTypes.WaitFor);
 
-        return builder.WithAnnotation(new WaitAnnotation(dependency.Resource, WaitType.WaitForCompletion, exitCode));
+        return builder.WithAnnotation(new WaitAnnotation(dependencyResource, WaitType.WaitForCompletion, exitCode));
     }
 
     /// <summary>

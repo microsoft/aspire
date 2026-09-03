@@ -43,7 +43,8 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.HasAppliedContainerProjection() ||
+        return resource is ContainerResource ||
+            resource.HasAppliedContainerProjection() ||
             resource.Annotations.OfType<ContainerImageAnnotation>().Any();
     }
 

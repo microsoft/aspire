@@ -1007,7 +1007,7 @@ internal static class AzureSandboxContainerDeployment
         return $"{repository}@{digest}";
     }
 
-    private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
+    internal static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
     {
         var modeledCommand = await ResolveModeledCommandAsync(context, resource).ConfigureAwait(false);
         if (!resource.IsContainer() || !resource.RequiresImageBuildAndPush())

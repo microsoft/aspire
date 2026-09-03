@@ -2629,6 +2629,43 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.True(AzureSandboxContainerDeployment.HasModeledCommandConfiguration(container.Resource));
     }
 
+#pragma warning disable ASPIRECONTAINERRUNTIME001
+    [Fact]
+    public async Task ProjectedSandboxContainerInspectsBuiltImageAndPreservesModeledCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var runtime = new FakeContainerRuntime();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(runtime);
+        var worker = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsDockerFile(container => container
+                .WithEntrypoint("/app/worker")
+                .WithArgs("--mode", "worker"));
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var metadata = await AzureSandboxContainerDeployment.ResolveContainerImageMetadataAsync(
+            stepContext,
+            worker.Resource,
+            "worker:latest");
+
+        Assert.True(runtime.WasInspectImageConfigCalled);
+        Assert.Equal(["worker:latest"], runtime.InspectImageConfigCalls);
+        Assert.Equal(["/app/worker"], metadata.Entrypoint);
+        Assert.Equal(["--mode", "worker"], metadata.Command);
+    }
+#pragma warning restore ASPIRECONTAINERRUNTIME001
+
     [Fact]
     public async Task SandboxCommandEndpointReferencesAreIncludedInEgressPolicy()
     {
