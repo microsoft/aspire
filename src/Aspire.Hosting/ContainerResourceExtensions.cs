@@ -30,10 +30,14 @@ public static class ContainerResourceExtensions
     }
 
     /// <summary>
-    /// Determines whether the specified resource is a container resource.
+    /// Determines whether the specified resource is configured to execute as a container in the current AppHost invocation.
     /// </summary>
     /// <param name="resource">The resource to check.</param>
-    /// <returns>true if the specified resource is a container resource; otherwise, false.</returns>
+    /// <returns><see langword="true"/> if the resource is configured to execute as a container; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// An applied projection is authoritative for the active operation. Container image annotations
+    /// remain supported as the compatibility fallback for resources without a projection.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static bool IsContainer(this IResource resource)
     {

@@ -184,6 +184,42 @@ public class KubernetesPersistentVolumeRunModeTests
         Assert.Equal("/srv/data", environment["DATA_PATH"]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnnotationClassifiedContainerUsesScopedVolumeAndContainerMountPath(bool classifyBeforeBinding)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        if (classifyBeforeBinding)
+        {
+            executable.WithAnnotation(new ContainerImageAnnotation { Image = "image" });
+        }
+
+        executable.WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
+
+        if (!classifyBeforeBinding)
+        {
+            executable.WithAnnotation(new ContainerImageAnnotation { Image = "image" });
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        var expectedVolumeName = VolumeNameGenerator.Generate(volume, "kubernetes-env");
+        var mount = Assert.Single(executable.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal(expectedVolumeName, mount.Source);
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            executable.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal("/srv/data", environment["DATA_PATH"]);
+    }
+
     [Fact]
     public async Task NameMatchBindingPreservesExistingContainerVolume()
     {

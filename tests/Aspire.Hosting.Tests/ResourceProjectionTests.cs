@@ -393,6 +393,25 @@ public class ResourceProjectionTests
         Assert.Collection(model.GetExecutableResources(), resource => Assert.Same(executable.Resource, resource));
     }
 
+    [Fact]
+    public void ActiveProjectionIsContainerBeforeConfigurationCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        Assert.False(executable.Resource.IsContainer());
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container =>
+            {
+                Assert.True(executable.Resource.IsContainer());
+                Assert.Same(executable.Resource.Annotations, container.Resource.Annotations);
+                Assert.Empty(executable.Resource.Annotations.OfType<ContainerImageAnnotation>());
+            });
+
+        Assert.True(executable.Resource.IsContainer());
+    }
+
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]
