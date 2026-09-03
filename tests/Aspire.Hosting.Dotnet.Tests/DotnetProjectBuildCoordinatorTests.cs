@@ -808,19 +808,20 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RestartedBuildResourceKeepsTheCoordinatedBuildEnvironment()
+    public async Task RestartedBuildResourceRefreshesTheCoordinatedBuildEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var buildFlavor = "initial";
         var callbackCount = 0;
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithBuildEnvironment(context =>
             {
                 callbackCount++;
-                context.EnvironmentVariables["BUILD_FLAVOR"] = $"custom-{callbackCount}";
+                context.EnvironmentVariables["BUILD_FLAVOR"] = buildFlavor;
             })
             .WithEnvironment(context => context.EnvironmentVariables["RUNTIME_ONLY"] = "runtime");
         await using var app = builder.Build();
@@ -828,25 +829,51 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
-        await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(buildResource, serviceProvider: app.Services);
-        await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, serviceProvider: app.Services);
-
-        // DCP forgets the cached callback results of a resource whenever it restarts. The build environment stays
-        // owned by the coordinator, so rebuilding cannot re-run the user callback or change the initial build inputs.
-        ForgetCachedEnvironmentResults(project.Resource);
-        ForgetCachedEnvironmentResults(buildResource);
-        var restartedProjectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            project.Resource,
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var initialBuildEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResource,
             serviceProvider: app.Services);
+        await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, serviceProvider: app.Services);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        buildFlavor = "refreshed";
+        ForgetCachedCallbackResults(buildResource);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var rebuildEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             buildResource,
             serviceProvider: app.Services);
 
-        Assert.Equal(1, callbackCount);
+        // A project-only restart must reuse the latest completed build generation instead of creating another one.
+        ForgetCachedCallbackResults(project.Resource);
+        var restartedProjectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            serviceProvider: app.Services);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            project.Resource,
+            ExecutableLaunchMode.Debug,
+            restartedProjectEnvironment,
+            TestContext.Current.CancellationToken);
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(callbackContext));
+
+        Assert.Equal("initial", initialBuildEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(2, callbackCount);
         Assert.False(restartedProjectEnvironment.ContainsKey("BUILD_FLAVOR"));
         Assert.Equal("runtime", restartedProjectEnvironment["RUNTIME_ONLY"]);
         Assert.Equal(["BUILD_FLAVOR"], rebuildEnvironment.Keys);
-        Assert.Equal("custom-1", rebuildEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal("refreshed", rebuildEnvironment["BUILD_FLAVOR"]);
+        Assert.NotNull(launchConfiguration.BuildEnvironment);
+        Assert.Equal("refreshed", launchConfiguration.BuildEnvironment["BUILD_FLAVOR"]);
     }
 
     [Theory]
@@ -987,26 +1014,47 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ContextSpecificBuildEnvironmentIsSharedWithRebuilderAndIdeLaunch()
+    public async Task ContextSpecificBuildEnvironmentIsSharedWithinEachBuildAttempt()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var buildFlavor = "build;flavor%";
         var callbackCount = 0;
+        var refreshedEvaluationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRefreshedEvaluation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockRefreshedEvaluation = false;
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithBuildEnvironment(context =>
+            .WithBuildEnvironment(async context =>
             {
-                callbackCount++;
-                context.EnvironmentVariables["BUILD_FLAVOR"] = "build;flavor%";
+                Interlocked.Increment(ref callbackCount);
+                if (blockRefreshedEvaluation)
+                {
+                    refreshedEvaluationStarted.TrySetResult();
+                    await releaseRefreshedEvaluation.Task.WaitAsync(context.CancellationToken);
+                }
+
+                context.EnvironmentVariables["BUILD_FLAVOR"] = buildFlavor;
             })
             .WithEnvironment("BUILD_FLAVOR", "runtime")
             .WithEnvironment(context => context.EnvironmentVariables["RUNTIME_ONLY"] = "runtime");
+        var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        var resolverBuildEnvironment = string.Empty;
+        metadata.RunPropertiesResolver = (_, _, buildEnvironment, _, _, _) =>
+        {
+            resolverBuildEnvironment = buildEnvironment["BUILD_FLAVOR"];
+            return Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", null));
+        };
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var runtimeEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             project.Resource,
             serviceProvider: app.Services);
@@ -1021,7 +1069,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
             await project.Resource.CreateLaunchConfigurationAsync(callbackContext));
-        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         var buildEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             buildResource,
             serviceProvider: app.Services);
@@ -1041,6 +1088,135 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal("build;flavor%", launchConfiguration.BuildEnvironment["BUILD_FLAVOR"]);
         Assert.Equal(Path.GetDirectoryName(projectPath), launchConfiguration.BuildWorkingDirectory);
         Assert.Equal(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, launchConfiguration.Type);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+        buildFlavor = "rebuilt";
+        blockRefreshedEvaluation = true;
+        ForgetCachedCallbackResults(rebuilder);
+        ForgetCachedCallbackResults(project.Resource);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+
+        var refreshedEnvironmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            rebuilder,
+            serviceProvider: app.Services).AsTask();
+        await refreshedEvaluationStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var refreshedArgumentsTask = ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services).AsTask();
+        var restartedProjectEnvironmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            serviceProvider: app.Services).AsTask();
+        releaseRefreshedEvaluation.TrySetResult();
+
+        var refreshedEnvironment = await refreshedEnvironmentTask;
+        var refreshedArguments = await refreshedArgumentsTask;
+        var restartedProjectEnvironment = await restartedProjectEnvironmentTask;
+        var responseFileArgument = Assert.Single(refreshedArguments, argument => argument.StartsWith('@'));
+        var responseFileContents = File.ReadAllText(responseFileArgument[1..]);
+        var projectArguments = await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services);
+        var refreshedCallbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            project.Resource,
+            ExecutableLaunchMode.Debug,
+            restartedProjectEnvironment,
+            TestContext.Current.CancellationToken);
+        var refreshedLaunchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(refreshedCallbackContext));
+
+        Assert.Equal(2, callbackCount);
+        Assert.Equal("rebuilt", refreshedEnvironment["BUILD_FLAVOR"]);
+        Assert.Contains("rebuilt", responseFileContents, StringComparison.Ordinal);
+        Assert.Equal("runtime", restartedProjectEnvironment["BUILD_FLAVOR"]);
+        Assert.Equal(["--from-resolver"], projectArguments);
+        Assert.Equal("rebuilt", resolverBuildEnvironment);
+        Assert.NotNull(refreshedLaunchConfiguration.BuildEnvironment);
+        Assert.Equal("rebuilt", refreshedLaunchConfiguration.BuildEnvironment["BUILD_FLAVOR"]);
+    }
+
+    [Fact]
+    public async Task OverlappingBuildAttemptsAreSerializedWithoutMixingGenerations()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var buildFlavor = "FIRST_BUILD_FLAVOR";
+        var firstEvaluationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstEvaluation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackCount = 0;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(async context =>
+            {
+                Interlocked.Increment(ref callbackCount);
+                var capturedBuildFlavor = buildFlavor;
+                if (capturedBuildFlavor == "FIRST_BUILD_FLAVOR")
+                {
+                    firstEvaluationStarted.TrySetResult();
+                    await releaseFirstEvaluation.Task.WaitAsync(context.CancellationToken);
+                }
+
+                context.EnvironmentVariables[capturedBuildFlavor] = capturedBuildFlavor;
+            });
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var firstEnvironmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            buildResource,
+            serviceProvider: app.Services).AsTask();
+        await firstEvaluationStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        buildFlavor = "SECOND_BUILD_FLAVOR";
+        ForgetCachedCallbackResults(rebuilder);
+        var secondStartTask = builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        Assert.False(secondStartTask.IsCompleted);
+
+        releaseFirstEvaluation.TrySetResult();
+        var firstEnvironment = await firstEnvironmentTask;
+        var firstArguments = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var firstResponseFileArgument = Assert.Single(firstArguments, argument => argument.StartsWith('@'));
+        var firstResponseFileContents = File.ReadAllLines(firstResponseFileArgument[1..]);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+        await secondStartTask;
+
+        var secondEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            rebuilder,
+            serviceProvider: app.Services);
+        var secondArguments = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        var secondResponseFileArgument = Assert.Single(secondArguments, argument => argument.StartsWith('@'));
+        var secondResponseFileContents = File.ReadAllLines(secondResponseFileArgument[1..]);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            rebuilder,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        Assert.Equal(2, callbackCount);
+        Assert.Equal("FIRST_BUILD_FLAVOR", firstEnvironment["FIRST_BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:FIRST_BUILD_FLAVOR=FIRST_BUILD_FLAVOR\""], firstResponseFileContents);
+        Assert.Equal("SECOND_BUILD_FLAVOR", secondEnvironment["SECOND_BUILD_FLAVOR"]);
+        Assert.Equal(["\"--property:SECOND_BUILD_FLAVOR=SECOND_BUILD_FLAVOR\""], secondResponseFileContents);
     }
 
     [Fact]
@@ -2676,12 +2852,30 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Emulates what DCP does to a resource when it restarts it.
     /// </summary>
-    private static void ForgetCachedEnvironmentResults(IResource resource)
+    private static void ForgetCachedCallbackResults(IResource resource)
     {
-        Assert.True(resource.TryGetEnvironmentVariables(out var environmentCallbacks));
-        foreach (var environmentCallback in environmentCallbacks)
+        if (resource.TryGetEnvironmentVariables(out var environmentCallbacks))
         {
-            environmentCallback.AsCallbackAnnotation().ForgetCachedResult();
+            foreach (var environmentCallback in environmentCallbacks)
+            {
+                environmentCallback.AsCallbackAnnotation().ForgetCachedResult();
+            }
+        }
+
+        if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argumentCallbacks))
+        {
+            foreach (var argumentCallback in argumentCallbacks)
+            {
+                argumentCallback.AsCallbackAnnotation().ForgetCachedResult();
+            }
+        }
+
+        if (resource.TryGetAnnotationsOfType<LaunchToolArgsCallbackAnnotation>(out var launchToolArgumentCallbacks))
+        {
+            foreach (var launchToolArgumentCallback in launchToolArgumentCallbacks)
+            {
+                launchToolArgumentCallback.AsCallbackAnnotation().ForgetCachedResult();
+            }
         }
     }
 

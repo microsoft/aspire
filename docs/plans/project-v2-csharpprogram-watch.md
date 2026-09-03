@@ -351,8 +351,8 @@ runs; re-verify the `server`/`resource`/`host` flag surface (A1). *Depends on: 1
 ### Session 5 — Coordinated initial traversal and context-specific builds
 Implement the coordinated build (§5.3): AppHost-local traversal projects for compatible
 `DotnetProjectResource` `.csproj`s, serialized direct builds for incompatible SDK/environment contexts,
-and one completed build chain before services start, **identically for watch and non-watch**; exclude
-`.cs` apps; stream logs; fail fast.
+and serialized direct builds for file-based `.cs` apps, with one completed build chain before services
+start, **identically for watch and non-watch**; stream logs; fail fast.
 
 **Verify:** a multi-project app **with a shared library** builds once, no write races, from a TS app host then a C# app host.
 *Depends on: 1. Parallelizable with 2–4.*
@@ -360,9 +360,10 @@ and one completed build chain before services start, **identically for watch and
 **Status: ✅ Complete.** Added coordinated Run-mode build resources that write AppHost-local traversal
 projects for compatible contexts, use serialized direct builds when SDK roots or environments differ,
 stream logs, and block all dependent resources (including forced starts) on success. Traditional projects
-launch with `--no-build`; file-based `.cs` apps remain outside the build projects, retain
-`--file --no-cache`, wait in mixed models, and remain unchanged in file-only models. Automated coverage and
-the TypeScript-first/C#-second playground runs pass, including shared-library and service-discovery calls.
+launch with `--no-build`; file-based `.cs` apps remain outside generated traversal projects, use serialized
+direct-build resources in mixed and file-only models, and launch with `--file <path> --no-build`. Automated
+coverage and the TypeScript-first/C#-second playground runs pass, including shared-library and
+service-discovery calls.
 
 ### Session 6 — C# **service** watch: watch `server` + `resource` launch
 Add `DotnetWatchServerResource` (§5.2). When `ExecutionContext.RunConfiguration.WatchEnabled`, the package (a) adds the hidden

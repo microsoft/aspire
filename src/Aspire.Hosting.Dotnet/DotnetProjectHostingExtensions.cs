@@ -28,6 +28,9 @@ public static class DotnetProjectHostingExtensions
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="builder"/>, <paramref name="name"/>, or <paramref name="value"/> is null.
     /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="name"/> is empty.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The variable is available while Aspire builds the project but is not added to the environment of the
@@ -58,7 +61,7 @@ public static class DotnetProjectHostingExtensions
         string value)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(name);
+        ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(value);
 
         return builder.WithBuildEnvironment(context => context.EnvironmentVariables[name] = value);

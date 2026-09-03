@@ -116,4 +116,20 @@ public class DotnetProjectPublicApiTests
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal("configure", exception.ParamName);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void WithBuildEnvironmentShouldThrowWhenNameIsNullOrEmpty(string? name)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddResource(new DotnetProjectResource("app", builder.AppHostDirectory));
+
+        var action = () => project.WithBuildEnvironment(name!, "value");
+
+        var exception = name is null
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
 }

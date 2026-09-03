@@ -441,6 +441,10 @@ internal static class DotnetProjectBuildCoordinator
                             _sharedBuildEnvironments.Remove(sharedBuildEnvironment);
                             sharedBuildEnvironment.Dispose();
                         });
+                        rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
+                            _builder,
+                            buildResource,
+                            sharedBuildEnvironment));
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                         rollbackActions.Push(ApplyBuildEnvironment(buildResource, sharedBuildEnvironment));
                         rollbackActions.Push(ApplyBuildProperties(buildResource, sharedBuildEnvironment));
@@ -449,6 +453,10 @@ internal static class DotnetProjectBuildCoordinator
                             sharedBuildEnvironment));
                         if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
                         {
+                            rollbackActions.Push(BeginBuildEnvironmentAttemptOnResourceStart(
+                                _builder,
+                                rebuilder,
+                                sharedBuildEnvironment));
                             rollbackActions.Push(ValidateMaterializedBuildCallbacks(rebuilder, step.Projects));
                             rollbackActions.Push(ApplyBuildEnvironment(rebuilder, sharedBuildEnvironment));
                             rollbackActions.Push(ApplyBuildProperties(rebuilder, sharedBuildEnvironment));
@@ -656,6 +664,20 @@ internal static class DotnetProjectBuildCoordinator
             return () => target.Annotations.Remove(annotation);
         }
 
+        private static Action BeginBuildEnvironmentAttemptOnResourceStart(
+            IDistributedApplicationBuilder builder,
+            IResource target,
+            SharedBuildEnvironment sharedBuildEnvironment)
+        {
+            var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+                target,
+                (@event, cancellationToken) => sharedBuildEnvironment.BeginBuildAttemptAsync(
+                    target,
+                    @event.Services.GetRequiredService<ResourceLoggerService>().GetLogger(target),
+                    cancellationToken));
+            return () => builder.Eventing.Unsubscribe(subscription);
+        }
+
         private static Action ApplyBuildProperties(IResource target, SharedBuildEnvironment sharedBuildEnvironment)
         {
             // Environment variables enter MSBuild as low-precedence properties. Also pass them as global properties
@@ -755,7 +777,8 @@ internal static class DotnetProjectBuildCoordinator
             private readonly object _responseFilesLock = new();
             private readonly Dictionary<IResource, MsBuildResponseFile> _responseFiles =
                 new(ReferenceEqualityComparer.Instance);
-            private Task<IReadOnlyDictionary<string, string>>? _evaluation;
+            private BuildEnvironmentGeneration _generation = new(precedingEvaluation: null);
+            private Task _buildAttemptTail = Task.CompletedTask;
             private bool _disposed;
 
             public SharedBuildEnvironment(
@@ -779,6 +802,61 @@ internal static class DotnetProjectBuildCoordinator
             /// silently produce output that differs from the project launch environment.
             /// </remarks>
             public IReadOnlyList<DotnetProjectBuildEnvironmentCallbackAnnotation> Callbacks { get; }
+
+            public async Task BeginBuildAttemptAsync(
+                IResource resource,
+                ILogger logger,
+                CancellationToken cancellationToken)
+            {
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Task precedingAttempt;
+                lock (_lock)
+                {
+                    precedingAttempt = _buildAttemptTail;
+                    _buildAttemptTail = completion.Task;
+                }
+
+                try
+                {
+                    await precedingAttempt.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var initialSnapshot = _notificationService.TryGetCurrentState(
+                        resource.Name,
+                        out var resourceEvent)
+                            ? resourceEvent.Snapshot
+                            : null;
+
+                    lock (_lock)
+                    {
+                        // Materialization creates a pending generation so eager project or IDE configuration can evaluate
+                        // the same snapshot that the initial coordinated build will use. Later starts are rebuild attempts
+                        // and must observe mutable callback inputs again.
+                        if (!_generation.IsClaimedByBuildAttempt)
+                        {
+                            _generation.IsClaimedByBuildAttempt = true;
+                        }
+                        else
+                        {
+                            _generation = new BuildEnvironmentGeneration(_generation.Evaluation)
+                            {
+                                IsClaimedByBuildAttempt = true,
+                            };
+                        }
+                    }
+
+                    _ = CompleteBuildAttemptWhenSettledAsync(
+                        resource,
+                        initialSnapshot,
+                        completion,
+                        logger);
+                }
+                catch
+                {
+                    _ = CompleteSkippedBuildAttemptAsync(precedingAttempt, completion);
+                    throw;
+                }
+            }
 
             /// <summary>
             /// Applies the complete coordinated build environment to the resource that runs the build.
@@ -879,22 +957,30 @@ internal static class DotnetProjectBuildCoordinator
                 ILogger logger,
                 CancellationToken cancellationToken)
             {
+                BuildEnvironmentGeneration generation;
                 Task<IReadOnlyDictionary<string, string>> evaluation;
                 lock (_lock)
                 {
+                    generation = _generation;
                     // A faulted or canceled callback evaluation is deliberately not retained so a later build or rebuild
                     // can retry a transient failure. Every attempt starts from a fresh dictionary, so a retry can never
                     // observe a half-applied environment.
-                    if (_evaluation is null || _evaluation.IsFaulted || _evaluation.IsCanceled)
+                    if (generation.Evaluation is null ||
+                        generation.Evaluation.IsFaulted ||
+                        generation.Evaluation.IsCanceled)
                     {
-                        _evaluation = EvaluateAsync(executionContext, logger, _applicationStopping);
+                        generation.Evaluation = EvaluateAsync(
+                            generation,
+                            executionContext,
+                            logger,
+                            _applicationStopping);
                     }
 
-                    evaluation = _evaluation;
+                    evaluation = generation.Evaluation;
                 }
 
-                // The shared work belongs to the application lifetime. Each consumer can cancel only its own wait,
-                // without canceling the evaluation for concurrent build, rebuild, or launch consumers.
+                // The shared work belongs to the build generation. Each consumer can cancel only its own wait,
+                // without canceling the evaluation for concurrent build, rebuild, or launch consumers in that generation.
                 return evaluation.WaitAsync(cancellationToken);
             }
 
@@ -910,8 +996,7 @@ internal static class DotnetProjectBuildCoordinator
                         resource.Name,
                         resourceEvent =>
                             !ReferenceEquals(resourceEvent.Snapshot, initialSnapshot) &&
-                            (resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                             KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text)),
+                            IsSettledBuildSnapshot(resourceEvent.Snapshot),
                         _applicationStopping).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (_applicationStopping.IsCancellationRequested)
@@ -929,6 +1014,50 @@ internal static class DotnetProjectBuildCoordinator
                 {
                     ReleaseResponseFile(resource, responseFile);
                 }
+            }
+
+            private async Task CompleteBuildAttemptWhenSettledAsync(
+                IResource resource,
+                CustomResourceSnapshot? initialSnapshot,
+                TaskCompletionSource completion,
+                ILogger logger)
+            {
+                try
+                {
+                    await _notificationService.WaitForResourceAsync(
+                        resource.Name,
+                        resourceEvent =>
+                            !ReferenceEquals(resourceEvent.Snapshot, initialSnapshot) &&
+                            (resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
+                             KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text)),
+                        _applicationStopping).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_applicationStopping.IsCancellationRequested)
+                {
+                    // Application shutdown ends every queued build attempt.
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to monitor .NET build resource '{ResourceName}' for build-attempt serialization. " +
+                        "Further build attempts will remain blocked to avoid concurrent writes.",
+                        resource.Name);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, _applicationStopping)
+                        .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+                finally
+                {
+                    completion.TrySetResult();
+                }
+            }
+
+            private static async Task CompleteSkippedBuildAttemptAsync(
+                Task precedingAttempt,
+                TaskCompletionSource completion)
+            {
+                await precedingAttempt.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                completion.TrySetResult();
             }
 
             private void ReleaseResponseFile(IResource resource, MsBuildResponseFile expectedResponseFile)
@@ -961,10 +1090,19 @@ internal static class DotnetProjectBuildCoordinator
             }
 
             private async Task<IReadOnlyDictionary<string, string>> EvaluateAsync(
+                BuildEnvironmentGeneration generation,
                 DistributedApplicationExecutionContext executionContext,
                 ILogger logger,
                 CancellationToken cancellationToken)
             {
+                if (generation.PrecedingEvaluation is { } precedingEvaluation)
+                {
+                    // Build attempts normally cannot overlap, but the rebuilder and coordinated-build resources are
+                    // distinct DCP resources. Serialize their callbacks defensively because user callbacks need not be
+                    // thread-safe, while allowing a failed prior generation to be retried with new inputs.
+                    await ((Task)precedingEvaluation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+
                 var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
                 var environment = new Dictionary<string, object>(comparer);
                 foreach (var callback in Callbacks)
@@ -993,7 +1131,16 @@ internal static class DotnetProjectBuildCoordinator
                     resolvedEnvironment[name] = stringValue;
                 }
 
-                _entry.Metadata.SetBuildEnvironment(resolvedEnvironment);
+                lock (_lock)
+                {
+                    // An older evaluation can finish after a new build attempt has started. Do not let its snapshot
+                    // replace the metadata used by run-property resolution and IDE launch configuration.
+                    if (ReferenceEquals(_generation, generation))
+                    {
+                        _entry.Metadata.SetBuildEnvironment(resolvedEnvironment);
+                    }
+                }
+
                 return resolvedEnvironment;
             }
         }
@@ -1048,6 +1195,16 @@ internal static class DotnetProjectBuildCoordinator
                     workingDirectory,
                     entry.Metadata.BuildConfiguration,
                     [entry]);
+        }
+
+        private sealed class BuildEnvironmentGeneration(
+            Task<IReadOnlyDictionary<string, string>>? precedingEvaluation)
+        {
+            public Task<IReadOnlyDictionary<string, string>>? PrecedingEvaluation { get; } = precedingEvaluation;
+
+            public Task<IReadOnlyDictionary<string, string>>? Evaluation { get; set; }
+
+            public bool IsClaimedByBuildAttempt { get; set; }
         }
     }
 }
