@@ -14,13 +14,6 @@ namespace Aspire.Cli.Packaging;
 /// </summary>
 internal static class NuGetConfigComposer
 {
-    private static readonly Dictionary<string, string> s_mergerSectionNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["config"] = "config",
-        ["packageSourceMapping"] = "packageSourceMapping",
-        ["packageSources"] = "packageSources"
-    };
-
     private static readonly HashSet<string> s_knownItemNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "add",
@@ -84,18 +77,13 @@ internal static class NuGetConfigComposer
         // NuGet applies configuration files from lowest to highest precedence. A <clear /> removes
         // inherited items and keyed items replace the inherited item with the same key.
         // https://learn.microsoft.com/nuget/consume-packages/configuring-nuget-behavior#how-settings-are-applied
-        var shouldCanonicalizeSectionName = s_mergerSectionNames.TryGetValue(incomingSection.Name.LocalName, out var canonicalSectionName);
-        var sectionName = canonicalSectionName ?? incomingSection.Name.LocalName;
+        var sectionName = incomingSection.Name.LocalName;
         var section = configuration.Elements()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, sectionName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, sectionName, StringComparison.Ordinal));
         if (section is null)
         {
-            section = new XElement(incomingSection.Name.Namespace + sectionName);
+            section = new XElement(incomingSection.Name);
             configuration.Add(section);
-        }
-        else if (shouldCanonicalizeSectionName)
-        {
-            section.Name = section.Name.Namespace + sectionName;
         }
 
         foreach (var attribute in incomingSection.Attributes())
@@ -103,13 +91,13 @@ internal static class NuGetConfigComposer
             section.SetAttributeValue(attribute.Name, attribute.Value);
         }
 
-        if (string.Equals(sectionName, "fallbackPackageFolders", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(sectionName, "fallbackPackageFolders", StringComparison.Ordinal))
         {
             MergeFallbackPackageFolders(section, incomingSection, originDirectory);
             return;
         }
 
-        if (string.Equals(incomingSection.Name.LocalName, "minPublishAgeExceptions", StringComparison.OrdinalIgnoreCase) &&
+        if (string.Equals(incomingSection.Name.LocalName, "minPublishAgeExceptions", StringComparison.Ordinal) &&
             !incomingSection.Elements().Any(element => string.Equals(element.Name.LocalName, "clear", StringComparison.OrdinalIgnoreCase)))
         {
             section.RemoveNodes();
@@ -203,8 +191,8 @@ internal static class NuGetConfigComposer
 
     private static void CanonicalizeMergerItemNames(string sectionName, XElement item)
     {
-        if (string.Equals(sectionName, "config", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(sectionName, "packageSources", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(sectionName, "config", StringComparison.Ordinal) ||
+            string.Equals(sectionName, "packageSources", StringComparison.Ordinal))
         {
             if (string.Equals(item.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
             {
@@ -214,7 +202,7 @@ internal static class NuGetConfigComposer
             return;
         }
 
-        if (!string.Equals(sectionName, "packageSourceMapping", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(sectionName, "packageSourceMapping", StringComparison.Ordinal))
         {
             return;
         }
@@ -243,18 +231,18 @@ internal static class NuGetConfigComposer
             return string.Equals(GetAttributeValue(first, "key"), GetAttributeValue(second, "key"), StringComparison.OrdinalIgnoreCase);
         }
 
-        if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.Ordinal))
         {
             return string.Equals(itemName, second.Name.LocalName, StringComparison.OrdinalIgnoreCase);
         }
 
-        if (string.Equals(sectionName, "packageSourceMapping", StringComparison.OrdinalIgnoreCase) &&
+        if (string.Equals(sectionName, "packageSourceMapping", StringComparison.Ordinal) &&
             string.Equals(itemName, "packageSource", StringComparison.OrdinalIgnoreCase))
         {
             return string.Equals(GetAttributeValue(first, "key"), GetAttributeValue(second, "key"), StringComparison.OrdinalIgnoreCase);
         }
 
-        if (string.Equals(sectionName, "minPublishAgeExceptions", StringComparison.OrdinalIgnoreCase) &&
+        if (string.Equals(sectionName, "minPublishAgeExceptions", StringComparison.Ordinal) &&
             string.Equals(itemName, "package", StringComparison.OrdinalIgnoreCase))
         {
             return string.Equals(GetAttributeValue(first, "pattern"), GetAttributeValue(second, "pattern"), StringComparison.OrdinalIgnoreCase);
@@ -280,10 +268,10 @@ internal static class NuGetConfigComposer
     private static bool IsUnknownItem(string sectionName, XElement item)
     {
         var itemName = item.Name.LocalName;
-        if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(sectionName, "packageSources", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(sectionName, "auditSources", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(sectionName, "packageSourceMapping", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.Ordinal) ||
+            string.Equals(sectionName, "packageSources", StringComparison.Ordinal) ||
+            string.Equals(sectionName, "auditSources", StringComparison.Ordinal) ||
+            string.Equals(sectionName, "packageSourceMapping", StringComparison.Ordinal))
         {
             return false;
         }
@@ -319,10 +307,10 @@ internal static class NuGetConfigComposer
         {
             var key = GetAttributeValue(item, "key");
             var isPathSetting =
-                string.Equals(sectionName, "packageSources", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(sectionName, "auditSources", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(sectionName, "fallbackPackageFolders", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(sectionName, "config", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(sectionName, "packageSources", StringComparison.Ordinal) ||
+                string.Equals(sectionName, "auditSources", StringComparison.Ordinal) ||
+                string.Equals(sectionName, "fallbackPackageFolders", StringComparison.Ordinal) ||
+                string.Equals(sectionName, "config", StringComparison.Ordinal) &&
                     (string.Equals(key, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(key, "repositoryPath", StringComparison.OrdinalIgnoreCase));
             if (isPathSetting)
@@ -331,7 +319,7 @@ internal static class NuGetConfigComposer
             }
         }
 
-        else if (string.Equals(sectionName, "clientCertificates", StringComparison.OrdinalIgnoreCase) &&
+        else if (string.Equals(sectionName, "clientCertificates", StringComparison.Ordinal) &&
             string.Equals(item.Name.LocalName, "fileCert", StringComparison.OrdinalIgnoreCase))
         {
             ResolveRelativePathAttribute(item, "path", originDirectory);

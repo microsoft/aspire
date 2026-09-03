@@ -563,7 +563,7 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
-    public async Task CreateComposedAsync_CanonicalizesElementsConsumedByMerger()
+    public async Task CreateComposedAsync_PreservesCaseSensitiveSectionNames()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var configDirectory = workspace.CreateDirectory("repo");
@@ -582,6 +582,12 @@ public class TemporaryNuGetConfigTests
               <Config>
                 <AdD key="globalPackagesFolder" value="./packages" />
               </Config>
+              <Custom>
+                <add key="upper" value="true" />
+              </Custom>
+              <custom>
+                <add key="lower" value="true" />
+              </custom>
             </configuration>
             """);
 
@@ -593,22 +599,34 @@ public class TemporaryNuGetConfigTests
 
         var configuration = XDocument.Load(config.ConfigFile.FullName).Root!;
         Assert.Equal(
-            ["packageSources", "packageSourceMapping", "config"],
+            ["PackageSources", "PackageSourceMapping", "Config", "Custom", "custom", "packageSources", "packageSourceMapping", "config"],
             configuration.Elements().Select(element => element.Name.LocalName).ToArray());
 
+        var noncanonicalPackageSources = Assert.Single(configuration.Elements("PackageSources"));
+        Assert.Equal("channel", Assert.Single(noncanonicalPackageSources.Elements("AdD")).Attribute("key")?.Value);
+
         var packageSources = Assert.Single(configuration.Elements("packageSources"));
-        Assert.Equal("channel", Assert.Single(packageSources.Elements("add")).Attribute("key")?.Value);
+        var generatedSource = Assert.Single(packageSources.Elements("add"));
+        Assert.Equal(channelSource, generatedSource.Attribute("value")?.Value);
+
+        var noncanonicalPackageSourceMapping = Assert.Single(configuration.Elements("PackageSourceMapping"));
+        var noncanonicalSourceMapping = Assert.Single(noncanonicalPackageSourceMapping.Elements("PackageSource"));
+        Assert.Equal("Contoso.*", Assert.Single(noncanonicalSourceMapping.Elements("Package")).Attribute("pattern")?.Value);
 
         var packageSourceMapping = Assert.Single(configuration.Elements("packageSourceMapping"));
         var sourceMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
-        Assert.Equal(
-            ["Contoso.*", "Aspire*"],
-            sourceMapping.Elements("package").Select(element => element.Attribute("pattern")!.Value).ToArray());
+        Assert.Equal("Aspire*", Assert.Single(sourceMapping.Elements("package")).Attribute("pattern")?.Value);
+
+        Assert.Equal("true", Assert.Single(configuration.Element("Custom")!.Elements("add")).Attribute("value")?.Value);
+        Assert.Equal("true", Assert.Single(configuration.Element("custom")!.Elements("add")).Attribute("value")?.Value);
 
         var globalPackagesFolder = Assert.Single(Assert.Single(configuration.Elements("config")).Elements("add"));
         Assert.Equal(
             Path.Combine(workspace.WorkspaceRoot.FullName, "unused"),
             globalPackagesFolder.Attribute("value")?.Value);
+        Assert.Equal(
+            "./packages",
+            Assert.Single(Assert.Single(configuration.Elements("Config")).Elements("AdD")).Attribute("value")?.Value);
     }
 
     [Fact]
