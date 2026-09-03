@@ -1,0 +1,38 @@
+{
+  "run_id": 33696222557,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33696222557",
+  "analyzed_at": "2026-09-03T00:11:49Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18627,
+    "title": "Add Deno support to the TypeScript AppHost toolchain resolver",
+    "author": "rickylabs",
+    "state": "closed",
+    "head_branch": "feat/deno-typescript-apphost-toolchain",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18627"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Radius.Tests, Hosting.Radius, Hosting.Radius, tests/Asp... / Hosting.Radius (windows-latest)",
+      "id": 100465978094,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33696222557/job/100465978094",
+      "classification": "flaky-test",
+      "reason": "The only failing test, SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut, matches a previously identified flaky test (cause hosting-radius-sealedsecretapply-timeout-flaky) with identical Assert.True() failure signature. The PR's changed files are entirely in the VS Code extension and TypeScript AppHost toolchain areas, unrelated to Aspire.Hosting.Radius.Tests.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Radius.Tests, Hosting.Radius, Hosting.Radius, tests/Asp... / Hosting.Radius (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Radius.Tests\\Secrets\\SealedSecretApplyStepTests.cs:line 513\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Matches a prior recorded flaky test cause (hosting-radius-sealedsecretapply-timeout-flaky) with identical error/stack trace signature; the PR does not touch Aspire.Hosting.Radius.Tests or related source files."
+    }
+  ],
+  "causes": ["hosting-radius-sealedsecretapply-timeout-flaky"]
+}
