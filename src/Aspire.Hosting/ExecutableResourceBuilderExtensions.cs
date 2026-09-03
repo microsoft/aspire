@@ -132,7 +132,7 @@ public static class ExecutableResourceBuilderExtensions
         }
 
         var resource = builder.Resource;
-        var hasProjection = resource.HasAppliedContainerProjection();
+        var hasProjection = resource.AsContainer() is not null;
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,

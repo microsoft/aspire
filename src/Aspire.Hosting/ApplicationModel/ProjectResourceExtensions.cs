@@ -24,7 +24,7 @@ public static class ProjectResourceExtensions
 
         return model.Resources
             .OfType<ProjectResource>()
-            .Where(static resource => !resource.HasAppliedContainerProjection());
+            .Where(static resource => resource.AsContainer() is null);
     }
 
     /// <summary>

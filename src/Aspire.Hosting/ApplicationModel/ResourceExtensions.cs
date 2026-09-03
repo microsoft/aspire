@@ -39,11 +39,6 @@ public static class ResourceExtensions
         return resource is IResourceProjection projection ? projection.Owner : resource;
     }
 
-    // IsContainer also recognizes legacy ContainerImageAnnotation-based conversion. Callers use
-    // this narrower check only when an applied projection intentionally overrides legacy behavior.
-    internal static bool HasAppliedContainerProjection(this IResource resource) =>
-        resource is not ContainerResource && resource.AsContainer() is not null;
-
     /// <summary>
     /// Attempts to get the last annotation of the specified type from the resource.
     /// </summary>
@@ -887,7 +882,7 @@ public static class ResourceExtensions
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
 
                 // Container resources get their default listening port from the exposed port (implicit)
-                (_, _, null, int port) when resource is ContainerResource || resource.HasAppliedContainerProjection() => ResolvedPort.Implicit(port),
+                (_, _, null, int port) when resource.AsContainer() is not null => ResolvedPort.Implicit(port),
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
@@ -899,7 +894,7 @@ public static class ResourceExtensions
 
             // Track HTTP schemes encountered for ProjectResources
             if (resource is ProjectResource &&
-                !resource.HasAppliedContainerProjection() &&
+                resource.AsContainer() is null &&
                 IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
@@ -1892,9 +1887,8 @@ public static class ResourceExtensions
     /// </summary>
     internal static string GetResourceType(this IResource resource) => resource switch
     {
-        _ when resource.HasAppliedContainerProjection() => KnownResourceTypes.Container,
+        _ when resource.AsContainer() is not null => KnownResourceTypes.Container,
         ProjectResource => KnownResourceTypes.Project,
-        ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,
         DotnetToolResource => KnownResourceTypes.Tool,
         ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,
