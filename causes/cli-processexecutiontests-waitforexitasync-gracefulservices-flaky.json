@@ -1,9 +1,9 @@
 {
   "id": "cli-processexecutiontests-waitforexitasync-gracefulservices-flaky",
   "type": "flaky-test",
-  "title": "Flaky: ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill fails with 'Assert.Single() Failure: The collection was empty' on Windows",
-  "test_name": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill",
-  "error_pattern": "Assert.Single() Failure: The collection was empty\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(Boolean isolateConsole) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionTests.cs:line 265",
+  "title": "Flaky: ProcessExecutionTests WaitForExitAsync_WithGracefulServices_* tests time out/fail intermittently on Windows",
+  "test_name": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill(Boolean isolateConsole) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionTests.cs:line 233",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -11,6 +11,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 19826,
       "observed_at": "2026-09-01T10:23:09Z"
+    },
+    {
+      "run_id": 33782779276,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33782779276",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.TypeScript.Tests, Hosting.CodeGeneration... / Hosting.CodeGeneration.TypeScript (windows-latest)",
+      "pr_number": 19465,
+      "observed_at": "2026-09-03T18:05:07Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19839"

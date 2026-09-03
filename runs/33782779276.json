@@ -1,0 +1,47 @@
+{
+  "run_id": 33782779276,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33782779276",
+  "analyzed_at": "2026-09-03T18:05:07Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19465,
+    "title": "Fix docs safe-output base fallback",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "dapine/fix-docs-base-fallback",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19465"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.TypeScript.Tests, Hosting.CodeGeneration... / Hosting.CodeGeneration.TypeScript (windows-latest)",
+      "id": 100740903071,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33782779276/job/100740903071",
+      "classification": "transient-infra",
+      "reason": "Multiple steps failed with exit code -1073741502 (0xC0000142), a known Windows process initialization failure unrelated to PR content. PR only modifies docs-check workflow/scripts, not this test area.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 100740903076,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33782779276/job/100740903076",
+      "classification": "flaky-test",
+      "reason": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill timed out; this test area (process signal/kill timing) is unrelated to the PR's docs-check workflow changes and matches a known flaky pattern for timing-sensitive ProcessExecutionTests on Windows.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill(isolateConsole: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.DotNet.ProcessExecutionTests.WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill(Boolean isolateConsole) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionTests.cs:line 233",
+      "classification": "flaky",
+      "reason": "Timing-sensitive process signal escalation test unrelated to PR changes (PR only touches docs-check workflow scripts); matches known flaky pattern for similar ProcessExecutionTests timing tests on Windows runners."
+    }
+  ],
+  "causes": ["windows-process-init-0xc0000142", "cli-processexecutiontests-waitforexitasync-gracefulservices-flaky"]
+}
