@@ -444,6 +444,15 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void ContainerWithoutImageRetainsLegacyNonContainerClassification()
+    {
+        var container = new ContainerResource("container");
+
+        Assert.Same(container, container.AsContainer());
+        Assert.False(container.IsContainer());
+    }
+
+    [Fact]
     public void AsContainerReturnsExplicitContainerResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

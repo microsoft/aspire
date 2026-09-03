@@ -44,7 +44,10 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         {
             var steps = new List<PipelineStep>();
 
-            if (factoryContext.Resource.IsExcludedFromPublish())
+            // A projected project is built by the container pipeline annotation added by WithDockerfile.
+            // Emitting the SDK project steps as well would produce duplicate build/push step names.
+            if (factoryContext.Resource.IsExcludedFromPublish() ||
+                factoryContext.Resource.AsContainer() is not null)
             {
                 return steps;
             }

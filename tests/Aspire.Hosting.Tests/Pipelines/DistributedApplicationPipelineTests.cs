@@ -344,6 +344,24 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ResolveStepsAsync_WithProjectedProjectDockerfile_UsesContainerBuildStep()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var project = builder.AddProject(
+                "test-project",
+                Path.Combine(builder.AppHostDirectory, "dummy.csproj"),
+                options => options.ExcludeLaunchProfile = true)
+            .PublishAsDockerFile();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var buildStep = Assert.Single(steps, step => step.Name == "build-test-project");
+        Assert.Same(project.Resource, buildStep.Resource);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
         using var builder = CreatePipelineTestBuilder();
