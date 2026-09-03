@@ -101,6 +101,7 @@ FLAKY_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "flaky-test")
 CODE_ISSUE_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 MAIN_BREAK_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "main-repository-breakage")] | length' "$ANALYSIS_FILE")
 FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
+FLAKY_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "flaky")] | length' "$ANALYSIS_FILE")
 CODE_ISSUE_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 KNOWN_JOB_COUNT=$((INFRA_JOB_COUNT + FLAKY_JOB_COUNT + CODE_ISSUE_JOB_COUNT + MAIN_BREAK_JOB_COUNT))
 TRANSIENT_JOB_COUNT=$((INFRA_JOB_COUNT + FLAKY_JOB_COUNT))
@@ -216,12 +217,20 @@ case "$VERDICT" in
     fi
     ;;
   code-issue)
+    if [ "$FLAKY_TEST_COUNT" -ne 0 ]; then
+      echo "::error::Analysis failed_tests are incompatible with verdict code-issue"
+      exit 1
+    fi
     if [ "$CODE_ISSUE_JOB_COUNT" -ne "$FAILED_JOB_COUNT" ] || [ "$CAUSE_COUNT" -ne 0 ]; then
       echo "::error::A code-issue verdict requires every failed job to be a code issue and must not include cause files"
       exit 1
     fi
     ;;
   main-repository-breakage)
+    if [ "$FLAKY_TEST_COUNT" -ne 0 ]; then
+      echo "::error::Analysis failed_tests are incompatible with verdict main-repository-breakage"
+      exit 1
+    fi
     if [ "$MAIN_BREAK_JOB_COUNT" -ne "$FAILED_JOB_COUNT" ] ||
        [ "$MAIN_BREAK_CAUSE_COUNT" -eq 0 ] || [ "$MAIN_BREAK_CAUSE_COUNT" -ne "$CAUSE_COUNT" ]; then
       echo "::error::A main-repository-breakage verdict requires every failed job and cause to be a main repository breakage"
@@ -231,15 +240,18 @@ case "$VERDICT" in
   mixed)
     case "$TRUSTED_RUN_SCOPE" in
       main)
-        if [ "$MAIN_BREAK_JOB_COUNT" -eq 0 ] || [ "$TRANSIENT_JOB_COUNT" -eq 0 ] ||
+        if [ "$MAIN_BREAK_JOB_COUNT" -eq 0 ] ||
+           { [ "$TRANSIENT_JOB_COUNT" -eq 0 ] && [ "$FLAKY_TEST_COUNT" -eq 0 ]; } ||
            [ "$MAIN_BREAK_CAUSE_COUNT" -eq 0 ] || [ "$MAIN_BREAK_CAUSE_COUNT" -eq "$CAUSE_COUNT" ]; then
-          echo "::error::A mixed verdict for main requires transient and main-breakage failed jobs and causes"
+          echo "::error::A mixed verdict for main requires a main-breakage job and cause plus transient job or test evidence and cause"
           exit 1
         fi
         ;;
       pull-request)
-        if [ "$CODE_ISSUE_JOB_COUNT" -eq 0 ] || [ "$TRANSIENT_JOB_COUNT" -eq 0 ] || [ "$CAUSE_COUNT" -eq 0 ]; then
-          echo "::error::A mixed verdict for a pull request requires transient and code-issue failed jobs plus a transient cause"
+        if [ "$CODE_ISSUE_JOB_COUNT" -eq 0 ] ||
+           { [ "$TRANSIENT_JOB_COUNT" -eq 0 ] && [ "$FLAKY_TEST_COUNT" -eq 0 ]; } ||
+           [ "$CAUSE_COUNT" -eq 0 ]; then
+          echo "::error::A mixed verdict for a pull request requires a code-issue job plus transient job or test evidence and a transient cause"
           exit 1
         fi
         ;;
@@ -249,8 +261,8 @@ esac
 
 if { [ "$INFRA_JOB_COUNT" -eq 0 ] && [ "$INFRA_CAUSE_COUNT" -ne 0 ]; } ||
    { [ "$INFRA_JOB_COUNT" -ne 0 ] && [ "$INFRA_CAUSE_COUNT" -eq 0 ]; } ||
-   { [ "$FLAKY_JOB_COUNT" -eq 0 ] && [ "$FLAKY_CAUSE_COUNT" -ne 0 ]; } ||
-   { [ "$FLAKY_JOB_COUNT" -ne 0 ] && [ "$FLAKY_CAUSE_COUNT" -eq 0 ]; } ||
+   { [ "$FLAKY_JOB_COUNT" -eq 0 ] && [ "$FLAKY_TEST_COUNT" -eq 0 ] && [ "$FLAKY_CAUSE_COUNT" -ne 0 ]; } ||
+   { { [ "$FLAKY_JOB_COUNT" -ne 0 ] || [ "$FLAKY_TEST_COUNT" -ne 0 ]; } && [ "$FLAKY_CAUSE_COUNT" -eq 0 ]; } ||
    { [ "$MAIN_BREAK_JOB_COUNT" -eq 0 ] && [ "$MAIN_BREAK_CAUSE_COUNT" -ne 0 ]; } ||
    { [ "$MAIN_BREAK_JOB_COUNT" -ne 0 ] && [ "$MAIN_BREAK_CAUSE_COUNT" -eq 0 ]; }; then
   echo "::error::Failed-job classifications and persisted cause types do not match"

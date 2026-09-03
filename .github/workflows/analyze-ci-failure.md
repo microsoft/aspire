@@ -53,6 +53,7 @@ jobs:
           sparse-checkout: |
             eng/test-retry-patterns.json
             .github/workflows/analyze-ci-failure-history.sh
+            .github/workflows/analyze-ci-failure-candidates.sh
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -165,50 +166,10 @@ jobs:
             fi
 
             LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // ""' ci-failure-data/last-successful-main-run.json)
-            echo "[]" > ci-failure-data/candidate-merges.json
-            echo '{"state":"unavailable"}' > ci-failure-data/candidate-merge-history-status.json
-            if [ -n "${LAST_SUCCESSFUL_SHA}" ] && [ -n "${HEAD_SHA}" ]; then
-              if gh api --paginate --slurp "repos/${REPO}/compare/${LAST_SUCCESSFUL_SHA}...${HEAD_SHA}?per_page=100" \
-                  > ci-failure-data/main-comparison-pages.json 2>/dev/null; then
-                jq '{
-                  total_commits: (.[0].total_commits // 0),
-                  commits: [.[].commits[]?]
-                }' ci-failure-data/main-comparison-pages.json > ci-failure-data/main-comparison.json
-                RECEIVED_COMMIT_COUNT=$(jq '.commits | length' ci-failure-data/main-comparison.json)
-                TOTAL_COMMIT_COUNT=$(jq '.total_commits' ci-failure-data/main-comparison.json)
-                if [ "$RECEIVED_COMMIT_COUNT" -lt "$TOTAL_COMMIT_COUNT" ]; then
-                  echo "::warning::GitHub returned only ${RECEIVED_COMMIT_COUNT} of ${TOTAL_COMMIT_COUNT} commits in the comparison."
-                  echo '{"state":"incomplete"}' > ci-failure-data/candidate-merge-history-status.json
-                else
-                  echo '{"state":"available"}' > ci-failure-data/candidate-merge-history-status.json
-                fi
-                jq -c '.commits[]? | {sha, message: .commit.message, html_url}' \
-                  ci-failure-data/main-comparison.json | while IFS= read -r COMMIT; do
-                  COMMIT_SHA=$(jq -r '.sha' <<< "${COMMIT}")
-                  if ! MERGE_PR=$(gh api "repos/${REPO}/commits/${COMMIT_SHA}/pulls" \
-                      --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\" and .merged_at != null)] | first // null" \
-                      2>/dev/null); then
-                    echo "::warning::Unable to associate commit ${COMMIT_SHA} with a merged pull request."
-                    echo '{"state":"incomplete"}' > ci-failure-data/candidate-merge-history-status.json
-                    continue
-                  fi
-                  if [ "${MERGE_PR}" != "null" ]; then
-                    jq --argjson commit "${COMMIT}" --argjson pr "${MERGE_PR}" \
-                      '. + [$commit + {pull_request: {
-                        number: $pr.number,
-                        title: $pr.title,
-                        url: $pr.html_url,
-                        merged_at: $pr.merged_at
-                      }}]' ci-failure-data/candidate-merges.json \
-                      > ci-failure-data/candidate-merges.tmp
-                    mv ci-failure-data/candidate-merges.tmp ci-failure-data/candidate-merges.json
-                  fi
-                done
-              else
-                echo "::warning::Unable to compare the last successful main commit with the failed commit."
-              fi
-              rm -f ci-failure-data/main-comparison.json ci-failure-data/main-comparison-pages.json
-            fi
+            bash .github/workflows/analyze-ci-failure-candidates.sh \
+              "$REPO" "$LAST_SUCCESSFUL_SHA" "$HEAD_SHA" \
+              ci-failure-data/candidate-merges.json \
+              ci-failure-data/candidate-merge-history-status.json
           fi
           echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
 
@@ -657,6 +618,7 @@ safe-outputs:
               .github/workflows/analyze-ci-failure-validation.sh
               .github/workflows/analyze-ci-failure-persistence.sh
               .github/workflows/analyze-ci-failure-comment.sh
+              .github/workflows/analyze-ci-failure-issue.sh
             sparse-checkout-cone-mode: false
         - uses: actions/download-artifact@v4
           with:
@@ -952,75 +914,28 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
-                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
-                    LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // "unknown"' ci-failure-data/last-successful-main-run.json)
-                    FAILED_SHA=$(jq -r '.head_sha // "unknown"' "$RUN_CONTEXT_FILE")
-                    TRIGGERING_MERGE=$(jq -r 'if .number then "#\(.number) \(.title)" else "Not found" end' ci-failure-data/triggering-merge-pr.json)
-                  fi
-                  {
-                    echo "${MARKER}"
-                    echo "${TYPE_MARKER}"
-                    echo ""
-                    echo "## Build Information"
-                    echo ""
-                    echo "Build: ${RUN_URL}"
-                    if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
-                      echo "Affected branch: \`main\`"
-                      echo "Last successful main SHA: \`${LAST_SUCCESSFUL_SHA}\`"
-                      echo "Failed main SHA: \`${FAILED_SHA}\`"
-                      echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
-                    elif [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
-                    else
-                      echo "Build error leg: ${FIRST_JOB}"
-                    fi
-                    if [ "$RUN_SCOPE" = "pull-request" ] && [ "$PR_NUMBER" != "0" ]; then
-                      echo "Pull request: #${PR_NUMBER}"
-                    fi
-                    echo ""
-                    echo "## Error Message"
-                    echo ""
-                    echo '```'
-                    jq -r '.error_pattern' "$CAUSE_FILE"
-                    echo '```'
-                    echo ""
-                    echo "## Description"
-                    echo ""
-                    jq -r '.title' "$CAUSE_FILE"
-                    echo ""
-                    echo "**Type**: ${CAUSE_TYPE}"
-                    echo ""
-                    echo "## Occurrences"
-                    echo ""
-                    echo "| Date | Build | Job | Context |"
-                    echo "|------|-------|-----|----|"
-                    echo "$NEW_OCCURRENCE_ROW"
-                  } > "$BODY_FILE"
+                  ISSUE_METADATA_FILE=$(mktemp)
+                  bash .github/workflows/analyze-ci-failure-issue.sh \
+                    "$CAUSE_FILE" "$RUN_CONTEXT_FILE" \
+                    ci-failure-data/last-successful-main-run.json \
+                    ci-failure-data/triggering-merge-pr.json \
+                    "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$FIRST_JOB" \
+                    "$NEW_OCCURRENCE_ROW" "$BODY_FILE" "$ISSUE_METADATA_FILE"
 
-                  LABELS="ci-failure-cause"
-                  if [ "$CAUSE_TYPE" = "flaky-test" ]; then
-                    LABELS="ci-failure-cause,test-failure"
-                  elif [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
                     gh label create "main-ci-break" --repo "$REPO" \
                       --color "b60205" \
                       --description "Deterministic repository breakage on the main branch" \
                       --force
-                    LABELS="ci-failure-cause,main-ci-break"
                   fi
 
-                  # Build the title via jq to avoid shell metacharacter issues
-                  # with agent-generated cause titles.
-                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
-                    ISSUE_TITLE=$(jq -r '"[Main CI Failure] " + .title' "$CAUSE_FILE")
-                  else
-                    ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
-                  fi
+                  ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
+                  LABELS=$(jq -r '.labels' "$ISSUE_METADATA_FILE")
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
                     --body-file "$BODY_FILE")
-                  rm -f "$BODY_FILE"
+                  rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
                   echo "Created issue for cause: ${CAUSE_ID} — ${CREATED_ISSUE_URL}"
 
                   # Store issue URL in the cause file on memory branch
@@ -1567,6 +1482,8 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 ### Mixed Failures
 
 If there are both transient and non-transient failures, set `verdict` to `"mixed"`. Report all findings with per-job and per-test classifications.
+
+A single failed job can contain both a deterministic failure and a flaky failed test. In that case, classify the job by the deterministic failure, include the flaky test and its cause, and use `mixed` so neither failure is omitted.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
