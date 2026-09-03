@@ -39,9 +39,10 @@ test("loadDashboard paginates open pull requests for each watched repo", async (
     const body = JSON.parse(options.body);
     seenAfter.push(body.variables.after ?? null);
     if (body.query.includes("pullRequests")) {
+      assert.match(body.query, /readyForReviewEvents:\s*timelineItems\(last:1, itemTypes:\[READY_FOR_REVIEW_EVENT\]\)/);
       return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: page(
         body.variables.after,
-        prNode(1, "2026-07-01T10:00:00Z"),
+        prNode(1, "2026-07-01T10:00:00Z", "2026-07-01T09:30:00Z"),
         prNode(2, "2026-07-01T11:00:00Z"),
       ) } } });
     }
@@ -60,6 +61,10 @@ test("loadDashboard paginates open pull requests for each watched repo", async (
   assert.deepEqual(seenAfter, [null, "cursor-1"]);
   assert.equal(dashboard.counts.total, 2);
   assert.deepEqual(dashboard.lanes.flatMap((lane) => lane.items.map((item) => item.pr.number)).sort((a, b) => a - b), [1, 2]);
+  assert.equal(
+    dashboard.lanes.flatMap((lane) => lane.items).find((item) => item.pr.number === 1).pr.readyForReviewAt,
+    "2026-07-01T09:30:00Z",
+  );
 });
 
 test("loadDashboard paginates open issues for each watched repo", async () => {
@@ -193,7 +198,7 @@ function page(after, firstNode, secondNode) {
   return { nodes: [secondNode], pageInfo: { hasNextPage: false, endCursor: null } };
 }
 
-function prNode(number, updatedAt) {
+function prNode(number, updatedAt, readyForReviewAt = null) {
   return {
     number,
     title: `PR ${number}`,
@@ -206,6 +211,7 @@ function prNode(number, updatedAt) {
     baseRefName: "main",
     mergeable: "MERGEABLE",
     reviewDecision: null,
+    readyForReviewEvents: { nodes: readyForReviewAt ? [{ createdAt: readyForReviewAt }] : [] },
     additions: 1,
     deletions: 0,
     changedFiles: 1,

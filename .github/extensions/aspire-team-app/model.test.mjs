@@ -70,6 +70,7 @@ function makePr(overrides = {}) {
     authorType: "User",
     authorAvatarUrl: null,
     createdAt: isoAgo(2 * dayMs),
+    readyForReviewAt: null,
     updatedAt: isoAgo(dayMs),
     baseRef: "main",
     milestone: null,
@@ -125,6 +126,22 @@ test("createAttentionBuckets only surfaces the My draft PRs bucket when a login 
 
   const withoutLogin = createAttentionBuckets([draft]);
   assert.equal(withoutLogin.find((b) => b.label === "My draft PRs"), undefined);
+});
+
+test("createAttentionSignals measures open age from the latest ready-for-review transition", () => {
+  const recentlyReady = makePr({
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(2 * dayMs),
+  });
+  const alwaysReady = makePr({ createdAt: isoAgo(28 * dayMs) });
+
+  const recentlyReadyOpen = createAttentionSignals({ pullRequest: recentlyReady })
+    .find((signal) => signal.label.startsWith("open "));
+  const alwaysReadyOpen = createAttentionSignals({ pullRequest: alwaysReady })
+    .find((signal) => signal.label.startsWith("open "));
+
+  assert.deepEqual(recentlyReadyOpen, { label: "open 2d", tone: "muted" });
+  assert.deepEqual(alwaysReadyOpen, { label: "open 28d", tone: "warning" });
 });
 
 test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-failing PRs", () => {
