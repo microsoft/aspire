@@ -315,10 +315,7 @@ internal sealed class AddCommand : BaseCommand
 
             // When installing from a PR channel, ensure the project has access to
             // the PR hive as a NuGet source so `dotnet add package` can resolve the
-            // PR-version package. We add the hive source to the project's nuget.config
-            // WITHOUT package source mapping restrictions, so that transitive deps
-            // (including RID-specific and stable-versioned packages) can still resolve
-            // from NuGet.org via the normal NuGet source hierarchy.
+            // PR-version package.
             //
             // IsBackedByLocalPackageDirectory (not just the local-build NAME) is required so this
             // also fires when emulating a released build via ASPIRE_CLI_PACKAGES: there the channel
@@ -331,25 +328,33 @@ internal sealed class AddCommand : BaseCommand
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
                 {
-                    var hiveSources = mappings
-                        .Select(m => m.Source)
-                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-
                     var projectDir = effectiveAppHostProjectFile.Directory!;
-                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
-                    if (!File.Exists(nugetConfigPath))
+                    projectDir.Create();
+                    if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectDir, out _))
                     {
-                        projectDir.Create(); // ensure directory exists
+                        await NuGetConfigMerger.CreateOrUpdateAsync(
+                            projectDir,
+                            selectedNuGetPackage.Channel,
+                            cancellationToken: cancellationToken);
+                        InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+                    }
+                    else
+                    {
+                        // Keep a new config additive so existing projects continue to inherit private
+                        // feeds from their repository and user-level NuGet configuration.
+                        var hiveSources = mappings
+                            .Select(static mapping => mapping.Source)
+                            .Where(static source => !source.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                            .Distinct(PackageSourceIdentity.Comparer);
                         var configXml = new System.Xml.Linq.XDocument(
                             new System.Xml.Linq.XElement("configuration",
                                 new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
+                                    hiveSources.Select(static source =>
                                         new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
-                        InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+                                            new System.Xml.Linq.XAttribute("key", source),
+                                            new System.Xml.Linq.XAttribute("value", source))))));
+                        configXml.Save(Path.Combine(projectDir.FullName, "nuget.config"));
+                        InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
             }

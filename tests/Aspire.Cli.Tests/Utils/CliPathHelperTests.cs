@@ -112,11 +112,21 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("https://example.com/Feed/index.json", "https://example.com/feed/index.json")]
     [InlineData("https://example.com/index.json?token=AbC", "https://example.com/index.json?token=abc")]
-    [InlineData("/packages/Feed", "/packages/feed")]
     public void ComputeStagingFeedCacheKey_PreservesCaseSensitiveComponents(string firstUrl, string secondUrl)
     {
         var first = CliPathHelper.ComputeStagingFeedCacheKey(firstUrl, length: 16);
         var second = CliPathHelper.ComputeStagingFeedCacheKey(secondUrl, length: 16);
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_PreservesCaseSensitiveLocalPathComponents()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows local paths are case-insensitive.");
+
+        var first = CliPathHelper.ComputeStagingFeedCacheKey("/packages/Feed", length: 16);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey("/packages/feed", length: 16);
 
         Assert.NotEqual(first, second);
     }

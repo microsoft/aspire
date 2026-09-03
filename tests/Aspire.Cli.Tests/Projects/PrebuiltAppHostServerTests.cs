@@ -523,7 +523,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         var doc = IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
             "/custom/output/path",
-            "/custom/intermediate/path");
+            "/custom/intermediate/path",
+            "/custom/packages/path");
 
         var ns = doc.Root!.GetDefaultNamespace();
         Assert.Equal(
@@ -533,6 +534,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             "/custom/intermediate/path" + Path.DirectorySeparatorChar,
             doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault()?.Value);
         Assert.Equal("$(BaseIntermediateOutputPath)", doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault()?.Value);
+        Assert.Equal("/custom/packages/path", doc.Descendants(ns + "RestorePackagesPath").FirstOrDefault()?.Value);
     }
 
     [Fact]
@@ -2660,10 +2662,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         string? restoreSourcesPropsFile = null;
         string? restoreSourcesPropsContent = null;
         string? intermediateOutputPath = null;
+        string? temporaryGlobalPackagesFolder = null;
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["MyIntegration.dll"] = "integration-v1"
+            ["Aspire.Hosting.Redis.dll"] = "redis-v1"
         };
         var dotNetCliRunner = new TestDotNetCliRunner
         {
@@ -2680,7 +2683,35 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Assert.True(File.Exists(restoreSourcesPropsFile));
                 restoreSourcesPropsContent = File.ReadAllText(restoreSourcesPropsFile);
                 intermediateOutputPath = GetIntermediateOutputPath(projectFilePath.Directory!);
-                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
+                temporaryGlobalPackagesFolder = XDocument.Load(Path.Combine(projectFilePath.Directory!.FullName, "Directory.Build.props"))
+                    .Descendants("RestorePackagesPath")
+                    .Single()
+                    .Value;
+                Assert.StartsWith(
+                    Path.GetDirectoryName(intermediateOutputPath) + Path.DirectorySeparatorChar,
+                    temporaryGlobalPackagesFolder,
+                    StringComparisons.FileSystemPath);
+
+                WriteClosureInputs(
+                    projectFilePath.Directory!,
+                    closureFiles,
+                    ["MyIntegration"],
+                    CreatePackageMetadata());
+                var packageAssemblyPath = Path.Combine(
+                    temporaryGlobalPackagesFolder,
+                    "aspire.hosting.redis",
+                    "13.2.0",
+                    "lib",
+                    "net10.0",
+                    "Aspire.Hosting.Redis.dll");
+                Directory.CreateDirectory(Path.GetDirectoryName(packageAssemblyPath)!);
+                File.WriteAllText(packageAssemblyPath, closureFiles["Aspire.Hosting.Redis.dll"]);
+                File.WriteAllText(
+                    Path.Combine(Path.GetDirectoryName(packageAssemblyPath)!, ".nupkg.metadata"),
+                    channelSource);
+                File.WriteAllLines(
+                    Path.Combine(projectFilePath.Directory!.FullName, IntegrationClosureBuilder.ClosureSourcesFileName),
+                    [packageAssemblyPath]);
                 return 0;
             }
         };
@@ -2719,6 +2750,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(restoreSourcesPropsFile);
             Assert.NotNull(restoreSourcesPropsContent);
             Assert.NotNull(intermediateOutputPath);
+            Assert.NotNull(temporaryGlobalPackagesFolder);
             Assert.Contains(channelSource, restoreSourcesPropsContent);
             Assert.StartsWith(
                 Path.Combine(workingDirectory, "integration-restore", "temporary") + Path.DirectorySeparatorChar,
@@ -2727,14 +2759,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.False(File.Exists(restoreSourcesPropsFile));
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
             Assert.False(File.Exists(restoreStampFile));
-            Assert.False(Directory.Exists(intermediateOutputPath));
+            Assert.True(Directory.Exists(intermediateOutputPath));
+            Assert.True(Directory.Exists(temporaryGlobalPackagesFolder));
 
             var persistedProjectContent = await File.ReadAllTextAsync(
                 Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
             Assert.DoesNotContain(channelSource, persistedProjectContent);
+
+            server.Dispose();
+            Assert.False(Directory.Exists(intermediateOutputPath));
+            Assert.False(Directory.Exists(temporaryGlobalPackagesFolder));
         }
         finally
         {
+            server.Dispose();
             DeleteWorkingDirectory(workingDirectory);
         }
     }
