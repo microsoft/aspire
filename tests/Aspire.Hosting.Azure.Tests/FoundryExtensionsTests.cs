@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
@@ -9,6 +10,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -164,6 +166,67 @@ public class FoundryExtensionsTests
     {
         Assert.True(FoundryLocalService.TryParseServerEndpoint(output, out var endpoint));
         Assert.Equal(new Uri(expectedEndpoint), endpoint);
+    }
+
+    [Fact]
+    public async Task FoundryLocalService_ServerStartupCompletesWhenDaemonKeepsOutputStreamsOpen()
+    {
+        var temporaryDirectory = Directory.CreateTempSubdirectory(".foundry-daemon-test");
+        var daemonPidPath = Path.Combine(temporaryDirectory.FullName, "daemon.pid");
+        var options = new RemoteInvokeOptions
+        {
+            Start = false
+        };
+        options.StartInfo.RedirectStandardOutput = true;
+        options.StartInfo.RedirectStandardError = true;
+
+        using var handle = RemoteExecutor.Invoke(RunDaemonizingCli, daemonPidPath, options);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        try
+        {
+            var result = await FoundryLocalService.RunProcessAsync(
+                handle.Process,
+                "test server start",
+                onOutput: null,
+                cancellation.Token,
+                stopReadingAfterProcessExit: true,
+                outputCompletionPredicate: line => FoundryLocalService.TryParseServerEndpoint(line, out _));
+
+            Assert.Equal(
+                """{"running":true,"webUrls":["http://127.0.0.1:55829"],"port":55829}""",
+                result.Output);
+        }
+        finally
+        {
+            if (File.Exists(daemonPidPath) &&
+                int.TryParse(await File.ReadAllTextAsync(daemonPidPath), out var daemonPid))
+            {
+                using var daemon = Process.GetProcessById(daemonPid);
+                if (!daemon.HasExited)
+                {
+                    daemon.Kill(entireProcessTree: true);
+                    await daemon.WaitForExitAsync();
+                }
+            }
+
+            Directory.Delete(temporaryDirectory.FullName, recursive: true);
+        }
+
+        static void RunDaemonizingCli(string daemonPidPath)
+        {
+            // Emulate `foundry server start`: the CLI parent reports the endpoint and exits while
+            // the daemon child keeps the parent's redirected stdout and stderr handles open.
+            var daemonStartInfo = OperatingSystem.IsWindows()
+                ? new ProcessStartInfo("cmd.exe", "/d /s /c \"ping -n 300 127.0.0.1 > nul\"")
+                : new ProcessStartInfo("sleep", "300");
+            daemonStartInfo.UseShellExecute = false;
+
+            using var daemon = Process.Start(daemonStartInfo) ??
+                throw new InvalidOperationException("Failed to start the test daemon process.");
+            File.WriteAllText(daemonPidPath, daemon.Id.ToString());
+            Console.WriteLine("""{"running":true,"webUrls":["http://127.0.0.1:55829"],"port":55829}""");
+        }
     }
 
     [Theory]

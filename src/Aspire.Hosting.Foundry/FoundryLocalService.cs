@@ -358,9 +358,26 @@ internal static class FoundryLocalService
             StartInfo = CreateFoundryStartInfo(arguments)
         };
 
+        return await RunProcessAsync(
+            process,
+            FormatCommand(arguments),
+            onOutput,
+            cancellationToken,
+            stopReadingAfterProcessExit,
+            outputCompletionPredicate).ConfigureAwait(false);
+    }
+
+    internal static async Task<FoundryCommandResult> RunProcessAsync(
+        Process process,
+        string command,
+        Action<string>? onOutput,
+        CancellationToken cancellationToken,
+        bool stopReadingAfterProcessExit = false,
+        Func<string, bool>? outputCompletionPredicate = null)
+    {
         if (!process.Start())
         {
-            throw new InvalidOperationException($"Foundry CLI command '{FormatCommand(arguments)}' could not be started.");
+            throw new InvalidOperationException($"Foundry CLI command '{command}' could not be started.");
         }
 
         using var cancellationRegistration = cancellationToken.Register(static state => KillProcess((Process)state!), process);
@@ -694,7 +711,7 @@ internal static class FoundryLocalService
         return builder.Uri;
     }
 
-    private readonly record struct FoundryCommandResult(int ExitCode, string Output, string Error);
+    internal readonly record struct FoundryCommandResult(int ExitCode, string Output, string Error);
 }
 
 internal sealed class FoundryLocalLifecycleService : IHostedService, IAsyncDisposable
