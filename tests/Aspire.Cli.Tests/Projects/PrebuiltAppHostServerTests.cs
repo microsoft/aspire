@@ -3577,7 +3577,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName),
             [relativePath]);
         var intermediateOutputPath = Path.Combine(restoreDirectory.FullName, "obj");
-        WriteProjectAssetsFile(restoreDirectory, packageMetadata: null);
+        WriteProjectAssetsFile(intermediateOutputPath, packageMetadata: null);
 
         var manifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
             restoreDirectory.FullName,
