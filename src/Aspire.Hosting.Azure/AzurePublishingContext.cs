@@ -47,7 +47,7 @@ public sealed class AzurePublishingContext(
     };
 
     /// <summary>
-    /// Gets or sets a value indicating whether writing the root main.bicep file is skipped.
+    /// Gets or sets a value indicating whether the root main.bicep file is excluded from the published output.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -64,7 +64,7 @@ public sealed class AzurePublishingContext(
     /// it is never built, compiled, or written to disk. The default is <see langword="false"/>.
     /// </para>
     /// </remarks>
-    public bool SkipWritingMainBicepFile { get; set; }
+    public bool ExcludeMainBicepFile { get; set; }
 
     /// <summary>
     /// Gets a dictionary that maps parameter resources to provisioning parameters.
@@ -559,12 +559,12 @@ public sealed class AzurePublishingContext(
     /// <returns>A task that represents the asynchronous save operation.</returns>
     private async Task SaveToDiskAsync(string outputDirectoryPath)
     {
-        if (SkipWritingMainBicepFile)
+        if (ExcludeMainBicepFile)
         {
             // The root is not even built, rather than compiled and then discarded, because a model that
             // only the individual modules support (such as a tenant-scoped module without a location parameter)
             // makes compiling the root throw.
-            logger.LogDebug("Skipping writing {BicepName}.bicep because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(SkipWritingMainBicepFile));
+            logger.LogDebug("Excluding {BicepName}.bicep from the output because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(ExcludeMainBicepFile));
             return;
         }
 

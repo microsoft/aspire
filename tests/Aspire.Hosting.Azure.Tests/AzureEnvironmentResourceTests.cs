@@ -250,7 +250,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task AzurePublishingContext_SkipWritingMainBicepFile_WritesModulesWithoutMainBicep()
+    public async Task AzurePublishingContext_ExcludeMainBicepFile_WritesModulesWithoutMainBicep()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
@@ -267,7 +267,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 
         var outputPath = Path.Combine(workspace.Path, "skip-main");
         var context = await CreatePublishingContextAsync(app, outputPath);
-        context.SkipWritingMainBicepFile = true;
+        context.ExcludeMainBicepFile = true;
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
@@ -302,7 +302,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var outputPath = Path.Combine(workspace.Path, "write-main");
         var context = await CreatePublishingContextAsync(app, outputPath);
 
-        Assert.False(context.SkipWritingMainBicepFile);
+        Assert.False(context.ExcludeMainBicepFile);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
