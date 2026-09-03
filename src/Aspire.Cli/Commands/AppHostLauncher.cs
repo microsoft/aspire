@@ -472,7 +472,6 @@ internal sealed class AppHostLauncher(
         {
             throw new InvalidOperationException("Failed to create child CLI process execution.");
         }
-
         var childStartedAt = childProcess.StartTime;
 
         // Captured in the stable PID-identity clock domain so it can be compared against the
