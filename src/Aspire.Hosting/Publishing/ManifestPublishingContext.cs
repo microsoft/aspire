@@ -344,19 +344,19 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         // The projection shares annotations with its owner, but callback contexts also expose the
         // resource instance. Canonicalize that identity while retaining the typed container state.
         var owner = ((IResource)container).GetOwnerOrSelf();
-        var deploymentTarget = owner.GetDeploymentTargetAnnotation();
+        var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
-        if (owner.Annotations.OfType<DockerfileBuildAnnotation>().Any())
+        if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
             WriteConnectionString(owner);
-            await WriteBuildContextAsync(owner).ConfigureAwait(false);
+            await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
         else
         {
-            if (!owner.TryGetContainerImageName(out var image))
+            if (!container.TryGetContainerImageName(out var image))
             {
-                throw new DistributedApplicationException($"Could not get the container image name for resource '{owner.Name}'.");
+                throw new DistributedApplicationException($"Could not get the container image name for resource '{container.Name}'.");
             }
 
             if (deploymentTarget is not null)
@@ -386,18 +386,18 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         await WriteCommandLineArgumentsAsync(owner).ConfigureAwait(false);
 
         // Write container files destination if present
-        WriteContainerFilesDestination(owner);
+        WriteContainerFilesDestination(container);
 
         // Write volume & bind mount details
-        WriteContainerMounts(owner);
+        WriteContainerMounts(container);
 
         await WriteEnvironmentVariablesAsync(owner).ConfigureAwait(false);
-        WriteBindings(owner);
+        WriteBindings(container);
     }
 
-    private async Task WriteBuildContextAsync(IResource resource)
+    private async Task WriteBuildContextAsync(ContainerResource container)
     {
-        if (resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out var annotations) && annotations.Single() is { } annotation)
+        if (container.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out var annotations) && annotations.Single() is { } annotation)
         {
             var dockerfilePath = annotation.DockerfilePath;
 
@@ -405,11 +405,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             {
                 // Copy to a resource-specific path in the manifest output directory for publishing
                 var manifestDirectory = Path.GetDirectoryName(Path.GetFullPath(ManifestPath))!;
-                var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{resource.Name}.Dockerfile");
+                var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{container.Name}.Dockerfile");
                 var dockerfileContext = new DockerfileFactoryContext
                 {
                     Services = ExecutionContext.Services,
-                    Resource = resource,
+                    Resource = ((IResource)container).GetOwnerOrSelf(),
                     CancellationToken = CancellationToken
                 };
                 await annotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
