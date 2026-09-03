@@ -1,5 +1,6 @@
 ﻿{
   "type": "azure.bicep.v0",
+  "connectionString": "{hostgroup.outputs.connectionString}",
   "path": "hostgroup.module.bicep",
   "params": {
     "hostmi_outputs_id": "{hostmi.outputs.id}",

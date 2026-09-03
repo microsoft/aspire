@@ -21,7 +21,10 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireExport]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource
+public sealed class AzureSandboxGroupResource : AzureProvisioningResource,
+    IAzureComputeEnvironmentResource,
+    IResourceWithConnectionString,
+    IResourceWithCustomWithReference<AzureSandboxGroupResource>
 {
     internal const string ImagePullIdentityClientIdOutputName = "imagePullIdentityClientId";
 
@@ -112,11 +115,44 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     /// </summary>
     public BicepOutputReference LocationOutputReference => new("location", this);
 
+    /// <summary>
+    /// Gets the regional Azure Container Apps Sandboxes data-plane endpoint output reference.
+    /// </summary>
+    public BicepOutputReference EndpointOutputReference => new("endpoint", this);
+
+    /// <summary>
+    /// Gets the Azure subscription ID output reference.
+    /// </summary>
+    public BicepOutputReference SubscriptionIdOutputReference => new("subscriptionId", this);
+
+    /// <summary>
+    /// Gets the Azure resource group name output reference.
+    /// </summary>
+    public BicepOutputReference ResourceGroupOutputReference => new("resourceGroup", this);
+
+    /// <summary>
+    /// Gets the connection string for the Azure Container Apps sandbox group.
+    /// </summary>
+    /// <remarks>
+    /// The connection string contains the data-plane endpoint, subscription ID, resource group, and sandbox group name.
+    /// </remarks>
+    public ReferenceExpression ConnectionStringExpression =>
+        ReferenceExpression.Create($"{new BicepOutputReference("connectionString", this)}");
+
+    /// <summary>
+    /// Gets the regional Azure Container Apps Sandboxes data-plane endpoint expression.
+    /// </summary>
+    public ReferenceExpression UriExpression => ReferenceExpression.Create($"{EndpointOutputReference}");
+
     internal ManagedServiceIdentityType WorkloadManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
 
     internal List<AzureUserAssignedIdentityResource> WorkloadUserAssignedIdentities { get; } = [];
 
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
+    internal bool HasDataPlaneReferences { get; set; }
+
+    internal bool RequiresAcrPullIdentity { get; set; }
 
     IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry => ContainerRegistry;
 
@@ -151,6 +187,43 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
             return;
         }
 
+        if (HasDataPlaneReferences && !RequiresAcrPullIdentity)
+        {
+            return;
+        }
+
+        var imagePullIdentity = this.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation)
+            ? imagePullIdentityAnnotation.Identity
+            : null;
+        if (imagePullIdentity is not null && WorkloadUserAssignedIdentities.Contains(imagePullIdentity))
+        {
+            throw new InvalidOperationException(
+                $"Azure sandbox group '{Name}' uses identity '{imagePullIdentity.Name}' for both image pulls and workloads. " +
+                "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
+        }
+
+        var computeEnvironments = context.Model.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        // A data-plane reference should not implicitly turn the referenced application into a sandbox workload.
+        // Callers can still explicitly select this group with WithComputeEnvironment or PublishAsAzureSandbox.
+        var canClaimUnassignedComputeResources =
+            computeEnvironments.Count == 1 &&
+            ReferenceEquals(computeEnvironments[0], this) &&
+            !HasDataPlaneReferences;
+        var computeResources = context.Model.GetComputeResources()
+            .Where(resource =>
+            {
+                var resourceComputeEnvironment = resource.GetComputeEnvironment();
+                return (resourceComputeEnvironment is not null || canClaimUnassignedComputeResources) &&
+                    (resourceComputeEnvironment is null || ReferenceEquals(resourceComputeEnvironment, this)) &&
+                    resource.GetDeploymentTargetAnnotation(this) is null;
+            })
+            .ToArray();
+        if (computeResources.Length == 0)
+        {
+            return;
+        }
+
+        RequiresAcrPullIdentity = true;
         if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
             DefaultContainerRegistry is not null)
         {
@@ -160,38 +233,16 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
         var containerRegistry = ContainerRegistry ??
             throw new InvalidOperationException($"No container registry associated with Azure sandbox group '{Name}'. This should have been added automatically.");
-        var imagePullIdentity = this.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation)
-            ? imagePullIdentityAnnotation.Identity
-            : null;
 
-        if (imagePullIdentity is not null && WorkloadUserAssignedIdentities.Contains(imagePullIdentity))
+        if (this.IsExisting() && imagePullIdentity is null)
         {
             throw new InvalidOperationException(
-                $"Azure sandbox group '{Name}' uses identity '{imagePullIdentity.Name}' for both image pulls and workloads. " +
-                "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
+                $"Existing Azure sandbox group '{Name}' requires a user-assigned ACR pull identity. " +
+                $"Call '{nameof(AzureSandboxesExtensions.WithAcrPullIdentity)}' with an identity that is already attached to the sandbox group and has AcrPull on the configured registry.");
         }
 
-        var computeEnvironments = context.Model.Resources.OfType<IComputeEnvironmentResource>().ToList();
-        var canClaimUnassignedComputeResources = computeEnvironments.Count == 1 && ReferenceEquals(computeEnvironments[0], this);
-
-        foreach (var resource in context.Model.GetComputeResources())
+        foreach (var resource in computeResources)
         {
-            var resourceComputeEnvironment = resource.GetComputeEnvironment();
-            if (resourceComputeEnvironment is null && !canClaimUnassignedComputeResources)
-            {
-                continue;
-            }
-
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
-            {
-                continue;
-            }
-
-            if (resource.GetDeploymentTargetAnnotation(this) is not null)
-            {
-                continue;
-            }
-
             if (resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
             {
                 if (appIdentity.IdentityResource is not AzureUserAssignedIdentityResource userAssignedIdentity)
@@ -327,5 +378,34 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
             ManagedServiceIdentityType.SystemAssigned => ManagedServiceIdentityType.SystemAssignedUserAssigned,
             _ => WorkloadManagedIdentityType
         };
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", UriExpression);
+        yield return new("Endpoint", UriExpression);
+        yield return new("SubscriptionId", ReferenceExpression.Create($"{SubscriptionIdOutputReference}"));
+        yield return new("ResourceGroup", ReferenceExpression.Create($"{ResourceGroupOutputReference}"));
+        yield return new("SandboxGroupName", ReferenceExpression.Create($"{NameOutputReference}"));
+    }
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<AzureSandboxGroupResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source is not IResourceBuilder<AzureSandboxGroupResource> sandboxGroup)
+        {
+            return null;
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Azure sandbox groups.");
+        }
+
+        return AzureSandboxesExtensions.WithReference(builder, sandboxGroup, connectionName, optional);
     }
 }
