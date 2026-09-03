@@ -50,7 +50,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
-        Options.Add(s_mcpsOption);
+        Options.Add(s_mcpOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -77,16 +77,15 @@ internal sealed class AgentInitCommand : BaseCommand
     };
 
     /// <summary>
-    /// Selects which MCP servers standalone <c>aspire agent init</c> configures. This option is
-    /// only registered on this command — <c>aspire new</c> and <c>aspire init</c> do not add it,
-    /// so MCP configuration is unavailable from those chained flows by construction.
+    /// Confirms whether standalone <c>aspire agent init</c> configures the Aspire MCP server for
+    /// detected agent environments. This option is only registered on this command — <c>aspire
+    /// new</c> and <c>aspire init</c> do not add it, so MCP configuration is unavailable from
+    /// those chained flows by construction. Omitting the option defaults to "no"; passing
+    /// <c>--mcp</c> opts in, and <c>--mcp=false</c> is an explicit opt-out.
     /// </summary>
-    internal static readonly Option<string?> s_mcpsOption = new("--mcps")
+    internal static readonly Option<bool?> s_mcpOption = new("--mcp")
     {
-        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_McpsOptionDescription,
-            string.Join(",", McpServerDefinition.All.Select(s => s.Name)),
-            ConsoleInteractionService.AllChoice,
-            ConsoleInteractionService.NoneChoice),
+        Description = AgentCommandStrings.InitCommand_McpOptionDescription,
         Recursive = true
     };
 
@@ -104,8 +103,8 @@ internal sealed class AgentInitCommand : BaseCommand
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
     /// pre-selected, including aspireify.
-    /// Chained flows never register <c>--mcps</c> and never offer MCP server configuration: this
-    /// method always executes agent init with MCP selection unavailable, so MCP remains an
+    /// Chained flows never register <c>--mcp</c> and never offer MCP server configuration: this
+    /// method always executes agent init with MCP configuration unavailable, so MCP remains an
     /// explicit opt-in reachable only through standalone <c>aspire agent init</c>.
     /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
     /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
@@ -136,7 +135,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, mcpsBinding: null, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, mcpBinding: null, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -145,39 +144,12 @@ internal sealed class AgentInitCommand : BaseCommand
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
-        // Standalone `aspire agent init` is typically run against an existing project, so don't
-        // pre-select the one-time aspireify wiring skill even though every other bundle skill
-        // is default-on. Users can still opt into it from the prompt or via --skills.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
-        var mcpsBinding = PromptBinding.Create(parseResult, s_mcpsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, mcpsBinding, cancellationToken);
+        var mcpBinding = PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, selectByDefault: null, skillLocationsBinding, skillsBinding, mcpBinding, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
-
-    /// <summary>
-    /// Names of bundle skills that perform one-time workspace setup and should NOT be
-    /// pre-selected by standalone <c>aspire agent init</c>, which is typically run
-    /// against an existing project.
-    /// </summary>
-    /// <remarks>
-    /// This is the single source of truth the CLI consults when filtering bundle skills out
-    /// of the auto-preselection set. All bundle skills are default-on, so if the bundle ships
-    /// a new wiring or bootstrap-style skill that should NOT auto-run in an already-bootstrapped
-    /// workspace, add its name here.
-    /// </remarks>
-    internal static readonly IReadOnlySet<string> s_oneTimeSetupSkillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        CommonAgentApplicators.AspireifySkillName,
-    };
-
-    /// <summary>
-    /// Default-skill predicate used by flows that do not want one-time setup skills
-    /// pre-selected, such as standalone <c>aspire agent init</c>.
-    /// Skills filtered here remain available to opt into from the prompt or via <c>--skills</c>.
-    /// </summary>
-    internal static bool ExcludeOneTimeSetupSkillsFromDefaults(SkillDefinition skill)
-        => skill.IsDefault && !s_oneTimeSetupSkillNames.Contains(skill.Name);
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -214,7 +186,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Func<SkillDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        PromptBinding<string?>? mcpsBinding,
+        PromptBinding<bool>? mcpBinding,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -317,35 +289,23 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        // --- Phase 2b: MCP server selection ---
-        // `mcpsBinding` is only supplied by standalone `aspire agent init` (see s_mcpsOption).
+        // --- Phase 2b: MCP server configuration ---
+        // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
         // Chained flows (`aspire new`, `aspire init`) never construct a binding for it, so MCP
         // configuration is unreachable from those flows by construction rather than by a runtime
-        // visibility flag. Selectable MCP server definitions (currently just "aspire") are kept
-        // separate from the detected McpConfigurationTargets scanners discover for each agent
-        // environment (VS Code, GitHub Copilot, etc.); a selected definition is applied to every
-        // matching target exactly once in Phase 5.
-        IReadOnlyList<McpServerDefinition> selectedMcpServers = [];
-        var mcpConfigurationTargets = mcpsBinding is not null
-            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).Select(a => new McpConfigurationTarget(a)).ToList()
+        // visibility flag. The Aspire MCP server is the only server the CLI configures today, so
+        // this is a plain confirmation rather than a selection; the confirmed choice is applied to
+        // every detected configuration target in Phase 5.
+        var configureMcp = false;
+        var mcpConfigurationTargets = mcpBinding is not null
+            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
             : [];
 
-        // An explicitly provided --mcps value must be validated even when zero configuration
-        // targets were detected (e.g., no supported client installed) — otherwise an invalid
-        // value like "--mcps bogus" would silently succeed instead of reporting an error.
-        // Only skip the prompt entirely when there's nothing to select (no explicit value AND
-        // no targets to apply to), which preserves the previous interactive behavior.
-        var (mcpsWasProvided, _, _) = PromptBinding.Resolve(mcpsBinding);
-        if (mcpsBinding is not null && (mcpsWasProvided || mcpConfigurationTargets.Count > 0))
+        if (mcpBinding is not null && mcpConfigurationTargets.Count > 0)
         {
-            selectedMcpServers = await InteractionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_SelectMcpServers,
-                McpServerDefinition.All,
-                mcp => $"{mcp.Description.EscapeMarkup()} [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
-                preSelected: [], // MCP servers are intentionally never pre-selected — strictly opt-in.
-                optional: true,
-                binding: mcpsBinding.WithDefault(ConsoleInteractionService.NoneChoice),
-                echoSelected: false,
+            configureMcp = await InteractionService.PromptConfirmAsync(
+                AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
+                binding: mcpBinding,
                 cancellationToken: cancellationToken);
         }
 
@@ -440,12 +400,9 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        // --- Phase 5: Apply MCP server configuration if a definition was selected ---
-        // Apply every matching configuration target exactly once for each selected definition.
-        // Only one definition ("aspire") currently exists, so this loop is a single pass over
-        // the discovered targets, but the shape keeps room for additional MCP servers later
-        // without reintroducing a visibility flag.
-        if (selectedMcpServers.Count > 0)
+        // --- Phase 5: Apply MCP server configuration if the user confirmed ---
+        // Apply the confirmed configuration to every detected target exactly once.
+        if (configureMcp)
         {
             foreach (var target in mcpConfigurationTargets)
             {

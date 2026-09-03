@@ -209,9 +209,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // the default Aspire skills from the installed CLI's embedded bundle.
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("MCP servers should be configured"),
-            timeout: TimeSpan.FromSeconds(30), description: "MCP server selection prompt");
-        // MCP servers are strictly opt-in and never pre-selected, so accepting the default
+            s => s.ContainsText("Configure the Aspire MCP server for detected agent environments?"),
+            timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
+        // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
@@ -276,6 +276,165 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
             Assert.Contains($"name: {skillName}", File.ReadAllText(skillFile));
         }
+    }
+
+    /// <summary>
+    /// Regression test for the chained agent init flow reached via <c>aspire init</c>: verifies that
+    /// accepting agent init never surfaces the retired "Install Aspire MCP server" entry, either mixed
+    /// into the skill selection list or as its own prompt. MCP configuration is only reachable through
+    /// standalone <c>aspire agent init</c>, which chained flows never chain into.
+    /// </summary>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireInit_ChainedAgentInit_NeverOffersMcpConfiguration()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Pass --language so the interactive language prompt is skipped, then accept the chained
+        // agent init prompt (instead of declining it) to reach skill selection.
+        await auto.TypeAsync("aspire init --language csharp");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
+
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("configure AI agent environments"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "agent init prompt after aspire init");
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+
+        // Skill location prompt: accept the default (Standard).
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skill files be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
+        await auto.EnterAsync();
+
+        // Skill selection prompt: the retired "Install Aspire MCP server" entry must never be mixed
+        // into this list — MCP configuration is unreachable from the chained flow by construction.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
+        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
+        await auto.EnterAsync();
+
+        // The chained flow never registers --mcp, so it goes straight from skill selection to
+        // "configuration complete" — no MCP prompt is ever shown.
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
+        var completionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Regression test for the chained agent init flow reached via <c>aspire new</c>: verifies that
+    /// <c>aspireify</c> is pre-checked in the skill selection prompt (new projects get the complete
+    /// default skill set) while the retired "Install Aspire MCP server" entry never appears, either
+    /// mixed into that list or as its own prompt.
+    /// </summary>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireNew_ChainedAgentInit_PreSelectsAspireifyAndNeverOffersMcp()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Pass --skill-locations so the interactive skill-location prompt is skipped and the flow
+        // lands directly on the skill selection prompt whose pre-selected state we want to inspect.
+        await auto.TypeAsync("aspire new --skill-locations claudecode");
+        await auto.EnterAsync();
+
+        // Template selection: accept default Starter App
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(60),
+            description: "template selection list (> Starter App)");
+        await auto.EnterAsync();
+
+        // Project name
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "project name prompt");
+        await auto.TypeAsync("StarterApp");
+        await auto.EnterAsync();
+
+        // Output path: accept default
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "output path prompt");
+        await auto.EnterAsync();
+
+        // URLs prompt: accept default No
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "URLs prompt");
+        await auto.EnterAsync();
+
+        // Redis cache: accept default Yes
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "Redis cache prompt");
+        await auto.EnterAsync();
+
+        // Test project: accept default No
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "test project prompt");
+        await auto.EnterAsync();
+
+        // Agent init prompt: ACCEPT it (type 'y') to reach the chained skill selection prompt.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("configure AI agent environments"),
+            timeout: TimeSpan.FromSeconds(120),
+            description: "agent init prompt after aspire new");
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+
+        // --skill-locations was provided above, so the flow lands directly on skill selection.
+        // aspireify must be pre-checked (aspire new pre-selects the complete default skill set),
+        // and the retired "Install Aspire MCP server" entry must never appear in this list.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill selection prompt");
+        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("[X] aspireify", skillSelectionScreen);
+        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
+        await auto.EnterAsync();
+
+        // aspire new never registers --mcp, so it goes straight from skill selection to
+        // "configuration complete" — no MCP prompt is ever shown.
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
+        var completionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)

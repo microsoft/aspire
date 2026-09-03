@@ -112,14 +112,14 @@
         <target state="new">Install Aspire MCP server</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
+        <source>Configure the Aspire MCP server for detected agent environments?</source>
+        <target state="new">Configure the Aspire MCP server for detected agent environments?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize agent environment configuration for detected agents</source>
         <target state="needs-review-translation">検出されたエージェントのエージェント環境構成を初期化します。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfiguresDetectedAgentEnvironments">
-        <source>(configures detected agent environments)</source>
-        <target state="new">(configures detected agent environments)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
@@ -147,19 +147,14 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_McpsOptionDescription">
-        <source>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</source>
-        <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
+      <trans-unit id="InitCommand_McpOptionDescription">
+        <source>Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
+        <target state="new">Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_SelectMcpServers">
-        <source>Which MCP servers should be configured?</source>
-        <target state="new">Which MCP servers should be configured?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

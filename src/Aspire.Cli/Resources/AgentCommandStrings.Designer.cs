@@ -187,16 +187,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Which MCP servers should be configured?.
+        ///   Looks up a localized string similar to Configure the Aspire MCP server for detected agent environments?.
         /// </summary>
-        internal static string InitCommand_SelectMcpServers {
+        internal static string InitCommand_ConfigureMcpServerPrompt {
             get {
-                return ResourceManager.GetString("InitCommand_SelectMcpServers", resourceCulture);
+                return ResourceManager.GetString("InitCommand_ConfigureMcpServerPrompt", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to Installed Playwright CLI..
+        /// <summary>        ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
         internal static string InitCommand_InstalledPlaywrightCli {
             get {
@@ -246,15 +245,6 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_FailedToInstallSkill {
             get {
                 return ResourceManager.GetString("InitCommand_FailedToInstallSkill", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to (configures detected agent environments).
-        /// </summary>
-        internal static string InitCommand_ConfiguresDetectedAgentEnvironments {
-            get {
-                return ResourceManager.GetString("InitCommand_ConfiguresDetectedAgentEnvironments", resourceCulture);
             }
         }
 
@@ -610,11 +600,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'.
+        ///   Looks up a localized string similar to Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out.
         /// </summary>
-        internal static string InitCommand_McpsOptionDescription {
+        internal static string InitCommand_McpOptionDescription {
             get {
-                return ResourceManager.GetString("InitCommand_McpsOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InitCommand_McpOptionDescription", resourceCulture);
             }
         }
 
