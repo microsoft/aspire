@@ -168,7 +168,7 @@ internal class NuGetConfigMerger
         // Get the required sources from mappings
         var requiredSources = mappings
             .Select(m => m.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(PackageSourceIdentity.Comparer)
             .ToArray();
 
         // Load the existing NuGet.config
@@ -209,7 +209,7 @@ internal class NuGetConfigMerger
 
     private static Dictionary<string, string> BuildExistingSourceMappings(XElement[] existingAdds)
     {
-        var urlToExistingKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var urlToExistingKey = new Dictionary<string, string>(PackageSourceIdentity.Comparer);
         foreach (var addElement in existingAdds)
         {
             var key = (string?)addElement.Attribute("key");
@@ -225,22 +225,30 @@ internal class NuGetConfigMerger
     private static void AddMissingPackageSources(NuGetConfigContext context)
     {
         var existingValues = new HashSet<string>(context.ExistingAdds
-            .Select(e => (string?)e.Attribute("value") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+            .Select(e => (string?)e.Attribute("value") ?? string.Empty), PackageSourceIdentity.Comparer);
         var existingKeys = new HashSet<string>(context.ExistingAdds
             .Select(e => (string?)e.Attribute("key") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
 
         var missingSources = context.RequiredSources
-            .Where(s => !existingValues.Contains(s) && !existingKeys.Contains(s))
+            .Where(source =>
+                !existingValues.Contains(source) &&
+                (!PackageSourceIdentity.IsNamedSourceReference(source) || !existingKeys.Contains(source)))
             .ToArray();
 
         // Add missing sources
         foreach (var source in missingSources)
         {
-            // Use the source URL as both key and value for consistency with our temporary config
+            var key = source;
+            for (var suffix = 0; !existingKeys.Add(key); suffix++)
+            {
+                key = $"aspire-{suffix}";
+            }
+
             var add = new XElement("add");
-            add.SetAttributeValue("key", source);
+            add.SetAttributeValue("key", key);
             add.SetAttributeValue("value", source);
             context.PackageSources.Add(add);
+            context.UrlToExistingKey[source] = key;
         }
     }
 
@@ -271,8 +279,6 @@ internal class NuGetConfigMerger
     // cleaned up on disk.
     private static void RemoveOrphanedSafeToRemoveSources(NuGetConfigContext context, HashSet<string> sourcesInUse)
     {
-        var requiredSources = new HashSet<string>(context.RequiredSources, StringComparer.OrdinalIgnoreCase);
-
         var orphanedSources = context.PackageSources.Elements("add")
             .Where(add =>
             {
@@ -289,7 +295,8 @@ internal class NuGetConfigMerger
                     return false;
                 }
 
-                if (requiredSources.Contains(key) || (!string.IsNullOrEmpty(value) && requiredSources.Contains(value)))
+                if (context.RequiredSources.Contains(key, StringComparer.OrdinalIgnoreCase) ||
+                    !string.IsNullOrEmpty(value) && context.RequiredSources.Contains(value, PackageSourceIdentity.Comparer))
                 {
                     return false;
                 }
@@ -390,7 +397,7 @@ internal class NuGetConfigMerger
         HashSet<string> sourcesInUse)
     {
         // Second pass: Group patterns by source and add them all to the same packageSource element
-        var patternsBySource = patternsToAdd.GroupBy(x => x.newSource, StringComparer.OrdinalIgnoreCase);
+        var patternsBySource = patternsToAdd.GroupBy(x => x.newSource, PackageSourceIdentity.Comparer);
 
         foreach (var sourceGroup in patternsBySource)
         {
@@ -453,7 +460,7 @@ internal class NuGetConfigMerger
         // Group new patterns by their target source
         var newPatternsBySource = context.Mappings
             .Where(m => !existingPatterns.Contains(m.PackageFilter))
-            .GroupBy(m => m.Source, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(m => m.Source, PackageSourceIdentity.Comparer);
 
         foreach (var sourceGroup in newPatternsBySource)
         {
@@ -590,8 +597,9 @@ internal class NuGetConfigMerger
                 var sourceValue = (string?)sourceElement?.Attribute("value");
 
                 // Check if this source is required by the current channel
-                var isRequiredByCurrentChannel = context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
-                                               context.RequiredSources.Contains(sourceValue ?? "", StringComparer.OrdinalIgnoreCase);
+                var isRequiredByCurrentChannel =
+                    context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
+                    sourceValue is not null && context.RequiredSources.Contains(sourceValue, PackageSourceIdentity.Comparer);
 
                 // For user-defined sources, give them wildcard patterns to remain functional
                 // Only skip this for sources that we would remove anyway (like PR hives) OR
@@ -707,14 +715,14 @@ internal class NuGetConfigMerger
             {
                 // Also check if any existing source key maps to this URL (for URL->key mapping scenario)
                 var isUsedByExistingKey = urlToExistingKey.Any(kvp =>
-                    string.Equals(kvp.Key, sourceKey, StringComparison.OrdinalIgnoreCase) &&
+                    PackageSourceIdentity.Comparer.Equals(kvp.Key, sourceKey) &&
                     sourcesInUse.Contains(kvp.Value));
 
                 if (!isUsedByExistingKey)
                 {
                     var sourceToRemove = packageSources.Elements("add")
                         .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase) ||
-                                              string.Equals((string?)add.Attribute("value"), sourceKey, StringComparison.OrdinalIgnoreCase));
+                                              PackageSourceIdentity.Comparer.Equals((string?)add.Attribute("value"), sourceKey));
                     sourceToRemove?.Remove();
                 }
             }
@@ -728,7 +736,7 @@ internal class NuGetConfigMerger
         context.Configuration.Add(packageSourceMapping);
 
         // Group patterns by their target source and add them
-        var patternsBySource = context.Mappings.GroupBy(m => m.Source, StringComparer.OrdinalIgnoreCase);
+        var patternsBySource = context.Mappings.GroupBy(m => m.Source, PackageSourceIdentity.Comparer);
 
         foreach (var sourceGroup in patternsBySource)
         {
@@ -829,7 +837,7 @@ internal class NuGetConfigMerger
 
         var requiredSources = mappings
             .Select(m => m.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(PackageSourceIdentity.Comparer)
             .ToArray();
 
         try
@@ -845,12 +853,12 @@ internal class NuGetConfigMerger
 
             var existingAdds = packageSources.Elements("add").ToArray();
             var existingValues = new HashSet<string>(existingAdds
-                .Select(e => (string?)e.Attribute("value") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+                .Select(e => (string?)e.Attribute("value") ?? string.Empty), PackageSourceIdentity.Comparer);
             var existingKeys = new HashSet<string>(existingAdds
                 .Select(e => (string?)e.Attribute("key") ?? string.Empty), StringComparer.OrdinalIgnoreCase);
 
             // Create a mapping from source URLs to their existing keys for reuse in package source mappings
-            var urlToExistingKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var urlToExistingKey = new Dictionary<string, string>(PackageSourceIdentity.Comparer);
             foreach (var addElement in existingAdds)
             {
                 var key = (string?)addElement.Attribute("key");
@@ -862,7 +870,9 @@ internal class NuGetConfigMerger
             }
 
             var missingSources = requiredSources
-                .Where(s => !existingValues.Contains(s) && !existingKeys.Contains(s))
+                .Where(source =>
+                    !existingValues.Contains(source) &&
+                    (!PackageSourceIdentity.IsNamedSourceReference(source) || !existingKeys.Contains(source)))
                 .ToArray();
 
             // Check if any sources are missing

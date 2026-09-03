@@ -177,6 +177,30 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenFallbackPackagesFoldersChange()
+    {
+        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            restoreConfigContent: null,
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-a")],
+            CancellationToken.None);
+
+        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
+            "<Project />",
+            [],
+            [],
+            restoreConfigContent: null,
+            nugetPackagesPath: null,
+            nugetFallbackPackagesPaths: [Path.GetFullPath("fallback-b")],
+            CancellationToken.None);
+
+        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
+    }
+
+    [Fact]
     public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -893,7 +917,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
         // The cache subdirectory must be keyed by the resolved feed URL so two different staging
         // feeds (e.g. two darc builds or an overrideStagingFeed setting) get distinct caches.
-        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(channelSource);
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(result.CacheIdentity);
         Assert.NotNull(expectedCacheKey);
         var expectedCachePath = Path.Combine(
             CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
@@ -950,7 +974,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
         // The cache key is derived from the resolved staging feed URL so the same CLI talking to
         // a different overrideStagingFeed gets a different cache bucket.
-        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(overrideStagingFeed);
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(result.CacheIdentity);
         Assert.NotNull(expectedCacheKey);
         var expectedCachePath = Path.Combine(
             CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
@@ -1073,7 +1097,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
         // The cache key is derived from the --source override, not the channel's own mappings,
         // so users running multiple overrides against the same CLI get distinct cache buckets.
-        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(packageSourceOverride);
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(result.CacheIdentity);
         Assert.NotNull(expectedCacheKey);
         var expectedCachePath = Path.Combine(
             CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
@@ -1108,7 +1132,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PassesRequestedChannelToPackagingService()
+    public async Task TryCreateTemporaryNuGetConfig_WithUnknownRequestedChannel_Throws()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
@@ -1118,12 +1142,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var server = CreateServerWithPackagingService(workspace, packagingService);
 
-        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
-            server,
-            requestedChannel: PackageChannelNames.Staging,
-            packageSourceOverride: packageSourceOverride);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            InvokeTryCreateTemporaryNuGetConfigAsync(
+                server,
+                requestedChannel: PackageChannelNames.Staging,
+                packageSourceOverride: packageSourceOverride));
 
-        Assert.NotNull(result);
+        Assert.Contains(PackageChannelNames.Staging, exception.Message);
         Assert.Equal(PackageChannelNames.Staging, packagingService.LastRequestedChannelName);
     }
 
@@ -3659,8 +3684,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
+        var sourceKey = doc.Descendants("packageSources")
+            .Elements("add")
+            .SingleOrDefault(element => PackageSourceIdentity.Comparer.Equals(
+                element.Attribute("value")?.Value,
+                source))
+            ?.Attribute("key")
+            ?.Value;
+        if (sourceKey is null)
+        {
+            return [];
+        }
+
         return [.. doc.Descendants("packageSource")
-            .Where(e => string.Equals(e.Attribute("key")?.Value, source, StringComparison.OrdinalIgnoreCase))
+            .Where(e => string.Equals(e.Attribute("key")?.Value, sourceKey, StringComparison.OrdinalIgnoreCase))
             .Elements("package")
             .Select(e => e.Attribute("pattern")?.Value)
             .OfType<string>()];

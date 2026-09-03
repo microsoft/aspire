@@ -2170,7 +2170,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var aspirePatternSource = packageSourceMapping!.Elements("packageSource")
             .FirstOrDefault(ps => ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "Aspire*"));
         Assert.NotNull(aspirePatternSource);
-        Assert.Equal(channelSource, (string?)aspirePatternSource!.Attribute("key"));
+        var aspirePatternSourceKey = (string?)aspirePatternSource!.Attribute("key");
+        Assert.Contains(packageSources.Elements("add"), element =>
+            string.Equals((string?)element.Attribute("key"), aspirePatternSourceKey, StringComparison.OrdinalIgnoreCase) &&
+            (string?)element.Attribute("value") == channelSource);
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

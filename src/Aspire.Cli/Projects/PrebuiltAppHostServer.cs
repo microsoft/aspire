@@ -324,7 +324,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
-            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources),
+            globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig),
             ct: cancellationToken).ConfigureAwait(false);
         if (restoreResult.IsTemporary)
         {
@@ -400,6 +400,23 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string? restoreConfigContent,
         string? nugetPackagesPath,
         CancellationToken cancellationToken)
+        => await ComputeRestoreInputsAsync(
+            projectContent,
+            packageRefs,
+            projectRefs,
+            restoreConfigContent,
+            nugetPackagesPath,
+            nugetFallbackPackagesPaths: null,
+            cancellationToken).ConfigureAwait(false);
+
+    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
+        string projectContent,
+        IReadOnlyList<IntegrationReference> packageRefs,
+        IReadOnlyList<IntegrationReference> projectRefs,
+        string? restoreConfigContent,
+        string? nugetPackagesPath,
+        IReadOnlyList<string>? nugetFallbackPackagesPaths,
+        CancellationToken cancellationToken)
     {
         var hash = new XxHash3();
         hash.Append(Encoding.UTF8.GetBytes(projectContent));
@@ -411,6 +428,14 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         {
             hash.Append("\0NUGET_PACKAGES\0"u8);
             hash.Append(Encoding.UTF8.GetBytes(nugetPackagesPath));
+        }
+        if (nugetFallbackPackagesPaths is not null)
+        {
+            foreach (var fallbackPackagesPath in nugetFallbackPackagesPaths)
+            {
+                hash.Append("\0NUGET_FALLBACK_PACKAGES\0"u8);
+                hash.Append(Encoding.UTF8.GetBytes(fallbackPackagesPath));
+            }
         }
 
         var isFloating = HasFloatingPackageVersion(packageRefs);
@@ -929,8 +954,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 packageRefs,
                 projectRefs,
                 restoreConfigContent,
-                GetIntegrationRestoreGlobalPackagesFolder(restoreSources) ??
+                GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
                     CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
                 cancellationToken).ConfigureAwait(false);
             restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
         }
@@ -1157,11 +1183,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
         => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
 
-    private string? GetIntegrationRestoreGlobalPackagesFolder(IntegrationRestoreSources restoreSources)
+    private string? GetIntegrationRestoreGlobalPackagesFolder(
+        IntegrationRestoreSources restoreSources,
+        TemporaryNuGetConfig? temporaryNuGetConfig)
         => restoreSources.ConfigureGlobalPackagesFolder
             ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(
                 _executionContext.AspireHomeDirectory,
-                restoreSources.GlobalPackagesFolderSource)
+                temporaryNuGetConfig?.CacheIdentity ?? restoreSources.GlobalPackagesFolderIdentity)
             : null;
 
     private async Task<TemporaryNuGetConfig?> CreateTemporaryNuGetConfigAsync(IntegrationRestoreSources restoreSources)
@@ -1171,12 +1199,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             return null;
         }
 
-        return await TemporaryNuGetConfig.CreateAsync(
+        var config = await TemporaryNuGetConfig.CreateAsync(
             restoreSources.PackageSourceMappings,
-            restoreSources.ConfigureGlobalPackagesFolder,
-            restoreSources.ConfigureGlobalPackagesFolder
-                ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
-                : null).ConfigureAwait(false);
+            restoreSources.ConfigureGlobalPackagesFolder).ConfigureAwait(false);
+        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
     }
 
     private async Task<TemporaryNuGetConfig> CreateComposedBundleNuGetConfigAsync(
@@ -1184,14 +1210,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         CancellationToken cancellationToken)
     {
         var configPaths = await _nugetService.GetNuGetConfigPathsAsync(_appDirectoryPath, cancellationToken).ConfigureAwait(false);
-        return await TemporaryNuGetConfig.CreateComposedAsync(
+        var config = await TemporaryNuGetConfig.CreateComposedAsync(
             configPaths,
             restoreSources.PackageSourceMappings ?? [],
             restoreSources.ConfigureGlobalPackagesFolder,
-            restoreSources.ConfigureGlobalPackagesFolder
-                ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
-                : null,
+            globalPackagesFolderValue: null,
             cancellationToken).ConfigureAwait(false);
+        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
     }
 
     private async Task<TemporaryNuGetConfig> CreateComposedNuGetConfigAsync(
@@ -1207,14 +1232,35 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{_appDirectoryPath}'.");
         }
 
-        return await TemporaryNuGetConfig.CreateComposedAsync(
+        var config = await TemporaryNuGetConfig.CreateComposedAsync(
             configPaths,
             restoreSources.PackageSourceMappings!,
             restoreSources.ConfigureGlobalPackagesFolder,
-            restoreSources.ConfigureGlobalPackagesFolder
-                ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
-                : null,
+            globalPackagesFolderValue: null,
             cancellationToken).ConfigureAwait(false);
+        return await ConfigureGlobalPackagesFolderAsync(config, restoreSources).ConfigureAwait(false);
+    }
+
+    private async Task<TemporaryNuGetConfig> ConfigureGlobalPackagesFolderAsync(
+        TemporaryNuGetConfig config,
+        IntegrationRestoreSources restoreSources)
+    {
+        var globalPackagesFolder = GetIntegrationRestoreGlobalPackagesFolder(restoreSources, config);
+        if (globalPackagesFolder is null)
+        {
+            return config;
+        }
+
+        try
+        {
+            await config.SetGlobalPackagesFolderAsync(globalPackagesFolder).ConfigureAwait(false);
+            return config;
+        }
+        catch
+        {
+            config.Dispose();
+            throw;
+        }
     }
 
     private async Task<FileInfo?> WriteRestoreNuGetConfigAsync(string restoreDir, IntegrationRestoreSources restoreSources, CancellationToken cancellationToken)

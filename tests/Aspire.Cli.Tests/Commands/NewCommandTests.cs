@@ -736,15 +736,23 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
+        var sourceKey = doc.Root!
+            .Element("packageSources")!
+            .Elements("add")
+            .FirstOrDefault(element =>
+                (string?)element.Attribute("value") == source ||
+                string.Equals((string?)element.Attribute("key"), source, StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("key")
+            ?.Value;
         var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
-        if (packageSourceMapping is null)
+        if (sourceKey is null || packageSourceMapping is null)
         {
             return [];
         }
 
         return packageSourceMapping
             .Elements("packageSource")
-            .Where(e => string.Equals((string?)e.Attribute("key"), source, StringComparison.OrdinalIgnoreCase))
+            .Where(e => string.Equals((string?)e.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase))
             .Elements("package")
             .Select(e => (string?)e.Attribute("pattern"))
             .Where(pattern => pattern is not null)
@@ -1202,19 +1210,26 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 Assert.NotNull(nugetConfig);
 
                 var document = XDocument.Load(nugetConfig.FullName);
+                var sourcesByKey = document.Root!
+                    .Element("packageSources")!
+                    .Elements("add")
+                    .ToDictionary(
+                        element => (string)element.Attribute("key")!,
+                        element => (string)element.Attribute("value")!,
+                        StringComparer.OrdinalIgnoreCase);
                 var sourceMappings = document.Root!
                     .Element("packageSourceMapping")!
                     .Elements("packageSource");
-                discoveryAspireSource = (string?)sourceMappings
+                discoveryAspireSource = sourcesByKey[(string)sourceMappings
                     .Single(source => source
                         .Elements("package")
                         .Any(package => (string?)package.Attribute("pattern") == "Aspire*"))
-                    .Attribute("key");
-                discoveryFallbackSource = (string?)sourceMappings
+                    .Attribute("key")!];
+                discoveryFallbackSource = sourcesByKey[(string)sourceMappings
                     .Single(source => source
                         .Elements("package")
                         .Any(package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages))
-                    .Attribute("key");
+                    .Attribute("key")!];
 
                 return Task.FromResult<IEnumerable<NuGetPackage>>(
                     [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = expectedSource, Version = "9.2.0" }]);
