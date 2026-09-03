@@ -49,14 +49,47 @@ internal static class RadiusSecuritySecretKinds
     internal const string LegacyRawEncoding = "raw";
 
     /// <summary>
+    /// The complete <c>kind</c> enum of the <c>Radius.Security/secrets</c> type as pinned by
+    /// <see cref="RadiusBicepExtension.Version"/>.
+    /// </summary>
+    /// <remarks>
+    /// The enum is closed, and it is enforced by the <em>Bicep compiler</em> rather than only by the
+    /// control plane: the generated <c>bicepconfig.json</c> resolves <c>extension radius</c> to
+    /// <c>br:biceptypes.azurecr.io/radius:0.60</c>, whose <c>types.json</c> models <c>kind</c> as a
+    /// union of string literals with no bare string element. A value outside the union therefore
+    /// fails <c>bicep build</c> during <c>rad deploy</c>, and a newer control plane cannot make it
+    /// valid, because the compile step reads the pinned type definitions. Publishing an unknown
+    /// literal would only produce an artifact that cannot deploy, so it is rejected here where the
+    /// message can name the offending resource.
+    /// <see href="https://github.com/radius-project/radius/blob/v0.60.0/hack/bicep-types-radius/generated/radius/radius.security/2025-08-01-preview/types.json"/>
+    /// </remarks>
+    internal static IReadOnlySet<string> All { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Generic,
+        CertificatePem,
+        "certificate-pkcs12",
+        "basicAuthentication",
+        "awsIRSA",
+        "azureWorkloadIdentity",
+    };
+
+    /// <summary>
+    /// The complete <c>encoding</c> enum of a <c>Radius.Security/secrets</c> data entry, closed for
+    /// the same reason and by the same mechanism as <see cref="All"/>.
+    /// </summary>
+    internal static IReadOnlySet<string> Encodings { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "string",
+        "base64",
+    };
+
+    /// <summary>
     /// Returns the data keys the reference recipes require for <paramref name="kind"/>.
     /// </summary>
     /// <remarks>
-    /// Returns <see langword="false"/> for a kind with no documented required keys — <c>generic</c>,
-    /// <c>certificate-pkcs12</c> (the reference recipe documents no per-key contract for it), and
-    /// any string this build does not recognize. An unrecognized kind is deliberately allowed
-    /// through: a newer control plane may extend the enum, and the deploy-time schema check is the
-    /// authority on membership.
+    /// Returns <see langword="false"/> for a kind with no documented required keys — <c>generic</c>
+    /// and <c>certificate-pkcs12</c> (the reference recipe documents no per-key contract for it).
+    /// Membership in the enum itself is checked separately against <see cref="All"/>.
     /// </remarks>
     internal static bool TryGetRequiredKeys(string? kind, out IReadOnlyList<string> requiredKeys)
     {

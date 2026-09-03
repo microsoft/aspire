@@ -272,6 +272,28 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// Two database children may be distinct Aspire resources that name the <em>same</em> physical
+    /// database. The recipe provisions one database, and that single database satisfies both
+    /// consumers, so this model must publish.
+    /// </summary>
+    [Fact]
+    public void AliasedDatabaseChildrenNamingOnePhysicalDatabase_Publish()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            var a = pg.AddDatabase("orders-a", "orders");
+            var bDb = pg.AddDatabase("orders-b", "orders");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(a)
+                .WithReference(bDb);
+        });
+
+        Assert.Contains("database: 'orders'", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Annotations are the only reference signal available when the <c>database</c> property is
     /// chosen, and a <c>WithEnvironment</c> callback that composes a database's value inline records
     /// none. Picking the first child in that case creates a database the consumer does not use, so

@@ -157,17 +157,21 @@ public class PostCallbackSecretValidationTests : IDisposable
     }
 
     /// <summary>
-    /// An unrecognized kind may be one a newer control plane understands, so the publisher leaves it
-    /// alone rather than rejecting a value whose contract it does not know.
+    /// <c>kind</c> is a closed union of string literals in the types.json the pinned extension
+    /// resolves to, so an unrecognized literal fails <c>bicep build</c> during deployment. A newer
+    /// control plane cannot make it valid, because the compile step reads the pinned definitions —
+    /// publishing it would only produce an artifact that cannot deploy.
     /// </summary>
     [Fact]
-    public void CallbackSettingAnUnrecognizedKind_StillPublishes()
+    public void CallbackSettingAnUnrecognizedKind_FailsThePublish()
     {
-        var bicep = GenerateBicep(
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
             AddContainerWithSecretEnvironment,
-            opts => opts.SecuritySecrets[0].Kind = "somethingNewer");
+            opts => opts.SecuritySecrets[0].Kind = "somethingNewer"));
 
-        Assert.Contains("somethingNewer", bicep, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("somethingNewer", ex.Message);
+        Assert.Contains("certificate-pkcs12", ex.Message);
     }
 
     /// <summary>
@@ -312,19 +316,41 @@ public class PostCallbackSecretValidationTests : IDisposable
     }
 
     /// <summary>
-    /// The mirror of <see cref="CallbackSettingAnUnrecognizedKind_StillPublishes"/> for the
-    /// encoding vocabulary: only the known-legacy <c>raw</c> spelling is rejected, because any
-    /// other unrecognized value may be one a newer control plane introduced and there is no way
-    /// for an AppHost author to opt out of this gate.
+    /// The legacy store type's <c>properties.type</c> is a closed union in the pinned extension
+    /// types too, so an unrecognized literal is rejected rather than emitted as an artifact that
+    /// cannot compile.
     /// </summary>
     [Fact]
-    public void CallbackSettingAnUnrecognizedEncoding_StillPublishes()
+    public void CallbackSettingAnUnrecognizedLegacyStoreType_FailsThePublish()
     {
-        var bicep = GenerateBicep(
-            AddContainerWithSecretEnvironment,
-            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "somethingNewer");
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            builder =>
+            {
+                builder.AddRadiusSecretStore("store", RadiusSecretStoreType.Generic)
+                    .WithData("key", builder.AddParameter("val", secret: true));
+                builder.AddContainer("api", "myapp/api:latest");
+            },
+            opts => opts.SecretStores[0].StoreType = "somethingNewer"));
 
-        Assert.Contains("somethingNewer", bicep, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("somethingNewer", ex.Message);
+        Assert.Contains("azureWorkloadIdentity", ex.Message);
+    }
+
+    /// <summary>
+    /// The mirror of <see cref="CallbackSettingAnUnrecognizedKind_FailsThePublish"/> for the
+    /// encoding vocabulary, which the pinned types.json declares as the closed set
+    /// <c>string</c>/<c>base64</c>.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnUnrecognizedEncoding_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "somethingNewer"));
+
+        Assert.Contains("ASPIRERADIUS093", ex.Message);
+        Assert.Contains("somethingNewer", ex.Message);
     }
 
     /// <summary>

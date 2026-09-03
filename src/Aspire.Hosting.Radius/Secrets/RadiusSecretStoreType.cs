@@ -67,6 +67,13 @@ internal static class RadiusSecretStoreTypeExtensions
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown Radius secret-store type."),
     };
 
+    /// <summary>
+    /// Every literal the closed <c>properties.type</c> enum accepts, for diagnostics that need to
+    /// list the permitted set.
+    /// </summary>
+    internal static IReadOnlyList<string> AllRadiusTypeStrings { get; } =
+        Enum.GetValues<RadiusSecretStoreType>().Select(ToRadiusTypeString).ToList();
+
     /// <summary>Returns the Radius <c>encoding</c> string (<c>raw</c>/<c>base64</c>) for <paramref name="encoding"/>.</summary>
     internal static string ToRadiusEncodingString(this RadiusSecretStoreEncoding encoding) => encoding switch
     {

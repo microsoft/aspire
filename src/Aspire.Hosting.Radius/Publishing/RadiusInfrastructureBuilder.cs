@@ -1436,6 +1436,16 @@ internal sealed class RadiusInfrastructureBuilder
                 $"reject the deployment. Diagnostic: ASPIRERADIUS092.");
         }
 
+        if (!RadiusSecuritySecretKinds.All.Contains(kind))
+        {
+            throw new InvalidOperationException(
+                $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' declares kind " +
+                $"'{kind}', which is not one of the kinds the type accepts " +
+                $"('{string.Join("', '", RadiusSecuritySecretKinds.All)}'). The generated bicepconfig.json pins the " +
+                $"Radius extension to {RadiusBicepExtension.Version}, whose schema declares 'kind' as a closed set, so " +
+                $"'bicep build' would reject the artifact during deployment. Diagnostic: ASPIRERADIUS092.");
+        }
+
         if (!RadiusSecuritySecretKinds.TryGetRequiredKeys(kind, out var requiredKeys))
         {
             return;
@@ -1472,10 +1482,23 @@ internal sealed class RadiusInfrastructureBuilder
     private static void ValidateSecretStoreTypeRequiredKeys(RadiusSecretStoreConstruct store)
     {
         if (IsBicepExpression(store.StoreType) ||
-            RenderBicepLiteral(store.StoreType) is not { } storeTypeString ||
-            !RadiusSecretStoreTypeExtensions.TryParseRadiusTypeString(storeTypeString, out var storeType))
+            RenderBicepLiteral(store.StoreType) is not { } storeTypeString)
         {
             return;
+        }
+
+        // Closed enum, enforced by the Bicep compiler against the pinned extension types exactly as
+        // for Radius.Security/secrets `kind` — see RadiusSecuritySecretKinds.All. An unparseable
+        // literal cannot deploy, so it is reported here rather than emitted.
+        if (!RadiusSecretStoreTypeExtensions.TryParseRadiusTypeString(storeTypeString, out var storeType))
+        {
+            throw new InvalidOperationException(
+                $"The secret store '{store.BicepIdentifier}' declares type '{storeTypeString}', which is not one of " +
+                $"the types 'Applications.Core/secretStores' accepts " +
+                $"('{string.Join("', '", RadiusSecretStoreTypeExtensions.AllRadiusTypeStrings)}'). The generated " +
+                $"bicepconfig.json pins the Radius extension to {RadiusBicepExtension.Version}, whose schema declares " +
+                $"'type' as a closed set, so 'bicep build' would reject the artifact during deployment. " +
+                $"Diagnostic: ASPIRERADIUS092.");
         }
 
         var missing = storeType.RequiredKeys().Where(required => !store.Data.ContainsKey(required)).ToList();
@@ -1559,19 +1582,33 @@ internal sealed class RadiusInfrastructureBuilder
                     $"published artifacts — or remove the entry. Diagnostic: ASPIRERADIUS093.");
             }
 
-            // Unlike `kind`, the legacy spelling is the only encoding rejected here. `encoding` is a
-            // schema enum a newer control plane could extend, and a false positive would block a
-            // valid deploy with no way to opt out — but `raw` is not a future value, it is the
-            // legacy vocabulary this type replaced, so carrying it across is always a mistake.
+            // `encoding` is a closed union of string literals in the pinned extension's types.json
+            // (see RadiusSecuritySecretKinds.All for the mechanism), so any literal outside it fails
+            // `bicep build` during deployment. The legacy `raw` spelling keeps its own message
+            // because it is the specific migration mistake worth naming.
             if (!IsBicepExpression(dataEntry.Encoding) &&
-                RenderBicepLiteral(dataEntry.Encoding) is RadiusSecuritySecretKinds.LegacyRawEncoding)
+                RenderBicepLiteral(dataEntry.Encoding) is { } encoding)
             {
-                throw new InvalidOperationException(
-                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
-                    $"entry '{key}' with the encoding '{RadiusSecuritySecretKinds.LegacyRawEncoding}', which belongs " +
-                    $"to the legacy 'Applications.Core/secretStores' type this one replaces. " +
-                    $"'{RadiusResourceTypes.SecuritySecrets}' accepts 'string' or 'base64', so Radius would reject " +
-                    $"the deployment. Diagnostic: ASPIRERADIUS093.");
+                if (encoding is RadiusSecuritySecretKinds.LegacyRawEncoding)
+                {
+                    throw new InvalidOperationException(
+                        $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
+                        $"entry '{key}' with the encoding '{RadiusSecuritySecretKinds.LegacyRawEncoding}', which belongs " +
+                        $"to the legacy 'Applications.Core/secretStores' type this one replaces. " +
+                        $"'{RadiusResourceTypes.SecuritySecrets}' accepts 'string' or 'base64', so Radius would reject " +
+                        $"the deployment. Diagnostic: ASPIRERADIUS093.");
+                }
+
+                if (!RadiusSecuritySecretKinds.Encodings.Contains(encoding))
+                {
+                    throw new InvalidOperationException(
+                        $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
+                        $"entry '{key}' with the encoding '{encoding}', which is not one of the encodings the type " +
+                        $"accepts ('{string.Join("', '", RadiusSecuritySecretKinds.Encodings)}'). The generated " +
+                        $"bicepconfig.json pins the Radius extension to {RadiusBicepExtension.Version}, whose schema " +
+                        $"declares 'encoding' as a closed set, so 'bicep build' would reject the artifact during " +
+                        $"deployment. Diagnostic: ASPIRERADIUS093.");
+                }
             }
         }
     }
@@ -2289,10 +2326,11 @@ internal sealed class RadiusInfrastructureBuilder
             // callback-only consumer, and the resolved-consumption set misses a database that is
             // referenced but whose value no container happened to resolve.
             var wronglyConsumed = FindDatabaseChildren(resource)
-                .Where(d => !string.Equals(d.Name, selectedDatabaseName, StringComparison.Ordinal))
+                .Where(d => !string.Equals(GetPhysicalDatabaseName(d), selectedDatabaseName, StringComparison.Ordinal))
                 .Where(d => referencedResourceNames.Contains(d.Name) ||
                             _resolvedConnectionStringConsumption.Contains(d.Name))
-                .Select(d => d.Name)
+                .Select(GetPhysicalDatabaseName)
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
 
             if (wronglyConsumed.Count == 0)
@@ -2477,19 +2515,33 @@ internal sealed class RadiusInfrastructureBuilder
         // break a model that published before.
         var referenced = databaseChildren.Where(d => referencedResourceNames.Contains(d.Name)).ToList();
 
-        if (referenced.Count > 1)
+        // Group by the *deployed* database name rather than the child resource name. Two children
+        // can be distinct Aspire resources that name one physical database — AddDatabase("orders-a",
+        // "orders") alongside AddDatabase("orders-b", "orders") — and the single database the recipe
+        // provisions satisfies every one of their consumers, so that model must keep publishing.
+        var referencedDatabaseNames = referenced
+            .Select(GetPhysicalDatabaseName)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (referencedDatabaseNames.Count > 1)
         {
             // Emitting one of them would leave every consumer of the others pointed at a database
             // the recipe never created — a connection failure at run time with nothing in the
             // generated Bicep to explain it.
             throw new InvalidOperationException(
-                $"Resource '{resource.Name}' has {referenced.Count} referenced databases " +
-                $"('{string.Join("', '", referenced.Select(d => d.Name))}'), but its Radius recipe provisions a single " +
+                $"Resource '{resource.Name}' has {referencedDatabaseNames.Count} referenced databases " +
+                $"('{string.Join("', '", referencedDatabaseNames)}'), but its Radius recipe provisions a single " +
                 $"database. Reference at most one database per resource, or split them across separate resources. " +
                 $"Diagnostic: ASPIRERADIUS072.");
         }
 
-        if (referenced.Count == 0 && databaseChildren.Count > 1)
+        var distinctDatabaseNames = databaseChildren
+            .Select(GetPhysicalDatabaseName)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (referenced.Count == 0 && distinctDatabaseNames.Count > 1)
         {
             // Annotations are the only reference signal available this early, and a WithEnvironment
             // callback that composes a database's connection string inline records none. So "no
@@ -2501,8 +2553,8 @@ internal sealed class RadiusInfrastructureBuilder
             if (ModelHasPotentialConsumer(resource, databaseChildren))
             {
                 throw new InvalidOperationException(
-                    $"Resource '{resource.Name}' declares {databaseChildren.Count} databases " +
-                    $"('{string.Join("', '", databaseChildren.Select(d => d.Name))}') and its Radius recipe provisions a " +
+                    $"Resource '{resource.Name}' declares {distinctDatabaseNames.Count} databases " +
+                    $"('{string.Join("', '", distinctDatabaseNames)}') and its Radius recipe provisions a " +
                     $"single database, but none of them is referenced through WithReference, so Aspire cannot tell which one " +
                     $"to create. Reference the database consumers connect to with WithReference, or declare one database per " +
                     $"resource. Diagnostic: ASPIRERADIUS072.");
@@ -2530,14 +2582,14 @@ internal sealed class RadiusInfrastructureBuilder
                 resource.Name);
         }
 
-        if (databaseChildren.Count > 1)
+        if (distinctDatabaseNames.Count > 1)
         {
             _logger.LogWarning(
                 "Radius resource '{ResourceName}' declares {Count} databases but its recipe provisions one; " +
                 "'{Selected}' was passed as the 'database' property. The others are not created.",
                 resource.Name,
-                databaseChildren.Count,
-                databaseChild.Name);
+                distinctDatabaseNames.Count,
+                GetPhysicalDatabaseName(databaseChild));
         }
 
         await SetTypePropertyAsync(construct, "database", databaseChild, "databasename").ConfigureAwait(false);
@@ -2545,7 +2597,7 @@ internal sealed class RadiusInfrastructureBuilder
         // Validated rather than acted on here: a WithEnvironment callback that consumes a different
         // database child is only observable once every container's environment has been resolved,
         // which happens after this runs. See ValidateRecipeDatabaseSelections.
-        _recipeDatabaseSelections.Add((resource, databaseChild.Name));
+        _recipeDatabaseSelections.Add((resource, GetPhysicalDatabaseName(databaseChild)));
     }
 
     /// <summary>
@@ -3103,6 +3155,37 @@ internal sealed class RadiusInfrastructureBuilder
             .OfType<IResourceWithConnectionString>()
             .Where(r => r is IResourceWithParent child && ReferenceEquals(child.Parent, resource))
             .ToList();
+
+    /// <summary>
+    /// The name of the database a child resource actually deploys to, which is what the recipe
+    /// provisions and what a consumer's connection string names.
+    /// </summary>
+    /// <remarks>
+    /// The Aspire resource name and the database name are independent: <c>AddDatabase("orders-a",
+    /// "orders")</c> creates a child named <c>orders-a</c> that targets the database <c>orders</c>.
+    /// Two such children are aliases for one physical database, so counting children would reject a
+    /// model the single recipe-provisioned database fully satisfies.
+    /// </remarks>
+    private static string GetPhysicalDatabaseName(IResourceWithConnectionString child)
+    {
+        var expression = FindConnectionProperty(child, "databasename");
+
+        // Unwrap pass-through wrappers for the same reason TryGetCredentialParameter does: resources
+        // commonly expose a property as ReferenceExpression.Create($"{inner}") where `inner` carries
+        // the value, so the literal sits a level or two down.
+        while (expression is { Format: "{0}", ValueProviders: [ReferenceExpression nested] })
+        {
+            expression = nested;
+        }
+
+        // Only a wholly literal name identifies the deployed database at publish time — a database
+        // name composed from a parameter is not known until deploy. Falling back to the child
+        // resource name is the conservative direction: two children then compare as distinct and
+        // keep the existing diagnostic rather than being silently merged into one database.
+        return expression is { ValueProviders.Count: 0 }
+            ? UnescapeBraces(expression.Format)
+            : child.Name;
+    }
 
     /// <summary>
     /// Resolves a named connection property to a Bicep value suitable for a Radius resource property,
