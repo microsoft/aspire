@@ -685,6 +685,29 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(realCacheDirectory.FullName, linkCacheDirectory.FullName);
     }
 
+    [Fact]
+    public async Task GetAppHostIntegrationCacheDirectory_PreservesLexicalWorkspaceForExternalSymlinkTarget()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var lexicalWorkspace = workspace.WorkspaceRoot.CreateSubdirectory("workspace");
+        await File.WriteAllTextAsync(Path.Combine(lexicalWorkspace.FullName, AspireConfigFile.FileName), "{}");
+        var externalAppHost = workspace.WorkspaceRoot.CreateSubdirectory("external-apphost");
+        var linkedAppHostPath = Path.Combine(lexicalWorkspace.FullName, "apphost");
+        TestSymlinkHelper.TryCreateSymlink(linkedAppHostPath, externalAppHost.FullName);
+
+        var externalCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(externalAppHost);
+        var linkedCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(linkedAppHostPath));
+
+        Assert.StartsWith(
+            PathNormalizer.ResolveToFilesystemPath(
+                Path.Combine(lexicalWorkspace.FullName, ".aspire", "integrations", "apphosts")) + Path.DirectorySeparatorChar,
+            linkedCacheDirectory.FullName,
+            StringComparisons.FileSystemPath);
+        Assert.Equal(externalCacheDirectory.Name, linkedCacheDirectory.Name);
+    }
+
     // PSM-guard cross-product tests.
     // Guard predicate: the resolved channel.Name == "local" — i.e. the *project requested* the
     // local pseudo-channel. The local hive has no real mappings, so emitting PSM would just
