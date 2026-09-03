@@ -153,7 +153,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var doc = XDocument.Load(projectPath);
 
         var noneElement = doc.Descendants("None")
-            .FirstOrDefault(e => e.Attribute("Include")?.Value == "appsettings.json");
+            .FirstOrDefault(e => e.Attribute("Update")?.Value == "appsettings.json");
 
         Assert.NotNull(noneElement);
         Assert.Equal("PreserveNewest", noneElement.Attribute("CopyToOutputDirectory")?.Value);
