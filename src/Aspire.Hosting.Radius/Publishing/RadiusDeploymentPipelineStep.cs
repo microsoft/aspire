@@ -125,7 +125,11 @@ internal sealed class RadiusDeploymentPipelineStep
     /// cluster could then let an unsupported workspace target pass the gate (or the reverse), the
     /// isolation redirects the home directory the CLI resolves <c>~/.kube/config</c> against, and
     /// sets <c>KUBECONFIG</c> as well for the code paths that do honor it. Both point at the same
-    /// minified file, so every loader inside <c>rad</c> reaches the workspace's cluster.
+    /// minified file, so every loader inside <c>rad</c> reaches the workspace's cluster. The
+    /// redirect deliberately keeps kubeconfig <c>exec</c> plugins working by pinning their
+    /// credential state back to the real home — see
+    /// <see cref="BuildIsolatedKubeConfigEnvironment"/>, which explains why <c>--flatten</c> is not
+    /// enough for managed clusters.
     /// See https://github.com/radius-project/radius/blob/main/pkg/kubeutil/config.go.
     /// </para>
     /// </remarks>
@@ -175,7 +179,10 @@ internal sealed class RadiusDeploymentPipelineStep
             var version = await RunAsync(
                 "rad",
                 ["version", "--output", "json"],
-                environment: BuildIsolatedKubeConfigEnvironment(kubeConfigHome.FullName),
+                environment: BuildIsolatedKubeConfigEnvironment(
+                    kubeConfigHome.FullName,
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    Environment.GetEnvironmentVariable),
                 cancellationToken).ConfigureAwait(false);
 
             if (version is not { ExitCode: 0 } versionResult)
@@ -222,15 +229,40 @@ internal sealed class RadiusDeploymentPipelineStep
     /// from the child's environment.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <c>HOME</c>, <c>USERPROFILE</c> and <c>HOMEDRIVE</c>/<c>HOMEPATH</c> are all set or cleared
     /// because client-go's <c>homedir.HomeDir()</c> — which computes the
     /// <c>clientcmd.RecommendedHomeFile</c> that <c>rad</c> reads directly — consults <c>HOME</c> on
     /// Unix and <c>USERPROFILE</c> then <c>HOMEDRIVE</c>+<c>HOMEPATH</c> on Windows. Leaving any of
     /// them pointing at the real profile would let the ambient kubeconfig win on that platform.
     /// See https://github.com/kubernetes/client-go/blob/master/util/homedir/homedir.go.
+    /// </para>
+    /// <para>
+    /// Redirecting the home directory is what isolates the kubeconfig, but it would also hide the
+    /// credential state that kubeconfig <c>exec</c> plugins read, and <c>--flatten</c> does not help
+    /// there: it inlines file-backed certificates, keys and token files, but an <c>exec</c> entry is
+    /// carried through untouched and still shells out at load time. Managed clusters are configured
+    /// exactly that way — <c>kubelogin</c> for AKS, <c>aws eks get-token</c> for EKS,
+    /// <c>gke-gcloud-auth-plugin</c> for GKE — and each of those resolves its own credentials under
+    /// the home directory. Under a bare redirect they would find an empty home, fail to
+    /// authenticate, and take <c>rad version</c> down with them; because the gate fails open on an
+    /// unreadable version, it would then silently skip for most managed-cluster users, which is the
+    /// population it is most needed for. Each helper's state is therefore pinned back to
+    /// <paramref name="realHome"/> through the variable it already documents for relocating it.
+    /// </para>
+    /// <para>
+    /// A variable the caller has already set is left alone: the child inherits the ambient
+    /// environment, and an explicit value may deliberately point somewhere other than the home
+    /// directory. Values are pinned without probing the file system, because a helper that finds no
+    /// state under the real home is no worse off than one pointed at the empty temporary home.
+    /// </para>
     /// </remarks>
-    internal static Dictionary<string, string?> BuildIsolatedKubeConfigEnvironment(string kubeConfigHome) =>
-        new(StringComparer.Ordinal)
+    internal static Dictionary<string, string?> BuildIsolatedKubeConfigEnvironment(
+        string kubeConfigHome,
+        string? realHome,
+        Func<string, string?> getEnvironmentVariable)
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["KUBECONFIG"] = Path.Combine(kubeConfigHome, ".kube", "config"),
             ["HOME"] = kubeConfigHome,
@@ -240,6 +272,35 @@ internal sealed class RadiusDeploymentPipelineStep
             ["HOMEDRIVE"] = null,
             ["HOMEPATH"] = null,
         };
+
+        if (string.IsNullOrEmpty(realHome))
+        {
+            return environment;
+        }
+
+        // https://learn.microsoft.com/cli/azure/azure-cli-configuration - `az`, and so `kubelogin`
+        // in its azurecli login mode, keeps its token cache and profile here.
+        Pin("AZURE_CONFIG_DIR", Path.Combine(realHome, ".azure"));
+
+        // https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html - `aws eks
+        // get-token` reads the profile and long-lived credentials from these two files.
+        Pin("AWS_CONFIG_FILE", Path.Combine(realHome, ".aws", "config"));
+        Pin("AWS_SHARED_CREDENTIALS_FILE", Path.Combine(realHome, ".aws", "credentials"));
+
+        // https://cloud.google.com/sdk/docs/configurations - `gke-gcloud-auth-plugin` resolves the
+        // active gcloud configuration and its credentials from this directory.
+        Pin("CLOUDSDK_CONFIG", Path.Combine(realHome, ".config", "gcloud"));
+
+        return environment;
+
+        void Pin(string variable, string homeRelativeDefault)
+        {
+            if (string.IsNullOrEmpty(getEnvironmentVariable(variable)))
+            {
+                environment[variable] = homeRelativeDefault;
+            }
+        }
+    }
 
     private readonly record struct ProcessRunResult(int ExitCode, string StandardOutput);
 

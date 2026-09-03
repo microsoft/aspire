@@ -83,7 +83,10 @@ public class ControlPlaneVersionGateTests
         var home = Path.Combine(Path.GetTempPath(), "aspire-radius-kubeconfig-test");
         var expectedKubeConfig = Path.Combine(home, ".kube", "config");
 
-        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(home);
+        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(
+            home,
+            realHome: null,
+            getEnvironmentVariable: static _ => null);
 
         // KUBECONFIG must name the file *inside* the redirected home, so the loaders that honor it
         // and the loaders that hardcode ~/.kube/config resolve to the same minified kubeconfig.
@@ -94,6 +97,75 @@ public class ControlPlaneVersionGateTests
         // either is empty, and a surviving pair would point Windows back at the real profile.
         Assert.Null(environment["HOMEDRIVE"]);
         Assert.Null(environment["HOMEPATH"]);
+    }
+
+    /// <summary>
+    /// <c>--flatten</c> inlines file-backed credentials but carries kubeconfig <c>exec</c> entries
+    /// through untouched, and every managed cluster authenticates that way (<c>kubelogin</c> for
+    /// AKS, <c>aws eks get-token</c> for EKS, <c>gke-gcloud-auth-plugin</c> for GKE). Those helpers
+    /// resolve their own credentials under the home directory, so a bare redirect would leave them
+    /// with an empty home, fail the authentication, and fail <c>rad version</c> — and because the
+    /// gate fails open on a version it cannot read, it would silently skip for exactly the users it
+    /// is most needed for. Each helper's state is pinned back to the real home instead.
+    /// </summary>
+    [Fact]
+    public void ControlPlaneGate_KeepsExecCredentialHelpersPointedAtTheRealHome()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "aspire-radius-kubeconfig-test");
+        var realHome = Path.Combine(Path.GetTempPath(), "aspire-radius-real-home");
+
+        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(
+            home,
+            realHome,
+            getEnvironmentVariable: static _ => null);
+
+        // The kubeconfig stays isolated; only the credential state follows the real home.
+        Assert.Equal(Path.Combine(home, ".kube", "config"), environment["KUBECONFIG"]);
+        Assert.Equal(home, environment["HOME"]);
+
+        Assert.Equal(Path.Combine(realHome, ".azure"), environment["AZURE_CONFIG_DIR"]);
+        Assert.Equal(Path.Combine(realHome, ".aws", "config"), environment["AWS_CONFIG_FILE"]);
+        Assert.Equal(Path.Combine(realHome, ".aws", "credentials"), environment["AWS_SHARED_CREDENTIALS_FILE"]);
+        Assert.Equal(Path.Combine(realHome, ".config", "gcloud"), environment["CLOUDSDK_CONFIG"]);
+    }
+
+    /// <summary>
+    /// A credential-helper location the user has already relocated must win: the child inherits the
+    /// ambient environment, and an explicit value may deliberately point outside the home. Only the
+    /// unset variables are pinned.
+    /// </summary>
+    [Fact]
+    public void ControlPlaneGate_DoesNotOverrideAnExplicitCredentialHelperLocation()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "aspire-radius-kubeconfig-test");
+        var realHome = Path.Combine(Path.GetTempPath(), "aspire-radius-real-home");
+
+        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(
+            home,
+            realHome,
+            getEnvironmentVariable: static name => name is "AZURE_CONFIG_DIR" ? "/custom/azure" : null);
+
+        Assert.False(environment.ContainsKey("AZURE_CONFIG_DIR"));
+        Assert.Equal(Path.Combine(realHome, ".config", "gcloud"), environment["CLOUDSDK_CONFIG"]);
+    }
+
+    /// <summary>
+    /// With no resolvable home there is nothing to pin the helpers to, so the isolation is applied
+    /// on its own rather than pointing them at paths built from an empty string.
+    /// </summary>
+    [Fact]
+    public void ControlPlaneGate_WithNoResolvableRealHome_PinsNothing()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "aspire-radius-kubeconfig-test");
+
+        var environment = RadiusDeploymentPipelineStep.BuildIsolatedKubeConfigEnvironment(
+            home,
+            realHome: string.Empty,
+            getEnvironmentVariable: static _ => null);
+
+        Assert.Equal(
+            new[] { "HOME", "HOMEDRIVE", "HOMEPATH", "KUBECONFIG", "USERPROFILE" },
+            environment.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
     }
 
     /// <summary>

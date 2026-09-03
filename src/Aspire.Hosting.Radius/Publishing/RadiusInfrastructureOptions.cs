@@ -79,14 +79,33 @@ public sealed class RadiusInfrastructureOptions
 
     /// <summary>
     /// Gets the list of <c>Radius.Security/secrets</c> constructs — the <c>Radius.*</c> UDT secret
-    /// primitive, emitted for credentials a UDT backing resource consumes by resource ID (for
-    /// example the RabbitMQ <c>properties.password</c>).
+    /// primitive. The collection holds two kinds of entry, both of which a callback can observe:
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The first kind carries a credential a UDT backing resource consumes by resource ID (for
+    /// example the RabbitMQ <c>properties.password</c>). The second is generated per container to
+    /// back its credential-bearing environment variables: a variable whose value carries a secret
+    /// is emitted as a <c>valueFrom.secretKeyRef</c> into a secret named after the container (for
+    /// example <c>api-env-secret</c>) rather than as a literal <c>value</c>, which is what keeps
+    /// the credential out of the <c>Deployment</c> spec and its rollout history. Both kinds are
+    /// ordinary <c>Radius.Security/secrets</c> resources, so nothing distinguishes them
+    /// structurally — a callback that treats every entry here as backing-resource state and removes
+    /// one may be removing the secret a container reads from.
+    /// </para>
+    /// <para>
+    /// Removing a container's secret, or the data key an environment variable names, is rejected
+    /// with <c>ASPIRERADIUS084</c> rather than silently emitted, because the resulting artifact is
+    /// accepted by Radius and only fails as a pod that never starts. Set the environment variable
+    /// explicitly in the callback if the intent is to supply the value another way.
+    /// </para>
+    /// <para>
     /// Exposed for the same reason as the other collections: <c>ConfigureRadiusInfrastructure</c>
     /// can rename a construct, and callers that rename one of these must be able to see it. The
-    /// publisher repairs the consuming resource's ID reference after the callbacks run, so a
-    /// rename here does not dangle.
+    /// publisher repairs the consuming resource's ID reference — and a container's
+    /// <c>secretKeyRef</c>, which names the secret by resource name — after the callbacks run, so a
+    /// rename of either kind does not dangle.
+    /// </para>
     /// </remarks>
     public List<RadiusSecuritySecretConstruct> SecuritySecrets { get; } = [];
 
