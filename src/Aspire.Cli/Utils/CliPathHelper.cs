@@ -76,24 +76,6 @@ internal static class CliPathHelper
             : path + Path.DirectorySeparatorChar;
 
     /// <summary>
-    /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
-    /// </summary>
-    /// <remarks>
-    /// The default NuGet <c>globalPackagesFolder</c> used by <c>TemporaryNuGetConfig</c> is relative to
-    /// the config file, which is unsafe for generated configs that may be copied from or disposed with a
-    /// temporary directory. Anchoring staging restores under <c>ASPIRE_HOME</c> keeps package paths alive
-    /// for manifests that reference them and keys the cache by feed URL to avoid sharing the same
-    /// stable-shaped package versions across different staging feeds.
-    /// </remarks>
-    internal static string GetStagingNuGetPackagesFeedDirectory(DirectoryInfo aspireHomeDirectory, string? feedUrl)
-    {
-        ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
-
-        var cacheKey = ComputeStagingFeedCacheKey(feedUrl) ?? "default";
-        return Path.Combine(GetStagingNuGetPackagesDirectory(aspireHomeDirectory), cacheKey);
-    }
-
-    /// <summary>
     /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,
     /// truncated to <paramref name="length"/> characters. Returns <see langword="null"/> when
     /// the URL is null, empty, or whitespace-only.
