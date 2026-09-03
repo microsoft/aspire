@@ -20,11 +20,12 @@ internal enum HeldFileLeaseProbeResult
 /// Holds a unique lease file open exclusively until disposal.
 /// </summary>
 /// <remarks>
-/// The open OS handle is authoritative. File names and file contents are advisory metadata only
-/// and must not be used to infer whether the creating process is still alive.
+/// A verified exclusive OS handle is authoritative. A lease whose exclusive lock cannot be
+/// verified is marked in its file name so probes retain it conservatively.
 /// </remarks>
 internal sealed class HeldFileLease : IDisposable
 {
+    private const string UnverifiedLockMarker = ".unverified-lock";
     private const int WindowsSharingViolationHResult = unchecked((int)0x80070020);
     private const int WindowsLockViolationHResult = unchecked((int)0x80070021);
     private const int LinuxWouldBlockHResult = 11;
@@ -60,16 +61,35 @@ internal sealed class HeldFileLease : IDisposable
         var fullLeaseDirectory = Path.GetFullPath(leaseDirectory);
         Directory.CreateDirectory(fullLeaseDirectory);
 
-        var leasePath = Path.Combine(
+        var leaseFileName = string.Concat(fileNamePrefix, Guid.NewGuid().ToString("N"));
+        var verifiedLeasePath = Path.Combine(
             fullLeaseDirectory,
-            string.Concat(fileNamePrefix, Guid.NewGuid().ToString("N"), fileNameExtension));
+            string.Concat(leaseFileName, fileNameExtension));
+        var leasePath = OperatingSystem.IsWindows()
+            ? verifiedLeasePath
+            : Path.Combine(
+                fullLeaseDirectory,
+                string.Concat(leaseFileName, UnverifiedLockMarker, fileNameExtension));
         var stream = new FileStream(
             leasePath,
             FileMode.CreateNew,
             FileAccess.ReadWrite,
             FileShare.None,
             bufferSize: 4096,
-            FileOptions.DeleteOnClose);
+            OperatingSystem.IsWindows() ? FileOptions.DeleteOnClose : FileOptions.None);
+
+        if (!OperatingSystem.IsWindows() && IsExclusiveLockEnforced(leasePath))
+        {
+            try
+            {
+                File.Move(leasePath, verifiedLeasePath);
+                leasePath = verifiedLeasePath;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                // Keep the marker so other processes retain this lease conservatively.
+            }
+        }
 
         return new HeldFileLease(leasePath, stream);
     }
@@ -78,11 +98,10 @@ internal sealed class HeldFileLease : IDisposable
     /// Probes lease files and reclaims any orphan files that can be opened exclusively.
     /// </summary>
     /// <remarks>
-    /// Probing has a documented side effect: successfully opening an orphan with
-    /// <see cref="FileShare.None"/> proves that no lease handle is held, and
-    /// <see cref="FileOptions.DeleteOnClose"/> removes that orphan when the probe handle closes.
-    /// Enumeration and access failures are reported as <see cref="HeldFileLeaseProbeResult.Unknown"/>
-    /// rather than being mistaken for an inactive lease.
+    /// Probing has a documented side effect: an orphan is removed after exclusive access is
+    /// acquired and, on Unix, verified with a second open of the same file.
+    /// Unverified leases and enumeration or access failures are reported as
+    /// <see cref="HeldFileLeaseProbeResult.Unknown"/> rather than being mistaken for inactive leases.
     /// </remarks>
     public static HeldFileLeaseProbeResult Probe(string leaseDirectory, string fileNameExtension)
     {
@@ -116,7 +135,7 @@ internal sealed class HeldFileLease : IDisposable
         var result = HeldFileLeaseProbeResult.None;
         foreach (var leasePath in leasePaths)
         {
-            var fileResult = ProbeLeaseFile(leasePath);
+            var fileResult = ProbeLeaseFile(leasePath, fileNameExtension);
             if (fileResult is HeldFileLeaseProbeResult.Active)
             {
                 return HeldFileLeaseProbeResult.Active;
@@ -134,11 +153,30 @@ internal sealed class HeldFileLease : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                // Unix has no kernel-backed DeleteOnClose, and an unverified lease may be renamed
+                // after opening. Remove the path explicitly while any verified lock is still held.
+                File.Delete(LeasePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                // Retaining a stale lease is safer than making cleanup race a live holder.
+            }
+        }
+
         _stream.Dispose();
     }
 
-    private static HeldFileLeaseProbeResult ProbeLeaseFile(string leasePath)
+    private static HeldFileLeaseProbeResult ProbeLeaseFile(string leasePath, string fileNameExtension)
     {
+        if (leasePath.EndsWith(string.Concat(UnverifiedLockMarker, fileNameExtension), StringComparison.Ordinal))
+        {
+            return HeldFileLeaseProbeResult.Unknown;
+        }
+
         try
         {
             using var stream = new FileStream(
@@ -147,7 +185,25 @@ internal sealed class HeldFileLease : IDisposable
                 FileAccess.ReadWrite,
                 FileShare.None,
                 bufferSize: 1,
-                FileOptions.DeleteOnClose);
+                OperatingSystem.IsWindows() ? FileOptions.DeleteOnClose : FileOptions.None);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                if (!IsExclusiveLockEnforced(leasePath))
+                {
+                    return HeldFileLeaseProbeResult.Unknown;
+                }
+
+                try
+                {
+                    File.Delete(leasePath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    return HeldFileLeaseProbeResult.Unknown;
+                }
+            }
+
             return HeldFileLeaseProbeResult.None;
         }
         catch (FileNotFoundException)
@@ -173,6 +229,33 @@ internal sealed class HeldFileLease : IDisposable
         catch (System.Security.SecurityException)
         {
             return HeldFileLeaseProbeResult.Unknown;
+        }
+    }
+
+    private static bool IsExclusiveLockEnforced(string path)
+    {
+        try
+        {
+            // FileStream ignores Unix flock failures other than EWOULDBLOCK, including ENOTSUP.
+            // A second open while the first handle is held distinguishes an enforced exclusive lock
+            // from a successful open that acquired no lock. See:
+            // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs.
+            using var verificationStream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.None);
+            return false;
+        }
+        catch (IOException ex) when (IsLeaseContention(ex))
+        {
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
         }
     }
 

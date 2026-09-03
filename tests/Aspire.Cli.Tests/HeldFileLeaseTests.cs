@@ -60,6 +60,18 @@ public class HeldFileLeaseTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Probe_ReturnsUnknownWithoutDeletingUnverifiedLease()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaseDirectory = workspace.CreateDirectory("leases").FullName;
+        var leasePath = Path.Combine(leaseDirectory, $"orphan.unverified-lock{LeaseExtension}");
+        File.WriteAllText(leasePath, "{}");
+
+        Assert.Equal(HeldFileLeaseProbeResult.Unknown, HeldFileLease.Probe(leaseDirectory, LeaseExtension));
+        Assert.True(File.Exists(leasePath));
+    }
+
+    [Fact]
     public void Probe_ReturnsActiveForLeaseHeldByAnotherProcess()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -84,6 +96,67 @@ public class HeldFileLeaseTests(ITestOutputHelper outputHelper)
                 SpinWait.SpinUntil(() => File.Exists(readyPath), TimeSpan.FromSeconds(30)),
                 "Timed out waiting for the child process to acquire its lease.");
             Assert.Equal(HeldFileLeaseProbeResult.Active, HeldFileLease.Probe(leaseDirectory, LeaseExtension));
+        }
+        finally
+        {
+            File.WriteAllText(releasePath, string.Empty);
+        }
+    }
+
+    [Fact]
+    public void Probe_ReturnsUnknownWithoutDeletingWhenFileLockingIsDisabled()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The .NET file-locking switch only affects Unix.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaseDirectory = workspace.CreateDirectory("leases").FullName;
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["DOTNET_SYSTEM_IO_DISABLEFILELOCKING"] = "1";
+
+        using var result = RemoteExecutor.Invoke(static leaseDirectory =>
+        {
+            using var lease = HeldFileLease.Acquire(leaseDirectory, "active-", LeaseExtension);
+            var orphanPath = Path.Combine(leaseDirectory, $"orphan{LeaseExtension}");
+            File.WriteAllText(orphanPath, "{}");
+
+            Assert.Equal(HeldFileLeaseProbeResult.Unknown, HeldFileLease.Probe(leaseDirectory, LeaseExtension));
+            Assert.True(File.Exists(lease.LeasePath));
+            Assert.True(File.Exists(orphanPath));
+        }, leaseDirectory, options);
+    }
+
+    [Fact]
+    public void Probe_ReturnsUnknownWhenLeaseHolderHasFileLockingDisabled()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The .NET file-locking switch only affects Unix.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaseDirectory = workspace.CreateDirectory("leases").FullName;
+        var readyPath = Path.Combine(workspace.Path, "ready");
+        var releasePath = Path.Combine(workspace.Path, "release");
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["DOTNET_SYSTEM_IO_DISABLEFILELOCKING"] = "1";
+
+        using var result = RemoteExecutor.Invoke(static (leaseDirectory, readyPath, releasePath) =>
+        {
+            using var lease = HeldFileLease.Acquire(leaseDirectory, "remote-", LeaseExtension);
+            File.WriteAllText(readyPath + ".lease-path", lease.LeasePath);
+            File.WriteAllText(readyPath, string.Empty);
+
+            if (!SpinWait.SpinUntil(() => File.Exists(releasePath), TimeSpan.FromSeconds(30)))
+            {
+                throw new TimeoutException("Timed out waiting for the parent process to release the lease holder.");
+            }
+        }, leaseDirectory, readyPath, releasePath, options);
+
+        try
+        {
+            Assert.True(
+                SpinWait.SpinUntil(() => File.Exists(readyPath), TimeSpan.FromSeconds(30)),
+                "Timed out waiting for the child process to acquire its lease.");
+            var leasePath = File.ReadAllText(readyPath + ".lease-path");
+            Assert.Equal(HeldFileLeaseProbeResult.Unknown, HeldFileLease.Probe(leaseDirectory, LeaseExtension));
+            Assert.True(File.Exists(leasePath));
         }
         finally
         {

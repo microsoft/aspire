@@ -264,6 +264,7 @@ export class DotNetService implements IDotNetService {
                 '--nologo',
                 '--verbosity',
                 'quiet',
+                '-target:ComputeRunArguments',
                 '-getProperty:RunCommand,RunArguments',
                 `-getResultOutputFile:${resultOutputPath}`
             ];

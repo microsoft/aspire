@@ -1222,6 +1222,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             '--nologo',
             '--verbosity',
             'quiet',
+            '-target:ComputeRunArguments',
             '-getProperty:RunCommand,RunArguments',
             `-getResultOutputFile:${resultOutputPath}`
         ]);
