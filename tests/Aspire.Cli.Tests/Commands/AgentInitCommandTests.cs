@@ -827,6 +827,25 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithInvalidMcps_FailsEvenWithZeroDetectedTargets()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // No AgentEnvironmentDetectorFactory override is configured, so zero MCP
+        // configuration targets are detected. An invalid --mcps value must still be
+        // rejected rather than silently ignored just because there's nothing to apply it to.
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --mcps bogus");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.MissingRequiredArgument, exitCode);
+    }
+
+    [Fact]
     public async Task AgentInitCommand_NonInteractive_WithSkillLocationsNone_DoesNotInstallAnySkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -208,6 +208,12 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Playwright and dotnet-inspect are not pre-selected, so just accept
         // the default Aspire skills from the installed CLI's embedded bundle.
         await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("MCP servers should be configured"),
+            timeout: TimeSpan.FromSeconds(30), description: "MCP server selection prompt");
+        // MCP servers are strictly opt-in and never pre-selected, so accepting the default
+        // here leaves MCP unconfigured.
+        await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -218,6 +224,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
         Assert.Contains("name: aspire-deployment", deploymentFileContent);
+
+        // Verify MCP was not configured, since it was never selected in the prompt above.
+        var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(vscodeMcpConfigPath), $"Expected no MCP config to be written but found {vscodeMcpConfigPath}");
     }
 
     /// <summary>

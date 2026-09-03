@@ -330,7 +330,13 @@ internal sealed class AgentInitCommand : BaseCommand
             ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
             : [];
 
-        if (mcpsBinding is not null && mcpConfigurationTargets.Count > 0)
+        // An explicitly provided --mcps value must be validated even when zero configuration
+        // targets were detected (e.g., no supported client installed) — otherwise an invalid
+        // value like "--mcps bogus" would silently succeed instead of reporting an error.
+        // Only skip the prompt entirely when there's nothing to select (no explicit value AND
+        // no targets to apply to), which preserves the previous interactive behavior.
+        var (mcpsWasProvided, _, _) = PromptBinding.Resolve(mcpsBinding);
+        if (mcpsBinding is not null && (mcpsWasProvided || mcpConfigurationTargets.Count > 0))
         {
             selectedMcpServers = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectMcpServers,
