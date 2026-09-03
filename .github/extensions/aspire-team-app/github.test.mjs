@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { dayMs } from "./constants.mjs";
 import { capFocusKeepingDebt, loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
@@ -65,6 +66,38 @@ test("loadDashboard paginates open pull requests for each watched repo", async (
     dashboard.lanes.flatMap((lane) => lane.items).find((item) => item.pr.number === 1).pr.readyForReviewAt,
     "2026-07-01T09:30:00Z",
   );
+});
+
+test("loadDashboard ranks review-ready PRs by time waiting for review", async () => {
+  const oldDraft = prNode(1, new Date().toISOString(), isoAgo(dayMs));
+  oldDraft.createdAt = isoAgo(28 * dayMs);
+  oldDraft.author.login = "old-draft-author";
+
+  const longerWait = prNode(2, new Date().toISOString());
+  longerWait.createdAt = isoAgo(3 * dayMs);
+  longerWait.author.login = "longer-wait-author";
+
+  globalThis.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body);
+    if (body.query.includes("pullRequests")) {
+      return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: {
+        nodes: [oldDraft, longerWait],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      } } } });
+    }
+    throw new Error(`Unexpected query: ${body.query}`);
+  };
+
+  const dashboard = await loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire"] }],
+    mode: "review",
+    release: "9.5",
+    prefs: {},
+    dismissed: [],
+  });
+
+  const reviewQueue = dashboard.lanes.find((lane) => lane.id === "review-queue");
+  assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
 test("loadDashboard paginates open issues for each watched repo", async () => {
@@ -196,6 +229,10 @@ function page(after, firstNode, secondNode) {
   }
   assert.equal(after, "cursor-1");
   return { nodes: [secondNode], pageInfo: { hasNextPage: false, endCursor: null } };
+}
+
+function isoAgo(ms) {
+  return new Date(Date.now() - ms).toISOString();
 }
 
 function prNode(number, updatedAt, readyForReviewAt = null) {
