@@ -187,8 +187,9 @@ if [ -d "$CAUSES_DIR" ]; then
               $classification == "main-repository-breakage"
             else
               $classification == "flaky-test" or
-                any($analysis[0].failed_tests[];
-                  .classification == "flaky" and .job == ($trusted_job.name // ""))
+                ((($classification == "code-issue") or ($classification == "main-repository-breakage")) and
+                  any($analysis[0].failed_tests[];
+                    .classification == "flaky" and .job == ($trusted_job.name // "")))
             end)
         )
       ' "$CAUSE_FILE" >/dev/null; then

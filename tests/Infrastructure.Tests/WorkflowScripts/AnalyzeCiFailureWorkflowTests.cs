@@ -777,6 +777,31 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await AssertValidationRejectsIncompatibleCauseJobAsync();
     }
 
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsFlakyCauseForTransientInfraJobWithMatchingTestName()
+    {
+        // A flaky-test verdict permits a transient-infra job alongside the flaky-test job (both
+        // count as "transient"). A flaky test sharing the transient-infra job's name must not
+        // let a flaky-test cause cover that job: the cause contract only allows this
+        // cross-reference for code-issue and main-repository-breakage jobs, never transient-infra.
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"transient-infra"}],
+             "failed_tests":[{"name":"Tests.Flaky","job":"Setup","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
+             "causes":["flaky-failure"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Tests"},{"id":2,"name":"Setup"}]""",
+            new Dictionary<string, string>
+            {
+                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1, 2),
+            });
+
+        await AssertValidationRejectsIncompatibleCauseJobAsync();
+    }
+
     [Theory]
     [InlineData("pull-request", "transient-infra", "infra-failure")]
     [InlineData("pull-request", "flaky-test", "flaky-test")]
@@ -1355,6 +1380,24 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
 
         var result = await RunRerunScriptAsync();
+
+        Assert.Empty(result.Failed);
+        Assert.Equal([123], result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunUsesTrustedRunIdForMainScopeTransientAnalysisEvenWithClosedPr()
+    {
+        // Main-scope runs have no associated PR to check for open state, so the PR-state check
+        // must be skipped entirely; a closed prState here proves the branch is never reached.
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"main","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            runScope: "main",
+            prNumbers: "");
+
+        var result = await RunRerunScriptAsync(prState: "closed");
 
         Assert.Empty(result.Failed);
         Assert.Equal([123], result.Reruns);
@@ -2127,7 +2170,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string analysis,
         string cause,
         string? priorCause = null,
-        string trustedFailedJobsJson = """[{"id":456,"name":"Tests"}]""")
+        string trustedFailedJobsJson = """[{"id":456,"name":"Tests"}]""",
+        string runScope = "pull-request",
+        string prNumbers = "42")
     {
         var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
         var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
@@ -2139,7 +2184,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(Path.Combine(causesDirectory, "nuget-timeout.json"), cause);
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "run-context.json"),
-            """{"run_id":123,"run_attempt":1,"run_scope":"pull-request","pr_numbers":"42"}""");
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_attempt = 1,
+                run_scope = runScope,
+                pr_numbers = prNumbers,
+            }));
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "failed-jobs.json"),
             trustedFailedJobsJson);
