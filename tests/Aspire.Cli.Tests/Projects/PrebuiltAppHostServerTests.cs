@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -395,6 +396,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var projectElements = doc.Descendants("ProjectReference").ToList();
         Assert.Single(projectElements);
         Assert.Equal("/path/to/MyIntegration.csproj", projectElements[0].Attribute("Include")?.Value);
+        Assert.Equal("false", projectElements[0].Element("IsAspireProjectResource")?.Value);
+        Assert.Equal("true", projectElements[0].Element("ReferenceOutputAssembly")?.Value);
+        Assert.Null(projectElements[0].Element("Private"));
 
         Assert.Empty(doc.Descendants("PackageReference"));
     }
@@ -436,16 +440,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GenerateIntegrationProjectFile_DoesNotSetEarlyOutputPathProperties()
+    {
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/custom/output/path");
+        var doc = XDocument.Parse(xml);
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Null(doc.Descendants(ns + "BaseOutputPath").FirstOrDefault());
+        Assert.Null(doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault());
+        Assert.Null(doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault());
+    }
+
+    [Fact]
+    public void CreateClosureDirectoryBuildProps_SetsEarlyOutputPathProperties()
+    {
+        var doc = IntegrationClosureBuilder.CreateClosureDirectoryBuildProps("/custom/output/path");
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal(
+            Path.Combine("/custom/output/path", "bin") + Path.DirectorySeparatorChar,
+            doc.Descendants(ns + "BaseOutputPath").FirstOrDefault()?.Value);
+        Assert.Equal(
+            Path.Combine("/custom/output/path", "obj") + Path.DirectorySeparatorChar,
+            doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault()?.Value);
+        Assert.Equal("$(BaseIntermediateOutputPath)", doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault()?.Value);
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestFiles()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/work");
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
-        Assert.Equal(Path.Combine("/tmp/work", PrebuiltAppHostServer.ClosureMetadataFileName), doc.Descendants(ns + "AspireClosureMetadataFile").FirstOrDefault()?.Value);
-        Assert.Equal(Path.Combine("/tmp/work", PrebuiltAppHostServer.ClosureSourcesFileName), doc.Descendants(ns + "AspireClosureSourcesFile").FirstOrDefault()?.Value);
-        Assert.Equal(Path.Combine("/tmp/work", PrebuiltAppHostServer.ClosureTargetsFileName), doc.Descendants(ns + "AspireClosureTargetsFile").FirstOrDefault()?.Value);
-        Assert.Equal(Path.Combine("/tmp/work", PrebuiltAppHostServer.ProjectRefAssemblyNamesFileName), doc.Descendants(ns + "AspireProjectRefAssemblyNamesFile").FirstOrDefault()?.Value);
+        Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureMetadataFileName), doc.Descendants(ns + "AspireClosureMetadataFile").FirstOrDefault()?.Value);
+        Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureSourcesFileName), doc.Descendants(ns + "AspireClosureSourcesFile").FirstOrDefault()?.Value);
+        Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ClosureTargetsFileName), doc.Descendants(ns + "AspireClosureTargetsFile").FirstOrDefault()?.Value);
+        Assert.Equal(Path.Combine("/tmp/work", IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), doc.Descendants(ns + "AspireProjectRefAssemblyNamesFile").FirstOrDefault()?.Value);
     }
 
     [Fact]
@@ -480,8 +511,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal("false", doc.Descendants(ns + "EnableDefaultItems").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "EnableNETAnalyzers").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "GenerateDocumentationFile").FirstOrDefault()?.Value);
+        Assert.Equal("false", doc.Descendants(ns + "IsPackable").FirstOrDefault()?.Value);
+        Assert.Equal("false", doc.Descendants(ns + "IsPublishable").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "ProduceReferenceAssembly").FirstOrDefault()?.Value);
     }
 
@@ -575,7 +609,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
 
-        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
+        var normalizedWorkspaceRoot = PathNormalizer.ResolveToFilesystemPath(workspace.WorkspaceRoot.FullName);
+        var rootDirectory = Path.Combine(normalizedWorkspaceRoot, ".aspire", "integrations", "apphosts");
         var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
         var parentDirectory = Path.GetDirectoryName(workingDirectory);
         var isDirectChildOfRoot = parentDirectory is not null &&
@@ -613,7 +648,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var firstWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(firstServer));
         var secondWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(secondServer));
 
-        var appHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
+        var normalizedWorkspaceRoot = PathNormalizer.ResolveToFilesystemPath(workspace.WorkspaceRoot.FullName);
+        var appHostsRoot = Path.Combine(normalizedWorkspaceRoot, ".aspire", "integrations", "apphosts");
 
         try
         {
@@ -631,6 +667,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 }
             }
         }
+    }
+
+    [Fact]
+    public void GetAppHostIntegrationCacheDirectory_NormalizesSymlinkedAppHostDirectory()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real-apphost");
+        var linkDirectoryPath = Path.Combine(workspace.WorkspaceRoot.FullName, "linked-apphost");
+        TestSymlinkHelper.TryCreateSymlink(linkDirectoryPath, realDirectory.FullName);
+
+        var realCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(realDirectory);
+        var linkCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(linkDirectoryPath));
+
+        Assert.Equal(realCacheDirectory.FullName, linkCacheDirectory.FullName);
     }
 
     // PSM-guard cross-product tests.
@@ -2897,10 +2949,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
 
         WriteProjectAssetsFile(restoreDirectory, packageMetadata);
-        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, PrebuiltAppHostServer.ClosureMetadataFileName), metadataLines);
-        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, PrebuiltAppHostServer.ClosureSourcesFileName), sourcePaths);
-        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, PrebuiltAppHostServer.ClosureTargetsFileName), targetPaths);
-        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, PrebuiltAppHostServer.ProjectRefAssemblyNamesFileName), projectReferenceAssemblyNames);
+        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName), metadataLines);
+        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName), sourcePaths);
+        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName), targetPaths);
+        File.WriteAllLines(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), projectReferenceAssemblyNames);
     }
 
     private static IReadOnlyDictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)> CreatePackageMetadata()

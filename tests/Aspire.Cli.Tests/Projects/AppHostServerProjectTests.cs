@@ -153,7 +153,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var doc = XDocument.Load(projectPath);
 
         var noneElement = doc.Descendants("None")
-            .FirstOrDefault(e => e.Attribute("Include")?.Value == "appsettings.json");
+            .FirstOrDefault(e => e.Attribute("Update")?.Value == "appsettings.json");
 
         Assert.NotNull(noneElement);
         Assert.Equal("PreserveNewest", noneElement.Attribute("CopyToOutputDirectory")?.Value);
@@ -229,6 +229,31 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(
             document.Descendants("PackageReference"),
             element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingPlatformPathComparison()
+    {
+        var project = CreateProject();
+        var firstProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Integration", "Integration.csproj");
+        var secondProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "integration", "Integration.csproj");
+        var integrations = new[]
+        {
+            IntegrationReference.FromProject("FirstIntegration", firstProjectPath),
+            IntegrationReference.FromProject("SecondIntegration", secondProjectPath)
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var projectReferences = document.Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .ToArray();
+        string[] expectedPaths = OperatingSystem.IsWindows()
+            ? [firstProjectPath]
+            : [firstProjectPath, secondProjectPath];
+
+        Assert.Equal(expectedPaths, projectReferences);
     }
 
     [Fact]
@@ -466,6 +491,42 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Aspire package version exists in both the hive and the channel feed.
         Assert.Equal(overrideSource, sources[0]);
         Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutConfiguredChannel_UsesExplicitChannelSources()
+    {
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var (projectFilePath, channelName) = await project.CreateProjectFilesAsync(
+            [IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")]).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.Equal(channelFeed, restoreSources);
+        Assert.Equal("daily", channelName);
     }
 
     [Fact]
