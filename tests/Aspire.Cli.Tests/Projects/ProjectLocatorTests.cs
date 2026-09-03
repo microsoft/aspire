@@ -2255,7 +2255,9 @@ builder.Build().Run();");
             public bool IsUnsupported { get; set; }
             public string LanguageId => "typescript";
             public string DisplayName => "TypeScript";
+            public bool RequiresStopForAddPackage => false;
             public bool SupportsLaunchProfiles => false;
+            public bool UsesAspireConfigForPackageResolution => true;
             public string? AppHostFileName => supportedFileName;
 
             public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
@@ -2271,6 +2273,9 @@ builder.Build().Run();");
 
             public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
+
+            public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+                => Task.FromResult(CliExitCodes.Success);
 
             public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
