@@ -450,6 +450,14 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public void ResolvePathFromOrigin_WithEmptyPath_PreservesEmptyPath()
+    {
+        var result = NuGetConfigComposer.ResolvePathFromOrigin(Path.GetTempPath(), string.Empty);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MoreLocalClearRemovesInheritedSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
