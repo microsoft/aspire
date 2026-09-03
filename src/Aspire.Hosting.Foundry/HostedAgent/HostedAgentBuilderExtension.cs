@@ -458,22 +458,28 @@ public static class HostedAgentResourceBuilderExtensions
             return;
         }
 
-        if (resource is not (ContainerResource or ExecutableResource or ProjectResource))
+        IResourceWithEnvironment target;
+        if (resource is ContainerResource || resource.IsContainer())
         {
-            throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
+            target = resource;
         }
-
-        if (resource is ExecutableResource executableResource &&
-            !resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>())
+        else if (resource is ExecutableResource executableResource)
         {
             // Ensure container APIs configure the executable's publish annotations.
             builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
                 .PublishAsDockerFile();
+
+            target = resource;
+        }
+        else if (resource is ProjectResource)
+        {
+            target = resource;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
-        // Projection callbacks configure the owner's shared annotations, so the canonical owner is
-        // always the deployed target regardless of whether its effective shape is a container.
-        IResourceWithEnvironment target = resource;
         EnsureDefaultHostedAgentEndpoint(builder, target);
 
         if (target is ProjectResource projectTarget)
