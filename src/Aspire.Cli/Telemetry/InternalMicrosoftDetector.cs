@@ -752,12 +752,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var tokenResult = await RunProcessAsync(executable, ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
-        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: true) is { } processFailure)
+        // gh reserves exit code 4 for an expected authentication-required state.
+        // Treat that as a clean negative without inspecting or reporting command output.
+        // https://cli.github.com/manual/gh_help_exit-codes
+        var authenticationRequired = tokenResult.ExitCode == 4;
+        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: !authenticationRequired) is { } processFailure)
         {
             return processFailure;
         }
 
-        if (string.IsNullOrWhiteSpace(tokenResult.Stdout))
+        if (authenticationRequired || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }

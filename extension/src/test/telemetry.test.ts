@@ -255,6 +255,28 @@ suite('telemetry utilities', () => {
         assert.deepStrictEqual(fake.events.map(event => event.properties?.command), ['cmd.after-opt-in']);
     });
 
+    test('preserves queued error events when usage telemetry is disabled', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.usage' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', { resource_type: 'test' });
+        fake.telemetryLevel = 'error';
+        clearTelemetryEnrichmentTask();
+
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 1);
+        const [event] = fake.events;
+        assert.strictEqual(event.name, 'aspire/vscode/debug/runsession/end');
+        assert.strictEqual(event.isError, true);
+    });
+
     test('usage and dashboard events keep their registry wire names', () => {
         setCommonTelemetryProperties({
             is_microsoft_internal: 'true',

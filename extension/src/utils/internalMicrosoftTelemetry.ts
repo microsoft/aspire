@@ -6,6 +6,8 @@ import { CommonTelemetryProperties, setCommonTelemetryProperties } from './telem
 const microsoftAuthenticationProviderId = 'microsoft';
 const microsoftTenantId = '72f988bf-86f1-41af-91ab-2d7cd011db47';
 const validAliasPattern = /^[A-Za-z0-9._-]+$/;
+const validMicrosoftDomainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*microsoft\.com$/;
+const maxDomainLength = 253;
 const initialAccountLoadGraceMs = 2_000;
 
 type AuthenticationApi = Pick<typeof vscode.authentication, 'getAccounts' | 'onDidChangeSessions'>;
@@ -163,7 +165,8 @@ function getLoginIdentity(accountLabel: string): { alias: string; domain: string
     const alias = accountLabel.slice(0, atIndex);
     const domain = accountLabel.slice(atIndex + 1).toLowerCase();
     if (!validAliasPattern.test(alias) ||
-        (domain !== 'microsoft.com' && !domain.endsWith('.microsoft.com'))) {
+        domain.length > maxDomainLength ||
+        !validMicrosoftDomainPattern.test(domain)) {
         return undefined;
     }
 

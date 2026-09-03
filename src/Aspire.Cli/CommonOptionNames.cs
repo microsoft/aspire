@@ -65,6 +65,12 @@ internal static class CommonOptionNames
 
             if (!commandSeen && s_rootOptionsWithValues.Contains(arg))
             {
+                if (index + 1 < args.Length &&
+                    args[index + 1] is Help or HelpShort or HelpAlt or HelpSlash or HelpAltSlash or Version or VersionShort)
+                {
+                    return true;
+                }
+
                 index++;
                 continue;
             }

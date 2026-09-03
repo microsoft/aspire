@@ -146,6 +146,21 @@ public class TelemetryConfigurationTests
         Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
     }
 
+    [Theory]
+    [InlineData("--log-level", "--help")]
+    [InlineData("-l", "-h")]
+    [InlineData("--capture-profile-output", "--version")]
+    [InlineData("--capture-profile-delay", "-v")]
+    [InlineData("--log-file", "-?")]
+    public void ReportedTelemetry_Disabled_WhenInformationalFlagIsConsumedAsMissingRootOptionValue(string rootOption, string informationalFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [rootOption, informationalFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
     [Fact]
     public void DetectorDiagnostics_Disabled_ForAgentTelemetryInvocation()
     {

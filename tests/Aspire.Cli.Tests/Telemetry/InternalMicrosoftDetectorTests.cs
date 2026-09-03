@@ -789,6 +789,35 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result.Failure), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("gh")]
+    [InlineData("gh.exe")]
+    public async Task CheckGhCliExecutableAsync_ReturnsNotDetectedWhenAuthenticationIsRequired(string executable)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, executable), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (4, "sensitive-token-or-path")
+        };
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["PATH"] = workspace.Path
+        });
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environment: environment);
+
+        var result = await detector.CheckGhCliExecutableAsync(executable, CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Failure);
+        Assert.Equal(executable, processFactory.LastFileName);
+    }
+
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFailureWhenUserRequestIsUnauthorized()
     {

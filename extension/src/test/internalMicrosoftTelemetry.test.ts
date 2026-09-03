@@ -29,6 +29,24 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         assert.deepStrictEqual(identity, { isInternal: true });
     });
 
+    test('uses tenant evidence without emitting a malformed Microsoft domain', () => {
+        for (const domain of [
+            'secret path.microsoft.com',
+            'secret\npath.microsoft.com',
+            '-secret.microsoft.com',
+            'secret-.microsoft.com',
+            'secret..microsoft.com',
+            `${'a'.repeat(64)}.microsoft.com`,
+            `${Array(121).fill('a').join('.')}.microsoft.com`,
+        ]) {
+            const identity = getInternalMicrosoftTelemetryIdentity([
+                { id: `unique.${microsoftTenantId}`, label: `user@${domain}` },
+            ]);
+
+            assert.deepStrictEqual(identity, { isInternal: true }, domain);
+        }
+    });
+
     test('preserves legitimate alias prefixes for one corporate account', () => {
         const identity = getInternalMicrosoftTelemetryIdentity([
             { id: `unique.${microsoftTenantId}`, label: 'Microsoft-User@Microsoft.com' },
