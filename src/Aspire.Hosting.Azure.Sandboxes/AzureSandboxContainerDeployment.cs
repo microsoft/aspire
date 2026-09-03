@@ -1055,7 +1055,7 @@ internal static class AzureSandboxContainerDeployment
             egressHosts.UnionWith(resolvedArg.EgressHosts);
         }
 
-        var configuredEntrypoint = resource.GetContainerEntrypoint();
+        var configuredEntrypoint = resource.AsContainer()?.Entrypoint;
         var entrypoint = !string.IsNullOrWhiteSpace(configuredEntrypoint)
             ? new[] { configuredEntrypoint }
             : null;
@@ -1066,7 +1066,7 @@ internal static class AzureSandboxContainerDeployment
 
     internal static bool HasModeledCommandConfiguration(IResource resource)
     {
-        var entrypoint = resource.GetContainerEntrypoint();
+        var entrypoint = resource.AsContainer()?.Entrypoint;
 
         return entrypoint is { Length: > 0 } ||
             resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks) && callbacks.Any();

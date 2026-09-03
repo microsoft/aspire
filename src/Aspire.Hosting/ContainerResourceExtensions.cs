@@ -48,19 +48,25 @@ public static class ContainerResourceExtensions
     }
 
     /// <summary>
-    /// Gets the entrypoint configured for the resource's effective container shape.
+    /// Gets the container resource represented by the specified resource.
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
-    /// <returns>The configured container entrypoint, or <see langword="null"/> when none is configured.</returns>
+    /// <returns>
+    /// The resource itself when it is a <see cref="ContainerResource"/>, the container projection applied for
+    /// the current AppHost invocation, or <see langword="null"/> when no strongly typed container view exists.
+    /// </returns>
     /// <remarks>
-    /// Returns the property from an explicit <see cref="ContainerResource"/> or from the container
-    /// projection applied to the owner for the current AppHost invocation.
+    /// This method reflects projection configuration completed so far. It returns <see langword="null"/> before
+    /// an applicable projection is registered and for resources classified as containers solely through the
+    /// legacy <see cref="ContainerImageAnnotation"/> fallback. Use <see cref="IsContainer(IResource)"/> when only
+    /// effective container classification is required.
     /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
-    public static string? GetContainerEntrypoint(this IResource resource)
+    public static ContainerResource? AsContainer(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.GetEffectiveResource() is ContainerResource container ? container.Entrypoint : null;
+        return resource.GetEffectiveResource() as ContainerResource;
     }
 }

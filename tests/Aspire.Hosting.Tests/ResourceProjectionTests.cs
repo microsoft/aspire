@@ -47,6 +47,7 @@ public class ResourceProjectionTests
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
         Assert.NotSame(executable.Resource, projectionBuilder.Resource);
         Assert.Same(executable.Resource.Annotations, projectionBuilder.Resource.Annotations);
+        Assert.Same(projectionBuilder.Resource, executable.Resource.AsContainer());
 
         Assert.True(executable.Resource.TryGetContainerImageName(out var image));
         Assert.Equal("projected-image:v2", image);
@@ -368,6 +369,8 @@ public class ResourceProjectionTests
             model.GetContainerResources(),
             resource => Assert.Same(executable.Resource, resource),
             resource => Assert.Same(project.Resource, resource));
+        Assert.Null(executable.Resource.AsContainer());
+        Assert.Null(project.Resource.AsContainer());
     }
 
     [Fact]
@@ -389,6 +392,7 @@ public class ResourceProjectionTests
         Assert.False(callbackInvoked);
         Assert.Empty(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
         Assert.False(executable.Resource.IsContainer());
+        Assert.Null(executable.Resource.AsContainer());
         Assert.False(builder.TryCreateResourceBuilder<ContainerResource>("worker", out _));
         Assert.Collection(model.GetExecutableResources(), resource => Assert.Same(executable.Resource, resource));
     }
@@ -399,17 +403,29 @@ public class ResourceProjectionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".");
         Assert.False(executable.Resource.IsContainer());
+        Assert.Null(executable.Resource.AsContainer());
 
         executable.WithContainerProjection(
             DistributedApplicationOperation.Publish,
             container =>
             {
                 Assert.True(executable.Resource.IsContainer());
+                Assert.Same(container.Resource, executable.Resource.AsContainer());
                 Assert.Same(executable.Resource.Annotations, container.Resource.Annotations);
                 Assert.Empty(executable.Resource.Annotations.OfType<ContainerImageAnnotation>());
             });
 
         Assert.True(executable.Resource.IsContainer());
+        Assert.NotNull(executable.Resource.AsContainer());
+    }
+
+    [Fact]
+    public void AsContainerReturnsExplicitContainerResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var container = builder.AddContainer("worker", "image");
+
+        Assert.Same(container.Resource, container.Resource.AsContainer());
     }
 
     [Theory]

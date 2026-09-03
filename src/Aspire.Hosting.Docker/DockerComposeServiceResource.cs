@@ -154,7 +154,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
     private void SetEntryPoint(Service composeService)
     {
-        var entrypoint = TargetResource.GetContainerEntrypoint();
+        var entrypoint = TargetResource.AsContainer()?.Entrypoint;
         if (entrypoint is not null)
         {
             composeService.Entrypoint.Add(entrypoint);

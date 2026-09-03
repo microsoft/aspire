@@ -415,7 +415,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
     protected void SetEntryPoint(ContainerAppContainer container)
     {
-        var entrypoint = Resource.GetContainerEntrypoint();
+        var entrypoint = Resource.AsContainer()?.Entrypoint;
         if (entrypoint is not null)
         {
             container.Command = [entrypoint];
