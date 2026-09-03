@@ -1,0 +1,29 @@
+{
+  "run_id": 33807224647,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33807224647",
+  "analyzed_at": "2026-09-03T22:16:52Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19870,
+    "title": "Fix Python callback handle wrapping",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/fix-python-callback-wrappers",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19870"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "id": 100824549214,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33807224647/job/100824549214",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 and no accessible logs. PR only modifies Aspire.Hosting.CodeGeneration.Python source and tests, and PolyglotAppHosts Python apphost sample - none related to the VS Code extension. Matches a previously recorded recurring flaky pattern for this exact shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-deno-debugger-flaky"]
+}
