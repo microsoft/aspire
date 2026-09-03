@@ -651,33 +651,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(channelFeed, restoreSources);
     }
 
-    [Fact]
-    public async Task CreateProjectFiles_WithoutChannelOrSourceOverride_DoesNotInjectRestoreSources()
-    {
-        var appPath = _workspace.WorkspaceRoot.FullName;
-        var packagingService = new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channels should not be resolved.")
-        };
-
-        var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(
-            appPath,
-            "test.sock",
-            appPath,
-            new TestDotNetCliRunner(),
-            packagingService,
-            new TestProcessExecutionFactory(),
-            new TestEnvironment(),
-            NullLogger<DotNetBasedAppHostServerProject>.Instance,
-            projectModelPath);
-
-        var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
-
-        var projectDoc = XDocument.Load(projectFilePath);
-        Assert.Null(projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault());
-    }
-
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);

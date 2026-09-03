@@ -230,8 +230,11 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             .Element("RestoreConfigFile")!
             .Value;
         var nugetConfig = XDocument.Load(restoreConfigFile);
+        using var expectedConfig = await TemporaryNuGetConfig.CreateAsync(
+            [new PackageMapping("Aspire*", stagingSource)],
+            configureGlobalPackagesFolder: true);
         Assert.Equal(
-            CliPathHelper.GetStagingNuGetPackagesFeedDirectory(aspireHomeDirectory, stagingSource),
+            CliPathHelper.GetStagingNuGetPackagesFeedDirectory(aspireHomeDirectory, expectedConfig.CacheIdentity),
             nugetConfig.Root!.Element("config")!.Elements("add").Single(e => e.Attribute("key")?.Value == "globalPackagesFolder").Attribute("value")!.Value);
     }
 
@@ -478,10 +481,21 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
-        var packageSources = doc.Root!
+        var sourceKey = doc.Root!
+            .Element("packageSources")!
+            .Elements("add")
+            .Single(element => PackageSourceIdentity.Comparer.Equals(
+                element.Attribute("value")?.Value,
+                source))
+            .Attribute("key")!
+            .Value;
+        var packageSource = doc.Root!
             .Element("packageSourceMapping")!
-            .Elements("packageSource");
-        var packageSource = packageSources.Single(e => e.Attribute("key")?.Value == source);
+            .Elements("packageSource")
+            .Single(element => string.Equals(
+                element.Attribute("key")?.Value,
+                sourceKey,
+                StringComparison.OrdinalIgnoreCase));
 
         return packageSource
             .Elements("package")
