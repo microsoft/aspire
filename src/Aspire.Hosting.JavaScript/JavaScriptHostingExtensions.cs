@@ -1886,7 +1886,7 @@ public static partial class JavaScriptHostingExtensions
                 });
 
                 // JavaScript apps default to build-only publishing unless a standalone runtime is enabled.
-                if (c.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerFileAnnotation))
+                if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerFileAnnotation))
                 {
                     dockerFileAnnotation.HasEntrypoint =
                         resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out _);
