@@ -39,8 +39,8 @@ internal sealed class SkillDefinition
 
     /// <summary>
     /// Creates a skill definition sourced from the Aspire skills bundle. All bundle-sourced
-    /// skills are pre-selected by default in the install prompt; callers like <c>aspire new</c>
-    /// and standalone <c>aspire agent init</c> can still narrow that set with a predicate
+    /// skills are pre-selected by default in the install prompt; standalone
+    /// <c>aspire agent init</c> can still narrow that set with a predicate
     /// (see <c>AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults</c>).
     /// </summary>
     internal static SkillDefinition CreateAspireSkillsBundle(

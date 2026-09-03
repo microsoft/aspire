@@ -155,8 +155,8 @@ internal sealed class InitCommand : BaseCommand
             _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
-        // Step 4: Chain to aspire agent init for MCP server + skill configuration.
-        // This prompt lets users choose which skills to install — including aspireify.
+        // Step 4: Chain to aspire agent init for skill configuration.
+        // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);

@@ -690,8 +690,8 @@ internal sealed class AgentInitCommand : BaseCommand
     {
         // When the caller doesn't customize default selection, fall back to SkillDefinition.IsDefault.
         // Bundle-sourced skills are uniformly IsDefault=true; CLI-defined skills (playwright-cli,
-        // dotnet-inspect) are IsDefault=false so they stay opt-in. Callers like `aspire new` pass
-        // a predicate to additionally filter out skills that don't fit their flow.
+        // dotnet-inspect) are IsDefault=false so they stay opt-in. Standalone `aspire agent init`
+        // passes a predicate to additionally filter out one-time setup skills.
         var predicate = selectByDefault ?? (static skill => skill.IsDefault);
         return availableSkills.Where(predicate).ToList();
     }
