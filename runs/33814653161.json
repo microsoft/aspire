@@ -1,0 +1,83 @@
+{
+  "run_id": 33814653161,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33814653161",
+  "analyzed_at": "2026-09-03T23:18:59Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19877,
+    "title": "Fix unpackaged WinUI debugging in VS Code",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-fix-winui3-debug-crash",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19877"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Radius.Tests, Hosting.Radius, Hosting.Radius, tests/Asp... / Hosting.Radius (windows-latest)",
+      "id": 100844448325,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100844448325",
+      "classification": "flaky-test",
+      "reason": "The failing test SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut is in the Aspire.Hosting.Radius.Tests project, an area not touched by this PR (which only modifies VS Code extension files and its e2e workflow). The assertion failure (Expected: True, Actual: False) on a wait-for-sync-then-timeout test is consistent with a timing-sensitive/flaky test unrelated to the PR changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 100845372900,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100845372900",
+      "classification": "flaky-test",
+      "reason": "PR does not touch the polyglot SDK or TypeScript SDK validation code paths; job logs were unavailable to fetch, but the failure is unrelated to PR-changed files (only extension debugger/e2e files and workflow changed).",
+      "failed_steps": ["Run TypeScript SDK validation"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "id": 100845372994,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100845372994",
+      "classification": "flaky-test",
+      "reason": "Same as Node 22.x job: unrelated to PR-changed files, both Node matrix legs failed simultaneously suggesting a shared unrelated/environmental cause rather than a PR-code issue.",
+      "failed_steps": ["Run TypeScript SDK validation"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, launch-profiles)",
+      "id": 100846325506,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100846325506",
+      "classification": "code-issue",
+      "reason": "This PR directly modifies extension/scripts/run-e2e.js, extension/src/debugger/languages/dotnet.ts, extension/src/test-e2e/winUiDebug.e2e.test.ts (new), and the extension-e2e-tests.yml workflow itself. The 'launch-profiles' e2e job failing is directly tied to code and test infrastructure the PR changed.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 100846325509,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100846325509",
+      "classification": "code-issue",
+      "reason": "Same reasoning as the Linux launch-profiles job: directly exercises the debugger/e2e code paths this PR changed (dotnet.ts, run-e2e.js, new winUiDebug.e2e.test.ts).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 100847490882,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33814653161/job/100847490882",
+      "classification": "flaky-test",
+      "reason": "This is an aggregation/summary job that fails when any TypeScript SDK Validation matrix leg fails; it is downstream of the unrelated TypeScript SDK Validation failures, not an independent code issue.",
+      "failed_steps": ["Check validation results"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut",
+      "job": "Hosting.Radius (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Radius.Tests\\Secrets\\SealedSecretApplyStepTests.cs:line 513\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "PR does not touch Radius/Secrets code; this timing/wait-loop based test (waits then times out) is a plausible candidate for timing flakiness on Windows CI runners."
+    }
+  ],
+  "causes": ["radius-sealedsecretapplystep-timeout-flaky", "polyglot-typescript-sdk-validation-unrelated-failure"]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "polyglot-typescript-sdk-validation-unrelated-failure",
+  "type": "infra-failure",
+  "title": "TypeScript SDK Validation fails on both Node 22.x and 24.x for PRs not touching polyglot SDK code",
+  "error_pattern": "Job logs unavailable ('Failed to fetch logs for job'); both Node matrix legs (22.x, 24.x) of 'TypeScript SDK Validation' plus the downstream 'Polyglot Validation Results' aggregation job fail simultaneously on a PR that only modifies VS Code extension debugger/e2e files, indicating an environment/dependency issue unrelated to PR changes.",
+  "occurrences": [
+    {
+      "run_id": 33814653161,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33814653161",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Radius.Tests, Hosting.Radius, Hosting.Radius, tests/Asp... / Hosting.Radius (windows-latest)",
+      "pr_number": 19877,
+      "observed_at": "2026-09-03T23:18:59Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19923"
+}
