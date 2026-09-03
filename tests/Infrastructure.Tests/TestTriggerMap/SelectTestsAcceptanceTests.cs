@@ -902,6 +902,23 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
             r.Jobs.Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public void RealMapManualMacPlatformSsoValidationDoesNotSelectCi()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            ["eng/scripts/validate-mac-platform-sso.sh"],
+            [],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.Empty(r.Jobs);
+        Assert.Empty(r.UnmatchedFiles);
+    }
+
     // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
     // same surface the per-language polyglot playground scripts regenerate and compile
     // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
