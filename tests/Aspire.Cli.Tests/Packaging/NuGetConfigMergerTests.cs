@@ -362,6 +362,48 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_MapsSourceUrlToEveryExistingAlias()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+        const string sourceUrl = "https://private.example/v3/index.json";
+
+        await WriteConfigAsync(root,
+            $$"""
+            <configuration>
+              <packageSources>
+                <add key="authenticated" value="{{sourceUrl}}" />
+                <add key="anonymousAlias" value="{{sourceUrl}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <authenticated>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </authenticated>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", sourceUrl)
+        };
+        var channel = CreateChannel(mappings);
+
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var document = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var mappedSources = document.Descendants("packageSourceMapping")
+            .Elements("packageSource")
+            .Where(element => element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "Aspire*"))
+            .Select(element => element.Attribute("key")!.Value)
+            .ToArray();
+
+        Assert.Equal(["authenticated", "anonymousAlias"], mappedSources);
+        Assert.NotNull(document.Descendants("packageSourceCredentials").Single().Element("authenticated"));
+        Assert.False(NuGetConfigMerger.HasMissingSources(root, channel));
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_ReusesExistingSourceKeys_WhenMappingToExistingSourcesByUrl()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

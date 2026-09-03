@@ -261,7 +261,7 @@ public static class RestoreCommand
         return sources;
     }
 
-    private static PackageSpec BuildPackageSpec(
+    internal static PackageSpec BuildPackageSpec(
         List<(string Id, string Version)> packages,
         NuGetFramework framework,
         string? runtimeIdentifier,
@@ -300,6 +300,7 @@ public static class RestoreCommand
             ProjectStyle = ProjectStyle.PackageReference,
             OutputPath = outputPath,
             PackagesPath = SettingsUtility.GetGlobalPackagesFolder(settings),
+            FallbackFolders = SettingsUtility.GetFallbackPackageFolders(settings).ToList(),
             OriginalTargetFrameworks = [tfmShort],
             ConfigFilePaths = settings.GetConfigFilePaths().ToList(),
         };
