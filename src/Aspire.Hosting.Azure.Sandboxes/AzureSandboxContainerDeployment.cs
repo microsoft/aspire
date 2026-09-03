@@ -35,6 +35,8 @@ internal static class AzureSandboxContainerDeployment
     internal const string SandboxStateSectionPrefix = $"{SandboxStateParentSection}:";
     private const int DiskImageReadyTimeoutSeconds = 600;
     private static readonly IReadOnlySet<string> s_noExcludedIds = new HashSet<string>(StringComparer.Ordinal);
+    // TODO: Replace this publisher-owned key list with app-model metadata that lets resources declare
+    // their required outbound hosts. https://github.com/microsoft/aspire/issues/19883
     private static readonly IReadOnlySet<string> s_outboundHttpConnectionStringKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "AccountEndpoint",
