@@ -676,7 +676,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            null,
+            includeMcpServerOption: true,
+            selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -710,7 +711,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            null,
+            includeMcpServerOption: true,
+            selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -732,9 +734,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<AgentInitCommand>();
 
-        // Callers that just created a new AppHost (aspire new) or are running standalone agent
-        // init pass a predicate that strips aspireify from the default selection. The skill
-        // remains in the prompt — it's just not pre-checked.
+        // Callers such as standalone agent init can pass a predicate that strips aspireify
+        // from the default selection. The skill remains in the prompt — it's just not pre-checked.
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
@@ -742,6 +743,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
+            includeMcpServerOption: true,
             AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults,
             CancellationToken.None).DefaultTimeout();
 

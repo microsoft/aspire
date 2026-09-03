@@ -170,7 +170,8 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            null,
+            includeMcpServerOption: true,
+            selectByDefault: null,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.

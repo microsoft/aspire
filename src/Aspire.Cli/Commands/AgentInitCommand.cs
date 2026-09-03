@@ -88,9 +88,9 @@ internal sealed class AgentInitCommand : BaseCommand
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
-    /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
-    /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
-    /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
+    /// pre-selected, including aspireify.
+    /// Callers can use <paramref name="includeMcpServerOption"/> to omit the Aspire MCP server from
+    /// flows that only configure skills.
     /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
     /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
     /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
@@ -102,6 +102,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
+        bool includeMcpServerOption,
         Func<SkillDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
@@ -120,7 +121,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, includeMcpServerOption, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -134,15 +135,14 @@ internal sealed class AgentInitCommand : BaseCommand
         // is default-on. Users can still opt into it from the prompt or via --skills.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, includeMcpServerOption: true, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
     /// <summary>
     /// Names of bundle skills that perform one-time workspace setup and should NOT be
-    /// pre-selected after a workspace was just produced by a template flow such as
-    /// <c>aspire new</c> or after standalone <c>aspire agent init</c> (typically run
-    /// against an existing project).
+    /// pre-selected by standalone <c>aspire agent init</c>, which is typically run
+    /// against an existing project.
     /// </summary>
     /// <remarks>
     /// This is the single source of truth the CLI consults when filtering bundle skills out
@@ -157,8 +157,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     /// <summary>
     /// Default-skill predicate used by flows that do not want one-time setup skills
-    /// pre-selected — namely <c>aspire new</c> (template already created the AppHost) and
-    /// standalone <c>aspire agent init</c> (typically run against an existing project).
+    /// pre-selected, such as standalone <c>aspire agent init</c>.
     /// Skills filtered here remain available to opt into from the prompt or via <c>--skills</c>.
     /// </summary>
     internal static bool ExcludeOneTimeSetupSkillsFromDefaults(SkillDefinition skill)
@@ -199,6 +198,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Func<SkillDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
+        bool includeMcpServerOption,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -252,7 +252,9 @@ internal sealed class AgentInitCommand : BaseCommand
         AspireSkillsBundle? aspireSkillsBundle = null;
         string? bundleInstallFailureMessage = null;
         AgentEnvironmentApplicator? combinedMcpApplicator = null;
-        var mcpApplicators = userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList();
+        var mcpApplicators = includeMcpServerOption
+            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
+            : [];
 
         if (selectedLocations.Count > 0)
         {
