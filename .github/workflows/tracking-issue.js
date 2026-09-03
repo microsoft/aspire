@@ -93,8 +93,8 @@ function normalizeCanonicalActions(actions, issueNumber) {
 }
 
 // Returns an ordered, side-effect-free mutation plan. `isMatchingIssue` is an
-// identity extension point for producers whose marker requires additional
-// deterministic validation, such as a separately versioned type marker.
+// Identity extension points let producers validate marker metadata and prefer
+// the canonical marker over historical aliases.
 function planIssueReconciliation({
     issues,
     label,
@@ -105,6 +105,7 @@ function planIssueReconciliation({
     buildBody,
     closeDuplicates = false,
     isMatchingIssue = () => true,
+    isCanonicalIssue = () => false,
     reopen = 'when-changing',
     actionsForCanonical = () => [],
 }) {
@@ -140,10 +141,23 @@ function planIssueReconciliation({
         };
     }
 
-    const canonical = matches[0];
+    const canonical = matches.find(isCanonicalIssue) ?? matches[0];
     const actions = [];
+    const canonicalActions = normalizeCanonicalActions(
+        actionsForCanonical(canonical, { created: false, matches }),
+        canonical.number);
+    const hasExplicitReopen = canonicalActions.some(action => action.type === 'reopen');
+    const shouldReopen =
+        canonical.state === 'closed' &&
+        !hasExplicitReopen &&
+        (reopen === 'always' || (reopen === 'when-changing' && canonicalActions.length > 0));
+    if (shouldReopen) {
+        actions.push({ type: 'reopen', issueNumber: canonical.number });
+    }
+    actions.push(...canonicalActions);
+
     if (closeDuplicates) {
-        for (const duplicate of matches.slice(1)) {
+        for (const duplicate of matches.filter(issue => issue.number !== canonical.number)) {
             if (duplicate.state === 'closed') {
                 continue;
             }
@@ -172,19 +186,6 @@ function planIssueReconciliation({
             });
         }
     }
-
-    const canonicalActions = normalizeCanonicalActions(
-        actionsForCanonical(canonical, { created: false, matches }),
-        canonical.number);
-    const hasExplicitReopen = canonicalActions.some(action => action.type === 'reopen');
-    const shouldReopen =
-        canonical.state === 'closed' &&
-        !hasExplicitReopen &&
-        (reopen === 'always' || (reopen === 'when-changing' && canonicalActions.length > 0));
-    if (shouldReopen) {
-        actions.push({ type: 'reopen', issueNumber: canonical.number });
-    }
-    actions.push(...canonicalActions);
 
     return {
         canonicalIssueNumber: canonical.number,

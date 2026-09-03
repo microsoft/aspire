@@ -29,7 +29,6 @@ public sealed class TrackingIssueTests : IDisposable
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "tracking-issue.harness.js");
     }
-
     public void Dispose() => _workspace.Dispose();
 
     [Fact]
@@ -486,11 +485,52 @@ public sealed class TrackingIssueTests : IDisposable
 
         Assert.Equal(8, result.Plan.CanonicalIssueNumber);
         Assert.Equal(
-            ["comment", "comment", "close", "reopen", "update", "comment"],
+            ["reopen", "update", "comment", "comment", "comment", "close"],
             result.Plan.Actions.Select(action => action.Type));
         Assert.Equal(
             result.Plan.Actions.Select(action => action.Type),
             result.AppliedActions.Select(action => action.Type));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DuplicateMutationsWaitForCanonicalActionsToSucceed()
+    {
+        var result = await InvokeHarnessAsync<PlanExecutionResult>(
+            "planAndExecute",
+            new
+            {
+                marker = "<!-- m -->",
+                updateBody = "<!-- m -->\nupdated",
+                comment = "new occurrence",
+                failComment = "new occurrence",
+                resumeAfterFailure = true,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 8, body = "<!-- m -->\nold", state = "closed" },
+                    new { number = 12, body = "<!-- m -->\nduplicate", state = "open" },
+                }
+            });
+
+        Assert.Equal("Injected createComment failure for issue #8", result.Error);
+        Assert.Equal(
+            ["update:8:state", "update:8:body", "createComment:8"],
+            result.Calls.Take(3));
+
+        var canonical = Assert.Single(result.IssuesAfterFailure, issue => issue.Number == 8);
+        Assert.Equal("open", canonical.State);
+        Assert.Equal("<!-- m -->\nupdated", canonical.Body);
+        Assert.Empty(canonical.Comments);
+
+        var duplicate = Assert.Single(result.IssuesAfterFailure, issue => issue.Number == 12);
+        Assert.Equal("open", duplicate.State);
+        Assert.Empty(duplicate.Comments);
+
+        Assert.Equal(
+            ["comment", "comment", "comment", "close"],
+            result.ResumedAppliedActions.Select(action => action.Type));
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 12).State);
     }
 
     [Fact]
@@ -599,7 +639,14 @@ public sealed class TrackingIssueTests : IDisposable
 
     private sealed record IssueState(int Number, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 
-    private sealed record PlanExecutionResult(ReconciliationPlan Plan, ReconciliationAction[] AppliedActions);
+    private sealed record PlanExecutionResult(
+        ReconciliationPlan Plan,
+        ReconciliationAction[] AppliedActions,
+        string? Error,
+        string[] Calls,
+        IssueState[] Issues,
+        IssueState[] IssuesAfterFailure,
+        ReconciliationAction[] ResumedAppliedActions);
 
     private sealed record ReconciliationPlan(int? CanonicalIssueNumber, ReconciliationAction[] Actions);
 

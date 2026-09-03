@@ -130,6 +130,52 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PublishPrefersClosedCanonicalMarkerOverOpenNewerRootAlias()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "oldest-sample-test",
+                    type = "flaky-test",
+                    title = "Oldest sample test",
+                    test_name = "Aspire.Sample.Tests.SampleTests.FlakyTest",
+                    error_pattern = "The sample test failed.",
+                    aliases = new[] { "newer-sample-test" },
+                    job_ids = new[] { 101 },
+                    job_names = new[] { "Tests / Sample" }
+                },
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = "<!-- ci-failure-cause:newer-sample-test -->\n<!-- ci-failure-cause-type:flaky-test -->\n"
+                    },
+                    new
+                    {
+                        number = 20,
+                        state = "closed",
+                        body = "<!-- ci-failure-cause:oldest-sample-test -->\n<!-- ci-failure-cause-type:flaky-test -->\n"
+                    }
+                }
+            });
+
+        Assert.Equal(20, result.Publish.Number);
+        Assert.Equal([10], result.Publish.DuplicatesClosed);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 20).State);
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 10).State);
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/20",
+            result.StoredCause.GetProperty("issue_url").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReplayingExistingOccurrenceDoesNotReopenClosedIssue()
     {
         var result = await InvokeHarnessAsync<PublishResult>(

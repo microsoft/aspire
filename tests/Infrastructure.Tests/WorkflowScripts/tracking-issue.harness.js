@@ -22,7 +22,18 @@ function toRestIssue(issue) {
     };
 }
 
-function makeGithub(store, concurrentIssue) {
+function snapshotIssues(issues) {
+    return issues.map(issue => ({
+        number: issue.number,
+        state: issue.state,
+        stateReason: issue.stateReason,
+        body: issue.body,
+        labels: issue.labels ?? [],
+        comments: [...issue.commentBodies],
+    }));
+}
+
+function makeGithub(store, concurrentIssue, fault = {}) {
     const calls = [];
     let listCount = 0;
     return {
@@ -68,7 +79,9 @@ function makeGithub(store, concurrentIssue) {
                     return { data: toRestIssue(issue) };
                 },
                 update: async ({ issue_number, state, state_reason, body }) => {
-                    calls.push('update');
+                    calls.push(fault.detailedCalls
+                        ? `update:${issue_number}:${body === undefined ? 'state' : 'body'}`
+                        : 'update');
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (state) { issue.state = state; }
                     if (state_reason) { issue.stateReason = state_reason; }
@@ -80,7 +93,10 @@ function makeGithub(store, concurrentIssue) {
                     return { data: (issue?.commentBodies ?? []).map(body => ({ body })) };
                 },
                 createComment: async ({ issue_number, body }) => {
-                    calls.push('createComment');
+                    calls.push(fault.detailedCalls ? `createComment:${issue_number}` : 'createComment');
+                    if (body === fault.failComment) {
+                        throw new Error(`Injected createComment failure for issue #${issue_number}`);
+                    }
                     const issue = store.issues.find(i => i.number === issue_number);
                     issue.commentBodies.push(body);
                 },
@@ -120,7 +136,11 @@ async function dispatch(operation, payload) {
                 })),
                 next: payload.nextNumber ?? 1000,
             };
-            const github = makeGithub(store);
+            const fault = {
+                failComment: payload.failComment,
+                detailedCalls: payload.failComment !== undefined,
+            };
+            const github = makeGithub(store, undefined, fault);
             const core = { info: () => {}, warning: () => {} };
             const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
             const transport = engine.createOctokitIssueTransport(github, context);
@@ -146,12 +166,32 @@ async function dispatch(operation, payload) {
                 ...options,
                 issues: store.issues.map(toRestIssue),
             });
-            const execution = await engine.executeIssueReconciliation(transport, core, {
-                ...options,
-            });
+            let execution = { appliedActions: [] };
+            let resumedExecution = { appliedActions: [] };
+            let issuesAfterFailure = [];
+            let error;
+            try {
+                execution = await engine.executeIssueReconciliation(transport, core, {
+                    ...options,
+                });
+            } catch (exception) {
+                error = exception.message;
+                issuesAfterFailure = snapshotIssues(store.issues);
+                if (payload.resumeAfterFailure) {
+                    fault.failComment = undefined;
+                    resumedExecution = await engine.executeIssueReconciliation(transport, core, {
+                        ...options,
+                    });
+                }
+            }
             return {
                 plan,
                 appliedActions: execution.appliedActions,
+                resumedAppliedActions: resumedExecution.appliedActions,
+                error,
+                calls: github.calls,
+                issues: snapshotIssues(store.issues),
+                issuesAfterFailure,
             };
         }
 

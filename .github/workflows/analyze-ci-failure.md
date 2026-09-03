@@ -95,10 +95,15 @@ jobs:
           RUN_STARTED_AT=$(jq -r '.run_started_at // ""' ci-failure-data/run.json)
           RUN_UPDATED_AT=$(jq -r '.updated_at // ""' ci-failure-data/run.json)
           RUN_EVENT=$(jq -r '.event // ""' ci-failure-data/run.json)
+          RUN_WORKFLOW_PATH=$(jq -r '.path // ""' ci-failure-data/run.json)
           HEAD_SHA=$(jq -r '.head_sha // ""' ci-failure-data/run.json)
           HEAD_BRANCH=$(jq -r '.head_branch // ""' ci-failure-data/run.json)
           RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
           CONCLUSION=$(jq -r '.conclusion // ""' ci-failure-data/run.json)
+          if [ "$RUN_WORKFLOW_PATH" != ".github/workflows/ci.yml" ]; then
+            echo "::error::Run ${RUN_ID} belongs to workflow '${RUN_WORKFLOW_PATH}', not '.github/workflows/ci.yml'"
+            exit 1
+          fi
           case "${RUN_EVENT}:${HEAD_BRANCH}" in
             push:main)
               RUN_SCOPE="main"
@@ -688,42 +693,17 @@ safe-outputs:
             ANALYSIS_FILE="$ARTIFACT_DIR/agent/analysis-result.json"
             CAUSES_DIR="$ARTIFACT_DIR/agent/causes"
 
-            if [ ! -f "$ANALYSIS_FILE" ]; then
-              echo "::error::Analysis result not found at $ANALYSIS_FILE"
-              exit 1
-            fi
-
-            # Validate summary JSON
-            if ! jq empty "$ANALYSIS_FILE" 2>/dev/null; then
-              echo "::error::analysis-result.json is not valid JSON"
-              exit 1
-            fi
-
             RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
             TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
             TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
-            TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
-            TRUSTED_PR_NUMBERS=$(jq -r '.pr_numbers' "$RUN_CONTEXT_FILE")
             VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
-
-            # Validate cause files
-            if [ -d "$CAUSES_DIR" ]; then
-              for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
-                [ -f "$CAUSE_FILE" ] || continue
-                if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
-                  echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
-                fi
-              done
-            fi
 
             REPO="${{ github.repository }}"
             MEMORY_BRANCH="memory/ci-failure-analysis"
 
             # Read fields from the analysis JSON
             RUN_ID="$TRUSTED_RUN_ID"
-            RUN_SCOPE="$TRUSTED_RUN_SCOPE"
             RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
-            PR_NUMBERS="$TRUSTED_PR_NUMBERS"
             ANALYZED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)
             RESOLVER_STATUS=0
@@ -774,7 +754,8 @@ safe-outputs:
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
-                  CAUSE_JOBS=$(jq -r '(.job_names // ["unknown"]) | join("<br>")' "$CAUSE_FILE")
+                  CAUSE_JOBS=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" display)
 
                   # Add an occurrences array with this run's entry to the agent's cause file
                   CAUSE_WITH_OCC=$(bash .github/workflows/analyze-ci-failure-persistence.sh add-occurrence \
@@ -790,7 +771,8 @@ safe-outputs:
                     # Merge: append new occurrence, deduplicate by run_id
                     echo "$CAUSE_WITH_OCC" | jq -s --slurpfile existing "$EXISTING" '
                       .[0] as $new | $existing[0] as $ex |
-                      $ex * ($new | del(.occurrences, .issue_url)) * {
+                      ($ex | del(.job_ids, .job_names)) *
+                      ($new | del(.occurrences, .issue_url, .job_ids, .job_names)) * {
                         occurrences: (
                           [$ex.occurrences[], $new.occurrences[]]
                           | unique_by(.run_id)
@@ -1310,7 +1292,7 @@ Each cause file must follow this schema:
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
   "error_pattern": "The key error message or pattern that identifies this cause",
-  "job_ids": [67890]
+  "job_ids": [123456789]
 }
 ```
 
@@ -1320,11 +1302,10 @@ Field details:
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test method name without theory argument text. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
-- `job_ids`: Required array containing the numeric IDs of every failed job caused by this underlying failure. Use the IDs from `failed_jobs`; do not attribute a cause to an unrelated failed job.
+- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
 - The union of `job_ids` across all cause files MUST cover every failed job classified as `transient-infra`, `flaky-test`, or `main-repository-breakage`.
-- `infra-failure` causes may reference only `transient-infra` jobs, `flaky-test` causes only `flaky-test` jobs, and `main-repository-breakage` causes only `main-repository-breakage` jobs.
 
-Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
+Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
 
 Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 

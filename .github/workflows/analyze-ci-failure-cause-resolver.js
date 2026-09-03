@@ -52,13 +52,21 @@ function resolveCauses({
             ? proposedCanonicalCause
             : undefined;
         let testNameMatch;
+        let sameTestCanonicalExtras = [];
         let retryPatternMatch;
         let explicitMatcherMatch;
 
+        if (cause.type === 'flaky-test') {
+            const sameTestPriorCauses = findPriorCausesByTestName(cause, priorCauses, priorById);
+            const proposedAliasMatchesTest = proposedAlias &&
+                [sameTestPriorCauses.canonical, ...sameTestPriorCauses.extras]
+                    .some(candidate => candidate?.id === proposedAlias.id);
+            if (!proposedAlias || proposedAliasMatchesTest) {
+                testNameMatch = sameTestPriorCauses.canonical;
+                sameTestCanonicalExtras = sameTestPriorCauses.extras;
+            }
+        }
         if (!proposedAlias) {
-            testNameMatch = cause.type === 'flaky-test'
-                ? findPriorCauseByTestName(cause, priorCauses, priorById)
-                : undefined;
             retryPatternMatch = cause.type === 'infra-failure'
                 ? findPriorCauseByRetryPattern(
                     evidence,
@@ -77,11 +85,11 @@ function resolveCauses({
             }
         }
 
-        // An explicit alias is authoritative. Otherwise normalized test identity is the primary
-        // key for flaky tests, while retry patterns and matchers cover cross-test root causes.
+        // Normalized test identity converges compatible historical roots. An explicit alias is
+        // otherwise authoritative, while retry patterns and matchers cover cross-test root causes.
         const canonicalPriorCause =
-            proposedAlias ??
             testNameMatch ??
+            proposedAlias ??
             retryPatternMatch ??
             explicitMatcherMatch ??
             findPriorCauseByExistingId(cause, priorById, priorByNormalizedId);
@@ -108,14 +116,28 @@ function resolveCauses({
                     `Cause '${cause.id}' of type '${cause.type}' cannot alias prior cause type ` +
                     `'${supersededPriorCause.type}'.`);
             }
-            const existingAliasTarget = priorCauseAliases.get(supersededPriorCause.id);
-            if (existingAliasTarget && existingAliasTarget !== canonicalId) {
-                throw new Error(
-                    `Prior cause '${supersededPriorCause.id}' matched conflicting canonical causes ` +
-                    `'${existingAliasTarget}' and '${canonicalId}'.`);
-            }
-            priorCauseAliases.set(supersededPriorCause.id, canonicalId);
+            addPriorCauseAlias(priorCauseAliases, supersededPriorCause.id, canonicalId);
         }
+        const sameTestExtraRecords = sameTestCanonicalExtras.flatMap(extra => {
+            validateCauseType(extra);
+            if (extra.type !== cause.type) {
+                throw new Error(
+                    `Cause '${cause.id}' of type '${cause.type}' cannot alias prior cause type ` +
+                    `'${extra.type}'.`);
+            }
+            const records = findPriorRecordsForCanonicalCause(extra.id, priorCauses);
+            for (const record of records) {
+                addPriorCauseAlias(priorCauseAliases, record.id, canonicalId);
+            }
+            return records;
+        });
+        const sameTestExtraAliases = unique(sameTestCanonicalExtras.flatMap(extra => [
+            extra.id,
+            ...(extra.aliases ?? []),
+            ...sameTestExtraRecords
+                .filter(record => record.id !== extra.id)
+                .map(record => record.id),
+        ])).sort();
         const aliases = unique([
             ...(canonicalPriorCause?.aliases ?? []),
             ...(proposedAlias && proposedPriorCause.id !== canonicalId ? [proposedPriorCause.id] : []),
@@ -123,7 +145,11 @@ function resolveCauses({
             ...(supersededPriorCause
                 ? [supersededPriorCause.id, ...(supersededPriorCause.aliases ?? [])]
                 : []),
+            ...sameTestExtraAliases,
         ]);
+        if (sameTestCanonicalExtras.length > 0) {
+            aliases.sort();
+        }
         const normalizedCause = normalizeCause(
             cause,
             canonicalPriorCause,
@@ -131,7 +157,9 @@ function resolveCauses({
             jobIds,
             jobNames,
             aliases,
-            canonicalPriorCause?.issue_url ?? supersededPriorCause?.issue_url);
+            canonicalPriorCause?.issue_url ??
+                sameTestCanonicalExtras.find(extra => extra.issue_url)?.issue_url ??
+                supersededPriorCause?.issue_url);
         validateCauseType(normalizedCause);
         proposedToCanonical.set(cause.id, canonicalId);
         hasPriorMatchByCanonicalId.set(
@@ -213,15 +241,20 @@ function resolveCauses({
         analysis: normalizedAnalysis,
         causes: normalizedCauses,
         canonicalizations,
-        priorCauseMigrations: [...priorCauseMigrations].map(([legacyId, canonicalId]) => ({
-            legacy_id: legacyId,
-            canonical_id: canonicalId,
-        })),
-        priorCauseAliases: [...priorCauseAliases].map(([legacyId, canonicalId]) => ({
-            legacy_id: legacyId,
-            canonical_id: canonicalId,
-        })),
+        priorCauseMigrations: toSortedCauseRemappings(priorCauseMigrations),
+        priorCauseAliases: toSortedCauseRemappings(priorCauseAliases),
     };
+}
+
+function toSortedCauseRemappings(remappings) {
+    return [...remappings]
+        .map(([legacyId, canonicalId]) => ({
+            legacy_id: legacyId,
+            canonical_id: canonicalId,
+        }))
+        .sort((left, right) =>
+            left.legacy_id.localeCompare(right.legacy_id) ||
+            left.canonical_id.localeCompare(right.canonical_id));
 }
 
 function coalesceFreshFlakyCauses({
@@ -258,12 +291,23 @@ function coalesceFreshFlakyCauses({
 
         const freshCauses = group.filter(
             cause => hasPriorMatchByCanonicalId.get(cause.id) !== true);
-        if (freshCauses.length < 2) {
+        freshCauses.sort((left, right) => left.id.localeCompare(right.id));
+        let owner;
+        let absorbedCauses;
+        if (authoritativeCauseIds.length === 1) {
+            owner = normalizedById.get(authoritativeCauseIds[0]);
+            absorbedCauses = freshCauses;
+        } else {
+            if (freshCauses.length < 2) {
+                continue;
+            }
+            [owner, ...absorbedCauses] = freshCauses;
+        }
+
+        if (absorbedCauses.length === 0) {
             continue;
         }
 
-        freshCauses.sort((left, right) => left.id.localeCompare(right.id));
-        const [owner, ...absorbedCauses] = freshCauses;
         let merged = owner;
         for (const absorbed of absorbedCauses) {
             merged = mergeCurrentCauses(merged, {
@@ -516,9 +560,9 @@ function findPriorCauseById(causeId, priorById, priorByNormalizedId) {
     return priorById.get(causeId) ?? priorByNormalizedId.get(causeId);
 }
 
-function findPriorCauseByTestName(cause, priorCauses, priorById) {
+function findPriorCausesByTestName(cause, priorCauses, priorById) {
     if (!cause.test_name) {
-        return undefined;
+        return { canonical: undefined, extras: [] };
     }
 
     const normalizedTestName = normalizeTestName(cause.test_name);
@@ -527,9 +571,13 @@ function findPriorCauseByTestName(cause, priorCauses, priorById) {
     const typeCompatibleCandidates = candidates.filter(prior => prior.type === cause.type);
     const unsupportedCandidates = candidates.filter(prior => !supportedCauseTypes.has(prior.type));
 
-    return selectOldestCanonicalCause(
+    const canonicalCandidates = sortCanonicalCauses(
         typeCompatibleCandidates.length > 0 ? typeCompatibleCandidates : unsupportedCandidates,
         priorById);
+    return {
+        canonical: canonicalCandidates[0],
+        extras: typeCompatibleCandidates.length > 0 ? canonicalCandidates.slice(1) : [],
+    };
 }
 
 function findPriorCauseByRetryPattern(
@@ -583,11 +631,49 @@ function findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById) {
 }
 
 function selectOldestCanonicalCause(candidates, priorById) {
+    return sortCanonicalCauses(candidates, priorById)[0];
+}
+
+function sortCanonicalCauses(candidates, priorById) {
     const canonicalCandidates = uniqueById(candidates.map(cause => resolveAlias(cause, priorById)));
     return canonicalCandidates.sort((left, right) => {
         const dateComparison = firstObservedAt(left).localeCompare(firstObservedAt(right));
         return dateComparison !== 0 ? dateComparison : left.id.localeCompare(right.id);
-    })[0];
+    });
+}
+
+function addPriorCauseAlias(priorCauseAliases, legacyId, canonicalId) {
+    if (legacyId === canonicalId) {
+        return;
+    }
+
+    const existingAliasTarget = priorCauseAliases.get(legacyId);
+    if (existingAliasTarget && existingAliasTarget !== canonicalId) {
+        throw new Error(
+            `Prior cause '${legacyId}' matched conflicting canonical causes ` +
+            `'${existingAliasTarget}' and '${canonicalId}'.`);
+    }
+    priorCauseAliases.set(legacyId, canonicalId);
+}
+
+function findPriorRecordsForCanonicalCause(canonicalId, priorCauses) {
+    // Alias records can form chains. Walk the reverse links so every record that
+    // ultimately named the absorbed root is rewritten directly to the new owner.
+    const matchingIds = new Set([canonicalId]);
+    let added;
+    do {
+        added = false;
+        for (const prior of priorCauses) {
+            if (!matchingIds.has(prior.id) && matchingIds.has(prior.canonical_id)) {
+                matchingIds.add(prior.id);
+                added = true;
+            }
+        }
+    } while (added);
+
+    return priorCauses
+        .filter(prior => matchingIds.has(prior.id))
+        .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function resolveAlias(cause, priorById) {
@@ -655,15 +741,15 @@ function validateCauseJobAttribution(analysis, causes, trustedFailedJobs) {
         throw new Error('Trusted failed jobs are invalid.');
     }
 
-    const trustedJobIds = new Set(trustedFailedJobs.map(job => job.id));
-    if (trustedJobIds.size !== trustedFailedJobs.length) {
+    const trustedJobsById = new Map(trustedFailedJobs.map(job => [job.id, job]));
+    if (trustedJobsById.size !== trustedFailedJobs.length) {
         throw new Error('Trusted failed job IDs must be unique.');
     }
 
     const trackedJobs = analysis.failed_jobs.filter(
         job => trackedClassifications.has(job.classification));
-    const trackedJobsById = new Map(trackedJobs.map(job => [job.id, job]));
-    const trackedJobIds = new Set(trackedJobs.map(job => job.id));
+    const failedJobsById = new Map(analysis.failed_jobs.map(job => [job.id, job]));
+    const failedTests = Array.isArray(analysis.failed_tests) ? analysis.failed_tests : [];
     const coveredJobIds = new Set();
     for (const cause of causes) {
         if (!Array.isArray(cause?.job_ids) ||
@@ -673,11 +759,19 @@ function validateCauseJobAttribution(analysis, causes, trustedFailedJobs) {
         }
 
         for (const jobId of cause.job_ids) {
-            if (!trustedJobIds.has(jobId) || !trackedJobIds.has(jobId)) {
+            const trustedJob = trustedJobsById.get(jobId);
+            const failedJob = failedJobsById.get(jobId);
+            if (!trustedJob || !failedJob) {
                 throw new Error(`Cause '${cause.id}' references untrusted failed job ID '${jobId}'.`);
             }
-            const classification = trackedJobsById.get(jobId).classification;
-            if (causeTypeJobClassifications.get(cause.type) !== classification) {
+            const classification = failedJob.classification;
+            const hasMatchingFlakyTest = cause.type === 'flaky-test' &&
+                typeof trustedJob.name === 'string' &&
+                trustedJob.name.length > 0 &&
+                failedTests.some(test =>
+                    test?.classification === 'flaky' &&
+                    test.job === trustedJob.name);
+            if (causeTypeJobClassifications.get(cause.type) !== classification && !hasMatchingFlakyTest) {
                 throw new Error(`Cause '${cause.id}' of type '${cause.type}' cannot reference job ID '${jobId}' classified as '${classification}'.`);
             }
             coveredJobIds.add(jobId);
