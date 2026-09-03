@@ -317,6 +317,88 @@ public class MauiEmulatorSelectionTests
     }
 
     [Fact]
+    public async Task PromptCancellation_OverridesStartingWithExitedState()
+    {
+        await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
+            androidEmulators:
+            [
+                new("Pixel_5_API_35", "Pixel 5 API 35"),
+                new("Pixel_9_API_36", "Pixel 9 API 36")
+            ]);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
+        });
+
+        var publishTask = env.PublishBeforeResourceStartedAsync(env.Android);
+        var interaction = await env.InteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInput>());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => publishTask);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await env.NotificationService.WaitForResourceAsync(
+            env.Android.Name,
+            e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.Exited, StringComparison.Ordinal),
+            cts.Token);
+    }
+
+    [Fact]
+    public async Task AndroidToolingTimeoutDuringPollingDelay_ThrowsActionableError()
+    {
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            AndroidEmulatorEnumerator.WaitForAndroidToolingAsync(
+                _ => Task.FromResult(false),
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromSeconds(30),
+                "Timed out waiting for Android emulator.",
+                CancellationToken.None));
+
+        Assert.Equal("Timed out waiting for Android emulator.", ex.Message);
+    }
+
+    [Fact]
+    public async Task AndroidToolingCallerCancellation_PreservesOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            AndroidEmulatorEnumerator.WaitForAndroidToolingAsync(
+                token =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    return Task.FromResult(false);
+                },
+                TimeSpan.FromMinutes(1),
+                TimeSpan.FromSeconds(30),
+                "Timed out waiting for Android emulator.",
+                cts.Token));
+    }
+
+    [Fact]
+    public async Task ExistingAndroidEmulator_WaitsForBootBeforeReturningSerial()
+    {
+        var waitedForBoot = false;
+
+        var serial = await AndroidEmulatorEnumerator.GetReadyRunningEmulatorSerialForAvdAsync(
+            "Pixel_5_API_35",
+            _ => Task.FromResult<string?>("emulator-5554"),
+            (bootSerial, _) =>
+            {
+                Assert.Equal("emulator-5554", bootSerial);
+                waitedForBoot = true;
+                return Task.CompletedTask;
+            },
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal("emulator-5554", serial);
+        Assert.True(waitedForBoot);
+    }
+
+    [Fact]
     public async Task CancellationToken_CancelsBeforePromptCompletes()
     {
         await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
@@ -338,7 +420,7 @@ public class MauiEmulatorSelectionTests
 
     private sealed class EmulatorSelectionTestEnvironment : IAsyncDisposable
     {
-        private TestTempDirectory TempDirectory { get; } = new();
+        private DirectoryInfo TempDirectory { get; } = Directory.CreateTempSubdirectory();
 
         public DistributedApplication App { get; private set; } = null!;
         public TestInteractionService InteractionService { get; private set; } = null!;
@@ -360,7 +442,7 @@ public class MauiEmulatorSelectionTests
             IReadOnlyList<EmulatorOption>? iOSSimulators = null)
         {
             var env = new EmulatorSelectionTestEnvironment();
-            var projectPath = Path.Combine(env.TempDirectory.Path, "TempMauiProject.csproj");
+            var projectPath = Path.Combine(env.TempDirectory.FullName, "TempMauiProject.csproj");
             File.WriteAllText(projectPath, MauiTestHelper.CreateProjectContent("net10.0-android;net10.0-ios"));
 
             var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
@@ -413,7 +495,7 @@ public class MauiEmulatorSelectionTests
         public async ValueTask DisposeAsync()
         {
             await App.DisposeAsync();
-            TempDirectory.Dispose();
+            TempDirectory.Delete(recursive: true);
         }
     }
 }

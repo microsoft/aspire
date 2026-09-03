@@ -6,6 +6,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
+using Aspire.Hosting.Tests;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,7 +20,7 @@ namespace Aspire.Hosting.Maui.Tests;
 /// <see cref="MauiBuildQueueEventSubscriber.RunBuildAsync"/> with a
 /// controllable <see cref="TaskCompletionSource"/> per resource.
 /// </summary>
-public class MauiBuildQueueTests
+public class MauiBuildQueueTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void BuildQueueAnnotation_SemaphoreInitializedToOne()
@@ -741,8 +743,8 @@ public class MauiBuildQueueTests
     [Fact]
     public async Task SelectedTargetArgument_IsAppliedToSerializedBuildAndLaunch()
     {
-        using var dir = new TestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -762,8 +764,8 @@ public class MauiBuildQueueTests
     [Fact]
     public async Task SelectedIOSSimulatorArgument_IsAppliedToSerializedBuildAndLaunch()
     {
-        using var dir = new TestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();

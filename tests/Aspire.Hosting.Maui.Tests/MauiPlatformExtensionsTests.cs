@@ -392,6 +392,26 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddAndroidEmulator_WithSelectedEmulator_EmitsSelectionInIdeLaunchConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var emulator = maui.AddAndroidEmulator("my-emulator");
+
+        Assert.True(emulator.Resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection));
+        selection.SelectedId = "emulator-5556";
+
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(emulator.Resource);
+
+        Assert.Equal("emulator-5556", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s emulator-5556" }, launchConfiguration.MsBuildProperties);
+    }
+
+    [Fact]
     public async Task AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
@@ -438,6 +458,29 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal("my-simulator", simulator.Resource.Name);
         Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
         var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(simulator.Resource);
+        Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["_DeviceName"] = ":v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
+        }, launchConfiguration.MsBuildProperties);
+    }
+
+    [Fact]
+    public async Task AddiOSSimulator_WithSelectedSimulator_EmitsSelectionInIdeLaunchConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var simulator = maui.AddiOSSimulator("my-simulator");
+
+        Assert.True(simulator.Resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection));
+        selection.SelectedId = "E25BBE37-69BA-4720-B6FD-D54C97791E79";
+
+        var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(simulator.Resource);
+
         Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
         Assert.Equal(new Dictionary<string, string>
         {

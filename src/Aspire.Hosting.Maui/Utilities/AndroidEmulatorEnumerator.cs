@@ -14,6 +14,9 @@ internal static class AndroidEmulatorEnumerator
 {
     private static readonly TimeSpan s_listTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_adbTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_serialWaitTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan s_bootWaitTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan s_pollInterval = TimeSpan.FromSeconds(2);
 
     internal static async Task<IReadOnlyList<EmulatorOption>> GetAvailableEmulatorsAsync(ILogger logger, CancellationToken cancellationToken)
     {
@@ -55,10 +58,14 @@ internal static class AndroidEmulatorEnumerator
         var adbPath = FindAndroidToolPath("adb", Path.Combine("platform-tools", "adb"));
         var emulatorPath = FindAndroidToolPath("emulator", Path.Combine("emulator", "emulator"));
 
-        var existingSerial = await GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, cancellationToken).ConfigureAwait(false);
+        var existingSerial = await GetReadyRunningEmulatorSerialForAvdAsync(
+            avdName,
+            token => GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, token),
+            (serial, token) => WaitForEmulatorBootAsync(adbPath, serial, logger, token),
+            logger,
+            cancellationToken).ConfigureAwait(false);
         if (existingSerial is not null)
         {
-            logger.LogInformation("Android emulator '{AvdName}' is already running as {Serial}.", avdName, existingSerial);
             return existingSerial;
         }
 
@@ -98,43 +105,49 @@ internal static class AndroidEmulatorEnumerator
         }
     }
 
+    internal static async Task<string?> GetReadyRunningEmulatorSerialForAvdAsync(
+        string avdName,
+        Func<CancellationToken, Task<string?>> getRunningEmulatorSerialAsync,
+        Func<string, CancellationToken, Task> waitForEmulatorBootAsync,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var existingSerial = await getRunningEmulatorSerialAsync(cancellationToken).ConfigureAwait(false);
+        if (existingSerial is null)
+        {
+            return null;
+        }
+
+        logger.LogInformation("Android emulator '{AvdName}' is already running as {Serial}.", avdName, existingSerial);
+        await waitForEmulatorBootAsync(existingSerial, cancellationToken).ConfigureAwait(false);
+
+        return existingSerial;
+    }
+
     private static async Task<string> WaitForEmulatorSerialAsync(string adbPath, string avdName, ILogger logger, CancellationToken cancellationToken)
     {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(90));
-
-        while (true)
-        {
-            try
+        string? serial = null;
+        await WaitForAndroidToolingAsync(
+            async token =>
             {
-                var serial = await GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, timeoutCts.Token).ConfigureAwait(false);
-                if (serial is not null)
-                {
-                    return serial;
-                }
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw new DistributedApplicationException(
-                    $"Timed out waiting for Android emulator '{avdName}' to appear in adb. " +
-                    "Try starting the emulator manually from Android Studio Device Manager and then start the Aspire resource again.");
-            }
+                serial = await GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, token).ConfigureAwait(false);
+                return serial is not null;
+            },
+            s_serialWaitTimeout,
+            s_pollInterval,
+            $"Timed out waiting for Android emulator '{avdName}' to appear in adb. Try starting the emulator manually from Android Studio Device Manager and then start the Aspire resource again.",
+            cancellationToken).ConfigureAwait(false);
 
-            await Task.Delay(TimeSpan.FromSeconds(2), timeoutCts.Token).ConfigureAwait(false);
-        }
+        Debug.Assert(serial is not null, "The wait helper only completes after the serial is resolved.");
+        return serial;
     }
 
     private static async Task WaitForEmulatorBootAsync(string adbPath, string serial, ILogger logger, CancellationToken cancellationToken)
     {
         logger.LogInformation("Waiting for Android emulator {Serial} to finish booting.", serial);
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromMinutes(2));
-
-        while (true)
-        {
-            string output;
-            try
+        await WaitForAndroidToolingAsync(
+            async token =>
             {
                 var result = await RunToolAsync(
                     adbPath,
@@ -143,22 +156,37 @@ internal static class AndroidEmulatorEnumerator
                     "adb shell getprop sys.boot_completed",
                     $"Unable to query Android emulator '{serial}' boot state.",
                     logger,
-                    timeoutCts.Token).ConfigureAwait(false);
-                output = result.StandardOutput.Trim();
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw new DistributedApplicationException(
-                    $"Timed out waiting for Android emulator '{serial}' to finish booting. " +
-                    "Try starting the emulator manually and wait for the home screen before starting the Aspire resource again.");
-            }
+                    token).ConfigureAwait(false);
 
-            if (string.Equals(output, "1", StringComparison.Ordinal))
-            {
-                return;
-            }
+                var output = result.StandardOutput.Trim();
+                return string.Equals(output, "1", StringComparison.Ordinal);
+            },
+            s_bootWaitTimeout,
+            s_pollInterval,
+            $"Timed out waiting for Android emulator '{serial}' to finish booting. Try starting the emulator manually and wait for the home screen before starting the Aspire resource again.",
+            cancellationToken).ConfigureAwait(false);
+    }
 
-            await Task.Delay(TimeSpan.FromSeconds(2), timeoutCts.Token).ConfigureAwait(false);
+    internal static async Task WaitForAndroidToolingAsync(
+        Func<CancellationToken, Task<bool>> probeAsync,
+        TimeSpan timeout,
+        TimeSpan pollInterval,
+        string timeoutMessage,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            while (!await probeAsync(timeoutCts.Token).ConfigureAwait(false))
+            {
+                await Task.Delay(pollInterval, timeoutCts.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException(timeoutMessage);
         }
     }
 
