@@ -913,12 +913,13 @@ jobs:
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 (needs.cli_starter_validation_linux_x64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
-                 (needs.cli_starter_validation_linux_arm64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
-                 (needs.cli_starter_validation_windows_x64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
-                 (needs.cli_starter_validation_windows_arm64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
-                 (needs.cli_starter_validation_macos_x64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
-                 (needs.cli_starter_validation_macos_arm64.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' &&
+                  (needs.cli_starter_validation_linux_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_linux_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_windows_arm64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_x64.result == 'skipped' ||
+                   needs.cli_starter_validation_macos_arm64.result == 'skipped')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&

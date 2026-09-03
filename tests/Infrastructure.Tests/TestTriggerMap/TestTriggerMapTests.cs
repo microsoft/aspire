@@ -796,13 +796,14 @@ public sealed class TestTriggerMapTests
         var resultsBlock = JobBlock(testsYml, "results");
         Assert.NotNull(resultsBlock);
         var normalizedResultsBlock = System.Text.RegularExpressions.Regex.Replace(resultsBlock, @"\s+", " ");
+        const string selectionGuard = "needs.setup_for_tests.outputs.run_cli_starter_validation == 'true'";
+        var groupedSkipCheck =
+            $"({selectionGuard} && ({string.Join(
+                " || ",
+                s_cliStarterValidationJobIds.Select(jobId => $"needs.{jobId}.result == 'skipped'"))}))";
 
-        Assert.All(
-            s_cliStarterValidationJobIds,
-            jobId => Assert.Contains(
-                $"(needs.{jobId}.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter_validation == 'true'))",
-                normalizedResultsBlock,
-                StringComparison.Ordinal));
+        Assert.Contains(groupedSkipCheck, normalizedResultsBlock, StringComparison.Ordinal);
+        Assert.Equal(1, normalizedResultsBlock.Split(selectionGuard, StringSplitOptions.None).Length - 1);
     }
 
     [Fact]
