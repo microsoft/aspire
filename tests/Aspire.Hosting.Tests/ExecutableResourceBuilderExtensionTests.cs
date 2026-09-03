@@ -27,6 +27,7 @@ public class ExecutableResourceBuilderExtensionTests
         var expectedPath = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, workingDirectory));
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(expectedPath, annotation.WorkingDirectory);
+        Assert.False(executable.Resource.WorkingDirExplicitlySet);
     }
 
     [Fact]
@@ -53,6 +54,7 @@ public class ExecutableResourceBuilderExtensionTests
         var expectedPath = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, workingDirectory));
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(expectedPath, annotation.WorkingDirectory);
+        Assert.True(executable.Resource.WorkingDirExplicitlySet);
     }
 
     [Fact]

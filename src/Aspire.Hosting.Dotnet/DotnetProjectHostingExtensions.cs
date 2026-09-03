@@ -236,7 +236,7 @@ public static class DotnetProjectHostingExtensions
             ?? KnownLaunchConfigurationTypes.Project;
 
         DotnetProjectBuildCoordinator.Configure(resource, buildCoordinator);
-        string? defaultRunWorkingDirectory = null;
+        var defaultRunWorkingDirectory = resource.Resource.WorkingDirectory;
 
         // Declare the SDK-selected tool invocation separately from the program arguments so a later
         // WithLaunchToolArgs call replaces it instead of being prepended to it.
@@ -271,11 +271,13 @@ public static class DotnetProjectHostingExtensions
                             cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);
                     var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
-                    defaultRunWorkingDirectory ??= executableAnnotation.WorkingDirectory;
                     executableAnnotation.Command = runProperties.Command;
-                    executableAnnotation.WorkingDirectory = string.IsNullOrEmpty(runProperties.WorkingDirectory)
-                        ? defaultRunWorkingDirectory
-                        : runProperties.WorkingDirectory;
+                    if (!resource.Resource.WorkingDirExplicitlySet)
+                    {
+                        executableAnnotation.WorkingDirectory = string.IsNullOrEmpty(runProperties.WorkingDirectory)
+                            ? defaultRunWorkingDirectory
+                            : runProperties.WorkingDirectory;
+                    }
 
                     foreach (var argument in CommandLineArgsParser.Parse(runProperties.Arguments))
                     {

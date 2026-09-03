@@ -1174,8 +1174,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var projectDirectory = Path.GetDirectoryName(projectPath)!;
         var runtimeWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "runtime")).FullName;
+        var sdkWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "sdk-runtime")).FullName;
         var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithWorkingDirectory(runtimeWorkingDirectory);
+        var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+            Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", sdkWorkingDirectory));
         if (requiresContextSpecificBuild)
         {
             project.WithBuildEnvironment("BUILD_FLAVOR", "custom");
@@ -1193,9 +1197,65 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
             await project.Resource.CreateLaunchConfigurationAsync(callbackContext));
 
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+        var arguments = await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services);
+
+        Assert.Equal(["--from-resolver"], arguments);
+        Assert.Equal("resolved-command", project.Resource.Command);
         Assert.Equal(runtimeWorkingDirectory, project.Resource.WorkingDirectory);
         Assert.Equal(projectDirectory, buildResource.WorkingDirectory);
         Assert.Equal(projectDirectory, launchConfiguration.BuildWorkingDirectory);
+    }
+
+    [Fact]
+    public async Task SdkRunWorkingDirectoryAppliesUntilRuntimeWorkingDirectoryIsExplicitlySet()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var projectDirectory = Path.GetDirectoryName(projectPath)!;
+        var firstSdkWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "sdk-runtime-1")).FullName;
+        var secondSdkWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "sdk-runtime-2")).FullName;
+        var sdkWorkingDirectory = firstSdkWorkingDirectory;
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+            Task.FromResult(new DotnetProjectRunProperties("resolved-command", "--from-resolver", sdkWorkingDirectory));
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+        var launchTool = Assert.Single(project.Resource.Annotations.OfType<LaunchToolArgsCallbackAnnotation>());
+
+        var firstArguments = await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services);
+
+        Assert.Equal(["--from-resolver"], firstArguments);
+        Assert.Equal(firstSdkWorkingDirectory, project.Resource.WorkingDirectory);
+
+        project.WithWorkingDirectory(projectDirectory);
+        sdkWorkingDirectory = secondSdkWorkingDirectory;
+        launchTool.AsCallbackAnnotation().ForgetCachedResult();
+
+        var secondArguments = await ArgumentEvaluator.GetArgumentListAsync(project.Resource, app.Services);
+
+        Assert.Equal(["--from-resolver"], secondArguments);
+        Assert.Equal(projectDirectory, project.Resource.WorkingDirectory);
     }
 
     [Fact]

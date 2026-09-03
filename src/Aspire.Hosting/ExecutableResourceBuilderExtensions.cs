@@ -217,6 +217,7 @@ public static class ExecutableResourceBuilderExtensions
         {
             workingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.ApplicationBuilder.AppHostDirectory, workingDirectory));
             executableAnnotation.WorkingDirectory = workingDirectory;
+            builder.Resource.WorkingDirExplicitlySet = true;
             return builder;
         }
 
