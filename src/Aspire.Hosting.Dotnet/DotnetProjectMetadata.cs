@@ -31,6 +31,9 @@ internal sealed class DotnetProjectMetadata(string projectPath, string? buildCon
     public string? BuildWorkingDirectory =>
         Volatile.Read(ref _buildWorkingDirectory);
 
+    internal DotnetProjectRunPropertiesResolverCallback RunPropertiesResolver { get; set; } =
+        DotnetProjectRunPropertiesResolver.ResolveAsync;
+
     /// <summary>
     /// Uses the exact path selected by the coordinated build for subsequent process and IDE launches.
     /// </summary>

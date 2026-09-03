@@ -254,12 +254,21 @@ public static class DotnetProjectHostingExtensions
                     metadata.SuppressBuild &&
                     metadata.BuildWorkingDirectory is { } buildWorkingDirectory)
                 {
-                    var runProperties = await DotnetProjectRunPropertiesResolver.ResolveAsync(
-                        metadata.ProjectPath,
-                        projectMetadata.BuildConfiguration,
-                        projectMetadata.BuildEnvironment,
-                        buildWorkingDirectory,
-                        ctx.Logger,
+                    var coordinator = buildCoordinator ?? throw new InvalidOperationException(
+                        "A coordinated .NET project build must have a build coordinator.");
+                    // Persistent explicit-start resources create their DCP object before BeforeResourceStarted is raised.
+                    // Keep the run-property query behind the build barrier even on that eager configuration path.
+                    var runProperties = await ResolveRunPropertiesAfterBuildAsync(
+                        coordinator,
+                        resource.Resource,
+                        ctx.ExecutionContext.Services,
+                        cancellationToken => projectMetadata.RunPropertiesResolver(
+                            metadata.ProjectPath,
+                            projectMetadata.BuildConfiguration,
+                            projectMetadata.BuildEnvironment,
+                            buildWorkingDirectory,
+                            ctx.Logger,
+                            cancellationToken),
                         ctx.CancellationToken).ConfigureAwait(false);
                     var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
                     defaultRunWorkingDirectory ??= executableAnnotation.WorkingDirectory;
@@ -355,6 +364,23 @@ public static class DotnetProjectHostingExtensions
 
         return resource;
     }
+
+#pragma warning disable ASPIREDOTNETPROJECT001
+    internal static async Task<DotnetProjectRunProperties> ResolveRunPropertiesAfterBuildAsync(
+        DotnetProjectBuildCoordinator.CoordinatorState coordinator,
+        DotnetProjectResource resource,
+        IServiceProvider services,
+        Func<CancellationToken, Task<DotnetProjectRunProperties>> resolver,
+        CancellationToken cancellationToken)
+    {
+        await coordinator.WaitForBuildCompletionAsync(
+            resource,
+            services,
+            cancellationToken).ConfigureAwait(false);
+
+        return await resolver(cancellationToken).ConfigureAwait(false);
+    }
+#pragma warning restore ASPIREDOTNETPROJECT001
 
     private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
     {

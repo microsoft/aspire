@@ -13,6 +13,14 @@ internal sealed record DotnetProjectRunProperties(
     string Arguments,
     string? WorkingDirectory);
 
+internal delegate Task<DotnetProjectRunProperties> DotnetProjectRunPropertiesResolverCallback(
+    string projectPath,
+    string? buildConfiguration,
+    IReadOnlyDictionary<string, string> buildEnvironment,
+    string workingDirectory,
+    ILogger logger,
+    CancellationToken cancellationToken);
+
 internal static class DotnetProjectRunPropertiesResolver
 {
     public static async Task<DotnetProjectRunProperties> ResolveAsync(

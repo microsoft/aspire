@@ -256,6 +256,20 @@ internal static class DotnetProjectBuildCoordinator
             _registrations.Add(new ResourceRegistration(resource));
         }
 
+        public Task WaitForBuildCompletionAsync(
+            DotnetProjectResource resource,
+            IServiceProvider services,
+            CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            var registration = _registrations.Single(
+                registration => ReferenceEquals(registration.Resource, resource));
+            var finalBuildResource = registration.FinalBuildResource ?? throw new InvalidOperationException(
+                $"The coordinated build plan for .NET project resource '{resource.Name}' has not been materialized.");
+            return WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken);
+        }
+
         public void AddEagerBuildDependencies()
         {
             if (PrimaryBuildResource is not { } primaryBuildResource)
@@ -469,6 +483,11 @@ internal static class DotnetProjectBuildCoordinator
                         IsSupportedPath(metadata.ProjectPath) &&
                         File.Exists(metadata.ProjectPath))
                     {
+                        var originalFinalBuildResource = registration.FinalBuildResource;
+                        registration.FinalBuildResource = finalBuildResource;
+                        rollbackActions.Push(() =>
+                            registration.FinalBuildResource = originalFinalBuildResource);
+
                         if (AddBuildDependency(_builder, resource, finalBuildResource) is { } rollback)
                         {
                             rollbackActions.Push(rollback);
@@ -987,7 +1006,12 @@ internal static class DotnetProjectBuildCoordinator
             ProjectEntry Entry,
             DotnetProjectBuildEnvironmentCallbackAnnotation[] Callbacks);
 
-        private sealed record ResourceRegistration(DotnetProjectResource Resource);
+        private sealed class ResourceRegistration(DotnetProjectResource resource)
+        {
+            public DotnetProjectResource Resource { get; } = resource;
+
+            public DotnetProjectBuildResource? FinalBuildResource { get; set; }
+        }
 
         private sealed class BuildStep
         {

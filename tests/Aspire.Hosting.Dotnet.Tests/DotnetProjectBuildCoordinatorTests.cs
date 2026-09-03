@@ -2100,6 +2100,121 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task PersistentExplicitStartResolvesRunPropertiesAfterCoordinatedBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProjectWithBuildProducedRunPropertiesSentinel(workspace.Path);
+        var sentinelPath = Path.Combine(Path.GetDirectoryName(projectPath)!, "build-sentinel.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+#pragma warning disable ASPIREPERSISTENCE001
+        var project = builder.AddDotnetProject("persistent-project", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithPersistentLifetime()
+            .WithExplicitStart();
+#pragma warning restore ASPIREPERSISTENCE001
+        var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
+        var resolverCallCount = 0;
+        metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
+        {
+            Interlocked.Increment(ref resolverCallCount);
+            Assert.True(File.Exists(sentinelPath));
+            return Task.FromResult(new DotnetProjectRunProperties("dotnet", "exec PersistentProject.dll", null));
+        };
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+
+        using var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = app.Services,
+            });
+        var callbackContext = new CommandLineArgsCallbackContext([], project.Resource, startCts.Token)
+        {
+            ExecutionContext = executionContext,
+            Logger = NullLogger.Instance,
+        };
+        var launchTool = Assert.Single(project.Resource.Annotations.OfType<LaunchToolArgsCallbackAnnotation>());
+        var resolutionTask = launchTool.AsCallbackAnnotation().EvaluateOnceAsync(callbackContext);
+
+        Assert.False(resolutionTask.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref resolverCallCount));
+
+        await app.StartAsync(startCts.Token);
+        _ = await resolutionTask;
+
+        Assert.Equal(1, Volatile.Read(ref resolverCallCount));
+        Assert.True(File.Exists(sentinelPath));
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("persistent-project", out var projectEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, projectEvent.Snapshot.State?.Text);
+
+        using (var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StopAsync(stopCts.Token);
+        }
+    }
+
+    [Fact]
+    public async Task RunPropertyResolutionWaitsForFinalCoordinatedBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Started\");");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+
+        var coordinator = app.Services.GetRequiredService<DotnetProjectBuildCoordinator.CoordinatorState>();
+        var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Equal(2, buildResources.Length);
+        var primaryBuildResource = coordinator.PrimaryBuildResource;
+        Assert.NotNull(primaryBuildResource);
+        var finalBuildResource = Assert.Single(
+            buildResources,
+            buildResource => !ReferenceEquals(buildResource, primaryBuildResource));
+        // Opposing results make resource selection observable without timing: waiting on the primary build fails,
+        // while waiting on the final build allows run-property resolution to succeed.
+        await app.ResourceNotifications.PublishUpdateAsync(
+            primaryBuildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        var resolverCalled = false;
+        var expected = new DotnetProjectRunProperties("dotnet", "exec Api.dll", null);
+        var resolutionTask = DotnetProjectHostingExtensions.ResolveRunPropertiesAfterBuildAsync(
+            coordinator,
+            project.Resource,
+            app.Services,
+            _ =>
+            {
+                resolverCalled = true;
+                return Task.FromResult(expected);
+            },
+            TestContext.Current.CancellationToken);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            finalBuildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        Assert.Equal(expected, await resolutionTask);
+        Assert.True(resolverCalled);
+    }
+
+    [Fact]
     public async Task FailedBuildResourceStartDeletesResponseFile()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2425,6 +2540,28 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
             return 1;
             """);
+        return projectPath;
+    }
+
+    private static string CreateProjectWithBuildProducedRunPropertiesSentinel(string root)
+    {
+        var projectPath = CreateProjectFile(root, "PersistentProject", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net8.0</TargetFramework>
+                <UseAppHost>false</UseAppHost>
+              </PropertyGroup>
+              <Target Name="WriteBuildSentinel" AfterTargets="Build">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-sentinel.txt" Lines="built" Overwrite="true" />
+              </Target>
+              <Target Name="RequireBuildSentinel" BeforeTargets="ComputeRunArguments">
+                <Error Condition="!Exists('$(MSBuildProjectDirectory)/build-sentinel.txt')" Text="Run properties were evaluated before the coordinated build completed." />
+              </Target>
+            </Project>
+            """);
+        var projectDirectory = Path.GetDirectoryName(projectPath)!;
+        File.WriteAllText(Path.Combine(projectDirectory, "Program.cs"), "System.Console.WriteLine(\"Started\");");
         return projectPath;
     }
 
