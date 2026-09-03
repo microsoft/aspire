@@ -2309,6 +2309,135 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsync_TransfersFileArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        byte[]? capturedContents = null;
+        string? capturedName = null;
+        var custom = builder.AddResource(new CustomResource("boardadmin"));
+        custom.WithCommand(
+            name: "import-squares",
+            displayName: "Import squares",
+            executeCommand: async context =>
+            {
+                using var files = context.Arguments["file"].GetFiles();
+                var file = Assert.Single(files);
+                capturedName = file.Name;
+                capturedContents = await file.ReadAllBytesAsync(context.CancellationToken);
+                return CommandResults.Success();
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "file",
+                        InputType = InputType.File,
+                        Required = true,
+                        FileFilter = ".json"
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "boardadmin",
+            CommandName = "import-squares",
+            Arguments = new JsonObject(),
+            Files =
+            [
+                new ResourceCommandFileArgument
+                {
+                    ArgumentName = "file",
+                    FileName = "aspire-13.5-bingo-squares.json",
+                    Data = """{"squares":["one","two"]}"""u8.ToArray()
+                }
+            ]
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.Equal("aspire-13.5-bingo-squares.json", capturedName);
+        Assert.Equal("""{"squares":["one","two"]}"""u8.ToArray(), capturedContents);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData("squares.txt", 1024, "does not match the accepted file types")]
+    [InlineData("squares.json", 1, "exceeds the maximum size")]
+    public async Task ExecuteResourceCommandAsync_RejectsInvalidFileArguments(string fileName, long maxFileSize, string expectedError)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("boardadmin"));
+        custom.WithCommand(
+            name: "import-squares",
+            displayName: "Import squares",
+            executeCommand: _ =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "file",
+                        InputType = InputType.File,
+                        Required = true,
+                        FileFilter = ".json",
+                        MaxFileSize = maxFileSize
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "boardadmin",
+            CommandName = "import-squares",
+            Arguments = new JsonObject(),
+            Files =
+            [
+                new ResourceCommandFileArgument
+                {
+                    ArgumentName = "file",
+                    FileName = fileName,
+                    Data = "{}"u8.ToArray()
+                }
+            ]
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        Assert.Contains(expectedError, response.Message);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandAsync_UnknownJsonArgument_ReturnsFailure()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

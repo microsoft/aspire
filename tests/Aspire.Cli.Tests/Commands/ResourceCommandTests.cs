@@ -610,6 +610,111 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_TransfersFileArgumentContents()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var filePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-13.5-bingo-squares.json");
+        await File.WriteAllTextAsync(filePath, """{"squares":["one","two"]}""");
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "boardadmin",
+                    CreateCommand(
+                        "import-squares",
+                        CreateArgument("file", inputType: "File", required: true, fileFilter: ".json")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["resource", "boardadmin", "import-squares", "--file", filePath]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments);
+        var file = Assert.Single(backchannel.ExecuteResourceCommandOptions!.Files!);
+        Assert.Equal("file", file.ArgumentName);
+        Assert.Equal("aspire-13.5-bingo-squares.json", file.FileName);
+        Assert.Equal("""{"squares":["one","two"]}""", System.Text.Encoding.UTF8.GetString(file.Data));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_FileArgumentRequiresCompatibleAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var filePath = Path.Combine(workspace.WorkspaceRoot.FullName, "squares.json");
+        await File.WriteAllTextAsync(filePath, "{}");
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceCommandFilesV1 = false,
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "boardadmin",
+                    CreateCommand(
+                        "import-squares",
+                        CreateArgument("file", inputType: "File", required: true)))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["resource", "boardadmin", "import-squares", "--file", filePath]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_TransfersMultipleFileArguments()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var firstFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "first.json");
+        var secondFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "second.json");
+        await File.WriteAllTextAsync(firstFilePath, """{"id":1}""");
+        await File.WriteAllTextAsync(secondFilePath, """{"id":2}""");
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "boardadmin",
+                    CreateCommand(
+                        "import-squares",
+                        CreateArgument("files", inputType: "File", required: true, allowMultipleFiles: true)))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "resource", "boardadmin", "import-squares",
+            "--files", firstFilePath,
+            "--files", secondFilePath
+        ]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments);
+        Assert.Collection(
+            backchannel.ExecuteResourceCommandOptions!.Files!,
+            file => Assert.Equal("first.json", file.FileName),
+            file => Assert.Equal("second.json", file.FileName));
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsArgumentAfterDoubleDashThatCollidesWithCliOption()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2365,7 +2470,10 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Dictionary<string, string?>? options = null,
         bool allowCustomChoice = false,
         bool disabled = false,
-        ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading = null)
+        ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading = null,
+        bool allowMultipleFiles = false,
+        string? fileFilter = null,
+        long? maxFileSize = null)
     {
         return new ResourceSnapshotCommandArgument
         {
@@ -2377,7 +2485,10 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             Options = options,
             AllowCustomChoice = allowCustomChoice,
             Disabled = disabled,
-            DynamicLoading = dynamicLoading
+            DynamicLoading = dynamicLoading,
+            AllowMultipleFiles = allowMultipleFiles,
+            FileFilter = fileFilter,
+            MaxFileSize = maxFileSize
         };
     }
 }

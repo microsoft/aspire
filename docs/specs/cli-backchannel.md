@@ -96,6 +96,7 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";  // 13.2+ with request objects
     public const string V3 = "aux.v3";  // 13.4+ with batched console log streaming
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+    public const string ResourceCommandFiles_V1 = "resource-command-files.v1";
 }
 ```
 
@@ -106,7 +107,6 @@ internal static class AuxiliaryBackchannelCapabilities
 | 13.1 | `aux.v1` | `GetAppHostInformationAsync()`, `GetDashboardMcpConnectionInfoAsync()`, `StopAppHostAsync()` |
 | 13.2 | `aux.v2` | All v1 methods + new request-object-based methods |
 | 13.4 | `aux.v3` | All v2 methods + `GetConsoleLogBatchesAsync(GetConsoleLogsRequest)` |
-
 ### Console Log Request Compatibility
 
 `GetConsoleLogsRequest.ResourceName` was required when the v2 console log methods shipped. In v3 it is optional: a `null` resource name requests logs for all resources. V2 callers that need all-resource logs should continue to use the legacy `GetResourceLogsAsync` method rather than sending a null `ResourceName` to v2 console log methods.
@@ -116,6 +116,10 @@ internal static class AuxiliaryBackchannelCapabilities
 When both sides advertise `resource-snapshot-versions.v1`, `ResourceSnapshot.Version` is monotonic and can order the initial GET against watch updates. The CLI starts the watch before the GET and retains the newest snapshot when the calls overlap.
 
 Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Without the capability, the CLI treats snapshot ordering as unknown and preserves the legacy GET-first behavior. A version of `0` must not participate in stale-snapshot comparisons.
+
+### Resource Command File Compatibility
+
+When both sides advertise `resource-command-files.v1`, file-type resource command arguments are transferred in `ExecuteResourceCommandRequest.Files`. A CLI connected to an older AppHost rejects file arguments with an upgrade diagnostic instead of forwarding a path as a scalar value that the command cannot read as an uploaded file.
 
 ### Compatibility Matrix
 
