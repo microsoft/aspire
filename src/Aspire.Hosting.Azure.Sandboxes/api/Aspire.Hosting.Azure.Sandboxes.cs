@@ -27,6 +27,10 @@ namespace Aspire.Hosting
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithAcrPullIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithNoManagedIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder) { throw null; }
 
         [AspireExport]
