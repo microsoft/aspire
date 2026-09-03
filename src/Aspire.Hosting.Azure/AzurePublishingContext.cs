@@ -47,7 +47,7 @@ public sealed class AzurePublishingContext(
     };
 
     /// <summary>
-    /// Gets or sets a value indicating whether generation of the root main.bicep template is skipped.
+    /// Gets or sets a value indicating whether writing the root main.bicep file is skipped.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -60,11 +60,11 @@ public sealed class AzurePublishingContext(
     /// <para>
     /// When set to <see langword="true"/>, <see cref="WriteModelAsync"/> still writes every per-resource
     /// Bicep module and populates <see cref="ParameterLookup"/> and <see cref="OutputLookup"/> against
-    /// <see cref="MainInfrastructure"/>, but <see cref="MainInfrastructure"/> is never built, compiled,
-    /// or written to disk. The default is <see langword="false"/>.
+    /// <see cref="MainInfrastructure"/>. <see cref="MainInfrastructure"/> remains available in memory, but
+    /// it is never built, compiled, or written to disk. The default is <see langword="false"/>.
     /// </para>
     /// </remarks>
-    public bool SkipMainBicepGeneration { get; set; }
+    public bool SkipWritingMainBicepFile { get; set; }
 
     /// <summary>
     /// Gets a dictionary that maps parameter resources to provisioning parameters.
@@ -559,12 +559,12 @@ public sealed class AzurePublishingContext(
     /// <returns>A task that represents the asynchronous save operation.</returns>
     private async Task SaveToDiskAsync(string outputDirectoryPath)
     {
-        if (SkipMainBicepGeneration)
+        if (SkipWritingMainBicepFile)
         {
-            // Building the root is skipped entirely rather than compiled and discarded, because a model that
+            // The root is not even built, rather than compiled and then discarded, because a model that
             // only the individual modules support (such as a tenant-scoped module without a location parameter)
             // makes compiling the root throw.
-            logger.LogDebug("Skipping generation of {BicepName}.bicep because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(SkipMainBicepGeneration));
+            logger.LogDebug("Skipping writing {BicepName}.bicep because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(SkipWritingMainBicepFile));
             return;
         }
 
