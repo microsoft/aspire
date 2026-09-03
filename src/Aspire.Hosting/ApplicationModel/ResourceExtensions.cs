@@ -36,7 +36,23 @@ public static class ResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource is IResourceProjection projection ? projection.Owner : resource;
+        if (resource is IResourceProjection projection)
+        {
+            return projection.Owner;
+        }
+
+        // A projection shares its owner's annotation collection, so the registration annotation is reachable from
+        // the projection as well as the owner. Matching on reference equality distinguishes the two sides of the
+        // pair without requiring integration-authored projection types to implement a marker interface.
+        foreach (var annotation in resource.Annotations.OfType<ContainerResourceProjectionAnnotation>())
+        {
+            if (ReferenceEquals(annotation.Projection, resource))
+            {
+                return annotation.Owner;
+            }
+        }
+
+        return resource;
     }
 
     /// <summary>

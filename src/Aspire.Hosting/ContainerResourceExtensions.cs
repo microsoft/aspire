@@ -43,8 +43,16 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.AsContainer() is IResourceProjection ||
-            resource.Annotations.OfType<ContainerImageAnnotation>().Any();
+        // A registered projection is authoritative: the owner executes as the projected container even when the
+        // owner itself is not a ContainerResource. The reference check excludes the projection side of the pair,
+        // which shares the owner's annotations, so a bare ContainerResource without an image is still classified
+        // by the legacy image annotation fallback below rather than by merely being its own container view.
+        if (resource.AsContainer() is { } container && !ReferenceEquals(container, resource))
+        {
+            return true;
+        }
+
+        return resource.Annotations.OfType<ContainerImageAnnotation>().Any();
     }
 
     /// <summary>
@@ -62,15 +70,20 @@ public static class ContainerResourceExtensions
     /// effective container classification is required.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
-    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
+    /// <ats-summary>Gets the container resource represented by a resource.</ats-summary>
+    [AspireExport]
     public static ContainerResource? AsContainer(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource as ContainerResource ??
-            resource.Annotations
-                .OfType<ContainerResourceProjectionAnnotation>()
-                .SingleOrDefault()
-                ?.Projection;
+        if (resource is ContainerResource container)
+        {
+            return container;
+        }
+
+        return resource.Annotations
+            .OfType<ContainerResourceProjectionAnnotation>()
+            .SingleOrDefault()
+            ?.Projection;
     }
 }

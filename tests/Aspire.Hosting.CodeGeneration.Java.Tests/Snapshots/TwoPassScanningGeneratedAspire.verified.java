@@ -2293,6 +2293,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public CSharpAppResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -3407,6 +3415,52 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public CSharpAppResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public CSharpAppResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -5433,6 +5487,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     public ContainerRegistryResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }
@@ -5767,6 +5829,52 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ContainerRegistryResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ContainerRegistryResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -6603,6 +6711,14 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("alias", AspireClient.serializeValue(alias));
         getClient().invokeCapability("Aspire.Hosting/withContainerNetworkAlias", reqArgs);
         return this;
+    }
+
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
@@ -7674,6 +7790,52 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public ContainerResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ContainerResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ContainerResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ContainerResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -9235,6 +9397,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Sets the package identifier for the tool configuration associated with the resource builder. */
     public DotnetToolResource withToolPackage(String packageId) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10383,6 +10553,52 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public DotnetToolResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public DotnetToolResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -11678,6 +11894,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Publishes an executable as a Docker file */
     public ExecutableResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12778,6 +13002,52 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ExecutableResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ExecutableResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ExecutableResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
+        return this;
+    }
+
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ExecutableResource withTerminal() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13519,6 +13789,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
     public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -13882,6 +14160,52 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ExternalServiceResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ExternalServiceResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -18317,6 +18641,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     public ParameterResource withDescription(String description) {
         return withDescription(description, null);
     }
@@ -18676,6 +19008,52 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    public ParameterResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ParameterResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ParameterResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ParameterResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -19872,6 +20250,14 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ProjectResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -20986,6 +21372,52 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public ProjectResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public ProjectResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public ProjectResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public ProjectResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -23360,6 +23792,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestDatabaseResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -24429,6 +24869,52 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public TestDatabaseResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public TestDatabaseResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -25575,6 +26061,14 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestRedisResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -26671,6 +27165,52 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public TestRedisResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public TestRedisResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -27915,6 +28455,14 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the container resource represented by a resource. */
+    public ContainerResource asContainer() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/asContainer", reqArgs);
+        return (ContainerResource) result;
+    }
+
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestVaultResource withMcpServer(WithMcpServerOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -28984,6 +29532,52 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource runAsContainerImage(String image) {
+        return runAsContainerImage(image, null);
+    }
+
+    /** Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged. */
+    public TestVaultResource runAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource publishAsContainerImage(String image) {
+        return publishAsContainerImage(image, null);
+    }
+
+    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
+    public TestVaultResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = (ContainerResource) args[0];
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 

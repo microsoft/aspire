@@ -604,6 +604,32 @@ public class ResourceProjectionTests
             typeof(IResource).GetProperty(nameof(IResource.Annotations))!.PropertyType);
     }
 
+    [Fact]
+    public void ProjectingAContainerResourceThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        // C# has no negative generic constraint, so a container reaching a projection API can only be caught here.
+        var container = builder.AddContainer("cache", "redis");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => container.RunAsContainerImage("contoso/other:1.0"));
+
+        Assert.Contains("already a container", exception.Message);
+    }
+
+    [Fact]
+    public void ProjectingAContainerResourceThrowsEvenWhenTheOperationDoesNotMatch()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var container = builder.AddContainer("cache", "redis");
+
+        // The guard runs ahead of the operation gate so the authoring mistake is not hidden in one mode.
+        Assert.Throws<InvalidOperationException>(
+            () => container.PublishAsContainerImage("contoso/other:1.0"));
+    }
+
     private sealed record SingletonAnnotation(string Value) : IResourceAnnotation;
 
     private sealed class FirstAnnotation : IResourceAnnotation;

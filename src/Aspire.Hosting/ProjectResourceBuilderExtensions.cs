@@ -988,25 +988,18 @@ public static class ProjectResourceBuilderExtensions
             DistributedApplicationOperation.Publish,
             container =>
             {
-                if (!hasProjection)
-                {
-                    container.WithImage(resource.Name);
-                    container.WithDockerfile(contextPath: projectDirectoryPath);
+                container.WithImage(resource.Name);
+                container.WithDockerfile(contextPath: projectDirectoryPath);
 
-                    // ASP.NET container images listen on port 8080 by default.
-                    container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
-                    container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
-                }
+                // ASP.NET container images listen on port 8080 by default.
+                container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
 
-                if (!hasProjection)
-                {
-                    // The image entrypoint replaces dotnet run, so arguments configured before the
-                    // first conversion often contain host-only paths and must not reach the container.
-                    container.WithArgs(context => context.Args.Clear());
-                }
-
-                configure?.Invoke(container);
-            });
+                // The image entrypoint replaces dotnet run, so arguments configured before the
+                // first conversion often contain host-only paths and must not reach the container.
+                container.WithArgs(context => context.Args.Clear());
+            },
+            configure);
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
         // manifest callback that an integration installed after the first conversion.

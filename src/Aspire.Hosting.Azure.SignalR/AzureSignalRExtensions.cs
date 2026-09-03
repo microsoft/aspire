@@ -136,6 +136,38 @@ public static class AzureSignalRExtensions
         => AddAzureSignalR(builder, name);
 
     /// <summary>
+    /// Configures an Azure SignalR resource to run as a container. Please note that the resource will run in <b>Serverless mode</b>.
+    /// </summary>
+    /// <ats-summary>Configures an Azure SignalR resource to run as a container. Please note that the resource will run in Serverless mode.</ats-summary>
+    /// <remarks>
+    /// This version of the package defaults to the <inheritdoc cref="SignalREmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="SignalREmulatorContainerImageTags.Registry"/>/<inheritdoc cref="SignalREmulatorContainerImageTags.Image"/> container image.
+    /// </remarks>
+    /// <param name="builder">The Azure SignalR resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes the underlying container to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureSignalRResource> RunAsContainer(this IResourceBuilder<AzureSignalRResource> builder, Action<IResourceBuilder<AzureSignalREmulatorResource>>? configureContainer = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // The projection shares the owner's annotation collection, so configuration applied through either builder
+        // is observed by both. The owner stays the only member of the application model.
+        return builder.RunAsContainerImage<AzureSignalRResource, AzureSignalREmulatorResource>(
+            $"{SignalREmulatorContainerImageTags.Registry}/{SignalREmulatorContainerImageTags.Image}:{SignalREmulatorContainerImageTags.Tag}",
+            container =>
+            {
+                container
+                    // Mark this resource as an emulator for consistent resource identification and tooling support
+                    .WithAnnotation(new EmulatorResourceAnnotation())
+                    .WithEndpoint(name: EmulatorEndpointName, targetPort: 8888, scheme: "http")
+                    .WithHttpHealthCheck(endpointName: EmulatorEndpointName, path: "/api/health");
+
+                configureContainer?.Invoke(container);
+            });
+    }
+
+    /// <summary>
     /// Configures an Azure SignalR resource to be emulated. This resource requires an <see cref="AzureSignalRResource"/> to be added to the application model. Please note that the resource will be emulated in <b>Serverless mode</b>.
     /// </summary>
     /// <ats-summary>Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.</ats-summary>
@@ -148,33 +180,7 @@ public static class AzureSignalRExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSignalRResource> RunAsEmulator(this IResourceBuilder<AzureSignalRResource> builder, Action<IResourceBuilder<AzureSignalREmulatorResource>>? configureContainer = null)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
-        // Mark this resource as an emulator for consistent resource identification and tooling support
-        builder.WithAnnotation(new EmulatorResourceAnnotation());
-
-        builder
-            .WithEndpoint(name: EmulatorEndpointName, targetPort: 8888, scheme: "http")
-            .WithAnnotation(new ContainerImageAnnotation
-            {
-                Registry = SignalREmulatorContainerImageTags.Registry,
-                Image = SignalREmulatorContainerImageTags.Image,
-                Tag = SignalREmulatorContainerImageTags.Tag
-            });
-        if (configureContainer != null)
-        {
-            var surrogate = new AzureSignalREmulatorResource(builder.Resource);
-            var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
-            configureContainer(surrogateBuilder);
-        }
-        return builder.WithHttpHealthCheck(endpointName: EmulatorEndpointName, path: "/api/health");
-    }
+        => builder.RunAsContainer(configureContainer);
 
     /// <summary>
     /// Assigns the specified roles to the given resource, granting it the necessary permissions

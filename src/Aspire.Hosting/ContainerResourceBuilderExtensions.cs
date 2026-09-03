@@ -1883,6 +1883,52 @@ public static class ContainerResourceBuilderExtensions
     {
         return builder.WithAnnotation(new ContainerNetworkAliasAnnotation(alias) { Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork });
     }
+
+    /// <summary>
+    /// Applies a full container image reference, keeping the registry, image, and tag or digest separate.
+    /// </summary>
+    /// <remarks>
+    /// This deliberately does not reuse <see cref="WithImage{T}(IResourceBuilder{T}, string, string?)"/>. That
+    /// method folds a registry present in the reference into <see cref="ContainerImageAnnotation.Image"/> for
+    /// continuity with Aspire 9.0 and earlier, which leaves <see cref="ContainerImageAnnotation.Registry"/> unset
+    /// and hides the registry from registry-aware features such as image mirroring and
+    /// <c>WithContainerRegistry</c>. The projection APIs are new surface with no such continuity requirement, so
+    /// they record the reference the way the rest of the model expects to read it.
+    /// </remarks>
+    internal static void WithImageReference<TContainer>(this IResourceBuilder<TContainer> container, string image)
+        where TContainer : ContainerResource
+    {
+        // Accepts the usual OCI reference forms:
+        //   nginx
+        //   nginx:1.27
+        //   contoso/service:latest
+        //   mcr.microsoft.com/dotnet/aspnet:10.0
+        //   mcr.microsoft.com/dotnet/aspnet@sha256:0f27a0...
+        var reference = ContainerReferenceParser.Parse(image);
+
+        var annotation = new ContainerImageAnnotation
+        {
+            Registry = reference.Registry,
+            Image = reference.Image
+        };
+
+        if (reference.Digest is { } digest)
+        {
+            const string prefix = "sha256:";
+            if (!digest.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                throw new ArgumentOutOfRangeException(nameof(image), digest, "invalid digest format");
+            }
+
+            annotation.SHA256 = digest[prefix.Length..];
+        }
+        else
+        {
+            annotation.Tag = reference.Tag ?? "latest";
+        }
+
+        container.WithAnnotation(annotation);
+    }
 }
 
 internal static class IListExtensions

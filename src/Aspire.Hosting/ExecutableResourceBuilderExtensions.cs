@@ -138,14 +138,14 @@ public static class ExecutableResourceBuilderExtensions
             DistributedApplicationOperation.Publish,
             container =>
             {
-                if (!hasProjection)
-                {
-                    container.WithImage(resource.Name);
-                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
-                }
-
+                container.WithImage(resource.Name);
+                container.WithDockerfile(contextPath: resource.WorkingDirectory);
+            },
+            container =>
+            {
                 // The image entrypoint replaces the host executable, so arguments configured before
-                // this conversion often contain host-only paths and must not reach the container.
+                // this conversion often contain host-only paths and must not reach the container. This runs on
+                // every conversion so a repeat conversion also discards arguments added since the last one.
                 container.WithArgs(context => context.Args.Clear());
                 configure?.Invoke(container);
             });

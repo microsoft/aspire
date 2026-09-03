@@ -7356,6 +7356,10 @@ class AbstractResource(abc.ABC):
         """Configures custom base images for generated Dockerfiles."""
 
     @abc.abstractmethod
+    def as_container(self) -> ContainerResource:
+        """Gets the container resource represented by a resource."""
+
+    @abc.abstractmethod
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
 
@@ -7446,6 +7450,14 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
+
+    @abc.abstractmethod
+    def run_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged."""
+
+    @abc.abstractmethod
+    def publish_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged."""
 
     @abc.abstractmethod
     def with_terminal(self) -> typing.Self:
@@ -7844,6 +7856,8 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
+    run_as_container_image: str | tuple[str, typing.Callable[[ContainerResource], None]]
+    publish_as_container_image: str | tuple[str, typing.Callable[[ContainerResource], None]]
     terminal: typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
@@ -7908,6 +7922,15 @@ class _BaseResource(AbstractResource):
         )
         self._handle = self._wrap_builder(result)
         return self
+
+    def as_container(self) -> ContainerResource:
+        """Gets the container resource represented by a resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/asContainer',
+            rpc_args,
+        )
+        return typing.cast(ContainerResource, result)
 
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
@@ -8175,6 +8198,32 @@ class _BaseResource(AbstractResource):
             rpc_args['exitCodes'] = exit_codes
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHiddenOnCompletion',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def run_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['image'] = image
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/runAsContainerImage',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def publish_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['image'] = image
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/publishAsContainerImage',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8738,6 +8787,30 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
+        if _run_as_container_image := kwargs.pop("run_as_container_image", None):
+            if _validate_type(_run_as_container_image, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(str, _run_as_container_image)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/runAsContainerImage', rpc_args))
+            elif _validate_tuple_types(_run_as_container_image, (str, typing.Callable[[ContainerResource], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _run_as_container_image)[0]
+                rpc_args["configure"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _run_as_container_image)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/runAsContainerImage', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'run_as_container_image'. Expected: str or (str, Callable[[ContainerResource], None])")
+        if _publish_as_container_image := kwargs.pop("publish_as_container_image", None):
+            if _validate_type(_publish_as_container_image, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(str, _publish_as_container_image)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsContainerImage', rpc_args))
+            elif _validate_tuple_types(_publish_as_container_image, (str, typing.Callable[[ContainerResource], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _publish_as_container_image)[0]
+                rpc_args["configure"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _publish_as_container_image)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsContainerImage', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'publish_as_container_image'. Expected: str or (str, Callable[[ContainerResource], None])")
         if _terminal := kwargs.pop("terminal", None):
             if _terminal is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

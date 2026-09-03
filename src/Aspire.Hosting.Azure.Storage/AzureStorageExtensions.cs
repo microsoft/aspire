@@ -180,6 +180,17 @@ public static class AzureStorageExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureStorageResource> RunAsEmulator(this IResourceBuilder<AzureStorageResource> builder, Action<IResourceBuilder<AzureStorageEmulatorResource>>? configureContainer = null)
+        => builder.RunAsContainer(configureContainer);
+
+    /// <summary>
+    /// Configures an Azure Storage resource to run as a container.
+    /// </summary>
+    /// <param name="builder">The Azure storage resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes the underlying container to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureStorageResource> RunAsContainer(this IResourceBuilder<AzureStorageResource> builder, Action<IResourceBuilder<AzureStorageEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         if (builder.Resource.IsHnsEnabled)
@@ -192,18 +203,33 @@ public static class AzureStorageExtensions
             return builder;
         }
 
-        // Mark this resource as an emulator for consistent resource identification and tooling support
-        builder.WithAnnotation(new EmulatorResourceAnnotation());
+        // The projection shares the owner's annotation collection, so configuration applied through either builder
+        // is observed by both. The owner stays the only member of the application model.
+        builder.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () => new AzureStorageEmulatorResource(builder.Resource),
+            container =>
+            {
+                container
+                    // Mark this resource as an emulator for consistent resource identification and tooling support
+                    .WithAnnotation(new EmulatorResourceAnnotation())
+                    .WithHttpEndpoint(name: "blob", targetPort: 10000)
+                    .WithHttpEndpoint(name: "queue", targetPort: 10001)
+                    .WithHttpEndpoint(name: "table", targetPort: 10002)
+                    .WithAnnotation(new ContainerImageAnnotation
+                    {
+                        Registry = StorageEmulatorContainerImageTags.Registry,
+                        Image = StorageEmulatorContainerImageTags.Image,
+                        Tag = StorageEmulatorContainerImageTags.Tag
+                    });
 
-        builder.WithHttpEndpoint(name: "blob", targetPort: 10000)
-               .WithHttpEndpoint(name: "queue", targetPort: 10001)
-               .WithHttpEndpoint(name: "table", targetPort: 10002)
-               .WithAnnotation(new ContainerImageAnnotation
-               {
-                   Registry = StorageEmulatorContainerImageTags.Registry,
-                   Image = StorageEmulatorContainerImageTags.Image,
-                   Tag = StorageEmulatorContainerImageTags.Tag
-               });
+                // The default arguments list is coming from https://github.com/Azure/Azurite/blob/c3f93445fbd8fd54d380eb265a5665166c460d2b/Dockerfile#L47C6-L47C106
+                // They need to be repeated in order to be able to add --skipApiVersionCheck
+                // --disableProductStyleUrl is required to ensure the emulator uses path-style URLs, and not “product-style” URLs which have the account name in the host name of the URL.
+                container.WithArgs("azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--disableProductStyleUrl", SkipApiVersionCheckArgument);
+
+            },
+            configureContainer);
 
         BlobServiceClient? blobServiceClient = null;
         QueueServiceClient? queueServiceClient = null;
@@ -251,17 +277,6 @@ public static class AzureStorageExtensions
         }, name: healthCheckKey);
 
         builder.WithHealthCheck(healthCheckKey);
-
-        // The default arguments list is coming from https://github.com/Azure/Azurite/blob/c3f93445fbd8fd54d380eb265a5665166c460d2b/Dockerfile#L47C6-L47C106
-        // They need to be repeated in order to be able to add --skipApiVersionCheck
-        // --disableProductStyleUrl is required to ensure the emulator uses path-style URLs, and not “product-style” URLs which have the account name in the host name of the URL.
-
-        var surrogate = new AzureStorageEmulatorResource(builder.Resource);
-        var surrogateBuilder = builder.ApplicationBuilder
-            .CreateResourceBuilder(surrogate)
-            .WithArgs("azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--disableProductStyleUrl", SkipApiVersionCheckArgument);
-
-        configureContainer?.Invoke(surrogateBuilder);
 
         return builder;
     }
