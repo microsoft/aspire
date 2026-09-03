@@ -190,8 +190,9 @@ jobs:
 
             WORKFLOW_ID=$(jq -r '.workflow_id' ci-failure-data/run.json)
             RUN_CREATED_AT=$(jq -r '.created_at' ci-failure-data/run.json)
+            FAILED_RUN_ID=$(jq -r '.id' ci-failure-data/run.json)
             if ! bash .github/workflows/analyze-ci-failure-history.sh \
-                "$REPO" "$WORKFLOW_ID" "$RUN_CREATED_AT" \
+                "$REPO" "$WORKFLOW_ID" "$RUN_CREATED_AT" "$FAILED_RUN_ID" \
                 ci-failure-data/last-successful-main-run.json; then
               echo "::warning::Unable to find the last successful main run. Continuing without a candidate merge range."
               echo "{}" > ci-failure-data/last-successful-main-run.json
@@ -1016,8 +1017,11 @@ safe-outputs:
               2>/dev/null | head -1 || true)
 
             if [ -n "$EXISTING_COMMENT_ID" ]; then
+              COMMENT_REQUEST_FILE=$(mktemp)
+              jq -n --rawfile body "$COMMENT_FILE" '{body: $body}' > "$COMMENT_REQUEST_FILE"
               gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
-                -f body="$(cat "$COMMENT_FILE")" > /dev/null
+                --input "$COMMENT_REQUEST_FILE" > /dev/null
+              rm -f "$COMMENT_REQUEST_FILE"
               echo "Updated existing analysis comment (ID: ${EXISTING_COMMENT_ID}) on PR #${SUBJECT_PR}"
             else
               gh pr comment "$SUBJECT_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
@@ -1359,10 +1363,13 @@ Field details:
 - `triggering_merge_pr`: For main scope, include the triggering merge PR from the summary when available. It is non-causal context and MUST NOT be copied to `pr`. For pull-request scope, this is `null`.
 - `main_context`: For main scope, include `last_successful_main_sha`, `failed_sha`, and `candidate_merges` from the summary. For pull-request scope, this is `null`.
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
+- `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
+- `failed_tests[].name`: A single-line test name, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
-- `failed_tests[].error`: The full error message from the TRX test failure data.
-- `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].error`: The first 1,000 characters of the error message from the TRX test failure data.
+- `failed_tests[].stack_trace`: The first 2,000 characters of the stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt.
 

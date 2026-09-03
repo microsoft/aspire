@@ -9,15 +9,16 @@ COMMAND="${1:?command is required}"
 CI_FAILURE_DATA_DIR="${CI_FAILURE_DATA_DIR:-ci-failure-data}"
 RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 
-sanitize_cause()
+sanitize_document()
 {
-  local input_file="$1"
-  local output_file="$2"
+  local document_type="$1"
+  local input_file="$2"
+  local output_file="$3"
 
   # CI errors can contain CRLF, ANSI escapes, and invisible Unicode formatting.
   # Preserve diagnostic text while removing controls that can alter later prompt
   # or Markdown rendering.
-  jq '
+  jq --arg document_type "$document_type" '
     def strip_unsafe:
       gsub("\u001b\\[[0-9;?]*[ -/]*[@-~]"; "") |
       gsub("\\p{Cf}|\\p{Zl}|\\p{Zp}|[\uFE00-\uFE0F]"; "") |
@@ -30,9 +31,37 @@ sanitize_cause()
     def sanitize_multiline:
       gsub("\r\n?"; "\n") |
       strip_unsafe;
-    if (.title | type) == "string" then .title |= sanitize_single_line else . end |
-    if (.test_name | type) == "string" then .test_name |= sanitize_single_line else . end |
-    if (.error_pattern | type) == "string" then .error_pattern |= sanitize_multiline else . end
+    if $document_type == "cause" then
+      if (.title | type) == "string" then .title |= sanitize_single_line else . end |
+      if (.test_name | type) == "string" then .test_name |= sanitize_single_line else . end |
+      if (.error_pattern | type) == "string" then .error_pattern |= sanitize_multiline else . end
+    elif $document_type == "analysis" then
+      if (.failed_jobs | type) == "array" then
+        .failed_jobs |= map(
+          if (type == "object") and ((.reason | type) == "string") then
+            .reason |= (sanitize_single_line | .[0:500])
+          else
+            .
+          end)
+      else
+        .
+      end |
+      if (.failed_tests | type) == "array" then
+        .failed_tests |= map(
+          if type == "object" then
+            if (.name | type) == "string" then .name |= (sanitize_single_line | .[0:500]) else . end |
+            if (.error | type) == "string" then .error |= (sanitize_multiline | .[0:1000]) else . end |
+            if (.stack_trace | type) == "string" then .stack_trace |= (sanitize_multiline | .[0:2000]) else . end |
+            if (.reason | type) == "string" then .reason |= (sanitize_single_line | .[0:500]) else . end
+          else
+            .
+          end)
+      else
+        .
+      end
+    else
+      error("unsupported document type")
+    end
   ' "$input_file" > "$output_file"
 }
 
@@ -59,7 +88,12 @@ case "$COMMAND" in
   sanitize-cause)
     INPUT_FILE="${2:?input file is required}"
     OUTPUT_FILE="${3:?output file is required}"
-    sanitize_cause "$INPUT_FILE" "$OUTPUT_FILE"
+    sanitize_document cause "$INPUT_FILE" "$OUTPUT_FILE"
+    ;;
+  sanitize-analysis)
+    INPUT_FILE="${2:?input file is required}"
+    OUTPUT_FILE="${3:?output file is required}"
+    sanitize_document analysis "$INPUT_FILE" "$OUTPUT_FILE"
     ;;
   pr-number)
     trusted_pr_number
@@ -129,7 +163,7 @@ case "$COMMAND" in
   render-prior-cause)
     CAUSE_FILE="${2:?cause file is required}"
 
-    sanitize_cause "$CAUSE_FILE" /dev/stdout | jq -c '{
+    sanitize_document cause "$CAUSE_FILE" /dev/stdout | jq -c '{
       id,
       type,
       title: ((.title // .id // "") | .[0:238]),

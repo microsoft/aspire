@@ -8,7 +8,13 @@ set -euo pipefail
 REPO="${1:?repository is required}"
 WORKFLOW_ID="${2:?workflow ID is required}"
 FAILED_RUN_CREATED_AT="${3:?failed run creation time is required}"
-OUTPUT_FILE="${4:?output file is required}"
+FAILED_RUN_ID="${4:?failed run ID is required}"
+OUTPUT_FILE="${5:?output file is required}"
+
+if [[ ! "$FAILED_RUN_ID" =~ ^[0-9]+$ ]]; then
+  echo "::error::Failed run ID must be numeric." >&2
+  exit 1
+fi
 
 TEMP_DIRECTORY=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIRECTORY"' EXIT
@@ -87,12 +93,19 @@ query_window()
   jq -s \
     --arg start_time "$start_time" \
     --arg end_time "$end_time" \
+    --arg failed_time "$FAILED_RUN_CREATED_AT" \
+    --argjson failed_run_id "$FAILED_RUN_ID" \
     '
       map(select(
         (.id | type) == "number" and
         (.created_at | type) == "string" and
         .created_at >= $start_time and
-        .created_at < $end_time
+        (
+          .created_at < $end_time or
+          ($end_time == $failed_time and
+            .created_at == $failed_time and
+            .id < $failed_run_id)
+        )
       ))
       | sort_by([.id, .created_at])
       | unique_by(.id)

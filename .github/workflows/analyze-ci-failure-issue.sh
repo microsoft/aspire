@@ -42,7 +42,7 @@ sanitize_single_line()
 render_code_span()
 {
   jq -nr --arg value "$1" '
-    ([ $value | scan("`+") | length ] | max // 0) + 1 as $delimiter_length |
+    (([ $value | scan("`+") | length ] | max // 0) + 1) as $delimiter_length |
     ("`" * $delimiter_length) + " " + $value + " " + ("`" * $delimiter_length)
   '
 }

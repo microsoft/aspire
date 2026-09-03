@@ -135,6 +135,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 workflow,
                 StringComparison.Ordinal);
             Assert.Contains(
+                "\"$REPO\" \"$WORKFLOW_ID\" \"$RUN_CREATED_AT\" \"$FAILED_RUN_ID\"",
+                workflow,
+                StringComparison.Ordinal);
+            Assert.Contains(
                 "bash .github/workflows/analyze-ci-failure-candidates.sh",
                 workflow,
                 StringComparison.Ordinal);
@@ -457,6 +461,63 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "::error::Analysis failed_tests must match the safe field schema",
             result.Output,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorSanitizesAndBoundsPublishedDiagnosticText()
+    {
+        var analysis = JsonSerializer.Serialize(new
+        {
+            run_id = 123,
+            run_scope = "pull-request",
+            verdict = "code-issue",
+            pr = new { number = 42 },
+            failed_jobs = new[]
+            {
+                new
+                {
+                    id = 123,
+                    classification = "code-issue",
+                    reason = "Job\r\n[link](https://evil.example)\u202E" + new string('j', 600),
+                },
+            },
+            failed_tests = new[]
+            {
+                new
+                {
+                    name = "Tests.Flaky\n![image](https://evil.example/image.png)" + new string('n', 600),
+                    job = "Tests",
+                    error = "Failure\u001b[31m\r\n# heading\n```" + new string('e', 1100),
+                    stack_trace = "frame\r\n@reviewers\u00AD" + new string('s', 2100),
+                    classification = "code-issue",
+                    reason = "Deterministic\r\n[details](https://evil.example)" + new string('r', 600),
+                },
+            },
+            causes = Array.Empty<string>(),
+        });
+        await WriteValidationFixtureAsync(
+            analysis,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+        using var sanitized = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "analysis-result.json")));
+        var failedJob = sanitized.RootElement.GetProperty("failed_jobs")[0];
+        Assert.Equal(500, failedJob.GetProperty("reason").GetString()!.Length);
+        Assert.StartsWith("Job [link](https://evil.example)", failedJob.GetProperty("reason").GetString(), StringComparison.Ordinal);
+        var failedTest = sanitized.RootElement.GetProperty("failed_tests")[0];
+        Assert.Equal(500, failedTest.GetProperty("name").GetString()!.Length);
+        Assert.StartsWith("Tests.Flaky ![image](https://evil.example/image.png)", failedTest.GetProperty("name").GetString(), StringComparison.Ordinal);
+        Assert.Equal(1000, failedTest.GetProperty("error").GetString()!.Length);
+        Assert.StartsWith("Failure\n# heading\n```", failedTest.GetProperty("error").GetString(), StringComparison.Ordinal);
+        Assert.Equal(2000, failedTest.GetProperty("stack_trace").GetString()!.Length);
+        Assert.StartsWith("frame\n@reviewers", failedTest.GetProperty("stack_trace").GetString(), StringComparison.Ordinal);
+        Assert.Equal(500, failedTest.GetProperty("reason").GetString()!.Length);
+        Assert.StartsWith("Deterministic [details](https://evil.example)", failedTest.GetProperty("reason").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -833,15 +894,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
-            "- `Build and Test (ubuntu-latest)` — Request timed out (transient-infra)",
+            "- ` Build and Test (ubuntu-latest) ` — ` Request timed out ` (transient-infra)",
             Assert.Single(result.Output.Split('\n'), line => line.StartsWith("- `", StringComparison.Ordinal)));
     }
 
     [Theory]
-    [InlineData("Forged job name", "- `Tests.Flaky`")]
+    [InlineData("Forged job name", "- ` Tests.Flaky `")]
     [InlineData(
         "Build and Test (ubuntu-latest)",
-        "- `Tests.Flaky` in job `Build and Test (ubuntu-latest)`")]
+        "- ` Tests.Flaky ` in job ` Build and Test (ubuntu-latest) `")]
     [RequiresTools(["bash", "jq"])]
     public async Task CommentRendererDisplaysOnlyTrustedFailedTestJobName(
         string reportedJobName,
@@ -884,7 +945,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
             expectedTestLine,
-            Assert.Single(result.Output.Split('\n'), line => line.StartsWith("- `Tests.Flaky`", StringComparison.Ordinal)));
+            Assert.Single(result.Output.Split('\n'), line => line.StartsWith("- ` Tests.Flaky `", StringComparison.Ordinal)));
     }
 
     [Theory]
@@ -940,9 +1001,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         Assert.Collection(
             result.Output.Split('\n').Where(line => line.StartsWith("- `", StringComparison.Ordinal)),
-            line => Assert.Equal("- `Tests` — Known intermittent signature (flaky-test)", line),
-            line => Assert.Equal("- `Infrastructure` — Runner disconnected (transient-infra)", line),
-            line => Assert.Equal("- `Tests.Flaky` in job `Tests`", line));
+            line => Assert.Equal("- ` Tests ` — ` Known intermittent signature ` (flaky-test)", line),
+            line => Assert.Equal("- ` Infrastructure ` — ` Runner disconnected ` (transient-infra)", line),
+            line => Assert.Equal("- ` Tests.Flaky ` in job ` Tests `", line));
     }
 
     [Fact]
@@ -1337,6 +1398,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Contains(".github/workflows/analyze-ci-failure-persistence.sh", workflow, StringComparison.Ordinal);
             Assert.Contains(".github/workflows/analyze-ci-failure-comment.sh", workflow, StringComparison.Ordinal);
             Assert.Contains("run: bash .github/workflows/analyze-ci-failure-validation.sh", workflow, StringComparison.Ordinal);
+            Assert.Contains("jq -n --rawfile body \"$COMMENT_FILE\"", workflow, StringComparison.Ordinal);
+            Assert.Contains("--input \"$COMMENT_REQUEST_FILE\"", workflow, StringComparison.Ordinal);
+            Assert.DoesNotContain("-f body=\"$(cat \"$COMMENT_FILE\")\"", workflow, StringComparison.Ordinal);
             var validationIndex = workflow.IndexOf(
                 "run: bash .github/workflows/analyze-ci-failure-validation.sh",
                 StringComparison.Ordinal);
@@ -1873,6 +1937,37 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 Assert.Contains("event=push", call, StringComparison.Ordinal);
                 Assert.Contains("status=success", call, StringComparison.Ordinal);
             });
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task LastSuccessfulMainRunOrdersRunsCreatedInTheSameSecond()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            cat <<'JSON'
+            {
+              "total_count": 3,
+              "workflow_runs": [
+                {"id": 26, "created_at": "2026-08-30T10:00:00Z", "head_sha": "later"},
+                {"id": 24, "created_at": "2026-08-30T10:00:00Z", "head_sha": "earlier"},
+                {"id": 20, "created_at": "2026-08-30T09:00:00Z", "head_sha": "older"}
+              ]
+            }
+            JSON
+            """;
+        var outputPath = Path.Combine(_workspace.Path, "last-success.json");
+
+        var result = await RunHistoryScriptAsync(
+            fakeGh,
+            "2026-08-30T10:00:00Z",
+            outputPath,
+            failedRunId: 25);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(24, output.RootElement.GetProperty("id").GetInt64());
+        Assert.Equal("earlier", output.RootElement.GetProperty("head_sha").GetString());
     }
 
     [Fact]
@@ -2422,6 +2517,65 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
     }
 
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CommentRendererTreatsJobAndTestDiagnosticsAsInertCode()
+    {
+        var analysisPath = Path.Combine(_workspace.Path, "analysis.json");
+        var trustedJobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            analysisPath,
+            """
+            {
+              "verdict": "flaky-test",
+              "failed_jobs": [
+                {
+                  "id": 1,
+                  "classification": "flaky-test",
+                  "reason": "[job reason](https://evil.example)"
+                }
+              ],
+              "failed_tests": [
+                {
+                  "name": "Tests.`![image](https://evil.example/image.png)",
+                  "job": "Tests `\r\nLinux",
+                  "error": "Failure\n# heading\n```\n@reviewers",
+                  "stack_trace": "frame\n```\n[link](https://evil.example)",
+                  "classification": "flaky",
+                  "reason": "[test reason](https://evil.example)"
+                }
+              ]
+            }
+            """);
+        await File.WriteAllTextAsync(trustedJobsPath, """[{"id":1,"name":"Tests `\r\nLinux"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, CommentScriptRelativePath),
+            [analysisPath, trustedJobsPath, "https://github.com/microsoft/aspire/actions/runs/123"]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            "- `` Tests ` Linux `` — ` [job reason](https://evil.example) ` (flaky-test)",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "- `` Tests.`![image](https://evil.example/image.png) `` in job `` Tests ` Linux ``",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "  - **Error**:\n\n        Failure\n        # heading\n        ```\n        @reviewers",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "  - **Stack Trace** (first frames):\n\n        frame\n        ```\n        [link](https://evil.example)",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "  - **Why likely flaky**: ` [test reason](https://evil.example) `",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(0, 30)]
     [InlineData(238, 256)]
@@ -2656,7 +2810,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         return new CommandResult(process.ExitCode, await stdoutTask + await stderrTask);
     }
 
-    private async Task<CommandResult> RunHistoryScriptAsync(string fakeGh, string failedRunCreatedAt, string outputPath)
+    private async Task<CommandResult> RunHistoryScriptAsync(
+        string fakeGh,
+        string failedRunCreatedAt,
+        string outputPath,
+        long failedRunId = 25)
     {
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
@@ -2670,7 +2828,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         return await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, HistoryScriptRelativePath),
-            ["microsoft/aspire", "137649006", failedRunCreatedAt, outputPath],
+            ["microsoft/aspire", "137649006", failedRunCreatedAt, failedRunId.ToString(), outputPath],
             new Dictionary<string, string>
             {
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",

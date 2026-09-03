@@ -15,6 +15,10 @@ if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] || [ ! -f "$TRUSTED
   exit 1
 fi
 
+bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+  sanitize-analysis "$ANALYSIS_FILE" "${ANALYSIS_FILE}.tmp"
+mv "${ANALYSIS_FILE}.tmp" "$ANALYSIS_FILE"
+
 TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
 TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
 ANALYSIS_RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
@@ -62,15 +66,27 @@ if ! jq -e '
   exit 1
 fi
 if ! jq -e '
+  def safe_single_line($max_length):
+    type == "string" and
+    length <= $max_length and
+    (test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]") | not) and
+    all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+  def safe_multiline($max_length):
+    type == "string" and
+    length <= $max_length and
+    ((gsub("[\t\n]"; "") | test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]")) | not) and
+    all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+  all(.failed_jobs[];
+    ((.reason // "") | safe_single_line(500))) and
   (.failed_tests | type == "array") and
   all(.failed_tests[];
     (type == "object") and
-    ((.name | type) == "string") and
+    (.name | safe_single_line(500)) and
     ((.job | type) == "string" and (.job | length) > 0) and
-    ((.error | type) == "string") and
-    ((.stack_trace == null) or ((.stack_trace | type) == "string")) and
+    (.error | safe_multiline(1000)) and
+    ((.stack_trace == null) or (.stack_trace | safe_multiline(2000))) and
     (.classification == "flaky" or .classification == "code-issue") and
-    ((.reason | type) == "string"))
+    (.reason | safe_single_line(500)))
 ' "$ANALYSIS_FILE" >/dev/null; then
   echo "::error::Analysis failed_tests must match the safe field schema"
   exit 1
