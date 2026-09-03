@@ -162,7 +162,9 @@ internal sealed class InitCommand : BaseCommand
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill).
+        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
+        // never registers `--mcps`, so MCP configuration is unavailable here by construction —
+        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
@@ -170,7 +172,6 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            offerMcpServerConfiguration: false,
             selectByDefault: null,
             cancellationToken);
 

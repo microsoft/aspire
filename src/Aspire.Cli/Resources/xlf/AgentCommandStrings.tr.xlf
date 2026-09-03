@@ -147,9 +147,19 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_McpsOptionDescription">
+        <source>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectMcpServers">
+        <source>Which MCP servers should be configured?</source>
+        <target state="new">Which MCP servers should be configured?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

@@ -102,6 +102,9 @@
   <data name="InitCommand_SelectSkills" xml:space="preserve">
     <value>Which skills should be installed?</value>
   </data>
+  <data name="InitCommand_SelectMcpServers" xml:space="preserve">
+    <value>Which MCP servers should be configured?</value>
+  </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
   </data>
@@ -239,6 +242,9 @@
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+  <data name="InitCommand_McpsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>

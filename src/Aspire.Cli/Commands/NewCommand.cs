@@ -598,8 +598,9 @@ internal sealed class NewCommand : BaseCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
-        // New projects get the complete default skill set, including aspireify. MCP configuration
-        // remains available through `aspire agent init`, but is intentionally omitted here.
+        // New projects get the complete default skill set, including aspireify. This chained flow
+        // never registers `--mcps`, so MCP configuration is unavailable here by construction —
+        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             templateResult.ExitCode,
@@ -607,7 +608,6 @@ internal sealed class NewCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            offerMcpServerConfiguration: false,
             selectByDefault: null,
             cancellationToken);
 

@@ -187,6 +187,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Which MCP servers should be configured?.
+        /// </summary>
+        internal static string InitCommand_SelectMcpServers {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectMcpServers", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
         internal static string InitCommand_InstalledPlaywrightCli {
@@ -597,6 +606,15 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillsOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_McpsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_McpsOptionDescription", resourceCulture);
             }
         }
 
