@@ -820,6 +820,7 @@ Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentVariablesConfig() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
+Aspire.Hosting/withExecutableVolume(target: string, name: string, env: string, isReadOnly?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withExternalHttpEndpoints() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withExternalServiceHttpHealthCheck(path?: string, statusCode?: number, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
@@ -855,6 +856,7 @@ Aspire.Hosting/withPipelineConfiguration(callback: callback) -> Aspire.Hosting/A
 Aspire.Hosting/withPipelineStepFactory(stepName: string, callback: callback, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withProcessCommand(commandName: string, displayName: string, options: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandExportOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: callback, options?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandResultExportOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withProjectVolume(target: string, name: string, env: string, isReadOnly?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/withReference(source: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|string|uri, connectionName?: string, optional?: boolean, name?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withReferenceEnvironment(options: Aspire.Hosting/Aspire.Hosting.Ats.ReferenceEnvironmentInjectionOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withRemoteImageName(remoteImageName: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource

@@ -27,6 +27,7 @@ enum:Aspire.Hosting.Azure.AzureSandboxTier = ExtraSmall | Small | Medium | Large
 # Capabilities
 Aspire.Hosting.Azure.Sandboxes/addAzureSandboxGroup(name: string) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/publishComputeResourceAsAzureSandbox(sandboxGroup: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource, options?: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
+Aspire.Hosting.Azure.Sandboxes/withAcrPullIdentity(identity: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withNoManagedIdentity() -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withSystemAssignedIdentity() -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withUserAssignedIdentity(identity: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
