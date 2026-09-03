@@ -1070,6 +1070,42 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LegacyAnnotationBasedProjectRetainsProjectContainerAppDefaults()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Image = "legacy-image",
+                Tag = "latest"
+            })
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var project = Assert.Single(model.GetProjectResources());
+
+        project.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task RoleAssignmentsWithAsExisting()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
