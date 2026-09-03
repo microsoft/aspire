@@ -197,7 +197,6 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
         content = content.Replace(
             "builder.Build().Run();",
             $$"""
-            #pragma warning disable ASPIREAZURE004
             var connectorNamespace = builder.AddAzureConnectorNamespace("connectors");
 
             var connection = connectorNamespace.AddConnection(
@@ -240,7 +239,6 @@ public sealed class AzureConnectorNamespaceDeploymentTests(ITestOutputHelper out
                         TenantId = "{{tenantId:D}}",
                         PrincipalType = AzureConnectorNamespaceMcpAccessPolicyPrincipalType.User
                     });
-            #pragma warning restore ASPIREAZURE004
 
             builder.Build().Run();
             """);

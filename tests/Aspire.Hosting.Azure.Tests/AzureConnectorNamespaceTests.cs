@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
-#pragma warning disable ASPIREAZURE004
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
