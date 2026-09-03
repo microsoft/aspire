@@ -17,11 +17,13 @@ import {
   computeFocusExclusionItems,
   computeCommunityItems,
   isChecksFailing,
+  isCoreTeamAuthor,
   isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
+import { annotateDashboardSla, isSlaCandidatePr, isSlaRepo } from "./sla.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -207,9 +209,15 @@ function resolveAuthor(login, assignees) {
 // Server-parity review summary (mirrors GitHubClient.CreateReviewStatusFromGraphQlAsync).
 // `rawUnresolved` is the count of unresolved review threads before policy gating.
 const RESOLUTION_REQUIRED_REPOS = new Set(["microsoft/aspire"]);
-function deriveReview(reviews, requestedReviewers, viewers, repo, rawUnresolved) {
+export function deriveReview(reviews, requestedReviewers, viewers, repo, rawUnresolved) {
+  // Copilot's code-review bot submits real REVIEW nodes whose GraphQL author.login is
+  // "copilot-pull-request-reviewer" (bot logins come back WITHOUT the "[bot]" suffix over
+  // GraphQL). It is not a human sign-off, so it must be kept out of the human review set --
+  // otherwise it inflates reviewerCount to 1, mislabels the PR as "Review started", and (on
+  // the aspire-1p mirror) wrongly clears the review SLA clock. isBotReviewer doesn't catch
+  // this login, so exclude Copilot reviewers explicitly; copilotReviewed still tracks it.
   const human = reviews
-    .filter((r) => r.author?.login && !isBotReviewer(r.author.login) && r.submittedAt)
+    .filter((r) => r.author?.login && !isBotReviewer(r.author.login) && !isCopilotReviewer(r.author.login) && r.submittedAt)
     .sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
   const copilotReviewed = reviews.some((r) => isCopilotReviewer(r.author?.login));
 
@@ -823,9 +831,31 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
         developerCounts: createDeveloperPullRequestCounts(allPrs),
       };
+      // SLA candidates = the full (uncapped) focused "Needs attention" queue, narrowed to
+      // PRs the review SLA applies to: on an SLA repo, authored outside the core team, and
+      // not yet reviewed by a human. annotateDashboardSla() consumes this scratch field to
+      // stamp anchors/state and then removes it from the broadcast payload.
+      attention.slaCandidates = focusAll
+        .map((f) => card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone }))
+        .filter((c) => isSlaCandidatePr(c.pr));
     }
 
     const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
+
+    // Lean list of every open, non-team PR on an SLA repo (drafts included). The hourly
+    // notifier uses this to detect brand-new external PRs; it is intentionally independent
+    // of the capped focus queue so a new PR is announced even before it surfaces there.
+    const externalOpenPrs = allPrs
+      .filter((p) => isSlaRepo(p.repository) && p.state === "open" && !isCoreTeamAuthor(p.author))
+      .map((p) => ({
+        repo: p.repository,
+        number: p.number,
+        title: p.title,
+        url: p.url,
+        author: p.author,
+        draft: !!p.draft,
+        createdAt: p.createdAt,
+      }));
 
     const counts = {
       prs: visiblePrs.length,
@@ -852,6 +882,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       showDrafts,
       reviewLimit,
       errors,
+      externalOpenPrs,
       fetchedAt: new Date().toISOString(),
     };
   }
@@ -859,5 +890,29 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   await Promise.all(jobs);
   // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
-  return snapshot();
+  const snap = snapshot();
+  // Stamp SLA anchors/state and attach dashboard.sla (review mode only). This also
+  // reconciles + persists the durable firstQualifiedAt tracking store.
+  if (snap.mode === "review") {
+    // Tell the SLA reconciler which SLA repos actually fetched OK this run so a transient
+    // failure can't prune tracked PRs and reset their breach clock (#5). okRepos holds
+    // hostRepoKey(graphql, repo) = `${graphql??""}\n${repo}`, so the repo slug is the text
+    // after the newline; keep only the ones under SLA, lowercased to match slaCandidateKey.
+    const authoritativeRepos = new Set();
+    for (const entry of okRepos) {
+      const repo = entry.slice(entry.indexOf("\n") + 1).toLowerCase();
+      if (isSlaRepo(repo)) authoritativeRepos.add(repo);
+    }
+    // The SLA repos this run was actually supposed to fetch (watched by some active account).
+    // annotateDashboardSla compares this against authoritativeRepos to flag a partial fetch, so
+    // the report can distinguish a genuinely empty queue from a run where the watched repo failed.
+    const expectedSlaRepos = new Set();
+    for (const acct of usable) {
+      for (const repo of acct.repos ?? []) {
+        if (isSlaRepo(repo)) expectedSlaRepos.add(repo.toLowerCase());
+      }
+    }
+    await annotateDashboardSla(snap, { now: Date.now(), authoritativeRepos, expectedSlaRepos });
+  }
+  return snap;
 }

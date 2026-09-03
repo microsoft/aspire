@@ -60,8 +60,13 @@ card shows are driven by its lane and its signal pills:
   explanations for watched GitHub repositories and Azure DevOps delivery pipelines.
   Related provider sources are grouped by repository and each group can be dragged
   into a preferred order that persists across reloads.
+- **Review SLA (aspire-1p)** — a pinned panel and per-card countdown that track the
+  1-business-day review SLA on the first-party `devdiv-microsoft/aspire-1p` repo, so
+  ready, externally-authored PRs don't sit unreviewed past budget. See
+  [Review SLA](#review-sla-aspire-1p).
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
-  N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
+  N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled,
+  Review SLA, Out of SLA.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
 - **Stable background refresh** — GitHub data is assembled into a complete snapshot
@@ -146,7 +151,42 @@ arrow keys. Every source in the group moves together. The app saves the flattene
 order in durable preferences and broadcasts changes to other open canvas instances
 without refetching provider data.
 
-## How it works
+## Review SLA (aspire-1p)
+
+The private first-party mirror `devdiv-microsoft/aspire-1p` carries a **1-business-day
+review SLA**. Review mode tracks it so a genuinely-ready PR from outside the core team
+never sits unreviewed past budget.
+
+- **Who it applies to** — a PR qualifies for the SLA clock when **all** of these hold:
+  it lives on an SLA repo (`devdiv-microsoft/aspire-1p`), it already qualifies for the
+  focused **Needs attention** queue, its author is **not** on the core team (core-team
+  membership on the mirror is an explicit allowlist of enterprise `_microsoft` accounts —
+  see `coreTeamEmuLogins` in `constants.mjs`; any other `_microsoft` author is a review
+  target), and it has had **zero human reviews** so far (Copilot/bot reviews don't stop
+  the clock). The first human review — comment or approval — stops the clock immediately.
+- **Business-time budget** — the budget is **8 business hours**, measured Mon–Fri
+  09:00–17:00 **Pacific**. Overnight, weekend, and holiday-adjacent hours don't burn
+  budget, and the window tracks Pacific daylight/standard transitions automatically. A
+  PR is flagged **approaching** at 6 business hours elapsed and **breached** at 8.
+- **Pinned SLA panel** — the top of the review board shows an at-a-glance panel: how
+  many tracked PRs are OK, approaching, or already out of SLA, with the breached and
+  approaching PRs listed by soonest deadline first.
+- **Per-card countdown** — every tracked card shows a live note (e.g. *"Review SLA: due
+  in 2h 40m"* or *"Out of SLA by 1h 10m"*) that ticks against your browser clock, plus a
+  **Review SLA** (approaching) or **Out of SLA** (breached) pill.
+- **Stable anchors, live text** — only the fixed anchors (first-qualified, warn, and
+  deadline instants) and a stepwise state are stored on the dashboard; the "due in"/
+  "overdue" text is computed client-side so the countdown ticks without churning the
+  cached snapshot. The tracking store lives at
+  `artifacts/sla-tracking.json` under the extension's Copilot home directory and records
+  only when each PR first qualified, so restarts and refreshes never reset a clock.
+- **Headless report for external automation** — `sla-cli.mjs` computes the same review-SLA
+  snapshot outside the canvas and prints it as a single JSON document (tracked PRs with their
+  stable anchors and state, plus every open external PR). An external scheduled automation can
+  consume that output to nudge reviewers even with the canvas closed; the report is a plain
+  read-only projection and takes no action itself.
+
+
 
 | File | Responsibility |
 | --- | --- |
@@ -157,6 +197,8 @@ without refetching provider data.
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
+| `sla.mjs` | Review-SLA engine: business-hours math, candidate rule, tracking store, dashboard annotation. |
+| `sla-cli.mjs` | Headless JSON emitter (`node sla-cli.mjs`) that prints a read-only review-SLA snapshot for an external scheduled automation to consume. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
 | `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
@@ -183,6 +225,8 @@ No credential is written to the extension preferences.
 - `accounts` — list every detected credential, its active state, and repo access.
 - `summary` — return PR/issue counts or Health status counts and reasons without
   opening the canvas.
+- `sla_report` — return the current aspire-1p review-SLA status (counts plus the
+  breached and approaching PRs, soonest deadline first) without opening the canvas.
 
 ## Install
 

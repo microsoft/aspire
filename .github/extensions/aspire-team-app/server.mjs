@@ -918,6 +918,55 @@ export async function forceRefresh() {
   return getDashboard(true);
 }
 
+// Compute an SLA snapshot for the headless notifier / agent action WITHOUT mutating the
+// user's persisted canvas mode or the shared dashboard cache. dashboard.sla is only produced
+// on the review-mode code path (see loadDashboard), so this MUST force review mode: using the
+// persisted mode would emit no SLA data whenever the canvas is on Issues, Ship, or Health.
+// Forcing a private review-mode load here keeps the hourly notifier correct regardless of what
+// the canvas currently shows.
+export async function computeSlaReport() {
+  const prefs = await loadPrefs();
+  const auth = await resolveAuth(prefs);
+  const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
+  const accountsForLoad = active
+    .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
+    .filter((a) => a.token && a.login);
+  if (accountsForLoad.length === 0) {
+    const anyDetected = auth.accounts.length > 0;
+    return {
+      authenticated: false,
+      message: !anyDetected
+        ? "No GitHub credentials detected. Run `gh auth login` so the SLA report can read the review queue."
+        : "The active GitHub account can't read its watched repositories.",
+      sla: null,
+      externalOpenPrs: [],
+    };
+  }
+  const dashboard = await loadDashboard({
+    accounts: accountsForLoad,
+    mode: "review",
+    release: prefs.release,
+    prefs: prefs.notifications,
+    dismissed: prefs.dismissedNotifications,
+    showDrafts: prefs.showDrafts,
+  });
+  // Surface fetch health so the notifier can tell an empty queue apart from a failed fetch of
+  // the watched repo. dashboard.sla.partial is SLA-scoped (see annotateDashboardSla); errors is
+  // the raw per-repo failure list for diagnostics. On a partial run the notifier should leave
+  // its tracker untouched rather than clearing/announcing against known-incomplete data.
+  const partial = !!(dashboard.sla && dashboard.sla.partial);
+  return {
+    authenticated: true,
+    viewer: dashboard.viewer,
+    sla: dashboard.sla ?? null,
+    externalOpenPrs: dashboard.externalOpenPrs ?? [],
+    fetchedAt: dashboard.fetchedAt,
+    partial,
+    unfetchedRepos: dashboard.sla?.unfetchedRepos ?? [],
+    errors: dashboard.errors ?? [],
+  };
+}
+
 export async function refreshInBackground() {
   return startCompute({ progress: false, background: true });
 }

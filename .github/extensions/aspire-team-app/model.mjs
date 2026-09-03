@@ -7,6 +7,7 @@
 
 import {
   afscromeIssueAuthor,
+  coreTeamEmuLogins,
   coreTeamMembers,
   coreTeamMemberAliasSuffixes,
   ctiTeamTitleMarker,
@@ -74,6 +75,17 @@ function isCopilotAttributedAuthor(author) {
   // punctuation) as part of keying to the human owner, so it can never end with "/copilot".
   return String(author || "").toLowerCase().endsWith("/copilot");
 }
+// Strip a trailing "/copilot" attribution so ownership checks compare the human base.
+// A Copilot-agent PR started by a team member surfaces as "{human}/copilot" (e.g.
+// "someone_microsoft/copilot"); the human owns it, so core-team matching must run against
+// the base. actorIdentityKey already drops "/copilot" on its direct-match path, but the
+// alias-suffix strip and the explicit roster allowlist compare raw logins -- without this
+// normalization those two checks miss and a team member's Copilot PR is wrongly treated as
+// external, landing it in the review queue.
+function copilotHumanBase(author) {
+  const raw = String(author || "");
+  return raw.toLowerCase().endsWith("/copilot") ? raw.slice(0, -"/copilot".length) : raw;
+}
 function isBotAuthor(author, authorType) {
   if (isCopilotAttributedAuthor(author)) return false;
   // GraphQL __typename is the most precise signal when present; the string checks mirror
@@ -84,18 +96,26 @@ function isBotAuthor(author, authorType) {
   if (knownBotAuthors.has(n)) return true;
   return n.endsWith("[bot]") || n.includes("bot") || n === "copilot" || n === "github-actions";
 }
-function isCoreTeamAuthor(author) {
+export function isCoreTeamAuthor(author) {
   return coreTeamOwnershipActor(author) !== null;
 }
-// Resolves the core-team actor that "owns" a PR by an author, honoring alias
-// suffixes (#95). Returns a canonical coreTeamMembers login when the author
-// matches directly or via a stripped alias suffix; otherwise returns the alias
-// login itself when the author carries a configured suffix (an MSFT alt account
-// not individually listed); null for everyone else.
+const coreTeamEmuLoginSet = new Set(coreTeamEmuLogins.map((login) => login.toLowerCase()));
+
+// Resolves the core-team actor that "owns" a PR by an author. Returns a canonical
+// coreTeamMembers login when the author matches a listed member directly or via a
+// stripped alias suffix (a member's "*_microsoft" alt whose base is a public login,
+// e.g. "eerhardt_microsoft" -> "eerhardt"). Otherwise, an EMU-form login counts as core
+// team only when it is on the explicit coreTeamEmuLogins allowlist (the mirror roster,
+// whose bases frequently differ from public logins). Everyone else -- including any
+// unlisted "*_microsoft" account -- returns null so they remain review targets.
 function coreTeamOwnershipActor(author) {
-  const member = matchingCoreTeamMember(author);
+  // Resolve ownership against the human base so a "{member}/copilot" mirror PR isn't treated
+  // as external: both the alias-suffix strip (via matchingCoreTeamMember) and the roster
+  // allowlist below otherwise compare the raw "/copilot"-suffixed login and miss.
+  const base = copilotHumanBase(author);
+  const member = matchingCoreTeamMember(base);
   if (member) return member;
-  return isConfiguredTeamAlias(author) ? author : null;
+  return coreTeamEmuLoginSet.has(base.toLowerCase()) ? base : null;
 }
 function matchingCoreTeamMember(author) {
   const authorKey = actorIdentityKey(author);
@@ -113,9 +133,6 @@ function configuredTeamAliasBase(author) {
     return s.length > 0 && normalized.endsWith(s) && normalized.length > s.length;
   });
   return suffix ? String(author).slice(0, -suffix.length) : null;
-}
-function isConfiguredTeamAlias(author) {
-  return configuredTeamAliasBase(author) !== null;
 }
 function isCommunityToolkitPullRequest(pr) {
   return pr.repository.toLowerCase() === "communitytoolkit/aspire";

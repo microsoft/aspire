@@ -15,6 +15,7 @@ import {
   createIssueSignals,
   filterCheckFailureRules,
   isChecksFailing,
+  isCoreTeamAuthor,
   isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
@@ -297,6 +298,27 @@ test("createDeveloperPullRequestCounts attributes open PRs to core-team members 
   assert.equal(byActor.has("randocontributor"), false);
 });
 
+test("isCoreTeamAuthor: EMU logins are core team only via the explicit allowlist", () => {
+  // Public core-team login and a member alt whose base matches the public roster.
+  assert.equal(isCoreTeamAuthor("davidfowl"), true);
+  assert.equal(isCoreTeamAuthor("eerhardt_microsoft"), true);
+
+  // Listed EMU logins whose base does NOT match a public login (e.g. David Pine is
+  // @IEvangelist publicly but dapine_microsoft on the mirror) still resolve via the
+  // allowlist, not a suffix-strip.
+  assert.equal(isCoreTeamAuthor("dapine_microsoft"), true);
+  assert.equal(isCoreTeamAuthor("midenn_microsoft"), true);
+  assert.equal(isCoreTeamAuthor("karolz_microsoft"), true);
+
+  // An unlisted "*_microsoft" account is NOT core team — carrying the suffix is not
+  // enough. These are the review targets the SLA queue is meant to catch.
+  assert.equal(isCoreTeamAuthor("andreas_microsoft"), false);
+  assert.equal(isCoreTeamAuthor("someexternal_microsoft"), false);
+
+  // Non-Microsoft community author.
+  assert.equal(isCoreTeamAuthor("randocontributor"), false);
+});
+
 function isoAgoIssue(ms) {
   return new Date(Date.now() - ms).toISOString();
 }
@@ -414,4 +436,24 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   // login has no "bot" substring (normalizeIssue now carries authorType for issues).
   const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
   assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
+});
+
+test("isCoreTeamAuthor treats a '/copilot'-attributed team author as core team", () => {
+  // A Copilot-agent PR started by a team member comes back as "{human}/copilot". Ownership
+  // must resolve the human base for BOTH the alias-suffix strip and the roster allowlist,
+  // otherwise the "/copilot" suffix makes both miss and the PR is misclassified as external.
+  // "eerhardt_microsoft" resolves via the alias-suffix strip (base "eerhardt" is a public
+  // member login); "dapine_microsoft" resolves via the explicit roster allowlist (its public
+  // login differs), so the two cases exercise both ownership paths.
+  assert.equal(isCoreTeamAuthor("eerhardt_microsoft/copilot"), true);
+  assert.equal(isCoreTeamAuthor("dapine_microsoft/copilot"), true);
+
+  // Plain (non-"/copilot") team authors and the bare aliases keep resolving as core team.
+  assert.equal(isCoreTeamAuthor("eerhardt_microsoft"), true);
+  assert.equal(isCoreTeamAuthor("dapine_microsoft"), true);
+
+  // A non-roster account stays external whether or not it carries the "/copilot" attribution,
+  // so its PRs still qualify for the review queue.
+  assert.equal(isCoreTeamAuthor("someone_microsoft/copilot"), false);
+  assert.equal(isCoreTeamAuthor("someone_microsoft"), false);
 });
