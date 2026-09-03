@@ -296,7 +296,7 @@ public partial class ResourcesTests : DashboardTestContext
         Task? showContextMenuTask = null;
         await cut.InvokeAsync(() =>
         {
-            showContextMenuTask = (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20])!;
+            showContextMenuTask = (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20, null])!;
         });
         Assert.NotNull(showContextMenuTask);
         cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));

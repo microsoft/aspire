@@ -432,6 +432,7 @@ class ResourceGraph {
         var cogGroup = newNodesContainer
             .append("g")
             .attr("class", "resource-menu-cog")
+            .attr("id", n => `resource-menu-cog-${n.id}`)
             .attr("transform", "translate(35,43)")
             .attr("role", "button")
             .attr("tabindex", 0)
@@ -600,7 +601,7 @@ class ResourceGraph {
         // Prevent default browser context menu.
         event.preventDefault();
 
-        await this.openResourceContextMenu(data.id, event.clientX, event.clientY);
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, null, null);
     };
 
     cogMenuClick = async (event) => {
@@ -612,7 +613,7 @@ class ResourceGraph {
         event.preventDefault();
         event.stopPropagation();
 
-        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, event.currentTarget);
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, event.currentTarget, null);
     };
 
     cogMenuKeyDown = async (event) => {
@@ -629,16 +630,17 @@ class ResourceGraph {
             data.id,
             Math.round(bounds.left + bounds.width / 2),
             Math.round(bounds.top + bounds.height / 2),
-            event.currentTarget);
+            event.currentTarget,
+            event.currentTarget.id);
     };
 
-    openResourceContextMenu = async (id, clientX, clientY, trigger) => {
+    openResourceContextMenu = async (id, clientX, clientY, trigger, focusElementId) => {
         this.openContextMenu = true;
         trigger?.setAttribute("aria-expanded", "true");
 
         try {
             // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY);
+            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY, focusElementId);
         } finally {
             this.openContextMenu = false;
             trigger?.setAttribute("aria-expanded", "false");

@@ -190,6 +190,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             var headerBounds = await header.BoundingBoxAsync();
             Assert.NotNull(headerBounds);
             Assert.InRange(headerBounds.Height, 39, 41);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(cog).ToBeFocusedAsync();
         });
     }
 
