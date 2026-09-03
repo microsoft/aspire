@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -464,6 +465,84 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Path.Combine("/custom/output/path", "obj") + Path.DirectorySeparatorChar,
             doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault()?.Value);
         Assert.Equal("$(BaseIntermediateOutputPath)", doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault()?.Value);
+    }
+
+    [Fact]
+    public async Task CreateClosureProjectFile_BuildEmitsClosureContract()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var integrationDirectory = workspace.CreateDirectory("MyIntegration");
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "MyIntegration.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var projectDirectory = workspace.CreateDirectory("generated-project");
+        var restoreDirectory = workspace.CreateDirectory("integration-restore");
+        var projectPath = Path.Combine(projectDirectory.FullName, "GeneratedClosure.csproj");
+        var nuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(nuGetConfigPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+              </packageSources>
+            </configuration>
+            """);
+        var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
+            restoreDirectory.FullName,
+            restoreConfigFile: nuGetConfigPath);
+        projectFile.ProjectReferences.Add(new CSharpProjectReference(
+            integrationProjectPath,
+            IsAspireProjectResource: false,
+            ReferenceOutputAssembly: true));
+
+        await File.WriteAllTextAsync(projectPath, projectFile.ToXDocument().ToString());
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory.FullName, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDirectory.FullName).ToString());
+
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = projectDirectory.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("build");
+        startInfo.ArgumentList.Add(projectPath);
+        startInfo.ArgumentList.Add("--nologo");
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet build.");
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        Assert.True(process.ExitCode == 0, $"dotnet build failed:{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+        Assert.True(File.Exists(Path.Combine(restoreDirectory.FullName, "obj", IntegrationClosureBuilder.ProjectAssetsFileName)));
+        Assert.True(File.Exists(Path.Combine(restoreDirectory.FullName, "bin", "Debug", "net10.0", "GeneratedClosure.dll")));
+        Assert.False(Directory.Exists(Path.Combine(projectDirectory.FullName, "obj")));
+        Assert.False(Directory.Exists(Path.Combine(projectDirectory.FullName, "bin")));
+
+        var sourcePaths = await File.ReadAllLinesAsync(
+            Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName));
+        Assert.Equal(["MyIntegration.dll", "MyIntegration.pdb"], sourcePaths.Select(Path.GetFileName));
+        Assert.All(sourcePaths, path => Assert.True(File.Exists(path)));
+        Assert.Equal(
+            ["|||", "|||"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName)));
+        Assert.Equal(
+            ["MyIntegration.dll", "MyIntegration.pdb"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName)));
+        Assert.Equal(
+            ["MyIntegration"],
+            await File.ReadAllLinesAsync(Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName)));
     }
 
     [Fact]
