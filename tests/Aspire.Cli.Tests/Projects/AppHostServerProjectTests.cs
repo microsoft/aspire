@@ -232,43 +232,28 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task CreateProjectFiles_ExplicitHostingProjectDoesNotAddRepositoryHostingProject()
+    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingPlatformPathComparison()
     {
-        var repositoryHostingDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
-            Path.Combine("src", "Aspire.Hosting"));
-        var repositoryHostingProjectPath = Path.Combine(repositoryHostingDirectory.FullName, "Aspire.Hosting.csproj");
-        await File.WriteAllTextAsync(repositoryHostingProjectPath, "<Project />");
-        var customHostingProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Custom.Aspire.Hosting.csproj");
-        await File.WriteAllTextAsync(customHostingProjectPath, "<Project />");
-
         var project = CreateProject();
+        var firstProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Integration", "Integration.csproj");
+        var secondProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "integration", "Integration.csproj");
         var integrations = new[]
         {
-            IntegrationReference.FromProject("Aspire.Hosting", customHostingProjectPath)
+            IntegrationReference.FromProject("FirstIntegration", firstProjectPath),
+            IntegrationReference.FromProject("SecondIntegration", secondProjectPath)
         };
 
         var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
 
-        var projectReference = Assert.Single(XDocument.Load(projectPath).Descendants("ProjectReference"));
-        Assert.Equal(customHostingProjectPath, projectReference.Attribute("Include")?.Value);
-    }
+        var document = XDocument.Load(projectPath);
+        var projectReferences = document.Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .ToArray();
+        string[] expectedPaths = OperatingSystem.IsWindows()
+            ? [firstProjectPath]
+            : [firstProjectPath, secondProjectPath];
 
-    [Fact]
-    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingFileSystemPathRules()
-    {
-        var upperCasePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Case", "Integration.csproj");
-        var lowerCasePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "case", "Integration.csproj");
-        var project = CreateProject();
-
-        var (projectPath, _) = await project.CreateProjectFilesAsync(
-        [
-            IntegrationReference.FromProject("FirstIntegration", upperCasePath),
-            IntegrationReference.FromProject("SecondIntegration", lowerCasePath)
-        ]).DefaultTimeout();
-
-        var projectReferences = XDocument.Load(projectPath).Descendants("ProjectReference").ToArray();
-        var expectedCount = StringComparers.FileSystemPath.Equals(upperCasePath, lowerCasePath) ? 1 : 2;
-        Assert.Equal(expectedCount, projectReferences.Length);
+        Assert.Equal(expectedPaths, projectReferences);
     }
 
     [Fact]

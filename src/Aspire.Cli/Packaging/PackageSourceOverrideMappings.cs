@@ -44,10 +44,6 @@ internal static class PackageSourceOverrideMappings
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
-        if (HasCredentialMaterial(packageSourceOverride))
-        {
-            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(packageSourceOverride));
-        }
 
         var mappings = new List<PackageMapping>
         {

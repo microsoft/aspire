@@ -13,7 +13,9 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         const string source = "https://user:p#word@host/";
 
         Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(source));
-        Assert.Throws<ArgumentException>(() => PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: null));
+        var mappings = PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: source);
+        Assert.Equal(2, mappings.Length);
+        Assert.All(mappings, mapping => Assert.Equal(source, mapping.Source));
     }
 
     [Fact]

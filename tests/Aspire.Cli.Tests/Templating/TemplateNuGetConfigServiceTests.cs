@@ -168,15 +168,25 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [InlineData("https://user:token@example.invalid/v3/index.json")]
     [InlineData("https://example.invalid/v3/index.json?sig=token")]
     [InlineData("https://example.invalid/v3/index.json#token")]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceThrows(string sourceOverride)
+    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceCreatesConfig(string sourceOverride)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var service = CreateService();
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            async () => await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, workspace.WorkspaceRoot.FullName, CancellationToken.None));
+        var changed = await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+            sourceOverride,
+            channelName: null,
+            workspace.WorkspaceRoot.FullName,
+            CancellationToken.None);
 
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+        Assert.True(changed);
+        Assert.Equal(
+            sourceOverride,
+            XDocument.Load(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"))
+                .Descendants("packageSources")
+                .Elements("add")
+                .Single(element => element.Attribute("key")?.Value == "aspire-0")
+                .Attribute("value")?.Value);
     }
 
     [Fact]

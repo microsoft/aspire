@@ -2334,7 +2334,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.True(firstResult.Success);
             Assert.True(secondResult.Success);
-            Assert.Equal([false, false], noRestoreValues);
+            Assert.Equal([false, true], noRestoreValues);
             Assert.All(processOptions, options =>
             {
                 Assert.True(options.SuppressLogging);
@@ -2436,7 +2436,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithPackageReferencesAndExplicitChannel_ComposesAmbientNuGetConfigAndCleansCredentialRestore()
+    public async Task PrepareAsync_WithPackageReferencesAndExplicitChannel_ComposesAmbientNuGetConfigAndCleansTemporaryConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://packages.example.com/v3/index.json";
@@ -2471,6 +2471,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
         XDocument? restoreConfig = null;
+        string? temporaryConfigPath = null;
         executionFactory.AsyncAttemptCallback = (_, _, _) =>
         {
             var args = executionFactory.LastArguments!;
@@ -2481,13 +2482,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             if (args is ["nuget", "restore", ..])
             {
-                restoreConfig = XDocument.Load(GetArgumentValue(args, "--nuget-config"));
+                temporaryConfigPath = GetArgumentValue(args, "--nuget-config");
+                restoreConfig = XDocument.Load(temporaryConfigPath);
             }
 
             return Task.FromResult((0, (string?)null));
         };
 
-        string? temporaryRestoreDirectory = null;
         try
         {
             var result = await server.PrepareAsync(
@@ -2504,23 +2505,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Contains(
                 restoreConfig.Descendants("packageSourceMapping").Elements("packageSource"),
                 source => source.Attribute("key")?.Value == "private");
-
-            temporaryRestoreDirectory = Directory.GetParent(server.IntegrationProbeManifestPath!)!.FullName;
-            Assert.True(Directory.Exists(temporaryRestoreDirectory));
-            Assert.StartsWith(
-                Path.Combine(
-                    workspace.WorkspaceRoot.FullName,
-                    ".aspire",
-                    "integrations",
-                    "package-restore",
-                    BundleNuGetService.TemporaryCredentialRestoreDirectoryName),
-                temporaryRestoreDirectory,
-                StringComparisons.FileSystemPath);
-
-            server.Dispose();
-
-            Assert.False(Directory.Exists(temporaryRestoreDirectory));
-            Assert.False(File.Exists(TemporaryCacheDirectory.GetLeasePath(temporaryRestoreDirectory)));
+            Assert.NotNull(temporaryConfigPath);
+            Assert.False(File.Exists(temporaryConfigPath));
+            Assert.NotNull(server.IntegrationProbeManifestPath);
+            Assert.True(Directory.Exists(Path.GetDirectoryName(server.IntegrationProbeManifestPath)));
         }
         finally
         {
@@ -2672,14 +2660,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_KeepsRestoreSourcesTemporary()
+    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_KeepsGeneratedSourcePropsTemporary()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
         string? restoreSourcesPropsFile = null;
         string? restoreSourcesPropsContent = null;
         string? intermediateOutputPath = null;
-        string? temporaryGlobalPackagesFolder = null;
+        var packageRoot = workspace.CreateDirectory("packages");
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2700,14 +2688,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Assert.True(File.Exists(restoreSourcesPropsFile));
                 restoreSourcesPropsContent = File.ReadAllText(restoreSourcesPropsFile);
                 intermediateOutputPath = GetIntermediateOutputPath(projectFilePath.Directory!);
-                temporaryGlobalPackagesFolder = XDocument.Load(Path.Combine(projectFilePath.Directory!.FullName, "Directory.Build.props"))
-                    .Descendants("RestorePackagesPath")
-                    .Single()
-                    .Value;
-                Assert.StartsWith(
-                    Path.GetDirectoryName(intermediateOutputPath) + Path.DirectorySeparatorChar,
-                    temporaryGlobalPackagesFolder,
-                    StringComparisons.FileSystemPath);
 
                 WriteClosureInputs(
                     projectFilePath.Directory!,
@@ -2715,7 +2695,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     ["MyIntegration"],
                     CreatePackageMetadata());
                 var packageAssemblyPath = Path.Combine(
-                    temporaryGlobalPackagesFolder,
+                    packageRoot.FullName,
                     "aspire.hosting.redis",
                     "13.2.0",
                     "lib",
@@ -2767,25 +2747,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(restoreSourcesPropsFile);
             Assert.NotNull(restoreSourcesPropsContent);
             Assert.NotNull(intermediateOutputPath);
-            Assert.NotNull(temporaryGlobalPackagesFolder);
             Assert.Contains(channelSource, restoreSourcesPropsContent);
-            Assert.StartsWith(
-                Path.Combine(workingDirectory, "integration-restore", "temporary") + Path.DirectorySeparatorChar,
-                intermediateOutputPath,
-                StringComparisons.FileSystemPath);
+            Assert.Equal(objDirectory, Path.TrimEndingDirectorySeparator(intermediateOutputPath));
             Assert.False(File.Exists(restoreSourcesPropsFile));
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
             Assert.False(File.Exists(restoreStampFile));
             Assert.True(Directory.Exists(intermediateOutputPath));
-            Assert.True(Directory.Exists(temporaryGlobalPackagesFolder));
 
             var persistedProjectContent = await File.ReadAllTextAsync(
                 Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
             Assert.DoesNotContain(channelSource, persistedProjectContent);
-
-            server.Dispose();
-            Assert.False(Directory.Exists(intermediateOutputPath));
-            Assert.False(Directory.Exists(temporaryGlobalPackagesFolder));
         }
         finally
         {
@@ -2795,7 +2766,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WhenCredentialBearingProjectRestoreFails_RemovesTemporaryRestoreMetadata()
+    public async Task PrepareAsync_WhenCredentialBearingProjectRestoreFails_RedactsOutputAndKeepsNuGetIntermediates()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
@@ -2846,13 +2817,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
             Assert.DoesNotContain(channelSource, output);
             Assert.Contains("https://feed.blob.core.windows.net/packages/index.json", output);
-            Assert.False(Directory.Exists(objDirectory));
             Assert.NotNull(intermediateOutputPath);
-            Assert.StartsWith(
-                Path.Combine(workingDirectory, "integration-restore", "temporary") + Path.DirectorySeparatorChar,
-                intermediateOutputPath,
-                StringComparisons.FileSystemPath);
-            Assert.False(Directory.Exists(intermediateOutputPath));
+            Assert.Equal(objDirectory, Path.TrimEndingDirectorySeparator(intermediateOutputPath));
+            Assert.True(File.Exists(Path.Combine(objDirectory, "project.assets.json")));
+            Assert.True(File.Exists(Path.Combine(objDirectory, "IntegrationRestore.csproj.nuget.dgspec.json")));
         }
         finally
         {

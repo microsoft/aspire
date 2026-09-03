@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.IO.Hashing;
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
@@ -32,8 +34,8 @@ internal interface INuGetService
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
     /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The package probe manifest and ownership of any temporary restore artifacts.</returns>
-    Task<PackageRestoreResult> RestorePackagesAsync(
+    /// <returns>The path to the package probe manifest.</returns>
+    Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -50,9 +52,6 @@ internal interface INuGetService
 internal sealed class BundleNuGetService : INuGetService
 {
     internal const string ManagedComponentNotFoundMessage = "aspire-managed not found in layout.";
-    internal const string TemporaryCredentialRestoreDirectoryName = "temporary";
-    internal const string TemporaryCredentialRestoreDirectoryPrefix = "credential";
-
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
@@ -76,7 +75,7 @@ internal sealed class BundleNuGetService : INuGetService
         _bundleService = bundleService;
     }
 
-    public async Task<PackageRestoreResult> RestorePackagesAsync(
+    public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -116,55 +115,41 @@ internal sealed class BundleNuGetService : INuGetService
             .Concat(nugetConfigInspection.CredentialBearingSources)
             .Distinct(StringComparer.Ordinal)
             .ToArray() ?? nugetConfigInspection.CredentialBearingSources;
-        var containsCredentialMaterial =
-            nugetConfigInspection.ContainsCredentialMaterial ||
-            sensitiveSources.Length > 0;
         var nugetFallbackPackagesPaths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment);
 
-        TemporaryCacheDirectory? temporaryRestoreDirectory = null;
-        var restoreDir = containsCredentialMaterial
-            ? CreateTemporaryCredentialRestoreDirectory(workingDirectory, out temporaryRestoreDirectory)
-            : Path.Combine(
-                GetPackageRestoreCacheDirectory(workingDirectory),
-                ComputePackageHash(
-                    packageList,
-                    targetFramework,
-                    runtimeIdentifier,
-                    managedPath,
-                    sourceList,
-                    nugetConfigInspection.CacheIdentity,
-                    globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
-                    nugetFallbackPackagesPaths));
+        var restoreDir = Path.Combine(
+            GetPackageRestoreCacheDirectory(workingDirectory),
+            ComputePackageHash(
+                packageList,
+                targetFramework,
+                runtimeIdentifier,
+                managedPath,
+                sourceList,
+                nugetConfigInspection.CacheIdentity,
+                globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                nugetFallbackPackagesPaths));
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
         var lockPath = Path.Combine(restoreDir, "restore.lock");
 
-        try
+        // Reusable package caches are shared by every AppHost in the workspace and must remain
+        // serialized while their manifest or project.assets.json file is being written.
+        using var fileLock = await FileLock.AcquireAsync(lockPath, ct).ConfigureAwait(false);
+
+        // Check if already restored after acquiring the lock because another process may
+        // have populated the shared cache while this process was waiting.
+        if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
-            // Credential-backed restores have a unique directory and do not need cross-process
-            // serialization. Avoiding a lock also lets failure cleanup remove the whole directory.
-            // Reusable package caches are shared by every AppHost in the workspace and must remain
-            // serialized while their manifest or project.assets.json file is being written.
-            using var fileLock = containsCredentialMaterial
-                ? null
-                : await FileLock.AcquireAsync(lockPath, ct).ConfigureAwait(false);
+            _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
+            return manifestPath;
+        }
 
-            // Check if already restored after acquiring the lock because another process may
-            // have populated the shared cache while this process was waiting.
-            if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
-            {
-                _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
-                var cachedResult = new PackageRestoreResult(manifestPath, temporaryRestoreDirectory);
-                temporaryRestoreDirectory = null;
-                return cachedResult;
-            }
+        Directory.CreateDirectory(objDir);
 
-            Directory.CreateDirectory(objDir);
-
-            // Step 1: Restore packages
-            // Prepend "nuget" subcommand for aspire-managed dispatch
-            var restoreArgs = new List<string>
+        // Step 1: Restore packages
+        // Prepend "nuget" subcommand for aspire-managed dispatch
+        var restoreArgs = new List<string>
         {
             "nuget",
             "restore",
@@ -172,106 +157,93 @@ internal sealed class BundleNuGetService : INuGetService
             "--framework", targetFramework
         };
 
-            if (!string.IsNullOrEmpty(runtimeIdentifier))
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            restoreArgs.Add("--runtime-identifier");
+            restoreArgs.Add(runtimeIdentifier);
+        }
+
+        foreach (var (id, version) in packageList)
+        {
+            restoreArgs.Add("--package");
+            restoreArgs.Add($"{id},{version}");
+        }
+
+        if (sourceList is not null)
+        {
+            foreach (var source in sourceList)
             {
-                restoreArgs.Add("--runtime-identifier");
-                restoreArgs.Add(runtimeIdentifier);
+                restoreArgs.Add("--source");
+                restoreArgs.Add(source);
             }
+        }
 
-            foreach (var (id, version) in packageList)
-            {
-                restoreArgs.Add("--package");
-                restoreArgs.Add($"{id},{version}");
-            }
+        // Pass working directory for nuget.config discovery.
+        restoreArgs.Add("--working-dir");
+        restoreArgs.Add(workingDirectory);
 
-            if (sourceList is not null)
-            {
-                foreach (var source in sourceList)
-                {
-                    restoreArgs.Add("--source");
-                    restoreArgs.Add(source);
-                }
-            }
+        if (!string.IsNullOrEmpty(nugetConfigPath))
+        {
+            restoreArgs.Add("--nuget-config");
+            restoreArgs.Add(nugetConfigPath);
+        }
 
-            // Pass working directory for nuget.config discovery.
-            restoreArgs.Add("--working-dir");
-            restoreArgs.Add(workingDirectory);
+        // Enable verbose output for debugging
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            restoreArgs.Add("--verbose");
+        }
 
-            if (!string.IsNullOrEmpty(nugetConfigPath))
-            {
-                restoreArgs.Add("--nuget-config");
-                restoreArgs.Add(nugetConfigPath);
-            }
+        _logger.LogDebug("Restoring {Count} packages", packageList.Count);
+        _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            // Build a redacted copy of the args specifically for the log line so user-supplied
+            // credentialed feeds (e.g., `https://user:pat@host/v3/index.json`, SAS-token URLs) do
+            // not flow to the debug log alongside the rest of the restore invocation. The
+            // original `restoreArgs` list is still passed verbatim to the process below.
+            _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", BuildRedactedArgsForLog(restoreArgs)));
+        }
 
-            // Enable verbose output for debugging
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                restoreArgs.Add("--verbose");
-            }
+        var environmentVariables = new Dictionary<string, string>();
+        if (globalPackagesFolderOverride is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolderOverride;
+        }
+        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
+        layoutLease?.AddEnvironment(environmentVariables);
 
-            _logger.LogDebug("Restoring {Count} packages", packageList.Count);
-            _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                // Build a redacted copy of the args specifically for the log line so user-supplied
-                // credentialed feeds (e.g., `https://user:pat@host/v3/index.json`, SAS-token URLs) do
-                // not flow to the debug log alongside the rest of the restore invocation. The
-                // original `restoreArgs` list is still passed verbatim to the process below.
-                _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", BuildRedactedArgsForLog(restoreArgs)));
-            }
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
+        managedPath,
+        restoreArgs,
+        environmentVariables: environmentVariables,
+        // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
+        // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
+        // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
+        killOnParentExit: true,
+        ct: ct);
 
-            var environmentVariables = new Dictionary<string, string>();
-            string? effectiveGlobalPackagesFolder;
-            if (containsCredentialMaterial)
-            {
-                // NuGet persists each package's source URL in .nupkg.metadata. Keep that metadata
-                // under the same lease as credential-bearing restore artifacts so a user-info or
-                // token-bearing URL cannot survive after the AppHost releases the manifest.
-                effectiveGlobalPackagesFolder = Path.Combine(restoreDir, "packages");
-            }
-            else
-            {
-                effectiveGlobalPackagesFolder = globalPackagesFolderOverride;
-            }
+        var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
 
-            if (effectiveGlobalPackagesFolder is not null)
-            {
-                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = effectiveGlobalPackagesFolder;
-            }
-            NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
-            layoutLease?.AddEnvironment(environmentVariables);
+        // NuGet errors often repeat the feed URL. Redact helper output separately from the
+        // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
+        if (!string.IsNullOrWhiteSpace(redactedError))
+        {
+            _logger.LogDebug("NuGetHelper restore stderr: {Error}", redactedError);
+        }
 
-            var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            restoreArgs,
-            environmentVariables: environmentVariables,
-            // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
-            // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
-            // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
-            killOnParentExit: true,
-            ct: ct);
+        if (exitCode != 0)
+        {
+            _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
+            _logger.LogError("Package restore stderr: {Error}", redactedError);
+            _logger.LogError("Package restore stdout: {Output}", redactedOutput);
+            throw new InvalidOperationException($"Package restore failed: {redactedError}");
+        }
 
-            var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-            var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
-
-            // NuGet errors often repeat the feed URL. Redact helper output separately from the
-            // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
-            if (!string.IsNullOrWhiteSpace(redactedError))
-            {
-                _logger.LogDebug("NuGetHelper restore stderr: {Error}", redactedError);
-            }
-
-            if (exitCode != 0)
-            {
-                _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
-                _logger.LogError("Package restore stderr: {Error}", redactedError);
-                _logger.LogError("Package restore stdout: {Output}", redactedOutput);
-                throw new InvalidOperationException($"Package restore failed: {redactedError}");
-            }
-
-            // Step 2: Create package probe manifest
-            // Prepend "nuget" subcommand for aspire-managed dispatch
-            var manifestArgs = new List<string>
+        // Step 2: Create package probe manifest
+        // Prepend "nuget" subcommand for aspire-managed dispatch
+        var manifestArgs = new List<string>
         {
             "nuget",
             "manifest",
@@ -280,54 +252,47 @@ internal sealed class BundleNuGetService : INuGetService
             "--framework", targetFramework
         };
 
-            if (!string.IsNullOrEmpty(runtimeIdentifier))
-            {
-                manifestArgs.Add("--runtime-identifier");
-                manifestArgs.Add(runtimeIdentifier);
-            }
-
-            // Enable verbose output for debugging
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                manifestArgs.Add("--verbose");
-            }
-
-            _logger.LogDebug("Creating package manifest from {AssetsPath}", assetsPath);
-            _logger.LogDebug("NuGet manifest args: {Args}", string.Join(" ", manifestArgs));
-
-            (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            manifestArgs,
-            environmentVariables: environmentVariables,
-            // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
-            // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
-            killOnParentExit: true,
-            ct: ct);
-
-            redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
-            redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
-            if (!string.IsNullOrWhiteSpace(redactedError))
-            {
-                _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
-            }
-
-            if (exitCode != 0)
-            {
-                _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
-                _logger.LogError("Manifest creation stderr: {Error}", redactedError);
-                _logger.LogError("Manifest creation stdout: {Output}", redactedOutput);
-                throw new InvalidOperationException($"Manifest creation failed: {redactedError}");
-            }
-
-            _logger.LogDebug("Package manifest created at {Path}", manifestPath);
-            var restoreResult = new PackageRestoreResult(manifestPath, temporaryRestoreDirectory);
-            temporaryRestoreDirectory = null;
-            return restoreResult;
-        }
-        finally
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
         {
-            temporaryRestoreDirectory?.Dispose();
+            manifestArgs.Add("--runtime-identifier");
+            manifestArgs.Add(runtimeIdentifier);
         }
+
+        // Enable verbose output for debugging
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            manifestArgs.Add("--verbose");
+        }
+
+        _logger.LogDebug("Creating package manifest from {AssetsPath}", assetsPath);
+        _logger.LogDebug("NuGet manifest args: {Args}", string.Join(" ", manifestArgs));
+
+        (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
+        managedPath,
+        manifestArgs,
+        environmentVariables: environmentVariables,
+        // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
+        // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
+        killOnParentExit: true,
+        ct: ct);
+
+        redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        if (!string.IsNullOrWhiteSpace(redactedError))
+        {
+            _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
+        }
+
+        if (exitCode != 0)
+        {
+            _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
+            _logger.LogError("Manifest creation stderr: {Error}", redactedError);
+            _logger.LogError("Manifest creation stdout: {Output}", redactedOutput);
+            throw new InvalidOperationException($"Manifest creation failed: {redactedError}");
+        }
+
+        _logger.LogDebug("Package manifest created at {Path}", manifestPath);
+        return manifestPath;
     }
 
     internal async Task<string[]> GetNuGetConfigPathsAsync(string workingDirectory, CancellationToken cancellationToken)
@@ -441,49 +406,7 @@ internal sealed class BundleNuGetService : INuGetService
             }
         }
 
-        // Use SHA256 for stable hash across processes/runtimes
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
-    }
-
-    private string CreateTemporaryCredentialRestoreDirectory(
-        string workingDirectory,
-        out TemporaryCacheDirectory temporaryRestoreDirectory)
-    {
-        var temporaryRoot = Path.Combine(
-            GetPackageRestoreCacheDirectory(workingDirectory),
-            TemporaryCredentialRestoreDirectoryName);
-        DirectoryHelper.CreateWithOwnerOnlyPermissions(temporaryRoot);
-        CleanupAbandonedTemporaryCredentialRestoreDirectories(temporaryRoot);
-        temporaryRestoreDirectory = TemporaryCacheDirectory.Create(
-            temporaryRoot,
-            TemporaryCredentialRestoreDirectoryPrefix,
-            path => TryDeleteDirectory(path, _logger),
-            path => TryDeleteFile(path, _logger));
-        return temporaryRestoreDirectory.FullName;
-    }
-
-    private void CleanupAbandonedTemporaryCredentialRestoreDirectories(string temporaryRoot)
-    {
-        foreach (var directory in Directory.EnumerateDirectories(
-            temporaryRoot,
-            $".{TemporaryCredentialRestoreDirectoryPrefix}-*"))
-        {
-            try
-            {
-                var leasePath = TemporaryCacheDirectory.GetLeasePath(directory);
-                using (TemporaryCacheDirectory.OpenLease(directory))
-                {
-                    TryDeleteDirectory(directory, _logger);
-                }
-
-                TryDeleteFile(leasePath, _logger);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogDebug(ex, "Unable to clean temporary package restore directory {Path}; it may still be in use.", directory);
-            }
-        }
+        return XxHash3.HashToUInt64(System.Text.Encoding.UTF8.GetBytes(content)).ToString("X16", CultureInfo.InvariantCulture);
     }
 
     private static async Task<NuGetConfigInspection> InspectNuGetConfigAsync(string? nugetConfigPath, CancellationToken cancellationToken)
@@ -508,40 +431,11 @@ internal sealed class BundleNuGetService : INuGetService
         });
         var document = await XDocument.LoadAsync(reader, LoadOptions.None, cancellationToken).ConfigureAwait(false);
 
-        var containsCredentialMaterial = TemporaryNuGetConfig.DocumentContainsCredentialMaterial(document);
         var credentialBearingSources = TemporaryNuGetConfig.GetCredentialBearingSources(document);
 
         return new NuGetConfigInspection(
-            containsCredentialMaterial ? null : document.ToString(SaveOptions.DisableFormatting),
-            containsCredentialMaterial,
+            document.ToString(SaveOptions.DisableFormatting),
             credentialBearingSources);
-    }
-
-    private static void TryDeleteDirectory(string path, ILogger logger)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to remove temporary package restore directory {Path}.", path);
-        }
-    }
-
-    private static void TryDeleteFile(string path, ILogger logger)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to remove temporary package restore lease {Path}.", path);
-        }
     }
 
     private static string GetManagedToolFingerprint(string? managedPath)
@@ -584,23 +478,8 @@ internal sealed class BundleNuGetService : INuGetService
 
     private sealed record NuGetConfigInspection(
         string? CacheIdentity,
-        bool ContainsCredentialMaterial,
         string[] CredentialBearingSources)
     {
-        public static NuGetConfigInspection Empty { get; } = new(null, false, []);
-    }
-}
-
-internal sealed class PackageRestoreResult(string manifestPath, TemporaryCacheDirectory? temporaryDirectory) : IDisposable
-{
-    private TemporaryCacheDirectory? _temporaryDirectory = temporaryDirectory;
-
-    public string ManifestPath { get; } = manifestPath;
-
-    public bool IsTemporary => _temporaryDirectory is not null;
-
-    public void Dispose()
-    {
-        Interlocked.Exchange(ref _temporaryDirectory, null)?.Dispose();
+        public static NuGetConfigInspection Empty { get; } = new(null, []);
     }
 }
