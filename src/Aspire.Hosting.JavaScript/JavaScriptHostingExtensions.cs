@@ -2252,7 +2252,7 @@ public static partial class JavaScriptHostingExtensions
         // Add a publish prereq step that validates the Next.js config has standalone output enabled.
         // This runs at deploy time (not resource creation time) so it doesn't block `aspire start`.
         // Can be disabled with .DisableBuildValidation().
-        var standaloneValidation = new PipelineStepAnnotation(factoryCtx =>
+        resourceBuilder.WithAnnotation(new PipelineStepAnnotation(factoryCtx =>
         [
             new PipelineStep
             {
@@ -2271,8 +2271,7 @@ public static partial class JavaScriptHostingExtensions
                     return Task.CompletedTask;
                 }
             }
-        ]);
-        resourceBuilder.WithAnnotation(standaloneValidation);
+        ]));
 
         if (builder.ExecutionContext.IsPublishMode)
         {
@@ -2280,7 +2279,6 @@ public static partial class JavaScriptHostingExtensions
                 .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
                 .ClearContainerFilesSources()
                 .WithEnvironment("HOSTNAME", "0.0.0.0");
-            MarkDockerfileAsExecutable(resourceBuilder);
             MarkDockerfileAsExecutable(resourceBuilder);
         }
 
