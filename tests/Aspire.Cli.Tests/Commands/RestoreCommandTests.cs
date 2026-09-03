@@ -152,7 +152,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
                     // The CLI-managed restore path builds the integration module project
                     // (.aspire/modules/Aspire.csproj), not the user's apphost.cs.
                     var moduleProjectPath = PathNormalizer.ResolveToFilesystemPath(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj"));
-                    Assert.Equal(moduleProjectPath, projectFilePath.FullName);
+                    Assert.Equal(moduleProjectPath, PathNormalizer.ResolveToFilesystemPath(projectFilePath.FullName));
                     Assert.True(File.Exists(moduleProjectPath));
                     Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
                     Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
