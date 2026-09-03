@@ -322,7 +322,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithChannelOptionUsesSpecifiedChannel()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         string? channelNameUsed = null;
         bool promptedForVersion = false;
 
@@ -332,13 +332,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 var prompter = new TestNewCommandPrompter(interactionService);
-                
+
                 prompter.PromptForTemplatesVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
                     throw new InvalidOperationException("Should not prompt for version when --channel is specified");
                 };
-                
+
                 return prompter;
             };
 
@@ -354,7 +354,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
-                    
+
                     var dailyCache = new FakeNuGetPackageCache();
                     dailyCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
                     {
@@ -362,13 +362,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0-dev" };
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
-                    
+
                     var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
                     var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
-                    
+
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
-                
+
                 return packagingService;
             };
 
@@ -392,7 +392,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
+
         // Assert
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("stable", channelNameUsed); // Verify the stable channel was used
@@ -403,7 +403,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithChannelOptionAutoSelectsHighestVersion()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         string? selectedVersion = null;
         bool promptedForVersion = false;
 
@@ -413,13 +413,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 var prompter = new TestNewCommandPrompter(interactionService);
-                
+
                 prompter.PromptForTemplatesVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
                     throw new InvalidOperationException("Should not prompt for version when --channel is specified");
                 };
-                
+
                 return prompter;
             };
 
@@ -440,14 +440,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         };
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
-                    
+
                     var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
-                
+
                 return packagingService;
             };
-            
+
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
@@ -469,7 +469,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
+
         // Assert
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("9.2.0", selectedVersion); // Should auto-select highest version (9.2.0)
@@ -627,16 +627,20 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         TestInteractionService? testInteractionService = null;
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CreateServiceCollection(workspace, options => {
+        var services = CreateServiceCollection(workspace, options =>
+        {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
-            options.InteractionServiceFactory = (sp) => {
+            options.InteractionServiceFactory = (sp) =>
+            {
                 testInteractionService = new TestInteractionService();
                 return testInteractionService;
             };
 
-            options.DotNetCliRunnerFactory = (sp) => {
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
                 var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) => {
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
                     return (0, Array.Empty<NuGetPackage>());
                 };
                 return runner;
@@ -1385,37 +1389,32 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("https://user:token@example.invalid/v3/index.json")]
     [InlineData("https://example.invalid/v3/index.json?sig=token")]
     [InlineData("https://example.invalid/v3/index.json#token")]
-    public async Task NewCommandWithCredentialBearingHttpSourceFailsBeforeCreatingProject(string sourceOverride)
+    public async Task NewCommandWithCredentialBearingHttpSourceCreatesProject(string sourceOverride)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldingInvoked = false;
-        TestInteractionService? interactionService = null;
 
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
-        });
+        var services = CreateServiceCollection(workspace);
 
         services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
         {
             ScaffoldAsyncCallback = (_, _) =>
             {
                 scaffoldingInvoked = true;
+                Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "output"));
                 return Task.FromResult(true);
             }
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.False(scaffoldingInvoked);
-        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
-        Assert.NotNull(interactionService);
-        Assert.Contains(NewCommandStrings.SourceWithCredentialsCannotBePersisted, interactionService!.DisplayedErrors);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(scaffoldingInvoked);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
     }
 
     [Fact]

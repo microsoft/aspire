@@ -39,8 +39,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
     private const string ProjectAssetsFileName = "project.assets.json";
     private const string RestoreStampFileName = "aspire-restore.stamp";
-    private const string TemporaryCredentialRestoreDirectoryName = "temporary";
-    private const string TemporaryCredentialRestoreDirectoryPrefix = "credential";
 
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
@@ -62,8 +60,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private string? _integrationLibsPath;
     private string? _integrationProbeManifestPath;
     private AppHostServerProjectLayout? _selectedProjectLayout;
-    private readonly List<PackageRestoreResult> _temporaryPackageRestores = [];
-    private readonly List<TemporaryCacheDirectory> _temporaryCredentialRestoreDirectories = [];
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -155,7 +151,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         try
         {
-            CleanupTemporaryPackageRestoreDirectories();
             _selectedProjectLayout = null;
             _contentRootPath = _workingDirectory;
             _integrationLibsPath = null;
@@ -184,19 +179,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
                 _projectLayoutStore.CleanupStagingDirectories();
 
-                var closureBuild = await BuildIntegrationClosureManifestAsync(
+                var closureManifest = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
                     projectRefs,
                     requestedChannel,
                     effectivePackageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
-                var closureManifest = closureBuild.Manifest;
-                if (closureBuild.CredentialRestoreDirectory is { } credentialRestoreDirectory)
-                {
-                    // Package-backed probe entries keep their source paths, so the private package
-                    // cache must remain leased until this server is disposed or prepared again.
-                    _temporaryCredentialRestoreDirectories.Add(credentialRestoreDirectory);
-                }
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
                 {
@@ -236,12 +224,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         catch (OperationCanceledException)
         {
-            CleanupTemporaryPackageRestoreDirectories();
             throw;
         }
         catch (AppHostServerPrepareFailedException ex)
         {
-            CleanupTemporaryPackageRestoreDirectories();
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             AppendRestoreContextOnFailure(ex.Output, requestedChannel, effectivePackageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
@@ -252,7 +238,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         catch (Exception ex)
         {
-            CleanupTemporaryPackageRestoreDirectories();
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             var output = new OutputCollector();
             output.AppendError($"Failed to prepare: {ex.Message}");
@@ -325,7 +310,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             : await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
         var sources = GetNuGetSources(restoreSources)?.ToArray();
 
-        var restoreResult = await _nugetService.RestorePackagesAsync(
+        return await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
@@ -334,16 +319,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             globalPackagesFolderOverride: GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryNuGetConfig),
             ct: cancellationToken).ConfigureAwait(false);
-        if (restoreResult.IsTemporary)
-        {
-            _temporaryPackageRestores.Add(restoreResult);
-        }
-        else
-        {
-            restoreResult.Dispose();
-        }
-
-        return restoreResult.ManifestPath;
     }
 
     /// <summary>
@@ -816,7 +791,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// then builds it to get the full transitive DLL closure via CopyLocalLockFileAssemblies.
     /// Requires .NET SDK.
     /// </summary>
-    private async Task<(AppHostServerClosureManifest Manifest, TemporaryCacheDirectory? CredentialRestoreDirectory)> BuildIntegrationClosureManifestAsync(
+    private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string? requestedChannel,
@@ -865,258 +840,176 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        // NuGet serializes effective sources into project.assets.json and the restore graph under obj/.
-        // Credential-bearing intermediates therefore use the same leased, owner-only temporary cache
-        // pattern as package-only restores. If cleanup is interrupted, a later restore reclaims the
-        // private directory without risking deletion of one still in use.
-        var temporaryIntermediateDirectory = hasCredentialBearingRestoreSource
-            ? CreateTemporaryCredentialRestoreDirectory(restoreDir)
-            : null;
-        try
+        var intermediateOutputPath = Path.Combine(restoreDir, "obj");
+
+        FileInfo? restoreConfigFile;
+        string? restoreConfigContent;
+        if (temporaryRestoreConfig is not null)
         {
-            var intermediateOutputPath = temporaryIntermediateDirectory?.FullName ?? Path.Combine(restoreDir, "obj");
-            var temporaryGlobalPackagesFolder = temporaryIntermediateDirectory is null
+            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
+            restoreConfigContent = temporaryRestoreConfig.CacheIdentity;
+        }
+        else if (!usePersistentRestoreConfig)
+        {
+            // With no single requested channel there is no unambiguous mapping to apply. Preserve
+            // ambient discovery and add every explicit channel source, matching the existing fallback.
+            restoreConfigFile = null;
+            restoreConfigContent = temporaryRestoreSourcesProps?.CacheIdentity;
+        }
+        else
+        {
+            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
+            restoreConfigContent = restoreConfigFile is null
                 ? null
-                : Path.Combine(temporaryIntermediateDirectory.FullName, "packages");
+                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        }
 
-            FileInfo? restoreConfigFile;
-            string? restoreConfigContent;
-            if (temporaryRestoreConfig is not null)
-            {
-                restoreConfigFile = temporaryRestoreConfig.ConfigFile;
-                restoreConfigContent = hasCredentialBearingRestoreSource
-                    ? null
-                    : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-            }
-            else if (!usePersistentRestoreConfig)
-            {
-                // With no single requested channel there is no unambiguous mapping to apply. Preserve
-                // ambient discovery and add every explicit channel source, matching the existing fallback.
-                restoreConfigFile = null;
-                restoreConfigContent = null;
-            }
-            else
-            {
-                restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
-                restoreConfigContent = restoreConfigFile is null
-                    ? null
-                    : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-            }
-
-            var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
-                ? GetNuGetSources(restoreSources)
-                : null;
-            var projectContent = GenerateIntegrationProjectFile(
+        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
+            ? GetNuGetSources(restoreSources)
+            : null;
+        var projectContent = GenerateIntegrationProjectFile(
+            packageRefs,
+            projectRefs,
+            restoreDir,
+            channelSources,
+            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
+            restoreConfigFile: restoreConfigFile?.FullName,
+            restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
+        var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
+        await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
+        var fingerprintProjectContent = temporaryRestoreConfig is null && temporaryRestoreSourcesProps is null
+            ? projectContent
+            : GenerateIntegrationProjectFile(
                 packageRefs,
                 projectRefs,
                 restoreDir,
                 channelSources,
                 useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-                restoreConfigFile: restoreConfigFile?.FullName,
-                restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
-            var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
-            await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
-            var fingerprintProjectContent = temporaryRestoreConfig is null
-                ? projectContent
-                : GenerateIntegrationProjectFile(
-                    packageRefs,
-                    projectRefs,
-                    restoreDir,
-                    channelSources,
-                    useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-                    restoreConfigFile: "__temporary_nuget_config__",
-                    restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
+                restoreConfigFile: temporaryRestoreConfig is null ? null : "__temporary_nuget_config__",
+                restoreSourcesPropsFile: temporaryRestoreSourcesProps is null ? null : "__temporary_restore_sources_props__");
 
-            // Write a Directory.Packages.props to opt out of Central Package Management
-            var directoryPackagesProps = """
+        // Write a Directory.Packages.props to opt out of Central Package Management
+        var directoryPackagesProps = """
             <Project>
               <PropertyGroup>
                 <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
               </PropertyGroup>
             </Project>
             """;
-            await WriteIfChangedAsync(
-                Path.Combine(restoreDir, "Directory.Packages.props"), directoryPackagesProps, cancellationToken);
+        await WriteIfChangedAsync(
+            Path.Combine(restoreDir, "Directory.Packages.props"), directoryPackagesProps, cancellationToken);
 
-            // Directory.Build.props sets output paths before the SDK consumes them and also prevents
-            // parent props from affecting the generated project.
-            await WriteIfChangedAsync(
-                Path.Combine(restoreDir, "Directory.Build.props"),
-                IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
-                    restoreDir,
-                    intermediateOutputPath,
-                    temporaryGlobalPackagesFolder).ToString(),
-                cancellationToken);
+        // Directory.Build.props sets output paths before the SDK consumes them and also prevents
+        // parent props from affecting the generated project.
+        await WriteIfChangedAsync(
+            Path.Combine(restoreDir, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                restoreDir,
+                intermediateOutputPath,
+                globalPackagesFolder: null).ToString(),
+            cancellationToken);
 
-            // Write empty Directory.Build.targets to prevent parent targets imports.
-            await WriteIfChangedAsync(
-                Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
+        // Write empty Directory.Build.targets to prevent parent targets imports.
+        await WriteIfChangedAsync(
+            Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
 
-            // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
-            // run again when something restore actually reads has changed. That set of inputs is captured
-            // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
-            // written only after a restore succeeds.
-            //
-            // Skipping restore never skips the build itself, so an edit to a referenced project is still
-            // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
-            // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
-            // restore rather than reported.
-            string? restoreFingerprint = null;
-            var hasCompleteNuGetConfigurationFingerprint =
-                !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
-            if (!hasCredentialBearingRestoreSource && hasCompleteNuGetConfigurationFingerprint)
+        // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
+        // run again when something restore actually reads has changed. That set of inputs is captured
+        // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
+        // written only after a restore succeeds.
+        //
+        // Skipping restore never skips the build itself, so an edit to a referenced project is still
+        // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
+        // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
+        // restore rather than reported.
+        string? restoreFingerprint = null;
+        var hasCompleteNuGetConfigurationFingerprint =
+            !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
+        if (hasCompleteNuGetConfigurationFingerprint)
+        {
+            var restoreInputs = await ComputeRestoreInputsAsync(
+                fingerprintProjectContent,
+                packageRefs,
+                projectRefs,
+                restoreConfigContent,
+                GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
+                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
+                cancellationToken).ConfigureAwait(false);
+            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+        }
+
+        if (restoreFingerprint is null)
+        {
+            // A restore that cannot prove all of its inputs must invalidate any stamp from a
+            // previous source configuration before it replaces the assets file.
+            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
+            if (restoreStampFile.Exists)
             {
-                var restoreInputs = await ComputeRestoreInputsAsync(
-                    fingerprintProjectContent,
-                    packageRefs,
-                    projectRefs,
-                    restoreConfigContent,
-                    GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
-                        CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
-                    CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
-                    cancellationToken).ConfigureAwait(false);
-                restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+                restoreStampFile.Delete();
             }
+        }
 
-            if (restoreFingerprint is null)
-            {
-                // A restore that cannot prove all of its inputs must invalidate any stamp from a
-                // previous source configuration before it replaces the assets file.
-                var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
-                if (restoreStampFile.Exists)
-                {
-                    restoreStampFile.Delete();
-                }
-            }
+        var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
 
-            var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
+        _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
+            packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
 
-            _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
-                packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
-
-            var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+            projectFilePath,
+            noRestore: skipRestore,
+            restoreSources.ConfigureGlobalPackagesFolder,
+            suppressLogging: hasCredentialBearingRestoreSource,
+            sensitiveRestoreSources,
+            cancellationToken).ConfigureAwait(false);
+        if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
+        {
+            _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
+                string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
+            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
                 projectFilePath,
-                noRestore: skipRestore,
+                noRestore: false,
                 restoreSources.ConfigureGlobalPackagesFolder,
                 suppressLogging: hasCredentialBearingRestoreSource,
                 sensitiveRestoreSources,
                 cancellationToken).ConfigureAwait(false);
-            if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
-            {
-                _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
-                    string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
-                (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
-                    projectFilePath,
-                    noRestore: false,
-                    restoreSources.ConfigureGlobalPackagesFolder,
-                    suppressLogging: hasCredentialBearingRestoreSource,
-                    sensitiveRestoreSources,
-                    cancellationToken).ConfigureAwait(false);
-            }
-
-            if (exitCode != 0)
-            {
-                var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
-                _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
-                throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
-            }
-
-            if (restoreFingerprint is not null && !skipRestore)
-            {
-                await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
-            }
-
-            var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
-                restoreDir,
-                _logger,
-                cancellationToken).ConfigureAwait(false);
-            var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
-
-            var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
-                restoreDir,
-                Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
-                appSettingsContent,
-                ClosureFileMissingBehavior.Throw,
-                _logger,
-                cancellationToken).ConfigureAwait(false);
-
-            // ReadClosureManifestAsync only returns null in ReturnNull mode; in Throw mode any
-            // missing/inconsistent state has already raised an exception.
-            Debug.Assert(closureManifest is not null);
-
-            await File.WriteAllLinesAsync(
-                Path.Combine(restoreDir, ClosureManifestFileName),
-                closureManifest!.GetManifestLines(),
-                cancellationToken).ConfigureAwait(false);
-            return (closureManifest, temporaryIntermediateDirectory);
         }
-        catch
+
+        if (exitCode != 0)
         {
-            temporaryIntermediateDirectory?.Dispose();
-            throw;
+            var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
+            _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
+            throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
         }
-    }
 
-    private TemporaryCacheDirectory CreateTemporaryCredentialRestoreDirectory(string restoreDir)
-    {
-        var temporaryRoot = Path.Combine(restoreDir, TemporaryCredentialRestoreDirectoryName);
-        DirectoryHelper.CreateWithOwnerOnlyPermissions(temporaryRoot);
-        CleanupAbandonedTemporaryCredentialRestoreDirectories(temporaryRoot);
-        return TemporaryCacheDirectory.Create(
-            temporaryRoot,
-            TemporaryCredentialRestoreDirectoryPrefix,
-            path => TryDeleteTemporaryCredentialRestoreDirectory(path, _logger),
-            path => TryDeleteTemporaryCredentialRestoreLease(path, _logger));
-    }
+        if (restoreFingerprint is not null && !skipRestore)
+        {
+            await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
+        }
 
-    private void CleanupAbandonedTemporaryCredentialRestoreDirectories(string temporaryRoot)
-    {
-        foreach (var directory in Directory.EnumerateDirectories(
-            temporaryRoot,
-            $".{TemporaryCredentialRestoreDirectoryPrefix}-*"))
-        {
-            try
-            {
-                var leasePath = TemporaryCacheDirectory.GetLeasePath(directory);
-                using (TemporaryCacheDirectory.OpenLease(directory))
-                {
-                    TryDeleteTemporaryCredentialRestoreDirectory(directory, _logger);
-                }
+        var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
+            restoreDir,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
+        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
 
-                TryDeleteTemporaryCredentialRestoreLease(leasePath, _logger);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogDebug(ex, "Unable to clean temporary integration restore directory {Path}; it may still be in use.", directory);
-            }
-        }
-    }
+        var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
+            restoreDir,
+            Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
+            appSettingsContent,
+            ClosureFileMissingBehavior.Throw,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
 
-    private static void TryDeleteTemporaryCredentialRestoreDirectory(string path, ILogger logger)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to remove temporary integration restore directory {Path}.", path);
-        }
-    }
+        // ReadClosureManifestAsync only returns null in ReturnNull mode; in Throw mode any
+        // missing/inconsistent state has already raised an exception.
+        Debug.Assert(closureManifest is not null);
 
-    private static void TryDeleteTemporaryCredentialRestoreLease(string path, ILogger logger)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogDebug(ex, "Unable to remove temporary integration restore lease {Path}.", path);
-        }
+        await File.WriteAllLinesAsync(
+            Path.Combine(restoreDir, ClosureManifestFileName),
+            closureManifest!.GetManifestLines(),
+            cancellationToken).ConfigureAwait(false);
+        return closureManifest;
     }
 
     /// <summary>
@@ -1567,25 +1460,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// <inheritdoc />
     public void Dispose()
     {
-        CleanupTemporaryPackageRestoreDirectories();
         _layoutLease?.Dispose();
-    }
-
-    private void CleanupTemporaryPackageRestoreDirectories()
-    {
-        foreach (var restore in _temporaryPackageRestores)
-        {
-            restore.Dispose();
-        }
-
-        _temporaryPackageRestores.Clear();
-
-        foreach (var directory in _temporaryCredentialRestoreDirectories)
-        {
-            directory.Dispose();
-        }
-
-        _temporaryCredentialRestoreDirectories.Clear();
     }
 
     private static string CreateAppSettingsContent(
@@ -1654,13 +1529,16 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     {
         private readonly DirectoryInfo _directory;
 
-        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile)
+        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile, string cacheIdentity)
         {
             _directory = directory;
             PropsFile = propsFile;
+            CacheIdentity = cacheIdentity;
         }
 
         public FileInfo PropsFile { get; }
+
+        public string CacheIdentity { get; }
 
         public static async Task<TemporaryRestoreSourcesProps> CreateAsync(
             IReadOnlyList<string> sources,
@@ -1674,8 +1552,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                     new XElement("Project",
                         new XElement("PropertyGroup",
                             new XElement("RestoreAdditionalProjectSources", string.Join(";", sources)))));
-                await File.WriteAllTextAsync(propsFile.FullName, document.ToString(), cancellationToken).ConfigureAwait(false);
-                return new TemporaryRestoreSourcesProps(directory, propsFile);
+                var content = document.ToString();
+                await File.WriteAllTextAsync(propsFile.FullName, content, cancellationToken).ConfigureAwait(false);
+                return new TemporaryRestoreSourcesProps(directory, propsFile, content);
             }
             catch
             {
