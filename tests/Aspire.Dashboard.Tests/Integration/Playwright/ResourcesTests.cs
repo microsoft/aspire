@@ -163,13 +163,28 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.InRange(Math.Abs(nodeBoundsAfter.Y - nodeBoundsBefore.Y), 0, 5);
             Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
 
-            await cog.FocusAsync();
-            await page.Keyboard.PressAsync("Enter");
-
             var menu = page.GetByRole(
                 AriaRole.Menu,
                 new PageGetByRoleOptions { Name = "TestResource", Exact = true });
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+
+            await node.HoverAsync();
+            await cog.ClickAsync();
             await Assertions.Expect(menu).ToBeVisibleAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
+            Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
+
+            await node.HoverAsync();
+            await cog.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-haspopup", "menu");
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
             var header = menu.Locator(".aspire-menu-header");
             await Assertions.Expect(header.Locator(".aspire-menu-header-text")).ToHaveTextAsync("TestResource");
             var headerBounds = await header.BoundingBoxAsync();

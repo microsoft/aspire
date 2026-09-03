@@ -246,6 +246,13 @@
     pointer-events: auto;
 }
 
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
 ::deep .resource-menu-cog-background {
     fill: var(--neutral-fill-secondary-rest);
     stroke: var(--neutral-stroke-rest);

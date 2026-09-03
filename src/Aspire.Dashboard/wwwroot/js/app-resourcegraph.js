@@ -436,6 +436,8 @@ class ResourceGraph {
             .attr("role", "button")
             .attr("tabindex", 0)
             .attr("aria-label", n => this.getResourceMenuLabel(n))
+            .attr("aria-haspopup", "menu")
+            .attr("aria-expanded", "false")
             // D3's drag handler is attached to the ancestor resource group. Stop drag-start
             // events here so an imprecise cog click can never move the resource node.
             .on('mousedown touchstart', event => event.stopPropagation())
@@ -610,7 +612,7 @@ class ResourceGraph {
         event.preventDefault();
         event.stopPropagation();
 
-        await this.openResourceContextMenu(data.id, event.clientX, event.clientY);
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, event.currentTarget);
     };
 
     cogMenuKeyDown = async (event) => {
@@ -625,18 +627,21 @@ class ResourceGraph {
         var bounds = event.currentTarget.getBoundingClientRect();
         await this.openResourceContextMenu(
             data.id,
-            bounds.left + bounds.width / 2,
-            bounds.top + bounds.height / 2);
+            Math.round(bounds.left + bounds.width / 2),
+            Math.round(bounds.top + bounds.height / 2),
+            event.currentTarget);
     };
 
-    openResourceContextMenu = async (id, clientX, clientY) => {
+    openResourceContextMenu = async (id, clientX, clientY, trigger) => {
         this.openContextMenu = true;
+        trigger?.setAttribute("aria-expanded", "true");
 
         try {
             // Wait for method completion. It completes when the context menu is closed.
             await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY);
         } finally {
             this.openContextMenu = false;
+            trigger?.setAttribute("aria-expanded", "false");
 
             // Unselect the node when the context menu is closed to reset mouseover state.
             this.updateNodeHighlights(null);
