@@ -126,6 +126,98 @@ render_untrusted_text()
   ' "$input_file"
 }
 
+select_test_results_artifact()
+{
+  local artifacts_file="$1"
+  local started_at="$2"
+  local updated_at="$3"
+
+  jq -r \
+    --arg started_at "$started_at" \
+    --arg updated_at "$updated_at" '
+    [
+      .[] |
+      select(
+        (.expired == false) and
+        (.name == "All-TestResults") and
+        ((.created_at | type) == "string") and
+        (.created_at >= $started_at and .created_at <= $updated_at))
+    ] | sort_by([.created_at, .id]) | last | .id // empty
+  ' "$artifacts_file"
+}
+
+cache_cause_issues()
+{
+  local repo="$1"
+  local open_issues_file="$2"
+  local closed_issues_file="$3"
+  local open_issues_temp
+  local closed_issues_temp
+  open_issues_temp=$(mktemp)
+  closed_issues_temp=$(mktemp)
+  rm -f "$open_issues_file" "$closed_issues_file"
+
+  if ! gh issue list --repo "$repo" --label "ci-failure-cause" --state open --limit 500 --json number,body \
+      > "$open_issues_temp"; then
+    echo "::error::Failed to load open cause issues" >&2
+    rm -f "$open_issues_temp" "$closed_issues_temp" "$open_issues_file" "$closed_issues_file"
+    return 1
+  fi
+  if ! gh issue list --repo "$repo" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
+      > "$closed_issues_temp"; then
+    echo "::error::Failed to load closed cause issues" >&2
+    rm -f "$open_issues_temp" "$closed_issues_temp" "$open_issues_file" "$closed_issues_file"
+    return 1
+  fi
+
+  mv "$open_issues_temp" "$open_issues_file"
+  mv "$closed_issues_temp" "$closed_issues_file"
+}
+
+pr_locked()
+{
+  local repo="$1"
+  local pr_number="$2"
+  local pr_json
+  local locked
+
+  if ! pr_json=$(gh api "repos/${repo}/pulls/${pr_number}"); then
+    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+    return 1
+  fi
+  if ! locked=$(jq -r '
+      if (.locked | type) == "boolean" then
+        .locked | tostring
+      else
+        error("locked must be a boolean")
+      end
+    ' <<< "$pr_json"); then
+    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+    return 1
+  fi
+  if [ "$locked" != "true" ] && [ "$locked" != "false" ]; then
+    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$locked"
+}
+
+find_analysis_comment()
+{
+  local repo="$1"
+  local pr_number="$2"
+  local comment_ids
+
+  if ! comment_ids=$(gh api "repos/${repo}/issues/${pr_number}/comments" --paginate \
+      --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body // "") | startswith("<!-- analyze-ci-failure -->\n"))) | .id'); then
+    echo "::warning::Failed to list existing analysis comments for PR #${pr_number}" >&2
+    return 1
+  fi
+
+  head -n 1 <<< "$comment_ids"
+}
+
 trusted_pr_number()
 {
   local run_scope
@@ -172,6 +264,28 @@ case "$COMMAND" in
     INPUT_FILE="${2:?input file is required}"
     MAX_LENGTH="${3:-65536}"
     render_untrusted_text "$INPUT_FILE" "$MAX_LENGTH"
+    ;;
+  select-test-results-artifact)
+    ARTIFACTS_FILE="${2:?artifacts file is required}"
+    STARTED_AT="${3:?start time is required}"
+    UPDATED_AT="${4:?update time is required}"
+    select_test_results_artifact "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT"
+    ;;
+  cache-cause-issues)
+    REPO="${2:?repository is required}"
+    OPEN_ISSUES_FILE="${3:?open issues file is required}"
+    CLOSED_ISSUES_FILE="${4:?closed issues file is required}"
+    cache_cause_issues "$REPO" "$OPEN_ISSUES_FILE" "$CLOSED_ISSUES_FILE"
+    ;;
+  pr-locked)
+    REPO="${2:?repository is required}"
+    PR_NUMBER="${3:?pull request number is required}"
+    pr_locked "$REPO" "$PR_NUMBER"
+    ;;
+  find-analysis-comment)
+    REPO="${2:?repository is required}"
+    PR_NUMBER="${3:?pull request number is required}"
+    find_analysis_comment "$REPO" "$PR_NUMBER"
     ;;
   pr-number)
     trusted_pr_number

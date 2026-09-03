@@ -317,7 +317,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 echo '[]'
                 ;;
               "api repos/microsoft/aspire/pulls/42")
-                echo '{"number":42,"title":"Subject","state":"open","user":{"login":"radical"},"head":{"ref":"feature"},"base":{"ref":"main"},"html_url":"https://github.com/microsoft/aspire/pull/42"}'
+                echo '{"number":42,"title":"Subject","state":"open","locked":true,"user":{"login":"radical"},"head":{"ref":"feature"},"base":{"ref":"main"},"html_url":"https://github.com/microsoft/aspire/pull/42"}'
                 ;;
               *)
                 exit 99
@@ -1566,9 +1566,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "\"$ANALYSIS_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" \"$RUN_URL\" > \"$COMMENT_FILE\"",
                 workflow,
                 StringComparison.Ordinal);
-            Assert.Contains(".user.login == \\\"github-actions[bot]\\\"", workflow, StringComparison.Ordinal);
-            Assert.Contains("startswith(\\\"${MARKER}\\\\n\\\")", workflow, StringComparison.Ordinal);
         });
+        Assert.Contains(".user.login == \"github-actions[bot]\"", s_persistenceScript, StringComparison.Ordinal);
+        Assert.Contains("startswith(\"<!-- analyze-ci-failure -->\\n\")", s_persistenceScript, StringComparison.Ordinal);
         Assert.Contains("FAILED_SHA=$(jq -r '.head_sha // \"unknown\"' \"$RUN_CONTEXT_FILE\")", s_issueScript, StringComparison.Ordinal);
         Assert.Contains("LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // \"unknown\"' \"$LAST_SUCCESSFUL_RUN_FILE\")", s_issueScript, StringComparison.Ordinal);
         Assert.Contains("sanitize-json-field \"$TRIGGERING_MERGE_FILE\" title 238", s_issueScript, StringComparison.Ordinal);
@@ -1640,7 +1640,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             var commentStep = GetSection(
                 workflow,
                 "- name: Comment on PR",
-                "# Update an existing analysis comment if one exists");
+                "if [ -n \"$EXISTING_COMMENT_ID\" ]");
             var trustedJobsPathIndex = commentStep.IndexOf(
                 "TRUSTED_FAILED_JOBS_FILE=\"ci-failure-data/failed-jobs.json\"",
                 StringComparison.Ordinal);
@@ -1681,12 +1681,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${WORKFLOW_RUN_ATTEMPT}",
                 collectionStep,
                 StringComparison.Ordinal);
+            Assert.Contains("select-test-results-artifact", collectionStep, StringComparison.Ordinal);
             Assert.Contains(
-                ".created_at >= $started_at and .created_at <= $updated_at",
+                "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip",
                 collectionStep,
                 StringComparison.Ordinal);
             Assert.Contains(
-                "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip",
+                "{number, title, state, locked, user: .user.login",
                 collectionStep,
                 StringComparison.Ordinal);
             Assert.DoesNotContain(
@@ -1694,6 +1695,465 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 collectionStep,
                 StringComparison.Ordinal);
         });
+        Assert.Contains("name: All-TestResults", ReadWorkflow("tests.yml"), StringComparison.Ordinal);
+        Assert.Contains(".name == \"All-TestResults\"", s_persistenceScript, StringComparison.Ordinal);
+        Assert.Contains(
+            ".created_at >= $started_at and .created_at <= $updated_at",
+            s_persistenceScript,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultsArtifactSelectionIgnoresLaterNoncanonicalArtifacts()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z"},
+              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-results-artifact",
+                artifactsPath,
+                "2026-09-03T12:00:00Z",
+                "2026-09-03T12:03:00Z",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("10", result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultsArtifactSelectionReturnsEmptyWithoutCanonicalArtifact()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-results-artifact",
+                artifactsPath,
+                "2026-09-03T12:00:00Z",
+                "2026-09-03T12:03:00Z",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Output);
+    }
+
+    [Theory]
+    [InlineData("open")]
+    [InlineData("closed")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseIssueCacheFailsWhenEitherIssueLookupFails(string failingState)
+    {
+        var fakeGhPath = await CreateFakeGhAsync(
+            """
+            #!/usr/bin/env bash
+            if [[ "$*" == *"--state ${FAILING_STATE}"* ]]; then
+              echo "lookup failed" >&2
+              exit 1
+            fi
+            echo '[]'
+            """);
+        var openIssuesPath = Path.Combine(_workspace.Path, "open-issues.json");
+        var closedIssuesPath = Path.Combine(_workspace.Path, "closed-issues.json");
+        await File.WriteAllTextAsync(openIssuesPath, "stale");
+        await File.WriteAllTextAsync(closedIssuesPath, "stale");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cache-cause-issues", "microsoft/aspire", openIssuesPath, closedIssuesPath],
+            new Dictionary<string, string>
+            {
+                ["FAILING_STATE"] = failingState,
+                ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains($"Failed to load {failingState} cause issues", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(openIssuesPath));
+        Assert.False(File.Exists(closedIssuesPath));
+    }
+
+    [Theory]
+    [InlineData("""{"locked":false}""", 0, "false")]
+    [InlineData("""{"locked":true}""", 0, "true")]
+    [InlineData("", 1, "")]
+    [InlineData("", 0, "")]
+    [InlineData("{}", 0, "")]
+    [InlineData("""{"locked":"false"}""", 0, "")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PrLockedLookupRequiresSuccessfulBooleanResponse(
+        string response,
+        int ghExitCode,
+        string expectedOutput)
+    {
+        var fakeGhPath = await CreateFakeGhAsync(
+            """
+            #!/usr/bin/env bash
+            printf '%s' "${GH_RESPONSE}"
+            exit "${GH_EXIT_CODE}"
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["pr-locked", "microsoft/aspire", "42"],
+            new Dictionary<string, string>
+            {
+                ["GH_EXIT_CODE"] = ghExitCode.ToString(),
+                ["GH_RESPONSE"] = response,
+                ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        if (expectedOutput.Length == 0)
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Unable to determine whether PR #42 is locked", result.Output, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(expectedOutput, result.Output.Trim());
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task ExistingAnalysisCommentLookupSurfacesApiFailure()
+    {
+        var fakeGhPath = await CreateFakeGhAsync("#!/usr/bin/env bash\nexit 1");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["find-analysis-comment", "microsoft/aspire", "42"],
+            new Dictionary<string, string>
+            {
+                ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Failed to list existing analysis comments", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task ExistingAnalysisCommentLookupReturnsFirstMatchWithoutPipeFailure()
+    {
+        var fakeGhPath = await CreateFakeGhAsync(
+            """
+            #!/usr/bin/env bash
+            seq 1 100000
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["find-analysis-comment", "microsoft/aspire", "42"],
+            new Dictionary<string, string>
+            {
+                ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("1", result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseIssueCacheWritesBothSuccessfulLookupResults()
+    {
+        var fakeGhPath = await CreateFakeGhAsync(
+            """
+            #!/usr/bin/env bash
+            case "$*" in
+              *"--state open"*) echo '[{"number":1,"body":"open"}]' ;;
+              *"--state closed"*) echo '[{"number":2,"body":"closed"}]' ;;
+              *) exit 99 ;;
+            esac
+            """);
+        var openIssuesPath = Path.Combine(_workspace.Path, "open-issues.json");
+        var closedIssuesPath = Path.Combine(_workspace.Path, "closed-issues.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cache-cause-issues", "microsoft/aspire", openIssuesPath, closedIssuesPath],
+            new Dictionary<string, string>
+            {
+                ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("""[{"number":1,"body":"open"}]""" + Environment.NewLine, await File.ReadAllTextAsync(openIssuesPath));
+        Assert.Equal("""[{"number":2,"body":"closed"}]""" + Environment.NewLine, await File.ReadAllTextAsync(closedIssuesPath));
+    }
+
+    [Fact]
+    public void PublicationLookupsFailClosedBeforeRemoteSideEffects()
+    {
+        ForEachExecutableWorkflow(workflow =>
+        {
+            var collectionStep = GetSection(
+                workflow,
+                "- name: Collect CI failure data",
+                "- name: Create analysis summary");
+            Assert.Contains(
+                "select-test-results-artifact",
+                collectionStep,
+                StringComparison.Ordinal);
+
+            var publishStep = GetSection(
+                workflow,
+                "- name: Publish analysis data and comment on PR",
+                "- name: Comment on PR");
+            var lockCheckIndex = publishStep.IndexOf("pr-locked \"$REPO\" \"$PR_NUMBER\"", StringComparison.Ordinal);
+            var memorySideEffectIndex = publishStep.IndexOf("# ── 1. Set up memory branch", StringComparison.Ordinal);
+            Assert.True(lockCheckIndex >= 0 && lockCheckIndex < memorySideEffectIndex);
+            Assert.Contains("if [ \"$PR_NUMBER\" != \"0\" ]; then", publishStep, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "No unambiguous subject PR found. Skipping publication.",
+                publishStep,
+                StringComparison.Ordinal);
+            Assert.Contains("cache-cause-issues", publishStep, StringComparison.Ordinal);
+            Assert.DoesNotContain("|| echo '[]'", publishStep, StringComparison.Ordinal);
+
+            var commentStep = GetSection(
+                workflow,
+                "- name: Comment on PR",
+                "echo \"Posted new analysis comment");
+            Assert.Contains("pr-locked \"$REPO\" \"$SUBJECT_PR\"", commentStep, StringComparison.Ordinal);
+            Assert.Contains("find-analysis-comment \"$REPO\" \"$SUBJECT_PR\"", commentStep, StringComparison.Ordinal);
+            Assert.True(
+                commentStep.IndexOf("find-analysis-comment", StringComparison.Ordinal) <
+                commentStep.IndexOf("COMMENT_FILE=$(mktemp)", StringComparison.Ordinal));
+            Assert.DoesNotContain("|| echo \"false\"", commentStep, StringComparison.Ordinal);
+            Assert.DoesNotContain("| head -1 || true", commentStep, StringComparison.Ordinal);
+        });
+    }
+
+    [Theory]
+    [InlineData("""{"locked":true}""")]
+    [InlineData("{}")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepDoesNotMutateLockedOrUnreadablePr(string prResponse)
+    {
+        await PreparePublicationStepFixtureAsync();
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var gitCallLog = Path.Combine(_workspace.Path, "git-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            printf '%s' "${PR_RESPONSE}"
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GIT_CALL_LOG}"
+            exit 99
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_TOKEN"] = "test-token",
+                ["GIT_CALL_LOG"] = gitCallLog,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["PR_RESPONSE"] = prResponse,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(File.Exists(gitCallLog));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepReachesMutationForUnlockedPr()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var gitCallLog = Path.Combine(_workspace.Path, "git-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            "#!/usr/bin/env bash\necho '{\"locked\":false}'");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GIT_CALL_LOG}"
+            exit 0
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_TOKEN"] = "test-token",
+                ["GIT_CALL_LOG"] = gitCallLog,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            await File.ReadAllLinesAsync(gitCallLog),
+            call => call.StartsWith("clone --depth 1 --branch memory/ci-failure-analysis ", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("open")]
+    [InlineData("closed")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepStopsBeforeIssueMutationWhenCauseCacheLookupFails(string failingState)
+    {
+        await PreparePublicationStepFixtureAsync();
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent", "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "nuget-timeout.json"),
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timeout","job_ids":[456]}""");
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var tempDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "temp")).FullName;
+        var ghCallLog = Path.Combine(_workspace.Path, "gh-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$*" in
+              "api repos/microsoft/aspire/pulls/42") echo '{"locked":false}' ;;
+              "issue list "*"--state ${FAILING_STATE} "*) exit 1 ;;
+              "issue list "*) echo '[]' ;;
+              *) exit 99 ;;
+            esac
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            "#!/usr/bin/env bash\nexit 0");
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["FAILING_STATE"] = failingState,
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_CALL_LOG"] = ghCallLog,
+                ["GH_TOKEN"] = "test-token",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["TMPDIR"] = tempDirectory,
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.DoesNotContain(
+            await File.ReadAllLinesAsync(ghCallLog),
+            call => call.Contains("issue create", StringComparison.Ordinal) ||
+                call.Contains("issue edit", StringComparison.Ordinal) ||
+                call.Contains("issue reopen", StringComparison.Ordinal));
+        Assert.Empty(Directory.GetFiles(tempDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CommentStepSkipsMutationAndCleansTempsWhenMarkerLookupFails()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var tempDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "temp")).FullName;
+        var ghCallLog = Path.Combine(_workspace.Path, "gh-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$*" in
+              "api repos/microsoft/aspire/pulls/42") echo '{"locked":false}' ;;
+              "api repos/microsoft/aspire/issues/42/comments --paginate"*) exit 1 ;;
+              *) exit 99 ;;
+            esac
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_CALL_LOG"] = ghCallLog,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["TMPDIR"] = tempDirectory,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.DoesNotContain(
+            await File.ReadAllLinesAsync(ghCallLog),
+            call => call.StartsWith("pr comment", StringComparison.Ordinal) ||
+                call.Contains("--method PATCH", StringComparison.Ordinal));
+        Assert.Empty(Directory.GetFiles(tempDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CommentStepPostsWhenMarkerLookupSucceedsWithoutMatch()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var ghCallLog = Path.Combine(_workspace.Path, "gh-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$*" in
+              "api repos/microsoft/aspire/pulls/42") echo '{"locked":false}' ;;
+              "api repos/microsoft/aspire/issues/42/comments --paginate"*) : ;;
+              "pr comment 42 --repo microsoft/aspire --body-file "*) : ;;
+              *) exit 99 ;;
+            esac
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_CALL_LOG"] = ghCallLog,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            await File.ReadAllLinesAsync(ghCallLog),
+            call => call.StartsWith("pr comment 42 --repo microsoft/aspire --body-file ", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -1882,6 +2342,21 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Empty(result.Failed);
         Assert.Empty(result.Reruns);
         Assert.Contains("The subject PR is closed. Skipping rerun.", result.Infos);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunSkipsWhenAssociatedPrIsLocked()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
+
+        var result = await RunRerunScriptAsync(prLocked: true);
+
+        Assert.Empty(result.Failed);
+        Assert.Empty(result.Reruns);
+        Assert.Contains("The subject PR is locked. Skipping rerun.", result.Infos);
     }
 
     [Fact]
@@ -3061,6 +3536,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private async Task<RerunHarnessResult> RunRerunScriptAsync(
         int? currentRunAttempt = null,
         string? prState = null,
+        bool? prLocked = null,
         string? enableRerun = null)
     {
         var requestPath = Path.Combine(_workspace.Path, "rerun-request.json");
@@ -3074,6 +3550,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 agentOutputPath = Path.Combine(_workspace.Path, "output.json"),
                 currentRunAttempt,
                 prState,
+                prLocked,
                 enableRerun,
             }));
 
@@ -3088,6 +3565,53 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         var response = JsonSerializer.Deserialize<RerunHarnessResult>(await File.ReadAllTextAsync(outputPath));
         return Assert.IsType<RerunHarnessResult>(response);
+    }
+
+    private async Task<string> CreateFakeGhAsync(string script)
+    {
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, $"fake-bin-{Guid.NewGuid():N}")).FullName;
+        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
+        await WriteExecutableAsync(fakeGhPath, script);
+
+        return fakeGhPath;
+    }
+
+    private async Task PreparePublicationStepFixtureAsync()
+    {
+        var workflowDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, ".github", "workflows")).FullName;
+        File.Copy(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            Path.Combine(workflowDirectory, Path.GetFileName(PersistenceScriptRelativePath)));
+        File.Copy(
+            Path.Combine(RepoRoot.Path, CommentScriptRelativePath),
+            Path.Combine(workflowDirectory, Path.GetFileName(CommentScriptRelativePath)));
+
+        var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
+        var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(agentDirectory, "analysis-result.json"),
+            """{"verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra","reason":"Infrastructure failure"}],"failed_tests":[],"causes":[]}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "run-context.json"),
+            """{"run_id":123,"run_attempt":1,"run_scope":"pull-request","pr_numbers":"42"}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "failed-jobs.json"),
+            """[{"id":456,"name":"Tests"}]""");
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "run.json"),
+            """{"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""");
+        await File.WriteAllTextAsync(Path.Combine(_workspace.Path, "output.json"), """{"items":[]}""");
+    }
+
+    private static async Task WriteExecutableAsync(string path, string script)
+    {
+        await File.WriteAllTextAsync(path, script);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     private static string ExtractWorkflowScript(string workflowFileName, string stepName)

@@ -319,7 +319,7 @@ jobs:
             # Fetch PR metadata (state, title, author) so the agent doesn't need
             # to make MCP pull_request_read calls at runtime.
             gh api "repos/${REPO}/pulls/${SUBJECT_PR}" \
-              --jq '{number, title, state, user: .user.login, head_branch: .head.ref, base_branch: .base.ref, html_url}' \
+              --jq '{number, title, state, locked, user: .user.login, head_branch: .head.ref, base_branch: .base.ref, html_url}' \
               > ci-failure-data/pr-metadata.json 2>/dev/null || echo "{}" > ci-failure-data/pr-metadata.json
           fi
 
@@ -357,19 +357,8 @@ jobs:
             echo "Warning: Failed to list test results artifacts"
             echo "[]" > "${ARTIFACTS_FILE}"
           fi
-          ARTIFACT_ID=$(jq -r \
-            --arg started_at "${RUN_STARTED_AT}" \
-            --arg updated_at "${RUN_UPDATED_AT}" \
-            '[
-              .[] |
-              select(
-                (.expired == false) and
-                ((.name | type) == "string") and
-                (.name | test("test-results|TestResults"; "i")) and
-                ((.created_at | type) == "string") and
-                (.created_at >= $started_at and .created_at <= $updated_at))
-            ] | sort_by([.created_at, .id]) | last | .id // empty' \
-            "${ARTIFACTS_FILE}")
+          ARTIFACT_ID=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+            select-test-results-artifact "${ARTIFACTS_FILE}" "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}")
           if [ -n "${ARTIFACT_ID}" ]; then
             ARTIFACT_NAME=$(jq -r \
               --argjson artifact_id "${ARTIFACT_ID}" \
@@ -708,6 +697,22 @@ safe-outputs:
             ANALYZED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)
 
+            # A locked or unreadable PR must remain side-effect free even if its
+            # state changed after collection or the agent missed the lock signal.
+            if [ "$RUN_SCOPE" = "pull-request" ]; then
+              if [ "$PR_NUMBER" != "0" ]; then
+                if ! PR_LOCKED=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    pr-locked "$REPO" "$PR_NUMBER"); then
+                  echo "::warning::PR state is unknown. Skipping publication."
+                  exit 0
+                fi
+                if [ "$PR_LOCKED" = "true" ]; then
+                  echo "PR #${PR_NUMBER} is locked. Skipping publication."
+                  exit 0
+                fi
+              fi
+            fi
+
             # ── 1. Set up memory branch and merge cause data ──
             # Pull request code issues are handled on the PR and do not need
             # stable cause records. Main repository breakages are persisted.
@@ -859,10 +864,11 @@ safe-outputs:
                   if [ -z "${ISSUES_CACHE_LOADED:-}" ]; then
                     OPEN_ISSUES_CACHE=$(mktemp)
                     CLOSED_ISSUES_CACHE=$(mktemp)
-                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
-                      > "$OPEN_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$OPEN_ISSUES_CACHE"
-                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
-                      > "$CLOSED_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$CLOSED_ISSUES_CACHE"
+                    if ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                        cache-cause-issues "$REPO" "$OPEN_ISSUES_CACHE" "$CLOSED_ISSUES_CACHE"; then
+                      echo "::error::Cause issue lookup failed. Refusing to create an issue from incomplete results."
+                      exit 1
+                    fi
                     ISSUES_CACHE_LOADED="true"
                   fi
 
@@ -1012,10 +1018,24 @@ safe-outputs:
               exit 0
             fi
 
-            # Check PR is not locked (still comment on closed PRs)
-            PR_LOCKED=$(gh api "repos/${REPO}/pulls/${SUBJECT_PR}" --jq '.locked' 2>/dev/null || echo "false")
+            # Recheck immediately before commenting because the PR can be locked
+            # after the publication job's earlier side-effect gate.
+            if ! PR_LOCKED=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                pr-locked "$REPO" "$SUBJECT_PR"); then
+              echo "::warning::PR state is unknown. Skipping comment."
+              exit 0
+            fi
             if [ "$PR_LOCKED" = "true" ]; then
               echo "PR #${SUBJECT_PR} is locked. Skipping comment."
+              exit 0
+            fi
+
+            # Update an existing analysis comment if one exists (by marker),
+            # otherwise create a new one. This prevents stacking duplicate
+            # comments on PRs with repeated CI failures.
+            if ! EXISTING_COMMENT_ID=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                find-analysis-comment "$REPO" "$SUBJECT_PR"); then
+              echo "::warning::Existing comment state is unknown. Skipping comment."
               exit 0
             fi
 
@@ -1024,14 +1044,6 @@ safe-outputs:
             COMMENT_FILE=$(mktemp)
             bash .github/workflows/analyze-ci-failure-comment.sh \
               "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_URL" > "$COMMENT_FILE"
-
-            # Update an existing analysis comment if one exists (by marker),
-            # otherwise create a new one. This prevents stacking duplicate
-            # comments on PRs with repeated CI failures.
-            MARKER="<!-- analyze-ci-failure -->"
-            EXISTING_COMMENT_ID=$(gh api "repos/${REPO}/issues/${SUBJECT_PR}/comments" --paginate \
-              --jq ".[] | select(.user.login == \"github-actions[bot]\" and ((.body // \"\") | startswith(\"${MARKER}\\n\"))) | .id" \
-              2>/dev/null | head -1 || true)
 
             if [ -n "$EXISTING_COMMENT_ID" ]; then
               COMMENT_REQUEST_FILE=$(mktemp)
@@ -1261,6 +1273,10 @@ safe-outputs:
                   const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: trustedPrNumber });
                   if (pr.state !== 'open') {
                     core.info('The subject PR is closed. Skipping rerun.');
+                    return;
+                  }
+                  if (pr.locked) {
+                    core.info('The subject PR is locked. Skipping rerun.');
                     return;
                   }
                 } catch (e) {

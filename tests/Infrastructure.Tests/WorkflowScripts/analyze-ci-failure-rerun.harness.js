@@ -17,7 +17,12 @@ async function main() {
     const github = {
         rest: {
             pulls: {
-                get: async () => ({ data: { state: request.prState ?? 'open' } }),
+                get: async () => ({
+                    data: {
+                        state: request.prState ?? 'open',
+                        locked: request.prLocked ?? false,
+                    },
+                }),
             },
             actions: {
                 getWorkflowRun: async () => ({ data: { run_attempt: request.currentRunAttempt ?? 1 } }),
