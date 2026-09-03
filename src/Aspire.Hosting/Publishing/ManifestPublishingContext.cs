@@ -318,10 +318,16 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
+        // Container-specific fields come from the projection, but the connection string contract belongs to the
+        // owner: the projection facade is a plain ContainerResource, so a projected owner implementing
+        // IResourceWithConnectionString would otherwise silently lose its connectionString field.
+        var connectionStringSource = ((IResource)container).GetContractOwner<IResourceWithConnectionString>()
+            ?? (IResource)container;
+
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
-            WriteConnectionString(container);
+            WriteConnectionString(connectionStringSource);
             await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
         else
@@ -340,7 +346,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Writer.WriteString("type", "container.v0");
             }
 
-            WriteConnectionString(container);
+            WriteConnectionString(connectionStringSource);
             Writer.WriteString("image", image);
         }
 

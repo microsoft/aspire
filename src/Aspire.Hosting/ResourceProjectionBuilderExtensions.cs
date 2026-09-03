@@ -229,10 +229,14 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(image);
 
-        return builder.WithContainerProjection(
+        var hadProjection = builder.Resource.AsContainer() is not null;
+
+        builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
             container => container.WithImageReference(image),
             configure);
+
+        return builder.EnsureContainerManifestPublishingCallback(hadProjection);
     }
 
     /// <summary>
@@ -303,10 +307,42 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(image);
 
-        return builder.WithContainerProjection(
+        var hadProjection = builder.Resource.AsContainer() is not null;
+
+        builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
             () => TContainer.CreateProjection(builder.Resource),
             container => container.WithImageReference(image),
             configure);
+
+        return builder.EnsureContainerManifestPublishingCallback(hadProjection);
+    }
+
+    /// <summary>
+    /// Points the owner's manifest writer at its publish projection, unless a projection was already registered.
+    /// </summary>
+    /// <remarks>
+    /// <c>ManifestPublishingContext</c> dispatches on the owner's CLR type, so without this a projected
+    /// project or executable keeps emitting <c>project.v*</c> or <c>executable.v0</c> and an owner type the
+    /// manifest writer does not recognize fails outright — the projection would be invisible to publishing.
+    /// <para>
+    /// Repeat calls only reconfigure the existing projection, so the callback is installed once. That preserves a
+    /// specialized callback an integration installed after the first registration, which would otherwise be
+    /// replaced by this generic one.
+    /// </para>
+    /// </remarks>
+    private static IResourceBuilder<T> EnsureContainerManifestPublishingCallback<T>(this IResourceBuilder<T> builder, bool hadProjection)
+        where T : IResource
+    {
+        // Registration is gated on the operation, so in run mode there is no publish projection to point at.
+        if (hadProjection || !builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        var container = builder.Resource.AsContainer() ??
+            throw new InvalidOperationException($"Resource '{builder.Resource.Name}' does not have a container projection.");
+
+        return builder.WithManifestPublishingCallback(context => context.WriteContainerAsync(container));
     }
 }

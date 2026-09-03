@@ -630,6 +630,166 @@ public class ResourceProjectionTests
             () => container.PublishAsContainerImage("contoso/other:1.0"));
     }
 
+    [Fact]
+    public async Task PublishAsContainerImageWritesTheOwnerAsAContainerInTheManifest()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // ManifestPublishingContext dispatches on the owner's CLR type, so without a manifest callback the
+        // projection is invisible and this still emits executable.v0 with host-only paths.
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsContainerImage("contoso/worker:1.0");
+
+        var manifest = await ManifestUtils.GetManifest(executable.Resource);
+
+        Assert.Equal("container.v0", manifest["type"]?.ToString());
+        Assert.Equal("contoso/worker:1.0", manifest["image"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsContainerImageWritesTheOwnerConnectionStringInTheManifest()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // The projection facade is a plain ContainerResource, so the owner's connection string only survives if
+        // the manifest writer resolves the owner rather than reading the contract off the facade.
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"))
+            .PublishAsContainerImage("contoso/db:1.0");
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+
+        Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
+    }
+
+    [Fact]
+    public void PublishAsContainerImageOnAProjectDoesNotRequireAnImageBuild()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // A prebuilt image has nothing to build or push. Classifying the owner by CLR type would still demand a
+        // registry and a deploy tag even though the project's step factory emits no build step.
+        var project = builder.AddProject<Projects.ServiceA>("proj")
+            .PublishAsContainerImage("contoso/proj:1.0");
+
+        Assert.False(project.Resource.RequiresImageBuild());
+        Assert.False(project.Resource.RequiresImageBuildAndPush());
+    }
+
+    [Fact]
+    public void PublishAsDockerFileOnAProjectStillRequiresAnImageBuild()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // The projection shares the owner's annotation collection, so the Dockerfile the projection adds is what
+        // keeps a projected project classified for build and push.
+        var project = builder.AddProject<Projects.ServiceA>("proj")
+            .PublishAsDockerFile();
+
+        Assert.True(project.Resource.RequiresImageBuild());
+        Assert.True(project.Resource.RequiresImageBuildAndPush());
+    }
+
+    [Fact]
+    public async Task ProjectionContractsResolveToTheOwnerWhenBothDeclareThem()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // The owner is the identity other resources reference, so it wins a contract both sides declare. The
+        // sanctioned way to vary a connection string by shape is for the owner to branch on it, which is what the
+        // Azure emulators do (AzureSignalRResource.ConnectionStringExpression tests IsEmulator). If the projection
+        // won instead, a resource's effective connection string would change with the operation being run.
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"))
+            .PublishAsContainerImage<ConnectionStringOwnerResource, ConnectionStringProjection>("contoso/db:1.0");
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+
+        Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ProjectionContractsFallBackToTheProjectionWhenTheOwnerLacksThem()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Resolving to the owner must not drop a contract only the projection declares: there is no ambiguity to
+        // settle here, so this is purely additive and a typed projection can still contribute one.
+        var resource = builder.AddResource(new PlainOwnerResource("db"))
+            .PublishAsContainerImage<PlainOwnerResource, ConnectionStringOnlyProjection>("contoso/db:1.0");
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+
+        Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
+    }
+
+    private sealed class PlainOwnerResource(string name) : Resource(name);
+
+    private sealed class ConnectionStringProjection(ConnectionStringOwnerResource owner)
+        : ContainerResource(owner.Name), IResourceWithConnectionString, IContainerProjection<ConnectionStringOwnerResource, ConnectionStringProjection>
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"Host=projection");
+
+        public static ConnectionStringProjection CreateProjection(ConnectionStringOwnerResource owner) => new(owner);
+    }
+
+    private sealed class ConnectionStringOnlyProjection(PlainOwnerResource owner)
+        : ContainerResource(owner.Name), IResourceWithConnectionString, IContainerProjection<PlainOwnerResource, ConnectionStringOnlyProjection>
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"Host=projection");
+
+        public static ConnectionStringOnlyProjection CreateProjection(PlainOwnerResource owner) => new(owner);
+    }
+
+    [Fact]
+    public async Task AProjectionCanOverrideTheOwnerConnectionStringThroughTheSharedAnnotationCollection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var emulator = builder.AddResource(new EmulatorConnectionStringResource("emulator"));
+
+        var resource = builder.AddResource(new RedirectAwareOwnerResource("db"))
+            .PublishAsContainerImage("contoso/db:1.0", container =>
+            {
+                // A projection shares its owner's annotation collection, so a redirect registered from the projected
+                // builder is the very same annotation the owner reads back. This is why owner-first contract
+                // precedence does not prevent a projection from changing a connection string: the projection supplies
+                // the value and the owner, which is what consumers reference, stays the one that hands it out.
+                container.WithAnnotation(
+                    new ConnectionStringRedirectAnnotation(emulator.Resource),
+                    ResourceAnnotationMutationBehavior.Replace);
+            });
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+
+        Assert.Equal("Host=container", manifest["connectionString"]?.ToString());
+    }
+
+    /// <summary>Mirrors RedisResource and PostgresServerResource: the owner keeps the contract and consults the
+    /// redirect annotation, which is how RunAsContainer varies a connection string today.</summary>
+    private sealed class RedirectAwareOwnerResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression =>
+            this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var redirect)
+                ? redirect.Resource.ConnectionStringExpression
+                : ReferenceExpression.Create($"Host=cloud");
+    }
+
+    private sealed class EmulatorConnectionStringResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=container");
+    }
+
+    private sealed class ConnectionStringOwnerResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"Host=owner");
+    }
+
     private sealed record SingletonAnnotation(string Value) : IResourceAnnotation;
 
     private sealed class FirstAnnotation : IResourceAnnotation;
