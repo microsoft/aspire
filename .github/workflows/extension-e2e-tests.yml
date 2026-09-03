@@ -562,6 +562,10 @@ jobs:
           # The known failure reproduces with the standalone C# debugger; C# Dev Kit is not
           # involved. Pin the exact debugger version so an upstream update cannot hide an
           # Aspire regression, and install its runtime dependency for the offline E2E host.
+          # Raw Marketplace VSIX URLs are not Dependabot-managed. Rebaseline these pins
+          # manually only when host compatibility requires it or the fixture is deliberately
+          # moved; before changing C#, verify that the old TargetPath launch still reproduces
+          # https://github.com/microsoft/aspire/issues/19091 and the RunCommand launch passes.
           dotnet_runtime_vsix="$RUNNER_TEMP/vscode-dotnet-runtime-3.1.0.vsix"
           curl --fail --location --compressed --retry 3 --retry-all-errors \
             --output "$dotnet_runtime_vsix" \
