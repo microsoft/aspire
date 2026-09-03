@@ -474,7 +474,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Resource actions.
+        ///   Looks up a localized string similar to Resource actions for {0}.
         /// </summary>
         public static string ResourcesGraphResourceActionsButton {
             get {

@@ -117,14 +117,27 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(node).ToBeVisibleAsync();
             await node.HoverAsync();
 
+            var resourceActionsLabel = string.Format(
+                Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton,
+                "TestResource");
+            var otherResourceActionsLabel = string.Format(
+                Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton,
+                "OtherResource");
             var cog = node.GetByRole(
                 AriaRole.Button,
                 new LocatorGetByRoleOptions
                 {
-                    Name = Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton,
+                    Name = resourceActionsLabel,
                     Exact = true
                 });
             await Assertions.Expect(cog).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(
+                AriaRole.Button,
+                new PageGetByRoleOptions
+                {
+                    Name = otherResourceActionsLabel,
+                    Exact = true
+                })).ToHaveCountAsync(1);
 
             // Attempt a large drag from the cog. D3's drag behavior is attached to the ancestor
             // resource group, so this verifies the cog stops the initiating pointer event.
@@ -157,7 +170,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 AriaRole.Menu,
                 new PageGetByRoleOptions { Name = "TestResource", Exact = true });
             await Assertions.Expect(menu).ToBeVisibleAsync();
-            await Assertions.Expect(menu.Locator(".aspire-menu-header-text")).ToHaveTextAsync("TestResource");
+            var header = menu.Locator(".aspire-menu-header");
+            await Assertions.Expect(header.Locator(".aspire-menu-header-text")).ToHaveTextAsync("TestResource");
+            var headerBounds = await header.BoundingBoxAsync();
+            Assert.NotNull(headerBounds);
+            Assert.InRange(headerBounds.Height, 39, 41);
         });
     }
 
@@ -173,6 +190,10 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 [
                     new UrlViewModel("http", new Uri("about:blank#resource-url"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
                 ]),
+            ModelTestHelpers.CreateResource(
+                resourceName: "OtherResource",
+                resourceType: KnownResourceTypes.Project,
+                state: KnownResourceState.Running),
             ModelTestHelpers.CreateResource(
                 resourceName: "HiddenResource",
                 resourceType: KnownResourceTypes.Container,

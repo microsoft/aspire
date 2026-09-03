@@ -233,9 +233,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourcesGraphResourceActionsButton">
-        <source>Resource actions</source>
-        <target state="new">Resource actions</target>
-        <note>Tooltip for the cog affordance on a graph resource node that opens the resource actions menu.</note>
+        <source>Resource actions for {0}</source>
+        <target state="new">Resource actions for {0}</target>
+        <note>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
         <source>Zoom in</source>

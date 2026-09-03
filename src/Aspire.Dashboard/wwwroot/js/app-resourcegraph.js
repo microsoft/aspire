@@ -435,7 +435,7 @@ class ResourceGraph {
             .attr("transform", "translate(35,43)")
             .attr("role", "button")
             .attr("tabindex", 0)
-            .attr("aria-label", this.menuIcon ? this.menuIcon.tooltip : null)
+            .attr("aria-label", n => this.getResourceMenuLabel(n))
             // D3's drag handler is attached to the ancestor resource group. Stop drag-start
             // events here so an imprecise cog click can never move the resource node.
             .on('mousedown touchstart', event => event.stopPropagation())
@@ -447,7 +447,7 @@ class ResourceGraph {
             .attr("class", "resource-menu-cog-background");
         cogGroup
             .append("title")
-            .text(this.menuIcon ? this.menuIcon.tooltip : "");
+            .text(n => this.getResourceMenuLabel(n));
         if (this.menuIcon) {
             var cogIcon = cogGroup
                 .append("path")
@@ -473,6 +473,12 @@ class ResourceGraph {
         this.nodeElements = newNodes.merge(this.nodeElements);
 
         // Set resource values that change.
+        this.nodeElementsG
+            .selectAll(".resource-group")
+            .select(".resource-menu-cog")
+            .attr("aria-label", n => this.getResourceMenuLabel(n))
+            .select("title")
+            .text(n => this.getResourceMenuLabel(n));
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
@@ -566,6 +572,10 @@ class ResourceGraph {
             return neighbors;
         },
             [node.id]);
+    }
+
+    getResourceMenuLabel(node) {
+        return this.menuIcon ? this.menuIcon.labelFormat.split('{0}').join(node.label) : "";
     }
 
     isNeighborLink(node, link) {

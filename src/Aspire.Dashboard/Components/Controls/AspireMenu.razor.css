@@ -32,6 +32,7 @@ fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-a
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
+    box-sizing: border-box;
     min-height: 40px;
     margin: 0 4px 4px;
     padding: 4px 8px 8px 0;

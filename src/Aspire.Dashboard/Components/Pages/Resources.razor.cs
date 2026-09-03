@@ -398,7 +398,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 menu = new
                 {
                     path = ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                    tooltip = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value
+                    labelFormat = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value
                 }
             };
 
