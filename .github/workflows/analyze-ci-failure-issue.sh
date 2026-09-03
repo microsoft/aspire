@@ -62,7 +62,15 @@ TYPE_MARKER="<!-- ci-failure-cause-type:${CAUSE_TYPE} -->"
 if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
   LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // "unknown"' "$LAST_SUCCESSFUL_RUN_FILE")
   FAILED_SHA=$(jq -r '.head_sha // "unknown"' "$RUN_CONTEXT_FILE")
-  TRIGGERING_MERGE=$(jq -r 'if .number then "#\(.number) \(.title)" else "Not found" end' "$TRIGGERING_MERGE_FILE")
+  TRIGGERING_MERGE_NUMBER=$(jq -r 'if (.number | type) == "number" then .number else empty end' "$TRIGGERING_MERGE_FILE")
+  if [ -n "$TRIGGERING_MERGE_NUMBER" ]; then
+    TRIGGERING_MERGE_TITLE=$(bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+      sanitize-json-field "$TRIGGERING_MERGE_FILE" title 238)
+    TRIGGERING_MERGE_TITLE_CODE=$(render_code_span "$TRIGGERING_MERGE_TITLE")
+    TRIGGERING_MERGE="#${TRIGGERING_MERGE_NUMBER} ${TRIGGERING_MERGE_TITLE_CODE}"
+  else
+    TRIGGERING_MERGE="Not found"
+  fi
 fi
 
 {

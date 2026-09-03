@@ -9,6 +9,21 @@ COMMAND="${1:?command is required}"
 CI_FAILURE_DATA_DIR="${CI_FAILURE_DATA_DIR:-ci-failure-data}"
 RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 
+JQ_SANITIZE_DEFS='
+  def strip_unsafe:
+    gsub("\u001b\\[[0-9;?]*[ -/]*[@-~]"; "") |
+    gsub("\\p{Cf}|\\p{Zl}|\\p{Zp}|[\uFE00-\uFE0F]"; "") |
+    gsub("[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]"; "") |
+    [explode[] | select((. < 917760 or . > 917999))] |
+    implode;
+  def sanitize_single_line:
+    gsub("[\r\n\t]+"; " ") |
+    strip_unsafe;
+  def sanitize_multiline:
+    gsub("\r\n?"; "\n") |
+    strip_unsafe;
+'
+
 sanitize_document()
 {
   local document_type="$1"
@@ -18,19 +33,7 @@ sanitize_document()
   # CI errors can contain CRLF, ANSI escapes, and invisible Unicode formatting.
   # Preserve diagnostic text while removing controls that can alter later prompt
   # or Markdown rendering.
-  jq --arg document_type "$document_type" '
-    def strip_unsafe:
-      gsub("\u001b\\[[0-9;?]*[ -/]*[@-~]"; "") |
-      gsub("\\p{Cf}|\\p{Zl}|\\p{Zp}|[\uFE00-\uFE0F]"; "") |
-      gsub("[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]"; "") |
-      [explode[] | select((. < 917760 or . > 917999))] |
-      implode;
-    def sanitize_single_line:
-      gsub("[\r\n\t]+"; " ") |
-      strip_unsafe;
-    def sanitize_multiline:
-      gsub("\r\n?"; "\n") |
-      strip_unsafe;
+  jq --arg document_type "$document_type" "$JQ_SANITIZE_DEFS"'
     if $document_type == "cause" then
       if (.title | type) == "string" then .title |= sanitize_single_line else . end |
       if (.test_name | type) == "string" then .test_name |= sanitize_single_line else . end |
@@ -65,6 +68,49 @@ sanitize_document()
   ' "$input_file" > "$output_file"
 }
 
+sanitize_json_field()
+{
+  local input_file="$1"
+  local field="$2"
+  local max_length="$3"
+
+  jq -er --arg field "$field" --argjson max_length "$max_length" "$JQ_SANITIZE_DEFS"'
+    (.[$field] // "") |
+    if type == "string" then
+      sanitize_single_line | .[0:$max_length]
+    else
+      error("field must be a string")
+    end
+  ' "$input_file"
+}
+
+render_untrusted_json()
+{
+  local input_file="$1"
+  local max_length="${2:-500}"
+  local string_format="${3:-single-line}"
+
+  jq -cer --argjson max_length "$max_length" --arg string_format "$string_format" "$JQ_SANITIZE_DEFS"'
+    def sanitize_json:
+      if type == "object" then
+        with_entries(.value |= sanitize_json)
+      elif type == "array" then
+        map(sanitize_json)
+      elif type == "string" then
+        if $string_format == "single-line" then
+          sanitize_single_line | .[0:$max_length]
+        elif $string_format == "multiline" then
+          sanitize_multiline | .[0:$max_length]
+        else
+          error("unsupported string format")
+        end
+      else
+        .
+      end;
+    sanitize_json
+  ' "$input_file" | sed 's/^/    /'
+}
+
 trusted_pr_number()
 {
   local run_scope
@@ -95,6 +141,18 @@ case "$COMMAND" in
     OUTPUT_FILE="${3:?output file is required}"
     sanitize_document analysis "$INPUT_FILE" "$OUTPUT_FILE"
     ;;
+  sanitize-json-field)
+    INPUT_FILE="${2:?input file is required}"
+    FIELD="${3:?field is required}"
+    MAX_LENGTH="${4:?maximum length is required}"
+    sanitize_json_field "$INPUT_FILE" "$FIELD" "$MAX_LENGTH"
+    ;;
+  render-untrusted-json)
+    INPUT_FILE="${2:?input file is required}"
+    MAX_LENGTH="${3:-500}"
+    STRING_FORMAT="${4:-single-line}"
+    render_untrusted_json "$INPUT_FILE" "$MAX_LENGTH" "$STRING_FORMAT"
+    ;;
   pr-number)
     trusted_pr_number
     ;;
@@ -105,7 +163,10 @@ case "$COMMAND" in
 
     jq -er \
       --arg format "$FORMAT" \
-      --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+      --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" "$JQ_SANITIZE_DEFS"'
+        def render_code_span:
+          (([scan("`+") | length] | max // 0) + 1) as $delimiter_length |
+          ("`" * $delimiter_length) + " " + . + " " + ("`" * $delimiter_length);
         .job_ids as $job_ids |
         [
           $job_ids[] as $job_id |
@@ -115,12 +176,13 @@ case "$COMMAND" in
           error("cause references an unknown trusted failed job")
         else
           $job_names
-          | map(gsub("[\r\n]+"; " "))
-          | join("<br>")
-          | if $format == "display" then
-              .
+          | map(sanitize_single_line | .[0:500])
+          | if $format == "plain" then
+              join(", ")
+            elif $format == "display" then
+              map(render_code_span) | join("<br>")
             elif $format == "table" then
-              gsub("\\|"; "\\|")
+              map(gsub("\\|"; "\\|") | render_code_span) | join("<br>")
             else
               error("unsupported cause job name format")
             end
