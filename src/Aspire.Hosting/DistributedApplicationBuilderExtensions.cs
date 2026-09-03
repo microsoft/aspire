@@ -75,7 +75,7 @@ public static class DistributedApplicationBuilderExtensions
             return builder.CreateResourceBuilder(typedResource);
         }
 
-        if (resource.GetEffectiveResource(builder.ExecutionContext) is not T effectiveResource)
+        if (resource.GetEffectiveResource() is not T effectiveResource)
         {
             throw new InvalidOperationException($"Resource '{name}' of type '{resource.GetType()}' is not assignable to requested type '{typeof(T).Name}'.");
         }
@@ -115,7 +115,7 @@ public static class DistributedApplicationBuilderExtensions
             return true;
         }
 
-        if (resource.GetEffectiveResource(builder.ExecutionContext) is not T effectiveResource)
+        if (resource.GetEffectiveResource() is not T effectiveResource)
         {
             resourceBuilder = null;
             return false;

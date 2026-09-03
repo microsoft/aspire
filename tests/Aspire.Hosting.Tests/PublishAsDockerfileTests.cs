@@ -548,7 +548,8 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     private static IResource GetContainerConfiguredOwner(IResource owner)
     {
         Assert.Same(owner, owner.GetOwnerOrSelf());
-        Assert.Single(owner.Annotations.OfType<ResourceProjectionAnnotation>());
+        var projection = Assert.Single(owner.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        Assert.Same(owner, projection.Projection.GetOwnerOrSelf());
         Assert.True(owner.IsContainer());
         return owner;
     }

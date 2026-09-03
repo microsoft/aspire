@@ -371,7 +371,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void ProjectionRegistrationIsOperationScoped()
+    public void ProjectionCallbackIsOperationScoped()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var callbackInvoked = false;
@@ -387,7 +387,6 @@ public class ResourceProjectionTests
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.False(callbackInvoked);
-        Assert.Single(executable.Resource.Annotations.OfType<ResourceProjectionAnnotation>());
         Assert.Empty(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
         Assert.False(executable.Resource.IsContainer());
         Assert.False(builder.TryCreateResourceBuilder<ContainerResource>("worker", out _));
@@ -421,7 +420,6 @@ public class ResourceProjectionTests
 
         Assert.Equal(operation == DistributedApplicationOperation.Run, runCallbackInvoked);
         Assert.Equal(operation == DistributedApplicationOperation.Publish, publishCallbackInvoked);
-        Assert.Equal(2, executable.Resource.Annotations.OfType<ResourceProjectionAnnotation>().Count());
         Assert.Single(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
         Assert.True(executable.Resource.TryGetContainerImageName(out var image));
         Assert.Equal(operation == DistributedApplicationOperation.Run ? "run-image:latest" : "publish-image:latest", image);
@@ -486,49 +484,6 @@ public class ResourceProjectionTests
 
         Assert.NotNull(resolvedBuilder);
         Assert.Same(executable.Resource, resolvedBuilder.Resource.GetOwnerOrSelf());
-    }
-
-    [Fact]
-    public void MultipleSelectedProjectionsAreRejected()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var executable = builder.AddExecutable("worker", "worker", ".");
-        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(
-                DistributedApplicationOperation.Publish,
-                new ContainerResource("worker"))));
-        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(
-                DistributedApplicationOperation.Publish,
-                new ContainerResource("worker"))));
-
-        var exception = Assert.Throws<DistributedApplicationException>(
-            () => executable.Resource.GetEffectiveResource(builder.ExecutionContext));
-
-        Assert.Contains(executable.Resource.Name, exception.Message);
-        Assert.Contains(DistributedApplicationOperation.Publish.ToString(), exception.Message);
-    }
-
-    [Fact]
-    public void RegisteringASecondProjectionForTheSameOperationIsRejected()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var executable = builder.AddExecutable("worker", "worker", ".");
-        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(
-                DistributedApplicationOperation.Publish,
-                new ContainerResource("worker"))));
-        executable.Resource.Annotations.Add(new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(
-                DistributedApplicationOperation.Publish,
-                new ContainerResource("worker"))));
-
-        var exception = Assert.Throws<DistributedApplicationException>(
-            () => executable.WithContainerProjection(
-                DistributedApplicationOperation.Publish,
-                container => container.WithImage("projected-image")));
-
-        Assert.Contains(executable.Resource.Name, exception.Message);
     }
 
     [Fact]

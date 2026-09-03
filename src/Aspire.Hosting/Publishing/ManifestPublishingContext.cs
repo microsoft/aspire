@@ -372,7 +372,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     internal Task WriteProjectedContainerAsync(IResource owner)
     {
-        if (owner.GetEffectiveResource(ExecutionContext) is not ContainerResource container)
+        if (owner.GetEffectiveResource() is not ContainerResource container)
         {
             throw new DistributedApplicationException(
                 $"Resource '{owner.Name}' does not have a container projection for the '{ExecutionContext.Operation}' operation.");

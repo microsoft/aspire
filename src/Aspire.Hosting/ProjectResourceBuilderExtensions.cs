@@ -982,7 +982,7 @@ public static class ProjectResourceBuilderExtensions
         var projectFilePath = builder.Resource.GetProjectMetadata().ProjectPath;
         var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
         var resource = builder.Resource;
-        var hasProjection = resource.HasContainerProjection();
+        var hasProjection = resource.HasAppliedContainerProjection();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,

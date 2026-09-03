@@ -22,6 +22,6 @@ public static class ExecutableResourceExtensions
 
         return model.Resources
             .OfType<ExecutableResource>()
-            .Where(static resource => !resource.HasContainerProjection());
+            .Where(static resource => !resource.HasAppliedContainerProjection());
     }
 }

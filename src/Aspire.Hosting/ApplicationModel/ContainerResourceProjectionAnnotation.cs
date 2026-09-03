@@ -19,6 +19,8 @@ public sealed class ContainerResourceProjectionAnnotation : IResourceAnnotation
         _projection = projection;
     }
 
+    internal ContainerResource Projection => _projection;
+
     /// <summary>
     /// Gets the container entrypoint configured through the projection.
     /// </summary>

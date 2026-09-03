@@ -19,52 +19,11 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
-    internal static IResource GetEffectiveResource(
-        this IResource resource,
-        DistributedApplicationExecutionContext executionContext)
+    internal static IResource GetEffectiveResource(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(executionContext);
 
-        return resource.TrySelectProjection(executionContext, out var projection) ? projection : resource;
-    }
-
-    /// <summary>
-    /// Selects the projection that is authoritative for the current operation, if any. Throws when
-    /// more than one projection matches, because the effective shape would otherwise depend on
-    /// annotation ordering.
-    /// </summary>
-    internal static bool TrySelectProjection(
-        this IResource resource,
-        DistributedApplicationExecutionContext executionContext,
-        [NotNullWhen(true)] out IResource? selectedProjection)
-    {
-        selectedProjection = null;
-
-        // A projection never projects again; returning it unchanged keeps realization from
-        // recursing through the owner's projection annotations.
-        if (resource is IResourceProjection)
-        {
-            return false;
-        }
-
-        foreach (var annotation in resource.Annotations.OfType<ResourceProjectionAnnotation>())
-        {
-            if (!annotation.Source.TrySelect(executionContext, out var projection))
-            {
-                continue;
-            }
-
-            if (selectedProjection is not null)
-            {
-                throw new DistributedApplicationException(
-                    $"Resource '{resource.Name}' has more than one projection selected for the '{executionContext.Operation}' operation.");
-            }
-
-            selectedProjection = projection;
-        }
-
-        return selectedProjection is not null;
+        return resource.TryGetAppliedContainerProjection(out var projection) ? projection : resource;
     }
 
     /// <summary>
@@ -80,10 +39,22 @@ public static class ResourceExtensions
         return resource is IResourceProjection projection ? projection.Owner : resource;
     }
 
-    internal static bool HasContainerProjection(this IResource resource) =>
-        resource.Annotations
+    // IsContainer also recognizes legacy ContainerImageAnnotation-based conversion. Callers use
+    // this narrower check only when an applied projection intentionally overrides legacy behavior.
+    internal static bool HasAppliedContainerProjection(this IResource resource) =>
+        resource.TryGetAppliedContainerProjection(out _);
+
+    internal static bool TryGetAppliedContainerProjection(
+        this IResource resource,
+        [NotNullWhen(true)] out ContainerResource? projection)
+    {
+        projection = resource.Annotations
             .OfType<ContainerResourceProjectionAnnotation>()
-            .Any();
+            .SingleOrDefault()
+            ?.Projection;
+
+        return projection is not null;
+    }
 
     /// <summary>
     /// Attempts to get the last annotation of the specified type from the resource.
@@ -928,7 +899,7 @@ public static class ResourceExtensions
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
 
                 // Container resources get their default listening port from the exposed port (implicit)
-                (_, _, null, int port) when resource is ContainerResource || resource.HasContainerProjection() => ResolvedPort.Implicit(port),
+                (_, _, null, int port) when resource is ContainerResource || resource.HasAppliedContainerProjection() => ResolvedPort.Implicit(port),
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
@@ -940,7 +911,7 @@ public static class ResourceExtensions
 
             // Track HTTP schemes encountered for ProjectResources
             if (resource is ProjectResource &&
-                !resource.HasContainerProjection() &&
+                !resource.HasAppliedContainerProjection() &&
                 IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
@@ -1933,7 +1904,7 @@ public static class ResourceExtensions
     /// </summary>
     internal static string GetResourceType(this IResource resource) => resource switch
     {
-        _ when resource.HasContainerProjection() => KnownResourceTypes.Container,
+        _ when resource.HasAppliedContainerProjection() => KnownResourceTypes.Container,
         ProjectResource => KnownResourceTypes.Project,
         ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,

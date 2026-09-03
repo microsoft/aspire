@@ -8,41 +8,6 @@ internal interface IResourceProjection
     IResource Owner { get; }
 }
 
-internal interface IResourceProjectionSource
-{
-    bool TrySelect(
-        DistributedApplicationExecutionContext executionContext,
-        out IResource? projection);
-}
-
-internal sealed class ResourceProjectionAnnotation(IResourceProjectionSource source) : IResourceAnnotation
-{
-    public IResourceProjectionSource Source { get; } = source;
-}
-
-internal sealed class OperationResourceProjectionSource : IResourceProjectionSource
-{
-    private readonly DistributedApplicationOperation _operation;
-
-    public OperationResourceProjectionSource(
-        DistributedApplicationOperation operation,
-        IResource projection)
-    {
-        _operation = operation;
-        _projection = projection;
-    }
-
-    private readonly IResource _projection;
-
-    public bool TrySelect(
-        DistributedApplicationExecutionContext executionContext,
-        out IResource? projection)
-    {
-        projection = executionContext.Operation == _operation ? _projection : null;
-        return projection is not null;
-    }
-}
-
 internal sealed class ContainerResourceProjection<TOwner>(TOwner owner)
     : ContainerResource(owner.Name), IResourceProjection
     where TOwner : IResource
