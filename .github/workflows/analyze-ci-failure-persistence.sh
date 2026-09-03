@@ -86,11 +86,13 @@ case "$COMMAND" in
     TRIGGERING_MERGE_FILE="$CI_FAILURE_DATA_DIR/triggering-merge-pr.json"
     LAST_SUCCESSFUL_RUN_FILE="$CI_FAILURE_DATA_DIR/last-successful-main-run.json"
     CANDIDATE_MERGES_FILE="$CI_FAILURE_DATA_DIR/candidate-merges.json"
+    CANDIDATE_HISTORY_STATUS_FILE="$CI_FAILURE_DATA_DIR/candidate-merge-history-status.json"
 
     [ -f "$PR_METADATA_FILE" ] || PR_METADATA_FILE=/dev/null
     [ -f "$TRIGGERING_MERGE_FILE" ] || TRIGGERING_MERGE_FILE=/dev/null
     [ -f "$LAST_SUCCESSFUL_RUN_FILE" ] || LAST_SUCCESSFUL_RUN_FILE=/dev/null
     [ -f "$CANDIDATE_MERGES_FILE" ] || CANDIDATE_MERGES_FILE=/dev/null
+    [ -f "$CANDIDATE_HISTORY_STATUS_FILE" ] || CANDIDATE_HISTORY_STATUS_FILE=/dev/null
 
     jq -n \
       --arg analyzed_at "$ANALYZED_AT" \
@@ -102,6 +104,7 @@ case "$COMMAND" in
       --slurpfile triggering_merge "$TRIGGERING_MERGE_FILE" \
       --slurpfile last_successful_run "$LAST_SUCCESSFUL_RUN_FILE" \
       --slurpfile candidate_merges "$CANDIDATE_MERGES_FILE" \
+      --slurpfile candidate_history_status "$CANDIDATE_HISTORY_STATUS_FILE" \
       '
         ($analysis[0]) as $analysis |
         ($run_context[0]) as $context |
@@ -111,6 +114,7 @@ case "$COMMAND" in
         ($triggering_merge[0] // {}) as $triggering |
         ($last_successful_run[0] // {}) as $last_success |
         ($candidate_merges[0] // []) as $candidates |
+        (($candidate_history_status[0].state // "unavailable")) as $candidate_history_state |
         ($analysis.failed_jobs | map({key: (.id | tostring), value: .}) | from_entries) as $analysis_jobs |
         ($trusted_jobs | map(.name) | map(select(type == "string" and length > 0)) | unique) as $trusted_job_names |
         {
@@ -136,7 +140,7 @@ case "$COMMAND" in
             end
           ),
           triggering_merge_pr: (
-            if $context.run_scope == "main" and ($triggering.number | type) == "number" then
+            if $context.run_scope == "main" and $candidate_history_state == "available" and ($triggering.number | type) == "number" then
               {
                 number: $triggering.number,
                 title: ($triggering.title // ""),
@@ -156,20 +160,27 @@ case "$COMMAND" in
               {
                 last_successful_main_sha: ($last_success.head_sha // null),
                 failed_sha: $context.head_sha,
-                candidate_merges: [
-                  $candidates[]? |
-                  {
-                    sha: .sha,
-                    message: .message,
-                    html_url: .html_url,
-                    pull_request: {
-                      number: .pull_request.number,
-                      title: .pull_request.title,
-                      url: .pull_request.url,
-                      merged_at: .pull_request.merged_at
-                    }
-                  }
-                ]
+                candidate_merge_history_state: $candidate_history_state,
+                candidate_merges: (
+                  if $candidate_history_state == "available" then
+                    [
+                      $candidates[]? |
+                      {
+                        sha: .sha,
+                        message: .message,
+                        html_url: .html_url,
+                        pull_request: {
+                          number: .pull_request.number,
+                          title: .pull_request.title,
+                          url: .pull_request.url,
+                          merged_at: .pull_request.merged_at
+                        }
+                      }
+                    ]
+                  else
+                    null
+                  end
+                )
               }
             else
               null

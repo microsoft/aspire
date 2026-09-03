@@ -1808,7 +1808,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":123,"name":"Build","conclusion":"failure","html_url":"https://github.com/job/123","steps":[{"name":"Compile","conclusion":"failure"}]}]""",
             """{"number":42,"title":"Trusted merge","html_url":"https://github.com/microsoft/aspire/pull/42"}""",
             """{"head_sha":"trusted-success"}""",
-            """[{"sha":"trusted-candidate","message":"candidate","html_url":"https://github.com/commit","pull_request":{"number":41,"title":"Candidate","url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-29T00:00:00Z"}}]""");
+            """[{"sha":"trusted-candidate","message":"candidate","html_url":"https://github.com/commit","pull_request":{"number":41,"title":"Candidate","url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-29T00:00:00Z"}}]""",
+            "{}",
+            """{"state":"available"}""");
 
         var outputPath = Path.Combine(_workspace.Path, "persisted-main.json");
         var result = await RunPersistenceScriptAsync("write-run-summary", outputPath);
@@ -1831,9 +1833,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal("https://github.com/microsoft/aspire/pull/42", triggeringMerge.GetProperty("url").GetString());
 
         var mainContext = root.GetProperty("main_context");
-        Assert.Equal(3, mainContext.EnumerateObject().Count());
+        Assert.Equal(4, mainContext.EnumerateObject().Count());
         Assert.Equal("trusted-failed", mainContext.GetProperty("failed_sha").GetString());
         Assert.Equal("trusted-success", mainContext.GetProperty("last_successful_main_sha").GetString());
+        Assert.Equal("available", mainContext.GetProperty("candidate_merge_history_state").GetString());
         Assert.Equal("trusted-candidate", mainContext.GetProperty("candidate_merges")[0].GetProperty("sha").GetString());
 
         var failedJob = root.GetProperty("failed_jobs")[0];
@@ -1842,6 +1845,35 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal("main-repository-breakage", failedJob.GetProperty("classification").GetString());
         Assert.Equal("compiler failed", failedJob.GetProperty("reason").GetString());
         Assert.Equal("Compile", failedJob.GetProperty("failed_steps")[0].GetString());
+    }
+
+    [Theory]
+    [InlineData("incomplete")]
+    [InlineData("unavailable")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PersistedMainAnalysisOmitsIncompleteCandidateHistory(string historyState)
+    {
+        await WritePersistenceFixtureAsync(
+            """{"run_scope":"main","verdict":"main-repository-breakage","failed_jobs":[],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_attempt":1,"run_scope":"main","head_sha":"trusted-failed","pr_numbers":""}""",
+            """{"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""",
+            """[{"id":123,"name":"Build","conclusion":"failure","steps":[]} ]""",
+            """{"number":42,"title":"Triggering merge"}""",
+            """{"head_sha":"trusted-success"}""",
+            """[{"sha":"partial","message":"partial","html_url":"https://github.com/commit","pull_request":{"number":41,"title":"Partial","url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-29T00:00:00Z"}}]""",
+            "{}",
+            $$"""{"state":"{{historyState}}"}""");
+
+        var outputPath = Path.Combine(_workspace.Path, $"persisted-{historyState}.json");
+        var result = await RunPersistenceScriptAsync("write-run-summary", outputPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var root = document.RootElement;
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("triggering_merge_pr").ValueKind);
+        var mainContext = root.GetProperty("main_context");
+        Assert.Equal(historyState, mainContext.GetProperty("candidate_merge_history_state").GetString());
+        Assert.Equal(JsonValueKind.Null, mainContext.GetProperty("candidate_merges").ValueKind);
     }
 
     [Fact]
@@ -2329,7 +2361,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string triggeringMerge,
         string lastSuccessfulRun,
         string candidateMerges,
-        string prMetadata = "{}")
+        string prMetadata = "{}",
+        string candidateHistoryStatus = """{"state":"available"}""")
     {
         var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
         var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
@@ -2340,6 +2373,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "triggering-merge-pr.json"), triggeringMerge);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "last-successful-main-run.json"), lastSuccessfulRun);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "candidate-merges.json"), candidateMerges);
+        await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "candidate-merge-history-status.json"), candidateHistoryStatus);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "pr-metadata.json"), prMetadata);
     }
 
