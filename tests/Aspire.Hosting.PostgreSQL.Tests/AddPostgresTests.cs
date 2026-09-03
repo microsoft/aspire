@@ -760,6 +760,7 @@ public class AddPostgresTests
     [InlineData("16.0", 16)]
     [InlineData("9.6", 9)]
     [InlineData("0.8.3-pg18-trixie", 18)]
+    [InlineData("pg18-trixie", 18)]
     [InlineData("2.28.1-pg17", 17)]
     public void TryParsePostgresMajorVersionReturnsTrueForValidTags(string tag, int expectedMajorVersion)
     {
@@ -775,6 +776,9 @@ public class AddPostgresTests
     [InlineData("")]
     [InlineData("  ")]
     [InlineData("abc")]
+    [InlineData("xpg18")]
+    [InlineData("pg180")]
+    [InlineData("pg9")]
     public void TryParsePostgresMajorVersionReturnsFalseForInvalidTags(string tag)
     {
         var result = PostgresBuilderExtensions.TryParsePostgresMajorVersion(tag, out var majorVersion);

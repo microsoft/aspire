@@ -731,7 +731,7 @@ public static partial class PostgresBuilderExtensions
         return parts.Length > 0 && int.TryParse(parts[0], out majorVersion) && majorVersion > 0;
     }
 
-    [GeneratedRegex("pg([0-9]{2})")]
+    [GeneratedRegex("(?:^|-)pg([0-9]{2})(?:-|$)")]
     private static partial Regex PostgresMajorVersionPgPrefixedRegex();
 
     private static async Task CreateDatabaseAsync(NpgsqlConnection npgsqlConnection, PostgresDatabaseResource npgsqlDatabase, IServiceProvider serviceProvider, CancellationToken cancellationToken)
