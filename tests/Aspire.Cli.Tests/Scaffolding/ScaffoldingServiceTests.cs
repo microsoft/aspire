@@ -84,6 +84,47 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void EnsureNestedBrownfieldTypeScriptToolchainFiles_WhenYarnSelected_CreatesLockFile()
+    {
+        var appHostDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            ScaffoldingService.EnsureNestedBrownfieldTypeScriptToolchainFiles(
+                appHostDirectory,
+                TypeScriptAppHostToolchain.Yarn);
+
+            Assert.Equal(string.Empty, File.ReadAllText(Path.Combine(appHostDirectory.FullName, "yarn.lock")));
+        }
+        finally
+        {
+            appHostDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnsureNestedBrownfieldTypeScriptToolchainFiles_WhenYarnLockExists_PreservesContent()
+    {
+        var appHostDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var yarnLockPath = Path.Combine(appHostDirectory.FullName, "yarn.lock");
+            File.WriteAllText(yarnLockPath, "# existing lockfile");
+
+            ScaffoldingService.EnsureNestedBrownfieldTypeScriptToolchainFiles(
+                appHostDirectory,
+                TypeScriptAppHostToolchain.Yarn);
+
+            Assert.Equal("# existing lockfile", File.ReadAllText(yarnLockPath));
+        }
+        finally
+        {
+            appHostDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void SerializePackageJson_PreservesTrailingNewLine_WhenOriginalHadOne()
     {
         var packageJson = JsonNode.Parse("""{ "scripts": { "aspire:start": "npm --prefix aspire-apphost run aspire:start" } }""")!.AsObject();

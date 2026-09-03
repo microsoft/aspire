@@ -22,6 +22,7 @@ namespace Aspire.Cli.Scaffolding;
 internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
+    private const string YarnLockFileName = "yarn.lock";
     private const string VsCodeSettingsFileName = ".vscode/settings.json";
     private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
     internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
@@ -216,6 +217,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         if (IsNestedBrownfieldTypeScriptAppHost(directory, scaffoldDirectory, language))
         {
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(scaffoldDirectory, _environment, _logger);
+            EnsureNestedBrownfieldTypeScriptToolchainFiles(scaffoldDirectory, toolchain);
             await AddRootTypeScriptAppHostScriptsAsync(directory, scaffoldDirectory, cancellationToken);
         }
 
@@ -288,6 +291,23 @@ internal sealed class ScaffoldingService : IScaffoldingService
                rootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                scaffoldDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                StringComparison.Ordinal);
+
+    internal static void EnsureNestedBrownfieldTypeScriptToolchainFiles(DirectoryInfo appHostDirectory, TypeScriptAppHostToolchain toolchain)
+    {
+        if (toolchain != TypeScriptAppHostToolchain.Yarn)
+        {
+            return;
+        }
+
+        // Yarn 2+ rejects a nested package that is not listed in its parent's workspace. An empty
+        // lockfile establishes the generated AppHost as an independent project without changing
+        // the user's workspace package graph. See https://yarnpkg.com/features/workspaces.
+        var yarnLockPath = Path.Combine(appHostDirectory.FullName, YarnLockFileName);
+        if (!File.Exists(yarnLockPath))
+        {
+            File.WriteAllText(yarnLockPath, string.Empty);
+        }
+    }
 
     private async Task AddRootTypeScriptAppHostScriptsAsync(DirectoryInfo rootDirectory, DirectoryInfo appHostDirectory, CancellationToken cancellationToken)
     {
@@ -426,7 +446,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
             var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
-            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain, directory);
         }
 
         var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);

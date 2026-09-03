@@ -109,14 +109,33 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
             await builder.build().run();
             """;
-
         File.WriteAllText(appHostPath, newContent);
+
+        string? expectedPnpmWorkspaceContent = null;
+        var pnpmWorkspacePath = Path.Combine(workspace.WorkspaceRoot.FullName, "pnpm-workspace.yaml");
+        if (toolchain == "pnpm")
+        {
+            expectedPnpmWorkspaceContent = """
+                allowBuilds:
+                  esbuild: true
+                  protobufjs: true
+                packages:
+                  - viteapp
+
+                """;
+            File.WriteAllText(pnpmWorkspacePath, expectedPnpmWorkspaceContent);
+        }
 
         // Step 6: Restore and type-check with the configured package manager before running.
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        if (expectedPnpmWorkspaceContent is not null)
+        {
+            Assert.Equal(expectedPnpmWorkspaceContent, File.ReadAllText(pnpmWorkspacePath));
+        }
 
         var appHostLockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -154,6 +173,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 8: Stop the apphost
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
+
+        if (expectedPnpmWorkspaceContent is not null)
+        {
+            Assert.Equal(expectedPnpmWorkspaceContent, File.ReadAllText(pnpmWorkspacePath));
+        }
     }
 
     [Fact]
@@ -391,8 +415,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.WaitForAnyPromptAsync(counter);
     }
 
-    [Fact]
-    public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoInWorkspaceSubdirectory()
+    [Theory]
+    [InlineData("npm")]
+    [InlineData("yarn")]
+    [CaptureWorkspaceOnFailure]
+    public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoInWorkspaceSubdirectory(string toolchain)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -406,7 +433,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // CLI's baked channel + ambient NuGet feeds.
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
         string? originalDevScript = null;
         string? originalBuildScript = null;
         string? originalPreviewScript = null;
@@ -445,6 +472,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         // Capture original package.json scripts and tsconfig before aspire init
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "packages", "brownfield");
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(projectRoot, toolchain, cleanInstallState: true);
         var packageJson = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot, "package.json")))!.AsObject();
         var scripts = packageJson["scripts"]!.AsObject();
         originalDevScript = scripts["dev"]?.GetValue<string>();
@@ -483,8 +511,9 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.Equal(originalBuildScript, scripts["build"]?.GetValue<string>());
         Assert.Equal(originalPreviewScript, scripts["preview"]?.GetValue<string>());
         Assert.Equal("custom-apphost-start", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
-        Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+        var directoryOption = toolchain == "yarn" ? "--cwd" : "--prefix";
+        Assert.Equal($"{toolchain} {directoryOption} aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal($"{toolchain} {directoryOption} aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal(originalPackageType, packageJson["type"]?.GetValue<string>());
         Assert.False(scripts.ContainsKey("start"));
         var rootDependencies = packageJson["dependencies"]?.AsObject();
@@ -514,6 +543,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.NotNull(appHostDevDependencies["tsx"]);
         Assert.NotNull(appHostDevDependencies["typescript"]);
         Assert.True(File.Exists(Path.Combine(appHostDirectory, "tsconfig.apphost.json")));
+        Assert.True(File.Exists(Path.Combine(appHostDirectory, TypeScriptAppHostToolchainTestHelpers.GetLockFileName(toolchain))));
 
         // Verify Aspire.Hosting.JavaScript was pre-added in config
         var configPath = Path.Combine(projectRoot, "aspire.config.json");
