@@ -219,6 +219,32 @@ public class ContainerSecretEnvironmentTests
     }
 
     /// <summary>
+    /// A <c>..</c>-prefixed name passes the <c>[-._a-zA-Z0-9]+</c> character class but is still
+    /// rejected by the API server, so it has to be rejected here too.
+    /// </summary>
+    /// <remarks>
+    /// apimachinery's <c>IsConfigMapKey</c> delegates to <c>hasChDirPrefix</c>, which rejects
+    /// <c>.</c>, <c>..</c> <em>and</em> every name starting with <c>..</c> — the kubelet's
+    /// atomic-writer projects each key as a file alongside its own <c>..data</c> symlink, so a
+    /// <c>..</c>-prefixed key would collide with that machinery. Pinned because the character
+    /// class alone reads as though <c>..token</c> were acceptable. See
+    /// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/util/validation/validation.go.
+    /// </remarks>
+    [Fact]
+    public void CredentialInAVariableWhoseNameStartsWithParentDirectory_FailsWithADiagnostic()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            var password = builder.AddParameter("pw", secret: true);
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("..token", password);
+        }));
+
+        Assert.Contains("ASPIRERADIUS083", ex.Message);
+        Assert.Contains("..token", ex.Message);
+    }
+
+    /// <summary>
     /// The container's secret is consumed only by that container, so it can safely read a backing
     /// resource's outputs. The credential secret a backing resource consumes by resource ID must
     /// stay a separate resource, or the graph becomes <c>secret → resource → secret</c>.
