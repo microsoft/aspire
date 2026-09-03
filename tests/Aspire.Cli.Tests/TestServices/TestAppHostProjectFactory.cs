@@ -40,11 +40,15 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
 
+    public Func<FileInfo, DirectoryInfo, CancellationToken, Task<RunningInstanceResult>>? FindAndStopRunningInstanceAsyncCallback { get; set; }
+
     public string LanguageId { get; set; } = "csharp";
 
     public string DisplayName { get; set; } = "C# (.NET)";
 
+    public bool RequiresStopForAddPackage { get; set; }
     public bool SupportsLaunchProfiles { get; set; } = true;
+    public bool UsesAspireConfigForPackageResolution { get; set; }
 
     /// <summary>
     /// Optional detection patterns to advertise from the test project.
@@ -154,7 +158,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         public bool IsUnsupported { get; set; }
         public string LanguageId => _factory.LanguageId;
         public string DisplayName => _factory.DisplayName;
+        public bool RequiresStopForAddPackage => _factory.RequiresStopForAddPackage;
         public bool SupportsLaunchProfiles => _factory.SupportsLaunchProfiles;
+        public bool UsesAspireConfigForPackageResolution => _factory.UsesAspireConfigForPackageResolution;
         public string? AppHostFileName => "AppHost.csproj";
 
         public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -191,6 +197,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             => _factory.RunAsyncCallback is not null
                 ? _factory.RunAsyncCallback(context, cancellationToken)
                 : throw new NotImplementedException();
+
+        public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+            => Task.FromResult(CliExitCodes.Success);
 
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();
@@ -242,7 +251,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
                 : throw new NotImplementedException();
 
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
-            => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+            => _factory.FindAndStopRunningInstanceAsyncCallback is not null
+                ? _factory.FindAndStopRunningInstanceAsyncCallback(appHostFile, homeDirectory, cancellationToken)
+                : Task.FromResult(RunningInstanceResult.NoRunningInstance);
 
         public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

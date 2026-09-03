@@ -36,6 +36,7 @@ internal interface IDotNetCliRunner
     Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> NewProjectAsync(string templateName, string name, string outputPath, string[] extraArgs, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<int> RestoreAsync(FileInfo projectFilePath, OutputCollector outputCollector, CancellationToken cancellationToken);
     Task<int> RestoreAsync(FileInfo projectFilePath, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -52,6 +53,9 @@ internal sealed class ProcessInvocationOptions
 {
     public Action<string>? StandardOutputCallback { get; set; }
     public Action<string>? StandardErrorCallback { get; set; }
+    public Dictionary<string, string> MSBuildProperties { get; } = [];
+
+    public HashSet<string> EnvironmentVariablesToRemove { get; } = [];
 
     public bool NoLaunchProfile { get; set; }
     public string? LaunchProfile { get; set; }
@@ -199,6 +203,9 @@ internal sealed class DotNetCliRunner(
     private const int MaxSearchRetries = 3;
     private static long s_binlogSequence;
     private static readonly TimeSpan[] s_searchRetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
+
+    private static string[] GetMSBuildPropertyArguments(ProcessInvocationOptions options)
+        => [.. options.MSBuildProperties.Select(static property => $"/p:{property.Key}={property.Value}")];
 
     internal static string GetBackchannelSocketPath()
     {
@@ -401,7 +408,7 @@ internal sealed class DotNetCliRunner(
         ProfilingTelemetry.ActivityScope activity,
         ProcessOutputCounters outputCounters)
     {
-        return new ProcessInvocationOptions
+        var instrumentedOptions = new ProcessInvocationOptions
         {
             NoLaunchProfile = options.NoLaunchProfile,
             StartDebugSession = options.StartDebugSession,
@@ -445,6 +452,18 @@ internal sealed class DotNetCliRunner(
                 options.StandardErrorCallback?.Invoke(line);
             }
         };
+
+        foreach (var (key, value) in options.MSBuildProperties)
+        {
+            instrumentedOptions.MSBuildProperties[key] = value;
+        }
+
+        foreach (var variableName in options.EnvironmentVariablesToRemove)
+        {
+            instrumentedOptions.EnvironmentVariablesToRemove.Add(variableName);
+        }
+
+        return instrumentedOptions;
     }
 
     private sealed class ProcessOutputCounters
@@ -945,13 +964,14 @@ internal sealed class DotNetCliRunner(
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
         // Add --verbose flag when using watch and debug is enabled
         var verboseSwitch = watch && options.Debug ? "--verbose" : string.Empty;
+        var msBuildProperties = GetMSBuildPropertyArguments(options);
 
         string[] cliOptions = isSingleFile switch
         {
-            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, "--project", projectFile.FullName],
+            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, "--project", projectFile.FullName, .. msBuildProperties],
             // BuildAsync applies the suppression property when it compiles file-based AppHosts, so
             // --no-build can reuse that output without recursively entering the CLI run hook.
-            true => ["run", noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, noBuild ? string.Empty : suppressCliRunHookProperty, "--file", projectFile.FullName]
+            true => ["run", noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, noBuild ? string.Empty : suppressCliRunHookProperty, "--file", projectFile.FullName, .. msBuildProperties]
         };
 
         // Empty extension-owned entries represent omitted optional switches, while empty or
@@ -1281,7 +1301,7 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        string[] cliArgs = ["restore", projectFilePath.FullName];
+        string[] cliArgs = ["restore", projectFilePath.FullName, .. GetMSBuildPropertyArguments(options)];
 
         return await ExecuteAsync(
             args: cliArgs,
@@ -1293,6 +1313,18 @@ internal sealed class DotNetCliRunner(
             cancellationToken: cancellationToken);
     }
 
+    public Task<int> RestoreAsync(FileInfo projectFilePath, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        return RestoreAsync(
+            projectFilePath,
+            new ProcessInvocationOptions
+            {
+                StandardOutputCallback = outputCollector.AppendOutput,
+                StandardErrorCallback = outputCollector.AppendError,
+            },
+            cancellationToken);
+    }
+
     public Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
         => BuildAsync(projectFilePath, noRestore, env: null, options, cancellationToken);
 
@@ -1301,7 +1333,7 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
-        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
+        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName, .. GetMSBuildPropertyArguments(options)];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
         // File-based AppHosts derive their RunCommand during build. Persist suppression into that
