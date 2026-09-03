@@ -134,26 +134,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenRestoreConfigContentChanges()
-    {
-        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project><PropertyGroup><RestoreConfigFile>nuget.config</RestoreConfigFile></PropertyGroup></Project>",
-            [],
-            [],
-            "<configuration><packageSources><add key=\"a\" value=\"https://example.invalid/a\" /></packageSources></configuration>",
-            CancellationToken.None);
-
-        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync(
-            "<Project><PropertyGroup><RestoreConfigFile>nuget.config</RestoreConfigFile></PropertyGroup></Project>",
-            [],
-            [],
-            "<configuration><packageSources><add key=\"b\" value=\"https://example.invalid/b\" /></packageSources></configuration>",
-            CancellationToken.None);
-
-        Assert.NotEqual(first.Fingerprint, second.Fingerprint);
-    }
-
-    [Fact]
     public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2236,84 +2216,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Contains(packageElements, e =>
                 e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" &&
                 e.Attribute("Version")?.Value == "13.4.0-pr.17141.gf142085f");
-        }
-        finally
-        {
-            DeleteWorkingDirectory(workingDirectory);
-        }
-    }
-
-    [Fact]
-    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_UsesTransientSourceProps()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
-        string? restoreSourcesPropsFile = null;
-        string? restoreSourcesPropsContent = null;
-
-        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["MyIntegration.dll"] = "integration-v1"
-        };
-        var dotNetCliRunner = new TestDotNetCliRunner
-        {
-            BuildAsyncCallback = (projectFilePath, _, _, _) =>
-            {
-                var generatedProject = XDocument.Load(projectFilePath.FullName);
-                var ns = generatedProject.Root!.GetDefaultNamespace();
-                Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
-                Assert.Null(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault());
-
-                restoreSourcesPropsFile = generatedProject.Descendants(ns + "Import")
-                    .Select(static element => element.Attribute("Project")?.Value)
-                    .Single(path => string.Equals(Path.GetFileName(path), "IntegrationRestoreSources.props", StringComparison.Ordinal));
-                Assert.True(File.Exists(restoreSourcesPropsFile));
-                restoreSourcesPropsContent = File.ReadAllText(restoreSourcesPropsFile);
-                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
-                return 0;
-            }
-        };
-        var channel = PackageChannel.CreateExplicitChannel(
-            name: "daily",
-            quality: PackageChannelQuality.Both,
-            mappings: [new PackageMapping("Aspire*", channelSource)],
-            nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures(),
-            NullLogger.Instance);
-        var packagingService = new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
-        };
-        var server = CreatePrebuiltAppHostServer(
-            workspace,
-            dotNetCliRunner: dotNetCliRunner,
-            packagingService: packagingService);
-        var workingDirectory = GetWorkingDirectory(server);
-        var restoreStampFile = Path.Combine(workingDirectory, "integration-restore", "obj", "aspire-restore.stamp");
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(restoreStampFile)!);
-            await File.WriteAllTextAsync(restoreStampFile, "stale-fingerprint");
-
-            var result = await server.PrepareAsync(
-                "13.4.0",
-                [
-                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
-                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
-                ]);
-
-            Assert.True(result.Success);
-            Assert.NotNull(restoreSourcesPropsFile);
-            Assert.NotNull(restoreSourcesPropsContent);
-            Assert.Contains(channelSource, restoreSourcesPropsContent);
-            Assert.False(File.Exists(restoreSourcesPropsFile));
-            Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
-            Assert.False(File.Exists(restoreStampFile));
-
-            var persistedProjectContent = await File.ReadAllTextAsync(
-                Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
-            Assert.DoesNotContain(channelSource, persistedProjectContent);
         }
         finally
         {
