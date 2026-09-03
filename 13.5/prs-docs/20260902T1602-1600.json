@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site infrastructure change (version placeholders, TypeScript-first tab rendering); does not document a specific product changelog entry",
+  "mergedAt": "2026-09-02T16:02:42Z",
+  "number": 1600,
+  "runDate": "2026-09-03T00:07:36Z",
+  "status": "excluded",
+  "title": "Keep docs versions current and default to TypeScript AppHosts"
+}
