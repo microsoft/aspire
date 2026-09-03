@@ -170,7 +170,7 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            includeMcpServerOption: true,
+            offerMcpServerConfiguration: false,
             selectByDefault: null,
             cancellationToken);
 

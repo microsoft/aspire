@@ -89,8 +89,8 @@ internal sealed class AgentInitCommand : BaseCommand
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
     /// pre-selected, including aspireify.
-    /// Callers can use <paramref name="includeMcpServerOption"/> to omit the Aspire MCP server from
-    /// flows that only configure skills.
+    /// Callers can use <paramref name="offerMcpServerConfiguration"/> to expose the opt-in Aspire MCP
+    /// server choice. Chained flows should leave it disabled.
     /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
     /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
     /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
@@ -102,7 +102,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        bool includeMcpServerOption,
+        bool offerMcpServerConfiguration,
         Func<SkillDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
@@ -121,7 +121,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, includeMcpServerOption, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, offerMcpServerConfiguration, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -135,7 +135,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // is default-on. Users can still opt into it from the prompt or via --skills.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, includeMcpServerOption: true, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, offerMcpServerConfiguration: true, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -198,7 +198,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Func<SkillDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        bool includeMcpServerOption,
+        bool offerMcpServerConfiguration,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -252,7 +252,7 @@ internal sealed class AgentInitCommand : BaseCommand
         AspireSkillsBundle? aspireSkillsBundle = null;
         string? bundleInstallFailureMessage = null;
         AgentEnvironmentApplicator? combinedMcpApplicator = null;
-        var mcpApplicators = includeMcpServerOption
+        var mcpApplicators = offerMcpServerConfiguration
             ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
             : [];
 

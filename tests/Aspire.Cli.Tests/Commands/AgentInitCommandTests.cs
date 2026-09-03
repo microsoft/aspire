@@ -676,7 +676,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            includeMcpServerOption: true,
+            offerMcpServerConfiguration: true,
             selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
@@ -711,7 +711,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            includeMcpServerOption: true,
+            offerMcpServerConfiguration: true,
             selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
@@ -743,7 +743,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            includeMcpServerOption: true,
+            offerMcpServerConfiguration: true,
             AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults,
             CancellationToken.None).DefaultTimeout();
 
@@ -774,20 +774,31 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_ConfigureMcpDefaultsToFalse()
+    public async Task AgentInitCommand_NonInteractive_DoesNotConfigureMcpByDefault()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var mcpConfigured = false;
+        var mcpApplicator = new AgentEnvironmentApplicator(
+            AgentCommandStrings.InitCommand_ConfigureMcpServer,
+            _ =>
+            {
+                mcpConfigured = true;
+                return Task.CompletedTask;
+            });
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(mcpApplicator);
+        });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        // --configure-mcp is not passed, should default to false in non-interactive mode
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --skills none");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(mcpConfigured);
     }
 
     [Fact]

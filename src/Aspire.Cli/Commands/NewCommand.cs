@@ -607,7 +607,7 @@ internal sealed class NewCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            includeMcpServerOption: false,
+            offerMcpServerConfiguration: false,
             selectByDefault: null,
             cancellationToken);
 
