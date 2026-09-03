@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -2312,7 +2313,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Create two different channels
         var fakeCache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
-        
+
         var mappings = new[] { new PackageMapping("Aspire*", "https://preview-feed") };
         var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache, new TestFeatures(), NullLogger.Instance);
 
@@ -2652,9 +2653,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         var selectedPackageId = string.Empty;
-        
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -2691,7 +2692,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        
+
         using var provider = services.BuildServiceProvider();
 
         // Act - without hives, should automatically select from implicit channel without prompting
@@ -2795,6 +2796,63 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(prompted);
         Assert.Equal(cliVersion, selectedVersion);
+    }
+
+    [Fact]
+    public async Task AddCommand_WithInheritedPrHiveSource_WritesMatchingLocalSourceMapping()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("AppHost");
+        var localSource = workspace.CreateDirectory(Path.Combine(".aspire", "hives", "pr-12345", "packages")).FullName;
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="aspire-0">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        Assert.True(await AddCommand.HasPackageSourceMappingAsync(
+            [Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config")],
+            CancellationToken.None));
+
+        AddCommand.CreateAdditiveLocalSourceNuGetConfig(
+            projectDirectory,
+            [
+                new PackageMapping("Aspire*", localSource),
+                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+            ],
+            packageSourceMappingEnabled: true);
+
+        var config = XDocument.Load(Path.Combine(projectDirectory.FullName, "nuget.config"));
+        var localSourceKey = config
+            .Descendants("packageSources")
+            .Elements("add")
+            .Single(element => element.Attribute("value")?.Value == localSource)
+            .Attribute("key")!
+            .Value;
+
+        Assert.Contains(
+            config.Descendants("packageSourceMapping").Elements("packageSource"),
+            element => element.Attribute("key")?.Value == localSourceKey &&
+                element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "Aspire*"));
+        Assert.DoesNotContain(
+            config.Descendants("packageSources").Elements("add"),
+            element => element.Attribute("value")?.Value == "https://api.nuget.org/v3/index.json");
+
+        var projectWithoutInheritedMapping = workspace.CreateDirectory("AppHostWithoutInheritedMapping");
+        AddCommand.CreateAdditiveLocalSourceNuGetConfig(
+            projectWithoutInheritedMapping,
+            [new PackageMapping("Aspire*", localSource)],
+            packageSourceMappingEnabled: false);
+
+        var configWithoutInheritedMapping = XDocument.Load(
+            Path.Combine(projectWithoutInheritedMapping.FullName, "nuget.config"));
+        Assert.Empty(configWithoutInheritedMapping.Descendants("packageSourceMapping"));
     }
 
     [Fact]

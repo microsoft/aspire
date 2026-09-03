@@ -1,10 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.IO.Hashing;
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -27,8 +32,9 @@ internal interface INuGetService
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
+    /// <param name="globalPackagesFolderOverride">An optional global packages folder override for the restore process.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Path to the package probe manifest.</returns>
+    /// <returns>The path to the package probe manifest.</returns>
     Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
@@ -36,6 +42,7 @@ internal interface INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? nugetConfigPath = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default);
 }
 
@@ -44,6 +51,7 @@ internal interface INuGetService
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
+    internal const string ManagedComponentNotFoundMessage = "aspire-managed not found in layout.";
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
@@ -74,6 +82,7 @@ internal sealed class BundleNuGetService : INuGetService
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? nugetConfigPath = null,
+        string? globalPackagesFolderOverride = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -99,18 +108,33 @@ internal sealed class BundleNuGetService : INuGetService
             throw new ArgumentException("At least one package is required", nameof(packages));
         }
 
-        // Compute a hash for the package set to create a unique restore location.
-        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath, sources);
-        var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
-        var restoreDir = Path.Combine(restoreCacheDirectory, packageHash);
+        var sourceList = sources?.ToArray();
+        var nugetConfigInspection = await InspectNuGetConfigAsync(nugetConfigPath, ct).ConfigureAwait(false);
+        var sensitiveSources = sourceList?
+            .Where(PackageSourceOverrideMappings.HasCredentialMaterial)
+            .Concat(nugetConfigInspection.CredentialBearingSources)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? nugetConfigInspection.CredentialBearingSources;
+        var nugetFallbackPackagesPaths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment);
+
+        var restoreDir = Path.Combine(
+            GetPackageRestoreCacheDirectory(workingDirectory),
+            ComputePackageHash(
+                packageList,
+                targetFramework,
+                runtimeIdentifier,
+                managedPath,
+                sourceList,
+                nugetConfigInspection.CacheIdentity,
+                globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                nugetFallbackPackagesPaths));
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
         var lockPath = Path.Combine(restoreDir, "restore.lock");
 
-        // The package cache is shared by every AppHost in the workspace. Serialize the
-        // restore and manifest write so one process cannot start RemoteHost while another
-        // process is rewriting the same manifest or project.assets.json file.
+        // Reusable package caches are shared by every AppHost in the workspace and must remain
+        // serialized while their manifest or project.assets.json file is being written.
         using var fileLock = await FileLock.AcquireAsync(lockPath, ct).ConfigureAwait(false);
 
         // Check if already restored after acquiring the lock because another process may
@@ -145,9 +169,9 @@ internal sealed class BundleNuGetService : INuGetService
             restoreArgs.Add($"{id},{version}");
         }
 
-        if (sources is not null)
+        if (sourceList is not null)
         {
-            foreach (var source in sources)
+            foreach (var source in sourceList)
             {
                 restoreArgs.Add("--source");
                 restoreArgs.Add(source);
@@ -182,31 +206,39 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         var environmentVariables = new Dictionary<string, string>();
+        if (globalPackagesFolderOverride is not null)
+        {
+            environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolderOverride;
+        }
         NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
         layoutLease?.AddEnvironment(environmentVariables);
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            restoreArgs,
-            environmentVariables: environmentVariables,
-            // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
-            // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
-            // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
-            killOnParentExit: true,
-            ct: ct);
+        managedPath,
+        restoreArgs,
+        environmentVariables: environmentVariables,
+        // A restore against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses this
+        // to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to instead
+        // arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
+        killOnParentExit: true,
+        ct: ct);
 
-        // Log stderr at debug level for diagnostics
-        if (!string.IsNullOrWhiteSpace(error))
+        var redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        var redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+
+        // NuGet errors often repeat the feed URL. Redact helper output separately from the
+        // invocation arguments so SAS tokens and URL user-info cannot reach logs or exceptions.
+        if (!string.IsNullOrWhiteSpace(redactedError))
         {
-            _logger.LogDebug("NuGetHelper restore stderr: {Error}", error);
+            _logger.LogDebug("NuGetHelper restore stderr: {Error}", redactedError);
         }
 
         if (exitCode != 0)
         {
             _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("Package restore stderr: {Error}", error);
-            _logger.LogError("Package restore stdout: {Output}", output);
-            throw new InvalidOperationException($"Package restore failed: {error}");
+            _logger.LogError("Package restore stderr: {Error}", redactedError);
+            _logger.LogError("Package restore stdout: {Output}", redactedOutput);
+            throw new InvalidOperationException($"Package restore failed: {redactedError}");
         }
 
         // Step 2: Create package probe manifest
@@ -236,30 +268,75 @@ internal sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("NuGet manifest args: {Args}", string.Join(" ", manifestArgs));
 
         (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            manifestArgs,
-            environmentVariables: environmentVariables,
-            // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
-            // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
-            killOnParentExit: true,
-            ct: ct);
+        managedPath,
+        manifestArgs,
+        environmentVariables: environmentVariables,
+        // Same rationale as the restore step above: keep this aspire-managed helper from outliving a
+        // hard-killed CLI (Windows kill-on-close job, or the cooperative watchdog on other hosts).
+        killOnParentExit: true,
+        ct: ct);
 
-        // Log stderr at debug level for diagnostics
-        if (!string.IsNullOrWhiteSpace(error))
+        redactedError = PackageSourceRedactor.RedactOccurrences(error, sensitiveSources);
+        redactedOutput = PackageSourceRedactor.RedactOccurrences(output, sensitiveSources);
+        if (!string.IsNullOrWhiteSpace(redactedError))
         {
-            _logger.LogDebug("NuGetHelper manifest stderr: {Error}", error);
+            _logger.LogDebug("NuGetHelper manifest stderr: {Error}", redactedError);
         }
 
         if (exitCode != 0)
         {
             _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("Manifest creation stderr: {Error}", error);
-            _logger.LogError("Manifest creation stdout: {Output}", output);
-            throw new InvalidOperationException($"Manifest creation failed: {error}");
+            _logger.LogError("Manifest creation stderr: {Error}", redactedError);
+            _logger.LogError("Manifest creation stdout: {Output}", redactedOutput);
+            throw new InvalidOperationException($"Manifest creation failed: {redactedError}");
         }
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
         return manifestPath;
+    }
+
+    internal async Task<string[]> GetNuGetConfigPathsAsync(string workingDirectory, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+
+        using var layoutLease = _bundleService is null
+            ? null
+            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-config-paths", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
+        var managedPath = layout?.GetManagedPath();
+        if (managedPath is null || !File.Exists(managedPath))
+        {
+            throw new InvalidOperationException(ManagedComponentNotFoundMessage);
+        }
+
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
+            managedPath,
+            ["nuget", "config-paths", "--working-dir", workingDirectory],
+            killOnParentExit: true,
+            ct: cancellationToken).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{workingDirectory}': {error}");
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+            if (document.RootElement.ValueKind is not JsonValueKind.Array)
+            {
+                throw new InvalidDataException("The NuGet configuration hierarchy response was not an array.");
+            }
+
+            return document.RootElement
+                .EnumerateArray()
+                .Select(static element => element.GetString()
+                    ?? throw new InvalidDataException("The NuGet configuration hierarchy contained a null path."))
+                .ToArray();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("The NuGet configuration hierarchy response was invalid.", ex);
+        }
     }
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
@@ -300,7 +377,10 @@ internal sealed class BundleNuGetService : INuGetService
         string tfm,
         string? runtimeIdentifier,
         string? managedPath = null,
-        IEnumerable<string>? sources = null)
+        IEnumerable<string>? sources = null,
+        string? nugetConfigCacheIdentity = null,
+        string? nugetPackagesPath = null,
+        IReadOnlyList<string>? nugetFallbackPackagesPaths = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
@@ -310,10 +390,52 @@ internal sealed class BundleNuGetService : INuGetService
         {
             content += $";sources:{string.Join("|", sources.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}";
         }
+        if (nugetConfigCacheIdentity is not null)
+        {
+            content += $";config:{nugetConfigCacheIdentity}";
+        }
+        if (nugetPackagesPath is not null)
+        {
+            content += $";global-packages:{nugetPackagesPath.Length}:{nugetPackagesPath}";
+        }
+        if (nugetFallbackPackagesPaths is not null)
+        {
+            foreach (var path in nugetFallbackPackagesPaths)
+            {
+                content += $";fallback-packages:{path.Length}:{path}";
+            }
+        }
 
-        // Use SHA256 for stable hash across processes/runtimes
-        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+        return XxHash3.HashToUInt64(System.Text.Encoding.UTF8.GetBytes(content)).ToString("X16", CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<NuGetConfigInspection> InspectNuGetConfigAsync(string? nugetConfigPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(nugetConfigPath))
+        {
+            return NuGetConfigInspection.Empty;
+        }
+
+        await using var stream = new FileStream(
+            nugetConfigPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            useAsync: true);
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        {
+            Async = true,
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null
+        });
+        var document = await XDocument.LoadAsync(reader, LoadOptions.None, cancellationToken).ConfigureAwait(false);
+
+        var credentialBearingSources = TemporaryNuGetConfig.GetCredentialBearingSources(document);
+
+        return new NuGetConfigInspection(
+            document.ToString(SaveOptions.DisableFormatting),
+            credentialBearingSources);
     }
 
     private static string GetManagedToolFingerprint(string? managedPath)
@@ -352,5 +474,12 @@ internal sealed class BundleNuGetService : INuGetService
         var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(
             new DirectoryInfo(Path.GetFullPath(workingDirectory)));
         return Path.Combine(integrationCacheDirectory.FullName, "package-restore");
+    }
+
+    private sealed record NuGetConfigInspection(
+        string? CacheIdentity,
+        string[] CredentialBearingSources)
+    {
+        public static NuGetConfigInspection Empty { get; } = new(null, []);
     }
 }

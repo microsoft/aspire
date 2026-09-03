@@ -94,18 +94,41 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputeStagingFeedCacheKey_NormalizesWhitespaceAndCasing()
+    public void ComputeStagingFeedCacheKey_NormalizesWhitespaceSchemeAndHostCasing()
     {
-        // Trim + lowercase normalization keeps the cache from fragmenting when the same feed
-        // shows up with stray whitespace from a config file or with a mixed-case hostname.
+        // HTTP URI normalization keeps the cache from fragmenting when the same feed shows up
+        // with stray whitespace or case variations in URI components that are case-insensitive.
         const string baseUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
 
         var baseKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl);
         var spacedKey = CliPathHelper.ComputeStagingFeedCacheKey("  " + baseUrl + "\t\n");
-        var upperKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl.ToUpperInvariant());
+        var upperSchemeAndHostKey = CliPathHelper.ComputeStagingFeedCacheKey(
+            "HTTPS://PKGS.DEV.AZURE.COM/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
 
         Assert.Equal(baseKey, spacedKey);
-        Assert.Equal(baseKey, upperKey);
+        Assert.Equal(baseKey, upperSchemeAndHostKey);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/Feed/index.json", "https://example.com/feed/index.json")]
+    [InlineData("https://example.com/index.json?token=AbC", "https://example.com/index.json?token=abc")]
+    public void ComputeStagingFeedCacheKey_PreservesCaseSensitiveComponents(string firstUrl, string secondUrl)
+    {
+        var first = CliPathHelper.ComputeStagingFeedCacheKey(firstUrl, length: 16);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey(secondUrl, length: 16);
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_PreservesCaseSensitiveLocalPathComponents()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows local paths are case-insensitive.");
+
+        var first = CliPathHelper.ComputeStagingFeedCacheKey("/packages/Feed", length: 16);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey("/packages/feed", length: 16);
+
+        Assert.NotEqual(first, second);
     }
 
     [Theory]
@@ -140,6 +163,21 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     {
         Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 0));
         Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: -1));
+    }
+
+    [Fact]
+    public void GetNuGetFallbackPackagesEnvironmentPaths_PreservesNormalizedOrder()
+    {
+        var first = Path.GetFullPath("fallback-a");
+        var second = Path.GetFullPath("fallback-b");
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliPathHelper.NuGetFallbackPackagesEnvironmentVariable] = $"{first};{second}"
+        });
+
+        var paths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(environment);
+
+        Assert.Equal([first, second], paths);
     }
 
     [Theory]

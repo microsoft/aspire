@@ -8,6 +8,17 @@ namespace Aspire.Cli.Tests.Packaging;
 public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void HasCredentialMaterial_MalformedHttpSource_FailsClosed()
+    {
+        const string source = "https://user:p#word@host/";
+
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(source));
+        var mappings = PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: source);
+        Assert.Equal(2, mappings.Length);
+        Assert.All(mappings, mapping => Assert.Equal(source, mapping.Source));
+    }
+
+    [Fact]
     [PlatformSpecific(TestPlatforms.AnyUnix)]
     public void ResolveForWorkingDirectory_RelativePathContainingColon_ResolvesAgainstWorkingDirectory()
     {

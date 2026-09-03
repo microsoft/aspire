@@ -4,6 +4,7 @@
 using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Packaging;
 using Aspire.Hosting.Backchannel;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,8 @@ namespace Aspire.Cli.Utils;
 internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
+    internal const string NuGetPackagesEnvironmentVariable = "NUGET_PACKAGES";
+    internal const string NuGetFallbackPackagesEnvironmentVariable = "NUGET_FALLBACK_PACKAGES";
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -76,6 +79,62 @@ internal static class CliPathHelper
             : path + Path.DirectorySeparatorChar;
 
     /// <summary>
+    /// Returns the normalized global packages folder selected by <c>NUGET_PACKAGES</c>, or
+    /// <see langword="null" /> when the environment variable is not set.
+    /// </summary>
+    /// <remarks>
+    /// NuGet gives this environment variable precedence over <c>globalPackagesFolder</c> from its
+    /// configuration. It requires an absolute path, normalizes directory separators, and then calls
+    /// <see cref="Path.GetFullPath(string)" />. Matching that normalization keeps cache identities
+    /// aligned with the package paths NuGet writes into <c>project.assets.json</c>.
+    /// See https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Configuration/Utility/SettingsUtility.cs.
+    /// </remarks>
+    internal static string? GetNuGetPackagesEnvironmentPath(IEnvironment environment)
+    {
+        var path = environment.GetEnvironmentVariable(NuGetPackagesEnvironmentVariable);
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
+    }
+
+    internal static IReadOnlyList<string>? GetNuGetFallbackPackagesEnvironmentPaths(IEnvironment environment)
+    {
+        var value = environment.GetEnvironmentVariable(NuGetFallbackPackagesEnvironmentVariable);
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        return value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static path => Path.IsPathRooted(path)
+                ? Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar))
+                : path)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
+    /// </summary>
+    /// <remarks>
+    /// The default NuGet <c>globalPackagesFolder</c> used by <c>TemporaryNuGetConfig</c> is relative to
+    /// the config file, which is unsafe for generated configs that may be copied from or disposed with a
+    /// temporary directory. Anchoring staging restores under <c>ASPIRE_HOME</c> keeps package paths alive
+    /// for manifests that reference them and keys the cache by feed URL to avoid sharing the same
+    /// stable-shaped package versions across different staging feeds.
+    /// </remarks>
+    internal static string GetStagingNuGetPackagesFeedDirectory(DirectoryInfo aspireHomeDirectory, string? feedUrl)
+    {
+        ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
+
+        var cacheKey = ComputeStagingFeedCacheKey(feedUrl) ?? "default";
+        return Path.Combine(GetStagingNuGetPackagesDirectory(aspireHomeDirectory), cacheKey);
+    }
+
+    /// <summary>
     /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,
     /// truncated to <paramref name="length"/> characters. Returns <see langword="null"/> when
     /// the URL is null, empty, or whitespace-only.
@@ -89,10 +148,11 @@ internal static class CliPathHelper
     /// feeds share the same stable-shaped <c>(id, version)</c> tuple and would otherwise
     /// collide in NuGet's cache.
     ///
-    /// The URL is trimmed and lower-cased before hashing so harmless variations (trailing
-    /// whitespace from a config file, hostname casing) don't fragment the cache. Hashing the
-    /// URL with <see cref="XxHash3"/> (non-cryptographic but very high quality) keeps any
-    /// embedded credentials out of the on-disk directory name even when the feed URL itself
+    /// The URL is trimmed and HTTP(S) URLs are canonicalized through <see cref="Uri"/> before
+    /// hashing so harmless scheme and hostname casing variations don't fragment the cache. Path
+    /// and query casing remains significant because servers can use both to distinguish feeds.
+    /// Hashing the URL with <see cref="XxHash3"/> (non-cryptographic but very high quality) keeps
+    /// any embedded credentials out of the on-disk directory name even when the feed URL itself
     /// contains them.
     /// </remarks>
     internal static string? ComputeStagingFeedCacheKey(string? feedUrl, int length = DefaultStagingFeedCacheKeyLength)
@@ -102,7 +162,7 @@ internal static class CliPathHelper
             return null;
         }
 
-        var normalized = feedUrl.Trim().ToLowerInvariant();
+        var normalized = PackageSourceIdentity.Normalize(feedUrl);
         var bytes = Encoding.UTF8.GetBytes(normalized);
         // XxHash3 emits 8 bytes (64 bits) -> 16 hex chars; truncate to the requested length.
         var hex = Convert.ToHexString(XxHash3.Hash(bytes)).ToLowerInvariant();

@@ -1398,10 +1398,10 @@ internal sealed class ProjectLocator(
 
     private string? GetNuGetPackagesCachePath()
     {
-        var envPath = environment.GetEnvironmentVariable("NUGET_PACKAGES");
-        if (!string.IsNullOrEmpty(envPath))
+        var envPath = CliPathHelper.GetNuGetPackagesEnvironmentPath(environment);
+        if (envPath is not null)
         {
-            return Path.GetFullPath(envPath);
+            return envPath;
         }
 
         var userProfile = executionContext.HomeDirectory.FullName;

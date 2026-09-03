@@ -116,14 +116,23 @@ internal static class IntegrationClosureBuilder
     /// Creates the early-imported props document that redirects generated integration project
     /// outputs into the shared integration restore directory.
     /// </summary>
-    public static XDocument CreateClosureDirectoryBuildProps(string restoreDir)
+    public static XDocument CreateClosureDirectoryBuildProps(
+        string restoreDir,
+        string intermediateOutputPath,
+        string? globalPackagesFolder)
     {
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
+        ArgumentException.ThrowIfNullOrEmpty(intermediateOutputPath);
 
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("BaseOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
-            new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "obj"))),
+            new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(intermediateOutputPath)),
             new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
+
+        if (!string.IsNullOrEmpty(globalPackagesFolder))
+        {
+            propertyGroup.Add(new XElement("RestorePackagesPath", globalPackagesFolder));
+        }
 
         return new XDocument(new XElement("Project", propertyGroup));
     }
@@ -135,12 +144,14 @@ internal static class IntegrationClosureBuilder
     {
         ArgumentNullException.ThrowIfNull(appHostDirectory);
 
+        // Workspace ownership follows the lexical path used for configuration discovery, while the
+        // hash uses the physical AppHost identity so aliases within a workspace share one cache.
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(appHostDirectory);
+        var integrationCacheFullPath = PathNormalizer.ResolveToFilesystemPath(integrationCacheDirectory.FullName);
         var appHostFullPath = PathNormalizer.ResolveToFilesystemPath(appHostDirectory.FullName);
-        var normalizedAppHostDirectory = new DirectoryInfo(appHostFullPath);
-        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(normalizedAppHostDirectory);
         var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(appHostFullPath));
         var hashFragment = Convert.ToHexString(hash)[..12].ToLowerInvariant();
-        var path = Path.Combine(integrationCacheDirectory.FullName, "apphosts", hashFragment);
+        var path = Path.Combine(integrationCacheFullPath, "apphosts", hashFragment);
 
         return new DirectoryInfo(path);
     }
@@ -289,7 +300,7 @@ internal static class IntegrationClosureBuilder
     private static async Task<List<string>> ReadManifestLinesAsync(string filePath, CancellationToken cancellationToken)
     {
         var lines = await File.ReadAllLinesAsync(filePath, cancellationToken).ConfigureAwait(false);
-        return lines.Where(static l => !string.IsNullOrWhiteSpace(l)).Select(static l => l.Trim()).ToList();
+        return lines.Where(static line => !string.IsNullOrWhiteSpace(line)).ToList();
     }
 
     private static async Task<Dictionary<string, string>> ReadPackageFingerprintsAsync(

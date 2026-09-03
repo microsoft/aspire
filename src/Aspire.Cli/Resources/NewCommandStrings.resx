@@ -121,9 +121,6 @@
   <data name="SourceDirectoryNotFound" xml:space="preserve">
     <value>The local NuGet source directory '{0}' does not exist.</value>
   </data>
-  <data name="SourceWithCredentialsCannotBePersisted" xml:space="preserve">
-    <value>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
-  </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
     <value>The version of the project templates to use</value>
   </data>

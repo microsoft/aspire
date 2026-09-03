@@ -3,6 +3,8 @@
 
 using Aspire.Managed.NuGet.Commands;
 using Microsoft.DotNet.RemoteExecutor;
+using NuGet.Configuration;
+using NuGet.Frameworks;
 using Xunit;
 
 namespace Aspire.Managed.Tests.NuGet;
@@ -111,6 +113,71 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var assetsContent = File.ReadAllText(Path.Combine(_workspace.Path, "obj", "project.assets.json"));
         Assert.Contains(JsonEncodedPath(configSourcePath), assetsContent);
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
+    }
+
+    [Fact]
+    public void RestoreCommand_PreservesCaseDistinctCliSources()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            "<configuration><packageSources><clear /></packageSources></configuration>");
+        var settings = Settings.LoadSpecificSettings(_workspace.Path, Path.GetFileName(nugetConfigPath));
+        const string upperCasePathSource = "https://example.invalid/Feed/index.json";
+        const string lowerCasePathSource = "https://example.invalid/feed/index.json";
+
+        var sources = RestoreCommand.ResolvePackageSources(
+            settings,
+            [upperCasePathSource, lowerCasePathSource],
+            noNugetOrg: true);
+
+        Assert.Equal(
+            [upperCasePathSource, lowerCasePathSource],
+            sources.Select(static source => source.Source));
+    }
+
+    [Fact]
+    public void RestoreCommand_IncludesNuGetConfigFallbackFoldersInRestoreMetadata()
+    {
+        var fallbackPackagesPath = Path.Combine(_workspace.Path, "fallback-packages");
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(nugetConfigPath, $"""
+            <configuration>
+              <fallbackPackageFolders>
+                <clear />
+                <add key="fallback" value="{fallbackPackagesPath}" />
+              </fallbackPackageFolders>
+            </configuration>
+            """);
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("NUGET_FALLBACK_PACKAGES");
+
+        RemoteExecutor.Invoke(static (tempDirPath) =>
+        {
+            var settings = Settings.LoadSpecificSettings(tempDirPath, "NuGet.config");
+            var packageSpec = RestoreCommand.BuildPackageSpec(
+                [("Fake.Package", "1.0.0")],
+                NuGetFramework.Parse("net10.0"),
+                runtimeIdentifier: null,
+                Path.Combine(tempDirPath, "obj"),
+                [],
+                settings);
+
+            Assert.Equal(
+                [Path.Combine(tempDirPath, "fallback-packages")],
+                packageSpec.RestoreMetadata.FallbackFolders);
+        }, _workspace.Path, options).Dispose();
+    }
+
+    [Fact]
+    public void ConfigPathsCommand_DiscoversWorkspaceNuGetConfig()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");
+        File.WriteAllText(nugetConfigPath, "<configuration />");
+
+        var configPaths = ConfigPathsCommand.GetConfigFilePaths(_workspace.Path);
+
+        Assert.Contains(nugetConfigPath, configPaths, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
