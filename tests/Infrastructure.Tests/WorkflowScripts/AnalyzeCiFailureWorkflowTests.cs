@@ -465,6 +465,29 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("title", "   ")]
+    [InlineData("error_pattern", "  ")]
+    [InlineData("test_name", "Tests.Infrastructure")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsInvalidInfrastructureCauseFields(string field, string value)
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            $$"""{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123],"{{field}}":"{{value}}"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause nuget-timeout.json contains unsupported or publisher-owned fields",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsUnknownCauseJobId()
@@ -1130,6 +1153,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("### If ALL failures are Main Repository Breakages:", s_sourceWorkflow, StringComparison.Ordinal);
         Assert.Contains(
             "Use `\"transient-infra\"` when every failed job is an infrastructure issue, `\"flaky-test\"` when at least one failed job is a flaky test and every failed job is transient",
+            s_sourceWorkflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "candidate history is available and complete. If candidate history is unavailable or incomplete, do not name any PR as causal, including the triggering merge",
+            s_sourceWorkflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "If candidate history is unavailable or incomplete, do not identify a causal PR or claim a candidate range",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(

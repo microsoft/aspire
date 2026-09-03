@@ -140,12 +140,13 @@ if [ -d "$CAUSES_DIR" ]; then
       ((keys - ["error_pattern", "id", "job_ids", "test_name", "title", "type"]) | length == 0) and
       ((.id | type) == "string") and
       ((.type | type) == "string") and
-      ((.title | type) == "string") and
-      ((.error_pattern | type) == "string") and
+      ((.title | type) == "string" and (.title | test("[^[:space:]]"))) and
+      ((.error_pattern | type) == "string" and (.error_pattern | test("[^[:space:]]"))) and
       ((.job_ids | type) == "array" and (.job_ids | length) > 0) and
       (all(.job_ids[]; type == "number" and . > 0 and . == floor)) and
       ((.job_ids | unique | length) == (.job_ids | length)) and
-      ((.test_name // "") | type == "string")
+      ((.test_name // "") | type == "string") and
+      (.type != "infra-failure" or (.test_name // "") == "")
     ' "$CAUSE_FILE" >/dev/null; then
       echo "::error::Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields"
       exit 1

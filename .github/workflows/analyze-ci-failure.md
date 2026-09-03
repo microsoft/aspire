@@ -1364,7 +1364,7 @@ Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
 - `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
-- `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `test_name`: The fully qualified test name for a flaky-test cause. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
 - `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
 
@@ -1438,7 +1438,7 @@ The failure is a deterministic code or repository failure on main. Indicators:
 - Deterministic test, API compatibility, lint, or formatting failures on main
 - Semantic merge conflicts where independently valid changes are incompatible together
 
-Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence; never presume that the triggering merge caused the break.
+Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence and candidate history is available and complete. If candidate history is unavailable or incomplete, do not name any PR as causal, including the triggering merge; report only repository-level evidence.
 
 ## Analysis Process
 
@@ -1480,7 +1480,7 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
 ### If ALL failures are Main Repository Breakages:
 
-Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context, and include the main candidate range in `main_context`. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue.
+Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context when candidate history is available and complete, and include the main candidate range in `main_context`. If candidate history is unavailable or incomplete, do not identify a causal PR or claim a candidate range. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
