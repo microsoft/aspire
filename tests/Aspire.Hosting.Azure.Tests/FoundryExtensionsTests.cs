@@ -245,6 +245,101 @@ public class FoundryExtensionsTests
         Assert.Equal(expectedCached, cached);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [SkipOnPlatform(TestPlatforms.Windows, "The synthetic Foundry CLI uses a POSIX shell script.")]
+    public void RunAsFoundryLocal_PreparesCachedAndUncachedModelsInOrder(bool cached)
+    {
+        RemoteExecutor.Invoke(RunModelPreparationScenario, cached.ToString()).Dispose();
+
+        static void RunModelPreparationScenario(string cachedValue)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return;
+            }
+
+            var cached = bool.Parse(cachedValue);
+            var temporaryDirectory = Directory.CreateTempSubdirectory(".foundry-model-test");
+            var commandLogPath = Path.Combine(temporaryDirectory.FullName, "commands.log");
+            var executablePath = Path.Combine(temporaryDirectory.FullName, "foundry");
+            var originalPath = Environment.GetEnvironmentVariable("PATH");
+
+            try
+            {
+                File.WriteAllText(executablePath, """
+                    #!/bin/sh
+                    printf '%s\n' "$*" >> "$FOUNDRY_FAKE_LOG"
+                    if [ "$1" = "--help" ]; then
+                      printf '%s\n' 'Commands:' '  server   Start, stop, restart, inspect, and troubleshoot the local Foundry daemon'
+                      exit 0
+                    fi
+                    if [ "$1 $2" = "model info" ]; then
+                      printf '{"model":{"id":"Phi-4-mini-instruct-generic-gpu:5","cached":%s}}\n' "$FOUNDRY_FAKE_CACHED"
+                      exit 0
+                    fi
+                    if [ "$1 $2" = "model download" ]; then
+                      printf '%s\n' \
+                        'Model ID' \
+                        'Phi-4-mini-instruct-generic-gpu:5'
+                      exit 0
+                    fi
+                    if [ "$1 $2" = "model load" ]; then
+                      exit 0
+                    fi
+                    exit 1
+                    """);
+                File.SetUnixFileMode(
+                    executablePath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+                Environment.SetEnvironmentVariable("PATH", $"{temporaryDirectory.FullName}{Path.PathSeparator}{originalPath}");
+                Environment.SetEnvironmentVariable("FOUNDRY_FAKE_LOG", commandLogPath);
+                Environment.SetEnvironmentVariable("FOUNDRY_FAKE_CACHED", cached.ToString().ToLowerInvariant());
+
+                using var builder = TestDistributedApplicationBuilder.Create();
+                var foundry = builder.AddFoundry("foundry");
+                var deployment = foundry.AddDeployment("deployment", "gpt-4", "1.0", "OpenAI");
+                foundry.RunAsFoundryLocal();
+                using var app = builder.Build();
+                using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+                builder.Eventing
+                    .PublishAsync(new ResourceReadyEvent(foundry.Resource, app.Services), cancellation.Token)
+                    .GetAwaiter()
+                    .GetResult();
+                app.ResourceNotifications
+                    .WaitForResourceAsync(deployment.Resource.Name, KnownResourceStates.Running, cancellation.Token)
+                    .GetAwaiter()
+                    .GetResult();
+
+                Assert.Equal("Phi-4-mini-instruct-generic-gpu:5", deployment.Resource.LocalModelId);
+                Assert.Equal(
+                    cached
+                        ? [
+                            "--help",
+                            "model info gpt-4 --output json",
+                            "model load Phi-4-mini-instruct-generic-gpu:5"
+                        ]
+                        : [
+                            "--help",
+                            "model info gpt-4 --output json",
+                            "model download gpt-4",
+                            "model load Phi-4-mini-instruct-generic-gpu:5"
+                        ],
+                    File.ReadAllLines(commandLogPath));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("PATH", originalPath);
+                Environment.SetEnvironmentVariable("FOUNDRY_FAKE_LOG", null);
+                Environment.SetEnvironmentVariable("FOUNDRY_FAKE_CACHED", null);
+                Directory.Delete(temporaryDirectory.FullName, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void FoundryLocalService_TryParseModelIds_ParsesLoadedModels()
     {
