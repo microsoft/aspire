@@ -9,6 +9,33 @@ COMMAND="${1:?command is required}"
 CI_FAILURE_DATA_DIR="${CI_FAILURE_DATA_DIR:-ci-failure-data}"
 RUN_CONTEXT_FILE="$CI_FAILURE_DATA_DIR/run-context.json"
 
+sanitize_cause()
+{
+  local input_file="$1"
+  local output_file="$2"
+
+  # CI errors can contain CRLF, ANSI escapes, and invisible Unicode formatting.
+  # Preserve diagnostic text while removing controls that can alter later prompt
+  # or Markdown rendering.
+  jq '
+    def strip_unsafe:
+      gsub("\u001b\\[[0-9;?]*[ -/]*[@-~]"; "") |
+      gsub("\\p{Cf}|\\p{Zl}|\\p{Zp}|[\uFE00-\uFE0F]"; "") |
+      gsub("[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]"; "") |
+      [explode[] | select((. < 917760 or . > 917999))] |
+      implode;
+    def sanitize_single_line:
+      gsub("[\r\n\t]+"; " ") |
+      strip_unsafe;
+    def sanitize_multiline:
+      gsub("\r\n?"; "\n") |
+      strip_unsafe;
+    if (.title | type) == "string" then .title |= sanitize_single_line else . end |
+    if (.test_name | type) == "string" then .test_name |= sanitize_single_line else . end |
+    if (.error_pattern | type) == "string" then .error_pattern |= sanitize_multiline else . end
+  ' "$input_file" > "$output_file"
+}
+
 trusted_pr_number()
 {
   local run_scope
@@ -29,6 +56,11 @@ trusted_pr_number()
 }
 
 case "$COMMAND" in
+  sanitize-cause)
+    INPUT_FILE="${2:?input file is required}"
+    OUTPUT_FILE="${3:?output file is required}"
+    sanitize_cause "$INPUT_FILE" "$OUTPUT_FILE"
+    ;;
   pr-number)
     trusted_pr_number
     ;;
@@ -77,6 +109,36 @@ case "$COMMAND" in
       --arg observed_at "$ANALYZED_AT" \
       '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
       "$CAUSE_FILE"
+    ;;
+  merge-cause)
+    NEW_CAUSE_FILE="${2:?new cause file is required}"
+    EXISTING_CAUSE_FILE="${3:?existing cause file is required}"
+    OUTPUT_FILE="${4:?output file is required}"
+
+    jq -s '
+      .[0] as $new | .[1] as $existing |
+      ($existing | del(.job_ids, .job_names)) * {
+        occurrences: (
+          [($existing.occurrences // [])[], ($new.occurrences // [])[]]
+          | unique_by(.run_id)
+          | sort_by(.observed_at)
+        )
+      }
+    ' "$NEW_CAUSE_FILE" "$EXISTING_CAUSE_FILE" > "$OUTPUT_FILE"
+    ;;
+  render-prior-cause)
+    CAUSE_FILE="${2:?cause file is required}"
+
+    sanitize_cause "$CAUSE_FILE" /dev/stdout | jq -c '{
+      id,
+      type,
+      title: ((.title // .id // "") | .[0:238]),
+      test_name: (if .test_name then .test_name[0:500] else null end),
+      issue_url: (.issue_url // null),
+      error_pattern: ((.error_pattern // "") | .[0:500]),
+      occurrence_count: ((.occurrences // []) | length),
+      last_seen: ((.occurrences // [] | sort_by(.observed_at) | last | .observed_at) // null)
+    }' | sed 's/^/    /'
     ;;
   write-run-summary)
     ANALYSIS_FILE="${2:?analysis file is required}"

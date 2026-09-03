@@ -5,6 +5,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ANALYSIS_FILE="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/analysis-result.json"
 CAUSES_DIR="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
@@ -134,17 +135,30 @@ if [ -d "$CAUSES_DIR" ]; then
     fi
 
     CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+    bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+      sanitize-cause "$CAUSE_FILE" "${CAUSE_FILE}.tmp"
+    mv "${CAUSE_FILE}.tmp" "$CAUSE_FILE"
     if ! jq -e '
+      def safe_single_line($max_length):
+        type == "string" and
+        length <= $max_length and
+        (test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]") | not) and
+        all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+      def safe_multiline($max_length):
+        type == "string" and
+        length <= $max_length and
+        ((gsub("[\t\n]"; "") | test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]")) | not) and
+        all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
       (type == "object") and
       ((keys - ["error_pattern", "id", "job_ids", "test_name", "title", "type"]) | length == 0) and
       ((.id | type) == "string") and
       ((.type | type) == "string") and
-      ((.title | type) == "string" and (.title | test("[^[:space:]]"))) and
-      ((.error_pattern | type) == "string" and (.error_pattern | test("[^[:space:]]"))) and
+      ((.title | safe_single_line(238)) and (.title | test("[^[:space:]]"))) and
+      ((.error_pattern | safe_multiline(500)) and (.error_pattern | test("[^[:space:]]"))) and
       ((.job_ids | type) == "array" and (.job_ids | length) > 0) and
       (all(.job_ids[]; type == "number" and . > 0 and . == floor)) and
       ((.job_ids | unique | length) == (.job_ids | length)) and
-      ((.test_name // "") | type == "string") and
+      ((.test_name // "") | safe_single_line(500)) and
       (.type != "infra-failure" or (.test_name // "") == "")
     ' "$CAUSE_FILE" >/dev/null; then
       echo "::error::Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields"
