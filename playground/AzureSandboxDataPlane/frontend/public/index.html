@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Sandbox data-plane playground</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, sans-serif;
+        }
+
+        body {
+            max-width: 52rem;
+            margin: 4rem auto;
+            padding: 0 1.5rem;
+        }
+
+        button {
+            padding: 0.75rem 1rem;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        pre {
+            min-height: 12rem;
+            padding: 1rem;
+            overflow: auto;
+            border: 1px solid currentColor;
+            border-radius: 0.5rem;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Azure Sandbox data-plane playground</h1>
+    <p>Create an isolated Ubuntu sandbox, run a command through the Azure Container Apps Sandboxes data-plane SDK, and delete the sandbox.</p>
+    <button id="launch" type="button">Launch sandbox</button>
+    <pre id="output">Ready.</pre>
+    <script type="module">
+        const button = document.querySelector("#launch");
+        const output = document.querySelector("#output");
+
+        button.addEventListener("click", async () => {
+            button.disabled = true;
+            output.textContent = "Creating sandbox...";
+
+            try {
+                const response = await fetch("/api/sandboxes", { method: "POST" });
+                const body = await response.json();
+                output.textContent = JSON.stringify(body, null, 2);
+            } catch (error) {
+                output.textContent = error instanceof Error ? error.message : "The request failed.";
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

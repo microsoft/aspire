@@ -285,6 +285,9 @@
   <Folder Name="/playground/HealthChecks/">
     <Project Path="playground/HealthChecks/HealthChecksSandbox.AppHost/HealthChecksSandbox.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/AzureSandboxDataPlane/">
+    <Project Path="playground/AzureSandboxDataPlane/AzureSandboxDataPlane.AppHost/AzureSandboxDataPlane.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/kafka/">
     <Project Path="playground/kafka/Consumer/Consumer.csproj" />
     <Project Path="playground/kafka/KafkaBasic.AppHost/KafkaBasic.AppHost.csproj" />

@@ -1,6 +1,7 @@
 # Azure Container Apps Sandboxes hosting integration
 
 Use this integration to deploy container-backed Aspire compute resources to Azure Container Apps Sandboxes.
+Sandbox groups can also be referenced as data-plane resources by applications that create and manage sandboxes at run time.
 
 ## Getting started
 
@@ -77,6 +78,41 @@ await api.publishAsAzureSandbox(sandboxGroup, {
 await builder.build().run();
 ```
 
+To use a sandbox group as a data-plane resource, reference it from an application:
+
+```csharp
+var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+var containerApps = builder.AddAzureContainerAppEnvironment("aca");
+
+builder.AddNodeApp("agent", "../Agent", "server.ts")
+    .WithHttpEndpoint(env: "PORT")
+    .WithComputeEnvironment(containerApps)
+    .WithReference(sandboxGroup)
+    .PublishAsDockerFile();
+```
+
+In run mode, `AddAzureSandboxGroup` remains inactive until a resource references it. The reference provisions the group and injects:
+
+* `ConnectionStrings__sandboxes`, containing `Endpoint`, `SubscriptionId`, `ResourceGroup`, and `SandboxGroupName`.
+* `SANDBOXES_ENDPOINT` and `SANDBOXES_URI`, containing the regional Azure Dev Compute endpoint.
+* `SANDBOXES_SUBSCRIPTIONID`, `SANDBOXES_RESOURCEGROUP`, and `SANDBOXES_SANDBOXGROUPNAME`.
+
+The referencing principal receives the **Container Apps SandboxGroup Data Owner** role by default. During local development this is the current Azure principal. When the application is published to a compute environment that supports managed identities, such as Azure Container Apps, the role is assigned to the application's managed identity.
+
+The official preview [`@azure/containerapps-sandbox`](https://www.npmjs.com/package/@azure/containerapps-sandbox) package can consume these values:
+
+```typescript
+import { DefaultAzureCredential } from "@azure/identity";
+import { SandboxGroupClient } from "@azure/containerapps-sandbox";
+
+const sandboxes = new SandboxGroupClient(
+    new DefaultAzureCredential(),
+    process.env.SANDBOXES_ENDPOINT!,
+    process.env.SANDBOXES_SUBSCRIPTIONID!,
+    process.env.SANDBOXES_RESOURCEGROUP!,
+    process.env.SANDBOXES_SANDBOXGROUPNAME!);
+```
+
 Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
 Images are resolved to immutable Linux/amd64 digests before import. Images hosted by the configured Azure Container Registry are imported with a dedicated user-assigned identity that has `AcrPull`; public registry images are imported without that ACR identity. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
@@ -103,7 +139,7 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 The package and service are preview features. The current integration does not support:
 
 * Connector Gateway, MCP, triggers, or OAuth flows.
-* Volumes, snapshots, shell/file APIs, or interactive lifecycle commands.
+* Deployment-time configuration of volumes, snapshots, shell/file APIs, or interactive lifecycle commands. Applications can use the Azure Container Apps Sandboxes data-plane SDK directly for supported run-time operations.
 * TCP ports, private service discovery, or cross-group endpoint references.
 * Windows, ARM64, or arbitrary registry credentials.
 * Runtime sandbox URLs as first-pass ARM/Bicep inputs.

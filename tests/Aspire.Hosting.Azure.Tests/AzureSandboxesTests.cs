@@ -17,6 +17,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Publishing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Core;
 using Azure.Provisioning.Resources;
@@ -36,6 +37,108 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         Assert.Equal("{sandboxes.outputs.id}", sandboxGroup.Resource.IdOutputReference.ValueExpression);
         Assert.Equal("{sandboxes.outputs.name}", sandboxGroup.Resource.NameOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.outputs.location}", sandboxGroup.Resource.LocationOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.outputs.endpoint}", sandboxGroup.Resource.EndpointOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.outputs.subscriptionId}", sandboxGroup.Resource.SubscriptionIdOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.outputs.resourceGroup}", sandboxGroup.Resource.ResourceGroupOutputReference.ValueExpression);
+        Assert.Equal("{sandboxes.connectionString}", ((IManifestExpressionProvider)sandboxGroup.Resource).ValueExpression);
+    }
+
+    [Fact]
+    public void UnreferencedSandboxGroupRemainsInactiveInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.DoesNotContain(model.Resources, resource => resource is AzureSandboxGroupResource);
+        Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
+    }
+
+    [Fact]
+    public async Task ReferencedSandboxGroupActivatesRunModeProvisioningAndInjectsConnectionProperties()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var frontend = builder.AddContainer("frontend", "node")
+            .WithReference(sandboxGroup);
+
+        sandboxGroup.Resource.Outputs["connectionString"] =
+            "Endpoint=https://management.eastus2.azuredevcompute.io;SubscriptionId=00000000-0000-0000-0000-000000000000;ResourceGroup=rg;SandboxGroupName=group";
+        sandboxGroup.Resource.Outputs["endpoint"] = "https://management.eastus2.azuredevcompute.io";
+        sandboxGroup.Resource.Outputs["subscriptionId"] = "00000000-0000-0000-0000-000000000000";
+        sandboxGroup.Resource.Outputs["resourceGroup"] = "rg";
+        sandboxGroup.Resource.Outputs["name"] = "group";
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            frontend.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+
+        Assert.Contains(sandboxGroup.Resource, model.Resources);
+        Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
+        Assert.Equal(
+            "Endpoint=https://management.eastus2.azuredevcompute.io;SubscriptionId=00000000-0000-0000-0000-000000000000;ResourceGroup=rg;SandboxGroupName=group",
+            environment["ConnectionStrings__sandboxes"]);
+        Assert.Equal("https://management.eastus2.azuredevcompute.io", environment["SANDBOXES_URI"]);
+        Assert.Equal("https://management.eastus2.azuredevcompute.io", environment["SANDBOXES_ENDPOINT"]);
+        Assert.Equal("00000000-0000-0000-0000-000000000000", environment["SANDBOXES_SUBSCRIPTIONID"]);
+        Assert.Equal("rg", environment["SANDBOXES_RESOURCEGROUP"]);
+        Assert.Equal("group", environment["SANDBOXES_SANDBOXGROUPNAME"]);
+
+        var defaults = Assert.Single(sandboxGroup.Resource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>());
+        var role = Assert.Single(defaults.Roles);
+        Assert.Equal("c24cf47c-5077-412d-a19c-45202126392c", role.Id);
+        Assert.Equal("Container Apps SandboxGroup Data Owner", role.Name);
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ReferencedSandboxGroupAssignsDataPlaneRoleToPublishedContainerApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aca = builder.AddAzureContainerAppEnvironment("aca");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var frontend = builder.AddContainer("frontend", "node")
+            .WithComputeEnvironment(aca)
+            .WithReference(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var annotation = Assert.Single(frontend.Resource.Annotations.OfType<RoleAssignmentAnnotation>());
+        Assert.Same(sandboxGroup.Resource, annotation.Target);
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal("c24cf47c-5077-412d-a19c-45202126392c", role.Id);
+        Assert.Equal("Container Apps SandboxGroup Data Owner", role.Name);
+    }
+
+    [Fact]
+    public async Task ExistingSandboxGroupCanBeReferencedWithoutComputeConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg");
+        var frontend = builder.AddContainer("frontend", "node")
+            .WithReference(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+
+        Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
+        Assert.Null(frontend.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
@@ -350,8 +453,10 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddAzureSandboxGroup("sandboxes")
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
             .PublishAsExisting("existing-sandboxes", "existing-rg");
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
 
         using var app = builder.Build();
 
@@ -360,7 +465,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal(
             "Existing Azure sandbox group 'sandboxes' requires a user-assigned ACR pull identity. " +
             "Call 'WithAcrPullIdentity' with an identity that is already attached to the sandbox group and has AcrPull on the configured registry.",
-            exception.Message);
+            exception.InnerException?.Message);
     }
 
     [Fact]
