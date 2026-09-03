@@ -118,6 +118,7 @@ internal sealed class BundleNuGetService : INuGetService
         var containsCredentialMaterial =
             nugetConfigInspection.ContainsCredentialMaterial ||
             sensitiveSources.Length > 0;
+        var nugetFallbackPackagesPaths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment);
 
         TemporaryCacheDirectory? temporaryRestoreDirectory = null;
         var restoreDir = containsCredentialMaterial
@@ -131,7 +132,8 @@ internal sealed class BundleNuGetService : INuGetService
                     managedPath,
                     sourceList,
                     nugetConfigInspection.CacheIdentity,
-                    globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment)));
+                    globalPackagesFolderOverride ?? CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                    nugetFallbackPackagesPaths));
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
@@ -218,11 +220,22 @@ internal sealed class BundleNuGetService : INuGetService
             }
 
             var environmentVariables = new Dictionary<string, string>();
-            if (globalPackagesFolderOverride is not null)
+            string? effectiveGlobalPackagesFolder;
+            if (containsCredentialMaterial)
             {
-                // NUGET_PACKAGES takes precedence over globalPackagesFolder in NuGet.config, so set
-                // the child environment explicitly when staging requires a feed-keyed package cache.
-                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = globalPackagesFolderOverride;
+                // NuGet persists each package's source URL in .nupkg.metadata. Keep that metadata
+                // under the same lease as credential-bearing restore artifacts so a user-info or
+                // token-bearing URL cannot survive after the AppHost releases the manifest.
+                effectiveGlobalPackagesFolder = Path.Combine(restoreDir, "packages");
+            }
+            else
+            {
+                effectiveGlobalPackagesFolder = globalPackagesFolderOverride;
+            }
+
+            if (effectiveGlobalPackagesFolder is not null)
+            {
+                environmentVariables[CliPathHelper.NuGetPackagesEnvironmentVariable] = effectiveGlobalPackagesFolder;
             }
             NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
             layoutLease?.AddEnvironment(environmentVariables);
@@ -400,7 +413,8 @@ internal sealed class BundleNuGetService : INuGetService
         string? managedPath = null,
         IEnumerable<string>? sources = null,
         string? nugetConfigCacheIdentity = null,
-        string? nugetPackagesPath = null)
+        string? nugetPackagesPath = null,
+        IReadOnlyList<string>? nugetFallbackPackagesPaths = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
@@ -417,6 +431,13 @@ internal sealed class BundleNuGetService : INuGetService
         if (nugetPackagesPath is not null)
         {
             content += $";global-packages:{nugetPackagesPath}";
+        }
+        if (nugetFallbackPackagesPaths is not null)
+        {
+            foreach (var path in nugetFallbackPackagesPaths)
+            {
+                content += $";fallback-packages:{path.Length}:{path}";
+            }
         }
 
         // Use SHA256 for stable hash across processes/runtimes

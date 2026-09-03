@@ -127,6 +127,41 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentFallbackPackageFolderOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var fallbackA = Path.Combine(workspace.WorkspaceRoot.FullName, "fallback-a");
+        var fallbackB = Path.Combine(workspace.WorkspaceRoot.FullName, "fallback-b");
+        var environmentVariables = new Dictionary<string, string?>
+        {
+            [CliPathHelper.NuGetFallbackPackagesEnvironmentVariable] = $"{fallbackA};{fallbackB}"
+        };
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(environmentVariables),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var resultA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+        environmentVariables[CliPathHelper.NuGetFallbackPackagesEnvironmentVariable] = $"{fallbackB};{fallbackA}";
+        using var resultB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_ExplicitGlobalPackagesFolderOverridesInheritedEnvironment()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -304,6 +339,40 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(firstResult.ManifestPath, secondResult.ManifestPath);
         Assert.True(firstResult.IsTemporary);
         Assert.True(secondResult.IsTemporary);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_CredentialBearingSourceUsesLeasedGlobalPackagesFolder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        const string credentialBearingSource = "https://packages.example.com/v3/index.json?sig=secret";
+        var persistentPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "persistent-packages");
+        var executionFactory = new TestProcessExecutionFactory();
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var result = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: [credentialBearingSource],
+            workingDirectory: appHostDirectory.FullName,
+            globalPackagesFolderOverride: persistentPackagesFolder);
+
+        var restoreDirectory = Directory.GetParent(result.ManifestPath)!.FullName;
+        Assert.True(result.IsTemporary);
+        Assert.Equal(
+            Path.Combine(restoreDirectory, "packages"),
+            executionFactory.LastEnvironmentVariables?[CliPathHelper.NuGetPackagesEnvironmentVariable]);
     }
 
     [Fact]
