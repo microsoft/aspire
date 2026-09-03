@@ -44,6 +44,8 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
             return;
         }
 
+        var attemptId = unchecked(selection.AttemptId + 1);
+        selection.AttemptId = attemptId;
         selection.SelectedId = null;
 
         var resource = @event.Resource;
@@ -57,7 +59,7 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
 
         var selectedId = options.Count == 1
             ? options[0].Id
-            : await PromptForTargetAsync(resource, selection.TargetKind, options, resourceLogger, cancellationToken).ConfigureAwait(false);
+            : await PromptForTargetAsync(resource, selection, attemptId, options, resourceLogger, cancellationToken).ConfigureAwait(false);
 
         var selectedOption = options.First(option => string.Equals(option.Id, selectedId, StringComparison.Ordinal));
         resourceLogger.LogInformation("Selected {DisplayName}.", selectedOption.DisplayName);
@@ -88,11 +90,13 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
 
     private async Task<string> PromptForTargetAsync(
         IResource resource,
-        MauiTargetSelectionKind targetKind,
+        SelectedEmulatorAnnotation selection,
+        int attemptId,
         IReadOnlyList<EmulatorOption> options,
         ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
+        var targetKind = selection.TargetKind;
         if (!interactionService.IsAvailable)
         {
             var targetName = GetTargetName(targetKind);
@@ -120,7 +124,7 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         if (result.Canceled)
         {
             resourceLogger.LogInformation("{TargetName} selection was canceled.", GetTargetName(targetKind));
-            _ = OverrideCanceledSelectionStateAsync(resource, resourceLogger, CancellationToken.None);
+            _ = OverrideCanceledSelectionStateAsync(resource, selection, attemptId, resourceLogger, CancellationToken.None);
             throw new OperationCanceledException($"{GetTargetName(targetKind)} selection was canceled.", cancellationToken);
         }
 
@@ -188,10 +192,17 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         };
     }
 
-    private async Task OverrideCanceledSelectionStateAsync(IResource resource, ILogger resourceLogger, CancellationToken cancellationToken)
+    private async Task OverrideCanceledSelectionStateAsync(
+        IResource resource,
+        SelectedEmulatorAnnotation selection,
+        int attemptId,
+        ILogger resourceLogger,
+        CancellationToken cancellationToken)
     {
         try
         {
+            await PublishCanceledSelectionStateAsync(resource, selection, attemptId).ConfigureAwait(false);
+
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -207,25 +218,42 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
                 // publish the canceled state anyway so prompt dismissal does not look like a crash.
             }
 
-            await notificationService.PublishUpdateAsync(resource, s =>
-            {
-                if (s.State?.Text is not null && !string.Equals(s.State.Text, KnownResourceStates.FailedToStart, StringComparison.Ordinal))
-                {
-                    return s;
-                }
-
-                return s with
-                {
-                    State = s_canceledState,
-                    StartTimeStamp = null,
-                    StopTimeStamp = null,
-                    ExitCode = null
-                };
-            }).ConfigureAwait(false);
+            await PublishCanceledSelectionStateAsync(resource, selection, attemptId).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             resourceLogger.LogDebug(ex, "Failed to override state to Exited for canceled target selection on resource '{ResourceName}'.", resource.Name);
         }
+    }
+
+    private Task PublishCanceledSelectionStateAsync(IResource resource, SelectedEmulatorAnnotation selection, int attemptId)
+    {
+        return notificationService.PublishUpdateAsync(resource, s =>
+        {
+            if (selection.AttemptId != attemptId || selection.SelectedId is not null)
+            {
+                return s;
+            }
+
+            if (!IsCanceledSelectionState(s.State?.Text))
+            {
+                return s;
+            }
+
+            return s with
+            {
+                State = s_canceledState,
+                StartTimeStamp = null,
+                StopTimeStamp = null,
+                ExitCode = null
+            };
+        });
+    }
+
+    private static bool IsCanceledSelectionState(string? state)
+    {
+        return state is null ||
+            string.Equals(state, KnownResourceStates.Starting, StringComparison.Ordinal) ||
+            string.Equals(state, KnownResourceStates.FailedToStart, StringComparison.Ordinal);
     }
 }

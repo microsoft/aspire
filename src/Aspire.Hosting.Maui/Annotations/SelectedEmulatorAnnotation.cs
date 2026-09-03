@@ -19,6 +19,11 @@ internal sealed class SelectedEmulatorAnnotation(MauiTargetSelectionKind targetK
     /// Gets or sets the selected emulator or simulator identifier.
     /// </summary>
     public string? SelectedId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current selection attempt.
+    /// </summary>
+    public int AttemptId { get; set; }
 }
 
 internal enum MauiTargetSelectionKind
