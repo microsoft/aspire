@@ -2131,8 +2131,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_PreservesAmbientNuGetConfig()
+    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_UsesAdditionalSourcesNotRestoreConfigFile()
     {
+        // Regression for finding #1 of the 2026-05-19 post-merge review: a project-ref restore
+        // with an explicit channel pin (daily/staging/pr-*) and NO --source must not replace the
+        // user's ambient nuget.config via <RestoreConfigFile>. The channel sources flow through
+        // additively via <RestoreAdditionalProjectSources> so private/internal feeds the user
+        // has configured in nuget.config remain reachable for non-Aspire transitives.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         XDocument? generatedProject = null;
@@ -2188,11 +2193,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(generatedProject);
 
             var ns = generatedProject!.Root!.GetDefaultNamespace();
-            var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+            Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
+
             var restoreSources = generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
-            Assert.Null(restoreConfigFile);
-            Assert.Equal(channelSource, restoreSources);
-            Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
+            Assert.NotNull(restoreSources);
+            Assert.Contains(channelSource, restoreSources!);
 
             // Aspire package versions remain in their original (non-pinned) form when no override
             // is in play; the exact-version pinning only fires when a single source is selected.
