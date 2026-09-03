@@ -69,10 +69,11 @@ Endpoints, environment variables, and service discovery are configured from the 
 
 ### Configure the build environment
 
-Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation. Projects
-with build-specific environment variables use serialized direct builds instead of a shared traversal
-build. Build environment variables are not added to the launched process; configure the same variable
-with `WithEnvironment` as well when it is needed at runtime.
+Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for a `.csproj`
+resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
+`WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct
+builds instead of a shared traversal build. Build environment variables are not added to the launched process;
+configure the same variable with `WithEnvironment` as well when it is needed at runtime.
 
 Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
 process environments. Protected temporary MSBuild response files preserve global-property semantics

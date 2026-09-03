@@ -217,7 +217,9 @@ public static class ExecutableResourceBuilderExtensions
         {
             workingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.ApplicationBuilder.AppHostDirectory, workingDirectory));
             executableAnnotation.WorkingDirectory = workingDirectory;
-            builder.Resource.WorkingDirExplicitlySet = true;
+#pragma warning disable ASPIREEXTENSION001 // Working-directory provenance is experimental.
+            executableAnnotation.WorkingDirectoryExplicitlySet = true;
+#pragma warning restore ASPIREEXTENSION001
             return builder;
         }
 

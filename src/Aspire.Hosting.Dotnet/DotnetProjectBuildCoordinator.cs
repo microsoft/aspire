@@ -342,9 +342,9 @@ internal static class DotnetProjectBuildCoordinator
                     GetBuildEnvironmentCallbacks(entry).Any());
             if (unsupportedBuildEnvironmentEntry is not null)
             {
-                throw new DistributedApplicationException(
-                    $"The .NET resource '{unsupportedBuildEnvironmentEntry.Registration.Resource.Name}' uses " +
-                    "WithBuildEnvironment, which is supported only for project files.");
+                DotnetProjectHostingExtensions.ValidateBuildEnvironmentSupport(
+                    unsupportedBuildEnvironmentEntry.Registration.Resource,
+                    unsupportedBuildEnvironmentEntry.Metadata);
             }
 
             var buildEntries = resourceEntries

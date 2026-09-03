@@ -45,15 +45,6 @@ public class ExecutableResource : Resource, IResourceWithEnvironment, IResourceW
     /// </summary>
     public string WorkingDirectory => GetAnnotation().WorkingDirectory;
 
-    /// <summary>
-    /// Gets a value indicating whether the working directory was explicitly set through the resource builder.
-    /// </summary>
-    /// <remarks>
-    /// The constructor establishes the integration default. Integrations that resolve runtime defaults later can
-    /// use this value to avoid overwriting a working directory explicitly authored with <c>WithWorkingDirectory</c>.
-    /// </remarks>
-    public bool WorkingDirExplicitlySet { get; internal set; }
-
     private ExecutableAnnotation GetAnnotation() => Annotations.OfType<ExecutableAnnotation>().LastOrDefault()
         ?? throw new InvalidOperationException("Unable to find ExecutableAnnotation on resource.");
 

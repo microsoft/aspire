@@ -358,12 +358,12 @@ start, **identically for watch and non-watch**; stream logs; fail fast.
 *Depends on: 1. Parallelizable with 2–4.*
 
 **Status: ✅ Complete.** Added coordinated Run-mode build resources that write AppHost-local traversal
-projects for compatible contexts, use serialized direct builds when SDK roots or environments differ,
-stream logs, and block all dependent resources (including forced starts) on success. Traditional projects
-launch with `--no-build`; file-based `.cs` apps remain outside generated traversal projects, use serialized
-direct-build resources in mixed and file-only models, and launch with `--file <path> --no-build`. Automated
-coverage and the TypeScript-first/C#-second playground runs pass, including shared-library and
-service-discovery calls.
+projects for compatible contexts. Different SDK roots and configurations use separate serialized traversal
+builds, while project-specific build environments and file-based `.cs` apps use serialized direct builds.
+All dependent resources (including forced starts) are blocked on success. Traditional projects launch their
+resolved `RunCommand` and `RunArguments` directly from the coordinated output; file-based apps remain outside
+generated traversal projects and launch with `dotnet run --file <path> --no-build`. Automated coverage and the
+TypeScript-first/C#-second playground runs pass, including shared-library and service-discovery calls.
 
 ### Session 6 — C# **service** watch: watch `server` + `resource` launch
 Add `DotnetWatchServerResource` (§5.2). When `ExecutionContext.RunConfiguration.WatchEnabled`, the package (a) adds the hidden

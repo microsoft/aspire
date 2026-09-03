@@ -954,7 +954,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildEnvironmentIsRejectedForFileBasedApps()
+    public async Task BuildPlanRejectsBuildEnvironmentAddedInternallyForFileBasedApps()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -962,8 +962,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             outputHelper);
         var appPath = Path.Combine(workspace.Path, "app.cs");
         File.WriteAllText(appPath, "System.Console.WriteLine(\"Hello\");");
-        builder.AddDotnetProject("app", appPath, options => options.ExcludeLaunchProfile = true)
-            .WithBuildEnvironment("BUILD_FLAVOR", "custom");
+        var resource = builder.AddDotnetProject("app", appPath, options => options.ExcludeLaunchProfile = true);
+        resource.Resource.Annotations.Add(
+            new DotnetProjectBuildEnvironmentCallbackAnnotation(_ => Task.CompletedTask));
         await using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(

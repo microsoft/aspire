@@ -132,4 +132,25 @@ public class DotnetProjectPublicApiTests
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
+
+    [Fact]
+    public void WithBuildEnvironmentOverloadsShouldRejectFileBasedAppsImmediately()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddResource(new DotnetProjectResource("app", builder.AppHostDirectory));
+        project.Resource.Annotations.Add(new DotnetProjectMetadata("app.cs", buildConfiguration: null));
+        const string expectedMessage =
+            "The .NET resource 'app' uses WithBuildEnvironment, which is supported only for project files.";
+
+        var valueException = Assert.Throws<DistributedApplicationException>(
+            () => project.WithBuildEnvironment("BUILD_FLAVOR", "custom"));
+        var callbackException = Assert.Throws<DistributedApplicationException>(
+            () => project.WithBuildEnvironment(_ => { }));
+        var asyncCallbackException = Assert.Throws<DistributedApplicationException>(
+            () => project.WithBuildEnvironment(_ => Task.CompletedTask));
+
+        Assert.Equal(expectedMessage, valueException.Message);
+        Assert.Equal(expectedMessage, callbackException.Message);
+        Assert.Equal(expectedMessage, asyncCallbackException.Message);
+    }
 }

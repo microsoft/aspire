@@ -31,7 +31,14 @@ public static class DotnetProjectHostingExtensions
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="name"/> is empty.
     /// </exception>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when <paramref name="builder"/> represents a file-based C# app.
+    /// </exception>
     /// <remarks>
+    /// <para>
+    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
+    /// build-only environment variables.
+    /// </para>
     /// <para>
     /// The variable is available while Aspire builds the project but is not added to the environment of the
     /// launched project. Use <c>WithEnvironment</c> separately when the same variable is also needed at runtime.
@@ -76,10 +83,19 @@ public static class DotnetProjectHostingExtensions
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
     /// </exception>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when <paramref name="builder"/> represents a file-based C# app.
+    /// </exception>
     /// <remarks>
+    /// <para>
+    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
+    /// build-only environment variables.
+    /// </para>
+    /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// </para>
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
@@ -106,10 +122,19 @@ public static class DotnetProjectHostingExtensions
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
     /// </exception>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when <paramref name="builder"/> represents a file-based C# app.
+    /// </exception>
     /// <remarks>
+    /// <para>
+    /// This method supports project files (<c>.csproj</c>) only. File-based C# apps (<c>.cs</c>) do not support
+    /// build-only environment variables.
+    /// </para>
+    /// <para>
     /// Values configured by this callback are not added to the environment of the launched project. Do not use this API
     /// for secrets because Aspire carries the values in IDE launch metadata, process environments, and protected
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
+    /// </para>
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
@@ -120,7 +145,21 @@ public static class DotnetProjectHostingExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
+        if (builder.Resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is { } metadata)
+        {
+            ValidateBuildEnvironmentSupport(builder.Resource, metadata);
+        }
+
         return builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+    }
+
+    internal static void ValidateBuildEnvironmentSupport(IResource resource, IProjectMetadata metadata)
+    {
+        if (metadata.IsFileBasedApp)
+        {
+            throw new DistributedApplicationException(
+                $"The .NET resource '{resource.Name}' uses WithBuildEnvironment, which is supported only for project files.");
+        }
     }
 
     /// <summary>
@@ -275,7 +314,7 @@ public static class DotnetProjectHostingExtensions
                         ctx.CancellationToken).ConfigureAwait(false);
                     var executableAnnotation = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
                     executableAnnotation.Command = runProperties.Command;
-                    if (!resource.Resource.WorkingDirExplicitlySet)
+                    if (!executableAnnotation.WorkingDirectoryExplicitlySet)
                     {
                         executableAnnotation.WorkingDirectory = string.IsNullOrEmpty(runProperties.WorkingDirectory)
                             ? defaultRunWorkingDirectory
