@@ -338,24 +338,24 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         // The projection supplies only container-specific property state. Annotations and callback
         // identity remain on the canonical owner under the typed-configuration-view model.
-        return WriteContainerCoreAsync(resource, container.Entrypoint);
+        return WriteContainerCoreAsync(resource, container);
     }
 
-    private async Task WriteContainerCoreAsync(IResource resource, string? entrypoint)
+    private async Task WriteContainerCoreAsync(IResource owner, ContainerResource container)
     {
-        var deploymentTarget = resource.GetDeploymentTargetAnnotation();
+        var deploymentTarget = owner.GetDeploymentTargetAnnotation();
 
-        if (resource.Annotations.OfType<DockerfileBuildAnnotation>().Any())
+        if (owner.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
-            WriteConnectionString(resource);
-            await WriteBuildContextAsync(resource).ConfigureAwait(false);
+            WriteConnectionString(owner);
+            await WriteBuildContextAsync(owner).ConfigureAwait(false);
         }
         else
         {
-            if (!resource.TryGetContainerImageName(out var image))
+            if (!owner.TryGetContainerImageName(out var image))
             {
-                throw new DistributedApplicationException($"Could not get the container image name for resource '{resource.Name}'.");
+                throw new DistributedApplicationException($"Could not get the container image name for resource '{owner.Name}'.");
             }
 
             if (deploymentTarget is not null)
@@ -367,7 +367,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Writer.WriteString("type", "container.v0");
             }
 
-            WriteConnectionString(resource);
+            WriteConnectionString(owner);
             Writer.WriteString("image", image);
         }
 
@@ -376,22 +376,22 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             await WriteDeploymentTarget(deploymentTarget).ConfigureAwait(false);
         }
 
-        if (entrypoint is not null)
+        if (container.Entrypoint is not null)
         {
-            Writer.WriteString("entrypoint", entrypoint);
+            Writer.WriteString("entrypoint", container.Entrypoint);
         }
 
         // Write args if they are present
-        await WriteCommandLineArgumentsAsync(resource).ConfigureAwait(false);
+        await WriteCommandLineArgumentsAsync(owner).ConfigureAwait(false);
 
         // Write container files destination if present
-        WriteContainerFilesDestination(resource);
+        WriteContainerFilesDestination(owner);
 
         // Write volume & bind mount details
-        WriteContainerMounts(resource);
+        WriteContainerMounts(owner);
 
-        await WriteEnvironmentVariablesAsync(resource).ConfigureAwait(false);
-        WriteBindings(resource);
+        await WriteEnvironmentVariablesAsync(owner).ConfigureAwait(false);
+        WriteBindings(owner);
     }
 
     private async Task WriteBuildContextAsync(IResource resource)
