@@ -1,0 +1,29 @@
+{
+  "run_id": 33710947040,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33710947040",
+  "analyzed_at": "2026-09-03T03:57:29Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19807,
+    "title": "Gate the CLI starter validation jobs on the test selector",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/enable-cli-starter-validation-selector",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19807"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 100513207488,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33710947040/job/100513207488",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' and no fetchable logs or TRX test failures. Matches a well-established recurring pattern (5 prior occurrences) for this exact shard. The PR only modifies .github/workflows/tests.yml, docs/ci/test-trigger-map.md, eng/github-ci/test-trigger-map.yml, and TestTriggerMapTests.cs — none of which touch the VS Code extension or its E2E test infrastructure.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
