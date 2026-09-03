@@ -32,18 +32,47 @@ case "$COMMAND" in
   pr-number)
     trusted_pr_number
     ;;
+  cause-job-names)
+    CAUSE_FILE="${2:?cause file is required}"
+    TRUSTED_FAILED_JOBS_FILE="${3:?trusted failed jobs file is required}"
+    FORMAT="${4:?format is required}"
+
+    jq -er \
+      --arg format "$FORMAT" \
+      --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+        .job_ids as $job_ids |
+        [
+          $job_ids[] as $job_id |
+          [$trusted_jobs[0][] | select(.id == $job_id) | .name][0]
+        ] as $job_names |
+        if any($job_names[]; type != "string" or length == 0) then
+          error("cause references an unknown trusted failed job")
+        else
+          $job_names
+          | map(gsub("[\r\n]+"; " "))
+          | join("<br>")
+          | if $format == "display" then
+              .
+            elif $format == "table" then
+              gsub("\\|"; "\\|")
+            else
+              error("unsupported cause job name format")
+            end
+        end
+      ' "$CAUSE_FILE"
+    ;;
   add-occurrence)
     CAUSE_FILE="${2:?cause file is required}"
     RUN_ID="${3:?run ID is required}"
     RUN_URL="${4:?run URL is required}"
-    FIRST_JOB="${5:?job name is required}"
+    JOB_NAMES="${5:?job names are required}"
     ANALYZED_AT="${6:?analysis timestamp is required}"
     PR_NUMBER=$(trusted_pr_number)
 
     jq \
       --argjson run_id "$RUN_ID" \
       --arg run_url "$RUN_URL" \
-      --arg job "$FIRST_JOB" \
+      --arg job "$JOB_NAMES" \
       --argjson pr_number "$PR_NUMBER" \
       --arg observed_at "$ANALYZED_AT" \
       '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \

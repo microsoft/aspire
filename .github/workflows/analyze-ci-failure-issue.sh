@@ -6,7 +6,7 @@
 set -euo pipefail
 
 if [ "$#" -ne 11 ]; then
-  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <run-url> <run-scope> <pr-number> <first-job> <occurrence-row> <body-file> <metadata-file>" >&2
+  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <run-url> <run-scope> <pr-number> <cause-jobs> <occurrence-row> <body-file> <metadata-file>" >&2
   exit 1
 fi
 
@@ -17,7 +17,7 @@ TRIGGERING_MERGE_FILE="$4"
 RUN_URL="$5"
 RUN_SCOPE="$6"
 PR_NUMBER="$7"
-FIRST_JOB="$8"
+CAUSE_JOBS="$8"
 NEW_OCCURRENCE_ROW="$9"
 BODY_FILE="${10}"
 METADATA_FILE="${11}"
@@ -47,9 +47,9 @@ fi
     echo "Failed main SHA: \`${FAILED_SHA}\`"
     echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
   elif [ -n "$TEST_NAME" ]; then
-    echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
+    echo "Build error leg or test failing: ${CAUSE_JOBS} / \`${TEST_NAME}\`"
   else
-    echo "Build error leg: ${FIRST_JOB}"
+    echo "Build error leg: ${CAUSE_JOBS}"
   fi
   if [ "$RUN_SCOPE" = "pull-request" ] && [ "$PR_NUMBER" != "0" ]; then
     echo "Pull request: #${PR_NUMBER}"

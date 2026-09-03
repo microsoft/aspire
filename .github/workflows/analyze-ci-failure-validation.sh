@@ -66,7 +66,7 @@ if ! jq -e '
   all(.failed_tests[];
     (type == "object") and
     ((.name | type) == "string") and
-    ((.job | type) == "string") and
+    ((.job | type) == "string" and (.job | length) > 0) and
     ((.error | type) == "string") and
     ((.stack_trace == null) or ((.stack_trace | type) == "string")) and
     (.classification == "flaky" or .classification == "code-issue") and
@@ -134,11 +134,14 @@ if [ -d "$CAUSES_DIR" ]; then
     CAUSE_BASENAME=$(basename "$CAUSE_FILE")
     if ! jq -e '
       (type == "object") and
-      ((keys - ["error_pattern", "id", "test_name", "title", "type"]) | length == 0) and
+      ((keys - ["error_pattern", "id", "job_ids", "test_name", "title", "type"]) | length == 0) and
       ((.id | type) == "string") and
       ((.type | type) == "string") and
       ((.title | type) == "string") and
       ((.error_pattern | type) == "string") and
+      ((.job_ids | type) == "array" and (.job_ids | length) > 0) and
+      (all(.job_ids[]; type == "number" and . > 0 and . == floor)) and
+      ((.job_ids | unique | length) == (.job_ids | length)) and
       ((.test_name // "") | type == "string")
     ' "$CAUSE_FILE" >/dev/null; then
       echo "::error::Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields"
@@ -163,6 +166,32 @@ if [ -d "$CAUSES_DIR" ]; then
         exit 1
         ;;
     esac
+
+    # A flaky test can share a failed job with deterministic failures. In that
+    # case the job's primary classification is not flaky-test, so require
+    # validated flaky-test evidence naming the same trusted job.
+    if ! jq -e \
+      --arg cause_type "$CAUSE_TYPE" \
+      --slurpfile analysis "$ANALYSIS_FILE" \
+      --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+        all(.job_ids[]; . as $job_id |
+          ([$analysis[0].failed_jobs[] | select(.id == $job_id)][0].classification // "") as $classification |
+          ([$trusted_jobs[0][] | select(.id == $job_id)][0] // null) as $trusted_job |
+          ($trusted_job != null) and
+            (if $cause_type == "infra-failure" then
+              $classification == "transient-infra"
+            elif $cause_type == "main-repository-breakage" then
+              $classification == "main-repository-breakage"
+            else
+              $classification == "flaky-test" or
+                any($analysis[0].failed_tests[];
+                  .classification == "flaky" and .job == ($trusted_job.name // ""))
+            end)
+        )
+      ' "$CAUSE_FILE" >/dev/null; then
+      echo "::error::Cause ${CAUSE_BASENAME} references an unknown or incompatible failed job"
+      exit 1
+    fi
 
     PRIOR_CAUSE_FILE="ci-failure-data/prior-causes/${CAUSE_BASENAME}"
     if [ -f "$PRIOR_CAUSE_FILE" ]; then
