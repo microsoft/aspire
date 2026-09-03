@@ -302,6 +302,12 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
+        // Create a detectable MCP configuration target so the negative MCP assertions below are
+        // meaningful: without a `.vscode` directory present, no agent environment is detected and
+        // the "no MCP prompt/config" assertions would trivially pass even if MCP were still wired
+        // into the chained flow.
+        var vscodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
+
         // Pass --language so the interactive language prompt is skipped, then accept the chained
         // agent init prompt (instead of declining it) to reach skill selection.
         await auto.TypeAsync("aspire init --language csharp");
@@ -312,6 +318,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("configure AI agent environments"),
             timeout: TimeSpan.FromSeconds(30),
             description: "agent init prompt after aspire init");
+        Directory.CreateDirectory(vscodePath);
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
 
@@ -331,11 +338,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         // The chained flow never registers --mcp, so it goes straight from skill selection to
-        // "configuration complete" — no MCP prompt is ever shown.
+        // "configuration complete" — no MCP prompt is ever shown, and the detected `.vscode`
+        // target (created above) is left untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);
+
+        var mcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(mcpConfigPath), $"Expected {mcpConfigPath} to not be written since MCP is unreachable from the chained flow.");
     }
 
     /// <summary>
@@ -362,65 +373,28 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Pass --skill-locations so the interactive skill-location prompt is skipped and the flow
-        // lands directly on the skill selection prompt whose pre-selected state we want to inspect.
-        await auto.TypeAsync("aspire new --skill-locations claudecode");
-        await auto.EnterAsync();
+        // The chained agent-init scan operates on the new project's output directory, not the
+        // workspace root, so the detectable `.vscode` folder must be seeded there once the project
+        // has been scaffolded (right before the agent-init prompt is accepted). Without it, no
+        // agent environment would be detected and the "no MCP prompt/config" assertions below
+        // would trivially pass even if MCP were still wired into the chained flow.
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp");
+        var vscodePath = Path.Combine(projectRoot, ".vscode");
 
-        // Template selection: accept default Starter App
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(60),
-            description: "template selection list (> Starter App)");
-        await auto.EnterAsync();
+        // --skill-locations skips the interactive skill-location prompt so the flow lands directly
+        // on the skill selection prompt whose pre-selected state we want to inspect.
+        await auto.AspireNewAcceptingAgentInitAsync(
+            "StarterApp",
+            extraArguments: "--skill-locations claudecode",
+            beforeAcceptingAgentInit: () =>
+            {
+                Directory.CreateDirectory(vscodePath);
+                return Task.CompletedTask;
+            });
 
-        // Project name
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "project name prompt");
-        await auto.TypeAsync("StarterApp");
-        await auto.EnterAsync();
-
-        // Output path: accept default
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "output path prompt");
-        await auto.EnterAsync();
-
-        // URLs prompt: accept default No
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "URLs prompt");
-        await auto.EnterAsync();
-
-        // Redis cache: accept default Yes
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "Redis cache prompt");
-        await auto.EnterAsync();
-
-        // Test project: accept default No
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "test project prompt");
-        await auto.EnterAsync();
-
-        // Agent init prompt: ACCEPT it (type 'y') to reach the chained skill selection prompt.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("configure AI agent environments"),
-            timeout: TimeSpan.FromSeconds(120),
-            description: "agent init prompt after aspire new");
-        await auto.WaitAsync(500);
-        await auto.TypeAsync("y");
-
-        // --skill-locations was provided above, so the flow lands directly on skill selection.
-        // aspireify must be pre-checked (aspire new pre-selects the complete default skill set),
-        // and the retired "Install Aspire MCP server" entry must never appear in this list.
+        // The flow lands directly on skill selection. aspireify must be pre-checked (aspire new
+        // pre-selects the complete default skill set), and the retired "Install Aspire MCP server"
+        // entry must never appear in this list.
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(60), description: "skill selection prompt");
@@ -430,11 +404,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         // aspire new never registers --mcp, so it goes straight from skill selection to
-        // "configuration complete" — no MCP prompt is ever shown.
+        // "configuration complete" — no MCP prompt is ever shown, and the detected `.vscode`
+        // target (created above) is left untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);
+
+        var mcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(mcpConfigPath), $"Expected {mcpConfigPath} to not be written since MCP is unreachable from the chained flow.");
     }
 
     private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)

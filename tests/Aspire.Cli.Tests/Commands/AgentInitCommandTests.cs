@@ -673,7 +673,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -685,7 +684,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PromptAndChainAsync_WithoutPredicateOverride_PreSelectsBundleDefaultsIncludingAspireify()
+    public async Task PromptAndChainAsync_PreSelectsBundleDefaultsIncludingAspireify()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -698,7 +697,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<AgentInitCommand>();
 
-        // Passing no predicate pre-selects every bundle-sourced skill, which is the semantic
+        // Chained agent init pre-selects every bundle-sourced skill, which is the semantic
         // `aspire init` relies on so the one-time wiring skill chains into the flow.
         var result = await command.PromptAndChainAsync(
             interactionService,
@@ -707,7 +706,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
             PromptBinding.CreateDefault<string?>(null),
-            selectByDefault: null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);

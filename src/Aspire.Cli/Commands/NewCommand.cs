@@ -608,7 +608,6 @@ internal sealed class NewCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            selectByDefault: null,
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

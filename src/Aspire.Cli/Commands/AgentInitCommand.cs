@@ -101,8 +101,7 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
-    /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
-    /// pre-selected, including aspireify.
+    /// Every bundle-sourced skill is pre-selected, including aspireify.
     /// Chained flows never register <c>--mcp</c> and never offer MCP server configuration: this
     /// method always executes agent init with MCP configuration unavailable, so MCP remains an
     /// explicit opt-in reachable only through standalone <c>aspire agent init</c>.
@@ -117,7 +116,6 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        Func<SkillDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -135,7 +133,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, mcpBinding: null, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, skillLocationsBinding, skillsBinding, mcpBinding: null, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -147,7 +145,7 @@ internal sealed class AgentInitCommand : BaseCommand
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
         var mcpBinding = PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, selectByDefault: null, skillLocationsBinding, skillsBinding, mcpBinding, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, skillLocationsBinding, skillsBinding, mcpBinding, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -183,7 +181,6 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
-        Func<SkillDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<bool>? mcpBinding,
@@ -259,7 +256,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // --skills parsing used elsewhere.
             availableSkills = [.. availableSkills.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
 
-            var defaultSkills = GetDefaultSkills(availableSkills, selectByDefault);
+            var defaultSkills = availableSkills.Where(static s => s.IsDefault).ToList();
             var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
             var skillsBindingWithDefault = skillsBinding.WithDefault(defaultSkillNames);
 
@@ -652,16 +649,6 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return simplified;
-    }
-
-    private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, Func<SkillDefinition, bool>? selectByDefault)
-    {
-        // When the caller doesn't customize default selection, fall back to SkillDefinition.IsDefault.
-        // Bundle-sourced skills are uniformly IsDefault=true; CLI-defined skills (playwright-cli,
-        // dotnet-inspect) are IsDefault=false so they stay opt-in. Standalone `aspire agent init`
-        // passes a predicate to additionally filter out one-time setup skills.
-        var predicate = selectByDefault ?? (static skill => skill.IsDefault);
-        return availableSkills.Where(predicate).ToList();
     }
 
     /// <summary>

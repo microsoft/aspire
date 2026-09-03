@@ -481,10 +481,66 @@ internal static class Hex1bAutomatorTestHelpers
         bool useRedisCache = true,
         bool useDevLocalhost = false)
     {
+        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost);
+
+        // Decline the agent init prompt and wait for success
+        await auto.DeclineAgentInitPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Runs <c>aspire new</c> interactively up to and including accepting the chained agent init
+    /// confirmation prompt, landing on whatever prompt comes next (skill location or skill selection,
+    /// depending on whether <paramref name="extraArguments"/> includes <c>--skill-locations</c>).
+    /// Used by tests that need to drive the chained agent-init flow instead of declining it via
+    /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
+    /// project has been scaffolded but before the prompt is accepted, so callers can seed a
+    /// detectable agent environment (e.g. a <c>.vscode</c> folder inside the new project) before
+    /// the chained scan runs.
+    /// </summary>
+    internal static async Task AspireNewAcceptingAgentInitAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        AspireTemplate template = AspireTemplate.Starter,
+        bool useRedisCache = true,
+        bool useDevLocalhost = false,
+        string extraArguments = "",
+        Func<Task>? beforeAcceptingAgentInit = null)
+    {
+        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost, extraArguments);
+
+        // Agent init prompt: wait for it, then optionally let the caller seed a detectable agent
+        // environment before ACCEPTING it (type 'y') to reach the chained skill selection prompt.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("configure AI agent environments"),
+            timeout: TimeSpan.FromSeconds(120),
+            description: "agent init prompt after aspire new");
+
+        if (beforeAcceptingAgentInit is not null)
+        {
+            await beforeAcceptingAgentInit();
+        }
+
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+    }
+
+    /// <summary>
+    /// Drives the <c>aspire new</c> prompt sequence from template selection through the test project
+    /// prompt, stopping just before the chained agent init confirmation prompt so callers can choose
+    /// to accept or decline it.
+    /// </summary>
+    private static async Task RunAspireNewPromptsAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        AspireTemplate template,
+        bool useRedisCache,
+        bool useDevLocalhost,
+        string extraArguments = "")
+    {
         var templateTimeout = TimeSpan.FromSeconds(60);
 
         // Step 1: Type aspire new and wait for the template list
-        await auto.TypeAsync("aspire new");
+        await auto.TypeAsync(string.IsNullOrEmpty(extraArguments) ? "aspire new" : $"aspire new {extraArguments}");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
@@ -632,9 +688,6 @@ internal static class Hex1bAutomatorTestHelpers
                 description: "test project prompt");
             await auto.EnterAsync(); // Accept default "No"
         }
-
-        // Step 8: Decline the agent init prompt and wait for success
-        await auto.DeclineAgentInitPromptAsync(counter);
     }
 
     /// <summary>
