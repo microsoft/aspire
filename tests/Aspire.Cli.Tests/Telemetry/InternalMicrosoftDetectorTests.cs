@@ -906,10 +906,32 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appSsoPath = Path.Combine(workspace.Path, "app-sso");
         await File.WriteAllTextAsync(appSsoPath, string.Empty);
+        var timeoutObserved = false;
         var processFactory = new TestProcessExecutionFactory
         {
-            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, _) =>
-                new StartCancellingProcessExecution(fileName, arguments, environment)
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+                new TestProcessExecution(
+                    fileName,
+                    arguments,
+                    environment,
+                    options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)),
+                    () => 1)
+                {
+                    WaitForExitAsyncCallback = async (_, cancellationToken) =>
+                    {
+                        try
+                        {
+                            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                            return 0;
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            timeoutObserved = true;
+                            throw;
+                        }
+                    }
+                }
         };
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
@@ -921,8 +943,9 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
 
         Assert.False(result.IsInternalMicrosoft);
+        Assert.True(timeoutObserved);
         Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, result.Failure?.Code);
-        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessStart, result.Failure?.Stage);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, result.Failure?.Stage);
     }
 
     [Fact]
@@ -1622,7 +1645,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         TimeSpan? probeStageTimeout = null,
         TestEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        string? macPlatformSsoPath = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
@@ -1641,6 +1665,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             NullLogger<InternalMicrosoftDetector>.Instance,
             processFactory ?? new TestProcessExecutionFactory(),
             ciEnvironmentDetector,
+            macPlatformSsoPath ?? "/usr/bin/app-sso",
             probeStages,
             gitHubHttpMessageHandler,
             gitHubCandidateTimeout,

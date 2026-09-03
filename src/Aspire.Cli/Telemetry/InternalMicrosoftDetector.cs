@@ -38,6 +38,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CacheFileName = "detector.json";
     private const string VisualStudioMicrosoftTenantProbeName = "Visual Studio Microsoft tenant";
     private const string WslVisualStudioMicrosoftTenantProbeName = "WSL Visual Studio Microsoft tenant";
+    private const string MacPlatformSsoPath = "/usr/bin/app-sso";
     private const int CacheVersion = 6;
     private const int MaxGitHubTokenCandidates = 5;
 
@@ -71,6 +72,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             logger,
             processExecutionFactory,
             ciEnvironmentDetector,
+            MacPlatformSsoPath,
             probeStages: null)
     {
     }
@@ -83,6 +85,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         ILogger<InternalMicrosoftDetector> logger,
         IProcessExecutionFactory processExecutionFactory,
         ICIEnvironmentDetector ciEnvironmentDetector,
+        string macPlatformSsoPath,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
         TimeSpan? gitHubCandidateTimeout = null,
@@ -777,6 +780,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.IdentityMismatch, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
     }
+
+    private static InternalMicrosoftProbeResult PlatformSsoFailure(string code, string stage)
+        => InternalMicrosoftProbeResult.Failed(new(code, stage));
 
     internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
     {
