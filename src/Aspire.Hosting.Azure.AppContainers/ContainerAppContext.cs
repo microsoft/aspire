@@ -111,8 +111,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         containerApp.Configuration = configuration;
 
         // default autoConfigureDataProtection to true for .NET projects
-        if (Resource is ProjectResource &&
-            !Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>())
+        if (Resource is ProjectResource && !Resource.IsContainer())
         {
             const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
@@ -216,8 +215,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             endpointsByTargetPort.Remove(httpIngress);
 
             var targetPort = httpIngress.Port ??
-                (Resource is ProjectResource &&
-                 !Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>() ? null : 80);
+                (Resource is ProjectResource && !Resource.IsContainer() ? null : 80);
 
             _httpIngress = (targetPort, httpIngress.AnyH2, httpIngress.External);
 
