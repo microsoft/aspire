@@ -793,9 +793,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         else if (temporaryRestoreConfig is not null)
         {
-            // Credential-bearing mapped URLs must exist only for the duration of this build.
-            // Persisting the generated config under .aspire/integrations would retain credentials
-            // from sources such as overrideStagingFeed after the command exits.
+            // Keep credential-bearing mappings out of the persistent generated NuGet.config.
+            // NuGet may still record evaluated sources in its normal restore intermediates.
             restoreConfigFile = temporaryRestoreConfig.ConfigFile;
             restoreConfigContent = null;
         }

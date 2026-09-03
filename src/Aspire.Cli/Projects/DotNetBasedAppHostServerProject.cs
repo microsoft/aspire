@@ -161,7 +161,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         projectFile.PackageReferences.Add(new CSharpPackageReference("Google.Protobuf"));
 
         // Add project references for Aspire.Hosting.* packages, NuGet for others
-        var addedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var addedProjects = new HashSet<string>(StringComparers.FileSystemPath);
         projectFile.AddIntegrationReferences(
             integrations,
             _repoRoot,
@@ -169,7 +169,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             addedProjectPaths: addedProjects,
             packageVersionAttributeName: CSharpPackageReference.VersionOverrideAttributeName);
 
-        // Always add Aspire.Hosting project reference
+        // Aspire configuration synthesizes the base Aspire.Hosting reference and ignores configured
+        // replacements. Add it defensively for direct callers that omit the base; path de-duplication
+        // handles the normal synthesized reference.
         projectFile.AddRepositoryProjectReferenceIfExists(
             _repoRoot,
             "Aspire.Hosting",

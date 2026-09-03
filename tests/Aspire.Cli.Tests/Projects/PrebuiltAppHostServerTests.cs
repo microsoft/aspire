@@ -2244,7 +2244,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_KeepsRestoreSourcesTemporary()
+    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_UsesTransientSourceProps()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";

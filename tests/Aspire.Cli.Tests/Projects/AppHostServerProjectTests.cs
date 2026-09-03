@@ -232,6 +232,31 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingPlatformPathComparison()
+    {
+        var project = CreateProject();
+        var firstProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Integration", "Integration.csproj");
+        var secondProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "integration", "Integration.csproj");
+        var integrations = new[]
+        {
+            IntegrationReference.FromProject("FirstIntegration", firstProjectPath),
+            IntegrationReference.FromProject("SecondIntegration", secondProjectPath)
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var projectReferences = document.Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .ToArray();
+        string[] expectedPaths = OperatingSystem.IsWindows()
+            ? [firstProjectPath]
+            : [firstProjectPath, secondProjectPath];
+
+        Assert.Equal(expectedPaths, projectReferences);
+    }
+
+    [Fact]
     public void ProjectModelPath_IsStableForSameAppPath()
     {
         // Arrange
