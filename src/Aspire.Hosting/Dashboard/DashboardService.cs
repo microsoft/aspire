@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, IInteractionTerminalSessionStore terminalSessionStore)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -268,6 +268,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
             Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
+            Aspire.Hosting.InputType.Terminal => Aspire.DashboardService.Proto.V1.InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -282,6 +283,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
             Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
+            Aspire.DashboardService.Proto.V1.InputType.Terminal => InputType.Terminal,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -590,6 +592,54 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             }
 
             throw;
+        }
+    }
+
+    public override async Task AttachTerminal(
+        IAsyncStreamReader<TerminalClientFrame> requestStream,
+        IServerStreamWriter<TerminalServerFrame> responseStream,
+        ServerCallContext context)
+    {
+        var cancellationToken = context.CancellationToken;
+
+        // The first frame selects the session, mirroring how UploadFile carries its metadata on the first chunk.
+        if (!await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Terminal stream is empty."));
+        }
+
+        var selector = requestStream.Current;
+        if (selector.InteractionId <= 0)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include an interaction ID."));
+        }
+        if (string.IsNullOrEmpty(selector.InputName))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include an input name."));
+        }
+
+        var stream = new GrpcTerminalStream(requestStream, responseStream);
+        await using var _ = stream.ConfigureAwait(false);
+
+        try
+        {
+            // Returns once the session ends or the caller disconnects. Holding the call open for that whole time is
+            // what keeps the tunnel alive, so this must not be fire-and-forget.
+            await terminalSessionStore.AttachAsync(
+                selector.InteractionId,
+                selector.InputName,
+                stream,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The interaction completed or never had this terminal input; the dashboard may still be holding a stale
+            // dialog open, so report it as a precondition failure rather than faulting the whole connection.
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The dashboard closed the tunnel, typically because the browser tab or dialog went away.
         }
     }
 }

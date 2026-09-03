@@ -1150,6 +1150,31 @@ internal sealed class DashboardClient : IDashboardClient
         return response.FileId;
     }
 
+    public async Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        // The call outlives this method, so the linked CTS cannot be scoped with `using` here. Link to the client
+        // token anyway so a dashboard-wide disconnect tears the tunnel down instead of leaking it.
+        var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var call = _client!.AttachTerminal(headers: _headers, cancellationToken: combinedTokens.Token);
+        var stream = new GrpcTerminalClientStream(call, interactionId, inputName, combinedTokens);
+
+        try
+        {
+            // The AppHost blocks on the selector frame before wiring the call to Hex1b, so send it eagerly rather than
+            // waiting for the browser's first HMP1 frame — otherwise nothing streams until the user types.
+            await stream.SendSelectorAsync(combinedTokens.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+
+        return stream;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _state, StateDisposed) is not StateDisposed)

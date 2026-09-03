@@ -70,6 +70,12 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, cancellationToken);
     }
 
+    public Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        return currentClient.AttachInteractionTerminalAsync(interactionId, inputName, cancellationToken);
+    }
+
     private void EnsureWritable()
     {
         if (IsReadOnly)

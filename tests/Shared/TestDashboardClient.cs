@@ -85,6 +85,11 @@ public class TestDashboardClient : IDashboardClient
         return Task.FromResult(Guid.NewGuid().ToString("N"));
     }
 
+    public Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<Stream>(new MemoryStream());
+    }
+
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (_consoleLogsChannelProvider == null)

@@ -1,0 +1,160 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Hex1b;
+using Microsoft.Extensions.DependencyInjection;
+
+// InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
+#pragma warning disable ASPIREINTERACTION001
+
+namespace Terminals.AppHost;
+
+/// <summary>
+/// Commands that exercise <see cref="InputType.Terminal"/> — an interaction input whose process is owned by the
+/// AppHost itself rather than orchestrated by Aspire.
+/// </summary>
+/// <remarks>
+/// This is the counterpart to <c>WithTerminal()</c>. With <c>WithTerminal()</c> the terminal is attached to a resource
+/// DCP already runs, and the PTY lives in a separate Aspire.TerminalHost process. Here the AppHost spawns and owns the
+/// process, and the session is tunneled to the browser over the dashboard's existing gRPC connection. That makes it
+/// possible to shell into things Aspire does not orchestrate — the <c>docker exec</c> commands below are the
+/// motivating example.
+/// </remarks>
+internal static class TerminalInteractionCommands
+{
+    /// <summary>
+    /// Adds a command that opens an interactive shell running as a child process of the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// Nothing about this shell is tied to <paramref name="resource"/>; commands just need a host resource to hang off.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses interaction service callbacks and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<T> WithAppHostShellCommand<T>(this IResourceBuilder<T> resource) where T : IResource
+    {
+        return resource.WithCommand(
+            "terminal-interaction-shell",
+            "Open shell (interaction terminal)",
+            executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                // The input takes a *builder*, not a built terminal: Aspire attaches the HMP1 server transport that
+                // carries the session over gRPC, and that has to happen before Build(). The caller only describes the
+                // workload.
+                var terminal = Hex1bTerminal.CreateBuilder()
+                    .WithDimensions(120, 32)
+                    .WithPtyProcess(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/bash", OperatingSystem.IsWindows() ? [] : ["-i", "-l"]);
+
+                var result = await interactionService.PromptInputsAsync(
+                    "AppHost shell",
+                    "This shell is a child process of the AppHost. Closing the dialog terminates it.",
+                    [
+                        new InteractionInput
+                        {
+                            Name = "shell",
+                            Label = "Shell",
+                            InputType = InputType.Terminal,
+                            Terminal = terminal
+                        }
+                    ],
+                    cancellationToken: commandContext.CancellationToken);
+
+                return result.Canceled
+                    ? CommandResults.Failure("Canceled")
+                    : CommandResults.Success();
+            });
+    }
+
+    /// <summary>
+    /// Adds a command that shells into this container with <c>docker exec -it &lt;container&gt; /bin/sh</c>.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Uses interaction service callbacks and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<ContainerResource> WithContainerShellCommand(this IResourceBuilder<ContainerResource> container)
+    {
+        return container.WithCommand(
+            "terminal-interaction-docker",
+            "Shell into container (docker exec)",
+            executeCommand: commandContext => ExecIntoContainerAsync(
+                commandContext,
+                ResolveContainerName(container.Resource),
+                ["/bin/sh"],
+                title: $"Shell into '{container.Resource.Name}'",
+                message: $"Runs `docker exec -it {ResolveContainerName(container.Resource)} /bin/sh` from the AppHost process."));
+    }
+
+    /// <summary>
+    /// Adds a command that opens a Node REPL inside this container with <c>docker exec -it &lt;container&gt; node</c>.
+    /// </summary>
+    /// <remarks>
+    /// The Node REPL is a readline app, so it exercises cursor addressing, history, and tab completion across the
+    /// tunnel in a way a plain shell prompt does not.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses interaction service callbacks and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<ContainerResource> WithNodeReplCommand(this IResourceBuilder<ContainerResource> container)
+    {
+        return container.WithCommand(
+            "terminal-interaction-node",
+            "Node REPL (docker exec)",
+            executeCommand: commandContext => ExecIntoContainerAsync(
+                commandContext,
+                ResolveContainerName(container.Resource),
+                ["node"],
+                title: "Node REPL",
+                message: $"Runs `docker exec -it {ResolveContainerName(container.Resource)} node` from the AppHost process."));
+    }
+
+    /// <summary>
+    /// Opens an interaction terminal whose process is <c>docker exec -it</c> into <paramref name="containerName"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is the motivating scenario for AppHost-owned terminals: shelling into a container in the app model without
+    /// Aspire orchestrating the exec itself. <c>-it</c> is required so docker allocates a TTY on the container side;
+    /// Hex1b supplies the PTY on this side.
+    /// </remarks>
+    private static async Task<ExecuteCommandResult> ExecIntoContainerAsync(
+        ExecuteCommandContext commandContext,
+        string containerName,
+        string[] command,
+        string title,
+        string message)
+    {
+        var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+        var terminal = Hex1bTerminal.CreateBuilder()
+            .WithDimensions(120, 32)
+            .WithPtyProcess("docker", ["exec", "-it", containerName, .. command]);
+
+        var result = await interactionService.PromptInputsAsync(
+            title,
+            message,
+            [
+                new InteractionInput
+                {
+                    Name = "shell",
+                    Label = "Container shell",
+                    InputType = InputType.Terminal,
+                    Terminal = terminal
+                }
+            ],
+            cancellationToken: commandContext.CancellationToken);
+
+        return result.Canceled
+            ? CommandResults.Failure("Canceled")
+            : CommandResults.Success();
+    }
+
+    /// <summary>
+    /// Resolves the name docker knows this container by.
+    /// </summary>
+    /// <remarks>
+    /// Without <c>WithContainerName</c>, DCP appends a random suffix to the resource name, so the resource name alone
+    /// would not be a valid <c>docker exec</c> target. These playground containers set an explicit name; the fallback
+    /// only exists so a misconfigured resource surfaces a docker error rather than throwing here.
+    /// </remarks>
+    private static string ResolveContainerName(ContainerResource container)
+    {
+        return container.TryGetLastAnnotation<ContainerNameAnnotation>(out var annotation)
+            ? annotation.Name
+            : container.Name;
+    }
+}

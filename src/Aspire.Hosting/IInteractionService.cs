@@ -5,6 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Hex1b;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -463,6 +464,27 @@ public sealed class InteractionInput
     /// </remarks>
     [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
     public InteractionFileCollection GetFiles() => _files;
+
+    /// <summary>
+    /// Gets the terminal session to run for an <see cref="InputType.Terminal"/> input. Required for terminal inputs
+    /// and ignored by every other input type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Configure the builder with the workload to run — for example
+    /// <c>Hex1bTerminal.CreateBuilder().WithPtyProcess("docker", ["exec", "-it", id, "/bin/sh"])</c>. The AppHost
+    /// attaches the transport and builds and runs the terminal, so the builder must not be built by the caller.
+    /// </para>
+    /// <para>
+    /// The session starts lazily when a client first attaches, so a dialog that is dismissed without opening the
+    /// terminal never starts the underlying process. The session is torn down when the interaction completes.
+    /// </para>
+    /// <para>
+    /// This property is experimental and exposes a Hex1b type directly. See the note in Aspire.Hosting.csproj.
+    /// </para>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Hex1bTerminalBuilder is a live builder object owning a local process; it cannot be serialized to polyglot app hosts.")]
+    public Hex1bTerminalBuilder? Terminal { get; init; }
 }
 
 /// <summary>
@@ -803,7 +825,15 @@ public enum InputType
     /// <summary>
     /// A file input. Allows the user to select a file using the OS/browser file picker.
     /// </summary>
-    File
+    File,
+    /// <summary>
+    /// An interactive terminal. Renders a terminal that is attached to a session owned by the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// This input type is experimental. The terminal session is configured through
+    /// <see cref="InteractionInput.Terminal"/>.
+    /// </remarks>
+    Terminal
 }
 
 /// <summary>

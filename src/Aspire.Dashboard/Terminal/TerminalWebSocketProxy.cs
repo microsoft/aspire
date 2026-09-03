@@ -87,6 +87,138 @@ internal static class TerminalWebSocketProxy
                 }
             }
         }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
+
+        // Terminal-typed interaction inputs. Unlike /api/terminal — where the process is orchestrated by Aspire and
+        // hosted out-of-process by Aspire.TerminalHost behind a Unix domain socket — the process here is owned by the
+        // AppHost itself, so the session is tunneled over the existing dashboard gRPC connection. Everything below the
+        // stream (this pump, the browser's HMP1 client, xterm.js) is identical; only the transport differs.
+        app.Map("/api/interaction-terminal", async (HttpContext context,
+                                                    IDashboardClient dashboardClient,
+                                                    ILoggerFactory loggerFactory) =>
+        {
+            var logger = loggerFactory.CreateLogger("Aspire.Dashboard.Terminal.TerminalWebSocketProxy");
+            var connectionId = Guid.NewGuid().ToString("n").Substring(0, 8);
+
+            try
+            {
+                await HandleInteractionAsync(context, dashboardClient, logger, connectionId).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Interaction terminal WebSocket handler {ConnectionId} crashed.", connectionId);
+
+                if (!context.Response.HasStarted)
+                {
+                    try
+                    {
+                        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                    }
+                    catch
+                    {
+                        // Response could be partially flushed by Kestrel; nothing more to do.
+                    }
+                }
+            }
+        }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
+    }
+
+    internal static async Task HandleInteractionAsync(HttpContext context,
+                                                      IDashboardClient dashboardClient,
+                                                      ILogger logger,
+                                                      string connectionId)
+    {
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("Expected a WebSocket upgrade request.").ConfigureAwait(false);
+            return;
+        }
+
+        // Same Cross-Site WebSocket Hijacking defense as /api/terminal — see the commentary there. This endpoint is
+        // arguably more sensitive because the terminal runs as the AppHost process itself.
+        if (!WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
+        {
+            logger.LogWarning(
+                "Rejecting interaction terminal WebSocket upgrade {ConnectionId} with disallowed Origin '{Origin}'.",
+                connectionId,
+                originLogValue);
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Origin not allowed.").ConfigureAwait(false);
+            return;
+        }
+
+        var interactionIdText = context.Request.Query["interactionId"].ToString();
+        var inputName = context.Request.Query["input"].ToString();
+
+        if (!int.TryParse(interactionIdText, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var interactionId))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("Missing or invalid 'interactionId' query parameter.").ConfigureAwait(false);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(inputName))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("Missing 'input' query parameter.").ConfigureAwait(false);
+            return;
+        }
+
+        // Open the tunnel before accepting the WebSocket so an unknown interaction/input surfaces as a real HTTP error
+        // instead of a WebSocket that closes immediately for no visible reason.
+        Stream upstream;
+        try
+        {
+            upstream = await dashboardClient.AttachInteractionTerminalAsync(interactionId, inputName, context.RequestAborted).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to attach interaction terminal for {InteractionId}/{InputName}.", interactionId, inputName);
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsync("Terminal is unavailable.").ConfigureAwait(false);
+            return;
+        }
+
+        WebSocket ws;
+        try
+        {
+            ws = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to accept interaction terminal WebSocket for {InteractionId}/{InputName}.", interactionId, inputName);
+            try { upstream.Dispose(); } catch { /* swallow */ }
+            return;
+        }
+
+        logger.LogInformation("Interaction terminal WS opened for {InteractionId}/{InputName} ({ConnectionId}).",
+            interactionId, inputName, connectionId);
+
+        try
+        {
+            await BridgeAsync(ws, upstream, logger, connectionId, context.RequestAborted, upstreamEofIsNormal: true).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Disposing ends the gRPC call, which is how the AppHost learns this viewer is gone.
+            try { upstream.Dispose(); } catch { /* swallow */ }
+            logger.LogInformation("Interaction terminal WS closed for {InteractionId}/{InputName} ({ConnectionId}).",
+                interactionId, inputName, connectionId);
+        }
+
+        if (ws.State == WebSocketState.Open)
+        {
+            try
+            {
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure,
+                                    "terminal closed",
+                                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
     }
 
     internal static async Task HandleAsync(HttpContext context,
@@ -259,7 +391,8 @@ internal static class TerminalWebSocketProxy
                                           Stream upstream,
                                           ILogger logger,
                                           string connectionId,
-                                          CancellationToken ct)
+                                          CancellationToken ct,
+                                          bool upstreamEofIsNormal = false)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var token = linkedCts.Token;
@@ -323,7 +456,7 @@ internal static class TerminalWebSocketProxy
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
-                LogPumpEnd(logger, connectionId, "inbound", endReason, endException, bytesIn, sends: 0, slowSends: 0, maxSendMs: 0);
+                LogPumpEnd(logger, connectionId, "inbound", endReason, endException, bytesIn, sends: 0, slowSends: 0, maxSendMs: 0, upstreamEofIsNormal);
             }
         }, token);
 
@@ -427,7 +560,7 @@ internal static class TerminalWebSocketProxy
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
-                LogPumpEnd(logger, connectionId, "outbound", endReason, endException, bytesOut, sends, slowSends, maxSendMs);
+                LogPumpEnd(logger, connectionId, "outbound", endReason, endException, bytesOut, sends, slowSends, maxSendMs, upstreamEofIsNormal);
             }
         }, token);
 
@@ -442,7 +575,8 @@ internal static class TerminalWebSocketProxy
     }
 
     private static void LogPumpEnd(ILogger logger, string connectionId, string direction, string reason,
-                                   Exception? exception, long bytes, long sends, long slowSends, long maxSendMs)
+                                   Exception? exception, long bytes, long sends, long slowSends, long maxSendMs,
+                                   bool upstreamEofIsNormal)
     {
         // Log abnormal terminations at Warning so they show up in default
         // AppHost output, normal terminations at Information. The reason
@@ -450,9 +584,13 @@ internal static class TerminalWebSocketProxy
         // reconnects: "upstream-eof" points at the terminal host /
         // slow-peer policy; "exception" + the type points at a transport
         // failure; "browser-close" is a clean browser-initiated close.
+        //
+        // Interaction terminals invert the meaning of "upstream-eof": the AppHost owns the process and ends the
+        // gRPC stream as soon as the interaction is completed or cancelled, so EOF is the expected close path there.
         var slow = direction == "outbound" ? $" sends={sends} slowSends={slowSends} maxSendMs={maxSendMs}" : "";
         var exType = exception?.GetType().FullName ?? "(none)";
-        var level = (reason is "exception" or "upstream-eof") ? LogLevel.Warning : LogLevel.Information;
+        var isAbnormal = reason is "exception" || (reason is "upstream-eof" && !upstreamEofIsNormal);
+        var level = isAbnormal ? LogLevel.Warning : LogLevel.Information;
         logger.Log(level, exception,
             "Terminal WS {Direction} pump ended for {ConnectionId}: reason={Reason} bytes={Bytes}{SlowInfo} exceptionType={ExceptionType}.",
             direction, connectionId, reason, bytes, slow, exType);

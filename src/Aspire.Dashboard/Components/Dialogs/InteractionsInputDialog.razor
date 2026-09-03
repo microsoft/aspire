@@ -197,6 +197,20 @@
                                 }
                             </InteractionInputField>
                             break;
+                        case InputType.Terminal:
+                            @* The terminal's process is owned by the AppHost, not by an orchestrated resource, so the
+                             * session is tunneled over the dashboard gRPC connection instead of the terminal host UDS.
+                             * TerminalView is otherwise identical to the resource console experience. *@
+                            var terminalId = $"{localItem.InputKey}-Terminal";
+                            <InteractionInputField ForId="@terminalId"
+                                                   InputViewModel="@localItem"
+                                                   MarkdownProcessor="@_markdownProcessor"
+                                                   Context="input">
+                                <div class="interaction-terminal-container" id="@terminalId">
+                                    <TerminalView EndpointPathAndQuery="@BuildInteractionTerminalEndpoint(input.ViewModel)" />
+                                </div>
+                            </InteractionInputField>
+                            break;
                         default:
                             @* Ignore unexpected InputTypes *@
                             break;

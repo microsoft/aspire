@@ -28,14 +28,16 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
+    private readonly IInteractionTerminalSessionStore _terminalSessionStore;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, IInteractionTerminalSessionStore terminalSessionStore)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
+        _terminalSessionStore = terminalSessionStore;
     }
 
     public bool IsAvailable
@@ -160,11 +162,17 @@ internal class InteractionService : IInteractionService
         // Create the collection early to validate names and generate missing ones
         var inputCollection = new InteractionInputCollection(inputs);
         var hasFileInputs = inputs.Any(input => input.InputType == InputType.File);
+        var hasTerminalInputs = inputs.Any(input => input.InputType == InputType.Terminal);
 
         // Validate inputs.
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
+            if (input.InputType == InputType.Terminal && input.Terminal is null)
+            {
+                throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input but does not set {nameof(InteractionInput.Terminal)}.");
+            }
+
             if (input.DynamicLoading is { } dynamic)
             {
                 if (dynamic.DependsOnInputs != null)
@@ -200,6 +208,14 @@ internal class InteractionService : IInteractionService
                     .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
                     .ToArray();
                 _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
+            }
+            if (hasTerminalInputs)
+            {
+                var terminalInputs = inputs
+                    .Where(input => input.InputType == InputType.Terminal)
+                    .Select(input => (input.Name, Builder: input.Terminal!))
+                    .ToArray();
+                _terminalSessionStore.StartInteraction(newState.InteractionId, terminalInputs);
             }
             AddInteractionUpdate(newState);
 
@@ -524,6 +540,21 @@ internal class InteractionService : IInteractionService
             else
             {
                 _fileUploadStore.CancelInteraction(interactionState.InteractionId);
+            }
+        }
+
+        // Terminal sessions are torn down on both paths — unlike uploaded files, nothing survives the interaction
+        // for the caller to consume, so a completed dialog must still stop the workload.
+        if (interactionState.InteractionInfo is Interaction.InputsInteractionInfo terminalInputsInfo &&
+            terminalInputsInfo.Inputs.Any(input => input.InputType == InputType.Terminal))
+        {
+            if (completion.State is IReadOnlyList<InteractionInput>)
+            {
+                _terminalSessionStore.CompleteInteraction(interactionState.InteractionId);
+            }
+            else
+            {
+                _terminalSessionStore.CancelInteraction(interactionState.InteractionId);
             }
         }
 

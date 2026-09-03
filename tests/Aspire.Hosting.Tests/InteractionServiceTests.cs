@@ -220,7 +220,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new TestInteractionTerminalSessionStore());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -248,7 +249,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new TestInteractionTerminalSessionStore());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -271,7 +273,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new TestInteractionTerminalSessionStore());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1340,7 +1343,8 @@ public class InteractionServiceTests
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            fileUploadStore ?? new TestInteractionFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore(),
+            new TestInteractionTerminalSessionStore());
     }
 
     [Fact]

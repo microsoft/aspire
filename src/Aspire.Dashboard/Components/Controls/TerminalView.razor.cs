@@ -18,8 +18,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalView>? _selfRef;
     private int _terminalId;
-    private string? _connectedResourceName;
-    private int _connectedReplicaIndex = -1;
+    // The endpoint (path + query) the JS terminal is currently bound to. A single string is used as the identity for
+    // rebind detection because a TerminalView can be addressed either by resource/replica or by an explicit endpoint
+    // (terminal-typed interaction inputs), and both collapse to one URL.
+    private string? _connectedEndpoint;
     // Highest reconnect generation we've observed from JS via a toolbar
     // snapshot. The JS side bumps `state.reconnect.generation` on every
     // initTerminal / reconnectTerminal / auto-reconnect. `reconnectTerminal`
@@ -57,6 +59,17 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public int ReplicaIndex { get; set; }
 
     /// <summary>
+    /// Gets or sets an explicit endpoint (path and query) to connect to, overriding
+    /// <see cref="ResourceName"/> and <see cref="ReplicaIndex"/>.
+    /// </summary>
+    /// <remarks>
+    /// Used for terminals that are not backed by a resource replica — currently terminal-typed interaction inputs,
+    /// whose process is owned by the AppHost and reached via <c>/api/interaction-terminal</c>.
+    /// </remarks>
+    [Parameter]
+    public string? EndpointPathAndQuery { get; set; }
+
+    /// <summary>
     /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
     /// dims, font size, etc.). The host page subscribes so the chrome that
     /// used to live inside the terminal frame — status badge, "Take control"
@@ -74,7 +87,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (string.IsNullOrEmpty(ResourceName))
+        var endpoint = ResolveEndpoint();
+        if (endpoint is null)
         {
             return;
         }
@@ -82,35 +96,26 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         if (firstRender)
         {
             _initStarted = true;
-            // Snapshot the resource/replica values BEFORE the JS init await:
-            // parameter push from the parent can change ResourceName/
-            // ReplicaIndex while initTerminal is in flight. Recording the
-            // *post-await* field values would falsely mark the terminal as
-            // connected to the new resource, so the rebind branch below
-            // would never fire and the JS terminal would keep streaming
-            // the previous resource.
-            var initResource = ResourceName;
-            var initReplica = ReplicaIndex;
-            await InitializeTerminalAsync(initResource!, initReplica);
-            // Only record the connected resource/replica when JS init actually
-            // produced a terminal. If _terminalId is still 0, InitializeTerminalAsync
-            // caught an exception; leaving _connectedResourceName null lets the
-            // rebind branch below (and future renders) notice and retry rather
-            // than silently masking the failure.
+            // Snapshot the endpoint BEFORE the JS init await: a parameter push from the parent can change it while
+            // initTerminal is in flight. Recording the *post-await* value would falsely mark the terminal as connected
+            // to the new endpoint, so the rebind branch below would never fire and the JS terminal would keep
+            // streaming the previous session.
+            var initEndpoint = endpoint;
+            await InitializeTerminalAsync(initEndpoint);
+            // Only record the connected endpoint when JS init actually produced a terminal. If _terminalId is still 0,
+            // InitializeTerminalAsync caught an exception; leaving _connectedEndpoint null lets the rebind branch below
+            // (and future renders) notice and retry rather than silently masking the failure.
             if (_terminalId != 0)
             {
-                _connectedResourceName = initResource;
-                _connectedReplicaIndex = initReplica;
+                _connectedEndpoint = initEndpoint;
             }
 
-            if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
-                ReplicaIndex != _connectedReplicaIndex)
+            var currentEndpoint = ResolveEndpoint();
+            if (!string.Equals(currentEndpoint, _connectedEndpoint, StringComparison.Ordinal))
             {
-                var newResource = ResourceName;
-                var newReplica = ReplicaIndex;
                 try
                 {
-                    await ReconnectAsync(newResource, newReplica);
+                    await ReconnectAsync(currentEndpoint);
                 }
                 catch (JSDisconnectedException)
                 {
@@ -121,19 +126,17 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                     return;
                 }
 
-                _connectedResourceName = newResource;
-                _connectedReplicaIndex = newReplica;
+                _connectedEndpoint = currentEndpoint;
             }
             return;
         }
 
         // If a re-render fires while the very first initTerminal call is still
         // in flight, do nothing here. Once that call completes the firstRender
-        // path will set _connectedResourceName / _connectedReplicaIndex and
-        // any future rebind needed will be caught on the next render after
-        // that. Without this guard the rebind branch below would re-enter
-        // initialization and stack a second xterm onto the same container —
-        // see the comment on _initStarted.
+        // path will set _connectedEndpoint and any future rebind needed will be
+        // caught on the next render after that. Without this guard the rebind
+        // branch below would re-enter initialization and stack a second xterm
+        // onto the same container — see the comment on _initStarted.
         if (_initStarted && _terminalId == 0)
         {
             return;
@@ -150,14 +153,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         // the SignalR circuit and tear down the entire dashboard tab. Failing
         // to switch terminals is a localized, recoverable issue (the JS side
         // will keep retrying or the user can reload); a circuit failure is not.
-        if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
-            ReplicaIndex != _connectedReplicaIndex)
+        if (!string.Equals(endpoint, _connectedEndpoint, StringComparison.Ordinal))
         {
-            var newResource = ResourceName;
-            var newReplica = ReplicaIndex;
             try
             {
-                await ReconnectAsync(newResource, newReplica);
+                await ReconnectAsync(endpoint);
             }
             catch (JSDisconnectedException)
             {
@@ -171,12 +171,30 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 // side keeps retrying so a transient hiccup heals itself.
                 return;
             }
-            _connectedResourceName = newResource;
-            _connectedReplicaIndex = newReplica;
+            _connectedEndpoint = endpoint;
         }
     }
 
-    private async Task InitializeTerminalAsync(string resourceName, int replicaIndex)
+    /// <summary>
+    /// Resolves the endpoint this terminal should be bound to, or <see langword="null"/> when the component has not
+    /// been given enough information to connect yet.
+    /// </summary>
+    private string? ResolveEndpoint()
+    {
+        if (!string.IsNullOrEmpty(EndpointPathAndQuery))
+        {
+            return EndpointPathAndQuery;
+        }
+
+        if (string.IsNullOrEmpty(ResourceName))
+        {
+            return null;
+        }
+
+        return $"/api/terminal?resource={Uri.EscapeDataString(ResourceName)}&replica={ReplicaIndex}";
+    }
+
+    private async Task InitializeTerminalAsync(string endpoint)
     {
         try
         {
@@ -187,7 +205,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef);
         }
         catch (JSDisconnectedException)
         {
@@ -213,25 +231,22 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Reconnects the terminal to a different resource/replica. When both
-    /// arguments match the current values this is a no-op.
+    /// Reconnects the terminal to a different endpoint. When the endpoint matches the current value this is a no-op.
     /// </summary>
-    public async Task ReconnectAsync(string? newResourceName, int newReplicaIndex)
+    public async Task ReconnectAsync(string? newEndpoint)
     {
         if (_jsModule is null || _terminalId == 0)
         {
-            ResourceName = newResourceName;
-            ReplicaIndex = newReplicaIndex;
-            if (!string.IsNullOrEmpty(newResourceName))
+            if (!string.IsNullOrEmpty(newEndpoint))
             {
-                await InitializeTerminalAsync(newResourceName, newReplicaIndex);
+                await InitializeTerminalAsync(newEndpoint);
             }
             return;
         }
 
         try
         {
-            if (string.IsNullOrEmpty(newResourceName))
+            if (string.IsNullOrEmpty(newEndpoint))
             {
                 await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
                 _terminalId = 0;
@@ -239,12 +254,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            ResourceName = newResourceName;
-            ReplicaIndex = newReplicaIndex;
             var generation = await _jsModule.InvokeAsync<int>(
                 "reconnectTerminal",
                 _terminalId,
-                BuildWebSocketUrl(newResourceName, newReplicaIndex));
+                BuildWebSocketUrl(newEndpoint));
             if (generation > 0)
             {
                 _connectedGeneration = generation;
@@ -401,11 +414,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
-    private string BuildWebSocketUrl(string resource, int replica)
+    private string BuildWebSocketUrl(string pathAndQuery)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);
         var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
-        return $"{wsScheme}://{baseUri.Authority}/api/terminal?resource={Uri.EscapeDataString(resource)}&replica={replica}";
+        return $"{wsScheme}://{baseUri.Authority}{pathAndQuery}";
     }
 
     public async ValueTask DisposeAsync()

@@ -455,6 +455,7 @@ enum InputType {
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
     INPUT_TYPE_FILE = 6;
+    INPUT_TYPE_TERMINAL = 7;
 }
 
 ////////////////////////////////////////////
@@ -476,6 +477,31 @@ message UploadFileResponse {
 
 ////////////////////////////////////////////
 
+// A message sent by the dashboard to the AppHost for a terminal input session.
+//
+// The stream carries an opaque HMP1 (Hex1b Muxer Protocol v1) byte stream, tunneled
+// so that the terminal can be owned by the AppHost process itself rather than by a
+// separate terminal host process reachable over a Unix domain socket. Neither the
+// dashboard nor this service interprets `data`; both sides are byte-level relays
+// between the browser's HMP1 client and the AppHost's HMP1 server.
+message TerminalClientFrame {
+    // The interaction that owns the terminal session (sent in the first frame).
+    int32 interaction_id = 1;
+    // The interaction input that owns the terminal session (sent in the first frame).
+    string input_name = 2;
+    // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
+    // Empty on the first frame, which only carries the session selector.
+    bytes data = 3;
+}
+
+// A message sent by the AppHost to the dashboard for a terminal input session.
+message TerminalServerFrame {
+    // A chunk of the HMP1 byte stream flowing from the AppHost to the browser.
+    bytes data = 1;
+}
+
+////////////////////////////////////////////
+
 service DashboardService {
     rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
     rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesUpdate);
@@ -483,4 +509,5 @@ service DashboardService {
     rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
     rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
+    rpc AttachTerminal(stream TerminalClientFrame) returns (stream TerminalServerFrame);
 }
