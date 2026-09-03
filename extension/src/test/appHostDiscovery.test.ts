@@ -7,14 +7,16 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import * as cliModule from '../debugger/languages/cli';
-import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import * as cliModule from '../utils/process/cliProcess';
+import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, isSameFileSystemEntry, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
+import { workspaceFolderCliPathTarget, getCliPathTargetKey } from '../utils/cliPathVariables';
 
+import { removeDirectorySafely } from './testHelpers';
 interface RecordedEvent {
     name: string;
     properties?: Record<string, string>;
@@ -46,6 +48,48 @@ class FakeTelemetryReporter {
 }
 
 suite('AppHost discovery', () => {
+    suite('filesystem identity comparison', () => {
+        let sandbox: sinon.SinonSandbox;
+
+        setup(() => {
+            sandbox = sinon.createSandbox();
+            sandbox.stub(process, 'platform').value('win32');
+        });
+
+        teardown(() => {
+            sandbox.restore();
+        });
+
+        test('keeps case-only Windows paths distinct when stable identities differ', () => {
+            const left = path.join('workspace', 'Foo');
+            const right = path.join('workspace', 'foo');
+            const identities = new Map([
+                [path.resolve(left), { dev: 1n, ino: 100n }],
+                [path.resolve(right), { dev: 1n, ino: 101n }],
+            ]);
+
+            assert.strictEqual(isSameFileSystemEntry(left, right, filePath => identities.get(filePath)), false);
+        });
+
+        test('matches case-only Windows paths when stable identities are equal', () => {
+            const left = path.join('workspace', 'Foo');
+            const right = path.join('workspace', 'foo');
+            const identity = { dev: 1n, ino: 100n };
+
+            assert.strictEqual(isSameFileSystemEntry(left, right, () => identity), true);
+        });
+
+        test('falls back to Windows path comparison when identity is unavailable', () => {
+            const left = path.join('workspace', 'Foo');
+            const right = path.join('workspace', 'foo');
+            const identities = new Map([
+                [path.resolve(left), { dev: 1n, ino: 100n }],
+            ]);
+
+            assert.strictEqual(isSameFileSystemEntry(left, right, filePath => identities.get(filePath)), true);
+        });
+    });
+
     test('resolves SDK-style C# AppHost source file to discovered project candidate', () => {
         const appHostProjectPath = buildPath('workspace', 'AppHost', 'AppHost.csproj');
         const programPath = buildPath('workspace', 'AppHost', 'Program.cs');
@@ -79,6 +123,19 @@ suite('AppHost discovery', () => {
         const candidate = findCandidateForEditorFile(appHostPath, [{
             path: appHostPath,
             language: 'typescript/nodejs',
+            status: 'buildable',
+        }]);
+
+        assert.strictEqual(candidate?.path, appHostPath);
+        assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
+    });
+
+    test('keeps Rust AppHost candidate as source file', () => {
+        const appHostPath = buildPath('workspace', 'AppHost', 'apphost.rs');
+
+        const candidate = findCandidateForEditorFile(appHostPath, [{
+            path: appHostPath,
+            language: 'rust',
             status: 'buildable',
         }]);
 
@@ -307,7 +364,85 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('watches Node module AppHost filenames', async () => {
+        test('forgetting a workspace folder retires its watchers and cache without cancelling subscribers', async () => {
+            const watcherDisposals: sinon.SinonSpy[] = [];
+            sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake(() => {
+                const dispose = sinon.spy();
+                watcherDisposals.push(dispose);
+                return {
+                    onDidCreate: () => ({ dispose: () => { } }),
+                    onDidChange: () => ({ dispose: () => { } }),
+                    onDidDelete: () => ({ dispose: () => { } }),
+                    dispose,
+                } as unknown as vscode.FileSystemWatcher;
+            });
+            const processKills: sinon.SinonSpy[] = [];
+            const spawnOptions: Array<Parameters<typeof emitLsOutput>[0]> = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                spawnOptions.push(options);
+                const kill = sinon.spy();
+                processKills.push(kill);
+                return { kill } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const firstDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 1);
+                const initialWatcherCount = watcherDisposals.length;
+                assert.ok(initialWatcherCount > 0);
+
+                service.forgetWorkspaceFolder(workspaceFolder);
+                assert.ok(watcherDisposals.every(dispose => dispose.calledOnce));
+                assert.strictEqual(processKills[0].called, false);
+
+                emitLsOutput(spawnOptions[0], []);
+                await firstDiscovery;
+
+                const secondDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.strictEqual(spawnStub.callCount, 2);
+                assert.strictEqual(watcherDisposals.length, initialWatcherCount * 2);
+                emitLsOutput(spawnOptions[1], []);
+                await secondDiscovery;
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('forgetting one workspace folder preserves other folder caches', async () => {
+            stubFileSystemWatchers(sandbox);
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                emitLsOutput(options, []);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const rootA = makeWorkspaceFolder(buildPath('workspace', 'root-a'));
+            const rootB = makeWorkspaceFolder(buildPath('workspace', 'root-b'));
+
+            try {
+                await service.discover(rootA);
+                await service.discover(rootB);
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                service.forgetWorkspaceFolder(rootB);
+
+                await service.discover(rootA);
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                await service.discover(rootB);
+                assert.strictEqual(spawnStub.callCount, 3);
+                assert.strictEqual(spawnStub.thirdCall.args[3]?.workingDirectory, rootB.uri.fsPath);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('watches guest AppHost filenames', async () => {
             const watchedPatterns: string[] = [];
             sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake((pattern) => {
                 watchedPatterns.push(typeof pattern === 'string' ? pattern : pattern.pattern);
@@ -338,6 +473,9 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.js'));
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
+                assert.ok(watchedPatterns.includes('**/apphost.rs'));
+                // Case matters: watcher globs are case-sensitive on Linux and the file is AppHost.java.
+                assert.ok(watchedPatterns.includes('**/AppHost.java'));
             }
             finally {
                 service.dispose();
@@ -1356,9 +1494,9 @@ suite('AppHost discovery', () => {
                     { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo'] },
                     { cliPath: 'new-aspire', args: ['ls', '--format', 'json', '--stream', '--nologo'] },
                 ]);
-                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'old-aspire' },
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'new-aspire' },
+                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => ({ ...call.args[0], target: getCliPathTargetKey(call.args[0].target) })), [
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'old-aspire', target: getCliPathTargetKey(workspaceFolderCliPathTarget(makeWorkspaceFolder(buildPath('workspace-one')))) },
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'new-aspire', target: getCliPathTargetKey(workspaceFolderCliPathTarget(makeWorkspaceFolder(buildPath('workspace-two')))) },
                 ]);
             }
             finally {
@@ -1393,8 +1531,8 @@ suite('AppHost discovery', () => {
                     ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
                 assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'aspire' },
-                    { suppressErrors: true, forceRefresh: true, cliPath: 'aspire' },
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'aspire', target: workspaceFolderCliPathTarget(workspaceFolder) },
+                    { suppressErrors: true, forceRefresh: true, cliPath: 'aspire', target: workspaceFolderCliPathTarget(workspaceFolder) },
                 ]);
             }
             finally {
@@ -1669,7 +1807,6 @@ suite('AppHost discovery', () => {
                     path: appHostPath,
                     language: 'csharp',
                     status: 'buildable',
-                    selected: true,
                 }]);
             }
             finally {
@@ -1780,7 +1917,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -1868,7 +2005,6 @@ suite('AppHost discovery', () => {
                     path: appHostPath,
                     language: 'csharp',
                     status: 'buildable',
-                    selected: true,
                 }]);
             }
             finally {
@@ -1917,7 +2053,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -1958,7 +2094,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2022,7 +2158,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2093,7 +2229,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2137,7 +2273,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2187,7 +2323,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2329,7 +2465,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2392,7 +2528,64 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
+            }
+        });
+
+        test('does not duplicate configured candidate when differently cased paths identify the same filesystem entry', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const configPath = path.join(tempDir, 'aspire.config.json');
+                const discoveredDirectory = path.join(tempDir, 'AppHost');
+                const configuredDirectory = path.join(tempDir, 'apphost');
+                const discoveredPath = path.join(discoveredDirectory, 'AppHost.csproj');
+                const configuredPath = path.join(configuredDirectory, 'AppHost.csproj');
+
+                fs.mkdirSync(discoveredDirectory);
+                fs.writeFileSync(discoveredPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />');
+                if (!fs.existsSync(configuredDirectory)) {
+                    // Case-sensitive test hosts need a case-variant alias to reproduce the same
+                    // native identity that default case-insensitive APFS provides directly.
+                    fs.symlinkSync(discoveredDirectory, configuredDirectory, 'junction');
+                }
+                fs.writeFileSync(configPath, JSON.stringify({ appHost: { path: 'apphost/AppHost.csproj' } }));
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(configPath)]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    emitLsOutput(options, [{
+                        path: discoveredPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: discoveredPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                        selected: true,
+                    }]);
+                    const discoveredStat = fs.statSync(discoveredPath, { bigint: true });
+                    const configuredStat = fs.statSync(configuredPath, { bigint: true });
+                    assert.strictEqual(configuredStat.dev, discoveredStat.dev);
+                    assert.strictEqual(configuredStat.ino, discoveredStat.ino);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2425,7 +2618,7 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(selectedPath, matchingAppHostPath);
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2455,7 +2648,7 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(selectedPath, undefined);
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2481,6 +2674,49 @@ suite('AppHost discovery', () => {
                 buildPath('workspace', 'First', 'AppHost.csproj'),
                 buildPath('workspace', 'Second', 'AppHost.csproj'),
             ]);
+        });
+    });
+
+    suite('workspace-folder CLI resolution target', () => {
+        let sandbox: sinon.SinonSandbox;
+
+        setup(() => {
+            sandbox = sinon.createSandbox();
+            stubFileSystemWatchers(sandbox);
+        });
+
+        teardown(() => {
+            sandbox.restore();
+        });
+
+        test('resolves the CLI path and capability probe with the workspace folder target', async () => {
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const getAspireCliExecutablePathStub = sandbox.stub().resolves('/repo/a/bin/aspire');
+            const terminalProvider = {
+                getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+                createEnvironment: () => ({}),
+            } as unknown as AspireTerminalProvider;
+            const getConfigInfoStub = sandbox.stub().resolves({ capabilities: [] });
+            const fakeConfigInfoProvider = { getConfigInfo: getConfigInfoStub } as unknown as configInfoProvider.ConfigInfoProvider;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([]));
+                options?.exitCallback?.(0);
+                return { kill: () => true } as any;
+            });
+            const service = new AppHostDiscoveryService(terminalProvider, fakeConfigInfoProvider);
+
+            try {
+                await service.discover(workspaceFolder);
+
+                assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(workspaceFolder)));
+                assert.strictEqual(getConfigInfoStub.calledOnce, true);
+                const configInfoOptions = getConfigInfoStub.firstCall.args[0];
+                assert.strictEqual(configInfoOptions.cliPath, '/repo/a/bin/aspire');
+                assert.deepStrictEqual(configInfoOptions.target, workspaceFolderCliPathTarget(workspaceFolder));
+            }
+            finally {
+                service.dispose();
+            }
         });
     });
 });

@@ -57,4 +57,15 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// Gets or sets a callback to resolve the default <c>PublishAsPackageScript</c> runtime image from the build image.
     /// </summary>
     internal Func<string, string>? ResolvePackageScriptRuntimeImage { get; init; }
+
+    /// <summary>
+    /// Gets the build image to use when the resource has no explicit build image configured.
+    /// </summary>
+    /// <remarks>
+    /// Package managers such as bun and deno are not present in the default Node.js base images, so Dockerfile
+    /// generation must fall back to a runtime-specific image rather than the Node.js default. This is consulted
+    /// after <see cref="DockerfileBaseImageAnnotation.BuildImage"/> so that a caller-supplied build image always
+    /// wins, and it covers the case where the caller configured only a runtime image.
+    /// </remarks>
+    internal string? DefaultBuildImage { get; init; }
 }

@@ -70,11 +70,13 @@ jobs:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
-    # issues:write + pull-requests:write are used only by tests.yml's isolated comment_selection job
-    # (which runs no PR code) to post the "selected tests" issue comment; every job that runs PR code
-    # stays at contents:read. Reusable-workflow tokens are capped by the caller, so this is where the
-    # elevated scope must be granted.
+    # actions:read lets the reusable workflow download build artifacts via gh/actions APIs (for example
+    # get-aspire-cli-pr.ps1 -> gh run download). issues:write + pull-requests:write are used only by
+    # tests.yml's isolated comment_selection job (which runs no PR code) to post the "selected tests"
+    # issue comment. Reusable-workflow tokens are capped by the caller, so every needed scope must be
+    # granted here.
     permissions:
+      actions: read
       contents: read
       issues: write
       pull-requests: write
@@ -191,20 +193,13 @@ jobs:
     steps:
       - name: Fail if any of the dependent jobs failed
         # Don't fail if the workflow is being skipped.
-        # Check skip_workflow on all declared dependencies. Workflows without
-        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
-        # empty string, so the check still works ('!= true' is true for empty).
-        #
-        # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
-        # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
-        # 'skipped'
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
-              needs.tests.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
-               contains(needs.*.result, 'skipped')) }}
+               needs.tests.result != 'success' ||
+               needs.stabilization_check.result != 'success') }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

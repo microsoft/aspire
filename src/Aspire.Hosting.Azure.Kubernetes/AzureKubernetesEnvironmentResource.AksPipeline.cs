@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
+#pragma warning disable ASPIREPIPELINES002 // IDeploymentStateManager is experimental
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
@@ -12,7 +13,6 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +23,14 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 /// </summary>
 public partial class AzureKubernetesEnvironmentResource
 {
+    // Test seams. These let tests execute the registered aks-get-credentials-{name} pipeline
+    // step end-to-end without the Azure CLI on PATH and without spawning a process, so the
+    // assertions cover the call site rather than only the helpers it delegates to. Asserting
+    // on the helpers alone would let the original wrong-subscription bug be reintroduced here
+    // undetected, which is precisely how #19216 shipped.
+    internal Func<string>? AzCliPathResolverForTesting { get; set; }
+    internal Func<string, string, ILogger, Task<AzCommandResult>>? AzCommandRunnerForTesting { get; set; }
+
     /// <summary>
     /// Per-environment AKS preparation work invoked by the <c>prepare-aks-{name}</c> pipeline
     /// step. Ensures a default user node pool exists and applies node-pool affinity and
@@ -215,13 +223,35 @@ public partial class AzureKubernetesEnvironmentResource
                 var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
                     ?? Name;
 
-                var azPath = FindAzCli();
+                var azPath = (AzCliPathResolverForTesting ?? FindAzCli)();
 
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
 
-                var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
+                // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
+                // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
+                // subscription/resource group, and the provisioner already targets that scope.
+                var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
+
+                var (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
+                    scopedSubscription,
+                    scopedResourceGroup,
+                    context.Services,
+                    context.CancellationToken).ConfigureAwait(false);
+
+                ValidateAzureResourceName(subscriptionId, "subscription ID");
+
+                Task<AzCommandResult> RunAzAsync(string path, string arguments)
+                    => (AzCommandRunnerForTesting ?? RunAzCommandAsync)(path, arguments, context.Logger);
+
+                var resourceGroup = await GetResourceGroupAsync(
+                    azPath,
+                    clusterName,
+                    subscriptionId,
+                    savedResourceGroup,
+                    context.Logger,
+                    RunAzAsync)
                     .ConfigureAwait(false);
 
                 ValidateAzureResourceName(resourceGroup, "resource group");
@@ -237,20 +267,16 @@ public partial class AzureKubernetesEnvironmentResource
                     "Fetching AKS credentials: cluster={ClusterName}, resourceGroup={ResourceGroup}",
                     clusterName, resourceGroup);
 
-                var result = await RunAzCommandAsync(
+                var kubeConfigContent = await FetchKubeConfigAsync(
                     azPath,
-                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -",
-                    context.Logger).ConfigureAwait(false);
-
-                if (result.ExitCode != 0)
-                {
-                    throw new InvalidOperationException(
-                        $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
-                }
+                    subscriptionId,
+                    resourceGroup,
+                    clusterName,
+                    RunAzAsync).ConfigureAwait(false);
 
                 // Write kubeconfig content to a temp file we control.
                 // The IFileSystemService temp directory is auto-cleaned on dispose.
-                await File.WriteAllTextAsync(kubeConfigPath, result.StandardOutput, context.CancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(kubeConfigPath, kubeConfigContent, context.CancellationToken).ConfigureAwait(false);
 
                 // On Unix, restrict file permissions to owner-only (0600)
                 if (!OperatingSystem.IsWindows())
@@ -270,9 +296,14 @@ public partial class AzureKubernetesEnvironmentResource
                     "☸ AKS Cluster",
                     new MarkdownString($"**{clusterName}** in resource group **{resourceGroup}**"));
 
+                // Quote the values: ValidateAzureResourceName permits parentheses in resource group
+                // names, and an unquoted `team(prod)` is a syntax error in bash and zsh. This hint is
+                // advertised as copy-pasteable, so it has to survive the same names the real
+                // invocation built by BuildGetCredentialsArguments already handles.
                 context.Summary.Add(
                     "🔑 Connect to cluster",
-                    new MarkdownString($"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName}`"));
+                    new MarkdownString(
+                        $"`az aks get-credentials --resource-group '{resourceGroup}' --name '{clusterName}' --subscription {subscriptionId}`"));
 
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
@@ -539,33 +570,170 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
-    /// Gets the resource group, trying deployment state first, falling back to az CLI query.
-    /// On first deploy, the deployment state may not be loaded into IConfiguration yet
-    /// because it's written during the pipeline run (after create-provisioning-context).
+    /// Gets the subscription and resource group this resource explicitly targets, if any.
     /// </summary>
-    private static async Task<string> GetResourceGroupAsync(
-        string azPath,
-        string clusterName,
-        PipelineStepContext context)
+    /// <remarks>
+    /// Mirrors the precedence in <c>BicepUtilities.GetExistingResourceScope</c>: an explicitly
+    /// assigned <see cref="AzureBicepResource.Scope"/> (which <c>ConfigureInfrastructure</c> can set)
+    /// wins over the <see cref="ExistingAzureResourceAnnotation"/> that <c>AsExistingInResourceGroup</c>
+    /// and friends attach. The credential fetch has to agree with whatever the provisioner deployed
+    /// against. Values are returned unresolved because they may be a literal string, a
+    /// <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/>.
+    /// </remarks>
+    private (object? Subscription, object? ResourceGroup) GetExplicitScopeValues()
     {
-        // Try deployment state first (works on re-deploys)
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
-        var resourceGroup = configuration["Azure:ResourceGroup"];
-
-        if (!string.IsNullOrEmpty(resourceGroup))
+        if (Scope is not null)
         {
-            return resourceGroup;
+            // A tenant-scoped resource pins neither value. HasResourceGroup must be checked first
+            // because the ResourceGroup getter throws for subscription- and tenant-scoped resources.
+            return Scope.IsTenantScope
+                ? (null, null)
+                : (Scope.Subscription, Scope.HasResourceGroup ? Scope.ResourceGroup : null);
         }
 
-        // Fallback for first deploy: query Azure directly
-        context.Logger.LogDebug(
+        if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && !existing.IsTenantScope)
+        {
+            return (existing.Subscription, existing.ResourceGroup);
+        }
+
+        return (null, null);
+    }
+
+    /// <summary>
+    /// Reads the global Azure deployment state without requiring a subscription to be present.
+    /// </summary>
+    internal static async Task<(string? SubscriptionId, string? ResourceGroup)> TryGetAzureDeploymentStateAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var deploymentStateManager = services.GetRequiredService<IDeploymentStateManager>();
+        var azureState = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+
+        // Use ToString() rather than GetValue<string>() to match how AzureEnvironmentResource reads
+        // these same keys, and because GetValue<string>() throws if hand-edited state stores a
+        // non-string JSON value.
+        return (azureState.Data["SubscriptionId"]?.ToString(), azureState.Data["ResourceGroup"]?.ToString());
+    }
+
+    /// <summary>
+    /// Resolves a scope value that may be a literal string or a deferred value such as a
+    /// <see cref="ParameterResource"/> or a <see cref="BicepOutputReference"/>.
+    /// </summary>
+    /// <remarks>
+    /// Matches <c>BicepProvisioner.ResolveScopeValueAsync</c>, including its refusal to accept a
+    /// null result from a provider. Falling back to the app's own subscription in that case would
+    /// be worse than failing: provisioning would have thrown, while the credential fetch would
+    /// quietly target the wrong scope and could adopt a same-named cluster there. Empty is rejected
+    /// for the same reason, since the string.IsNullOrEmpty checks downstream would treat it as
+    /// unpinned. Nothing upstream rejects empty (the scope constructors and
+    /// <c>AsExistingInResourceGroup</c> only guard against null), so a literal is checked too.
+    /// </remarks>
+    internal static async Task<string?> ResolveScopeValueAsync(object? value, CancellationToken cancellationToken)
+        => value switch
+        {
+            null => null,
+            string { Length: > 0 } s => s,
+            IValueProvider provider when
+                await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } resolved => resolved,
+            string or IValueProvider => throw new InvalidOperationException(
+                "The Azure resource scope value cannot be null or empty."),
+            _ => throw new NotSupportedException(
+                $"The Azure scope value type {value.GetType()} is not supported.")
+        };
+
+    /// <summary>
+    /// Resolves the subscription and resource group that this AKS cluster actually lives in.
+    /// </summary>
+    /// <remarks>
+    /// A cluster adopted with <c>AsExistingInResourceGroup(...)</c> can sit in a different
+    /// subscription and resource group than the one Aspire deploys the rest of the app into, and the
+    /// provisioner targets that per-resource scope. The Azure CLI calls here have to agree with it,
+    /// otherwise we would authenticate against the wrong subscription and could even find a
+    /// same-named cluster in the wrong place. Values the resource does not pin fall back to the
+    /// global deployment state.
+    /// </remarks>
+    internal static async Task<(string SubscriptionId, string? ResourceGroup)> ResolveDeploymentScopeAsync(
+        object? scopedSubscription,
+        object? scopedResourceGroup,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var subscriptionId = await ResolveScopeValueAsync(scopedSubscription, cancellationToken).ConfigureAwait(false);
+        var resourceGroup = await ResolveScopeValueAsync(scopedResourceGroup, cancellationToken).ConfigureAwait(false);
+
+        // Fully pinned by the resource, so the global deployment state is irrelevant and must not be
+        // required. This matters because the app's own subscription may legitimately be absent when
+        // every Azure resource is an adopted existing one.
+        if (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup))
+        {
+            return (subscriptionId, resourceGroup);
+        }
+
+        var (globalSubscriptionId, globalResourceGroup) =
+            await TryGetAzureDeploymentStateAsync(services, cancellationToken).ConfigureAwait(false);
+
+        var pinnedSubscription = !string.IsNullOrEmpty(subscriptionId);
+        subscriptionId = pinnedSubscription ? subscriptionId : globalSubscriptionId;
+
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            throw new InvalidOperationException(
+                "Could not resolve the Azure subscription selected for deployment. " +
+                "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
+        }
+
+        if (string.IsNullOrEmpty(resourceGroup))
+        {
+            // The saved resource group only names a group inside the saved subscription. Inheriting it
+            // across a subscription boundary would point at a group that may not exist there, or worse
+            // at an unrelated group that happens to share the name, so force discovery instead.
+            resourceGroup = pinnedSubscription && !string.Equals(subscriptionId, globalSubscriptionId, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : globalResourceGroup;
+        }
+
+        return (subscriptionId, resourceGroup);
+    }
+
+    /// <summary>
+    /// Gets the resource group the cluster lives in, preferring an already-resolved one and falling
+    /// back to an Azure CLI query.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="savedResourceGroup"/> is the resource group from the resolved deployment
+    /// scope, which may have come from <c>AzureBicepResource.Scope</c> or an
+    /// <c>ExistingAzureResourceAnnotation</c> rather than from deployment state. It is null when the
+    /// resource group is genuinely unknown: either deployment state predates it being recorded, or
+    /// <see cref="ResolveDeploymentScopeAsync"/> deliberately dropped it because the resource pins a
+    /// different subscription than the app deploys into, where the saved name would be meaningless
+    /// or, worse, match an unrelated group.
+    /// <para>
+    /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the Azure CLI
+    /// fallback is scoped to the resolved subscription without invoking the real az CLI.
+    /// </para>
+    /// </remarks>
+    internal static async Task<string> GetResourceGroupAsync(
+        string azPath,
+        string clusterName,
+        string subscriptionId,
+        string? savedResourceGroup,
+        ILogger logger,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        if (!string.IsNullOrEmpty(savedResourceGroup))
+        {
+            return savedResourceGroup;
+        }
+
+        // Keep the query scoped to the resolved subscription rather than the CLI default, otherwise
+        // a same-named cluster in the ambient subscription could be picked up instead.
+        logger.LogDebug(
             "Resource group not in deployment state, querying Azure for cluster '{ClusterName}'",
             clusterName);
 
-        var result = await RunAzCommandAsync(
+        var result = await runAzCommandAsync(
             azPath,
-            $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv",
-            context.Logger).ConfigureAwait(false);
+            BuildResourceGroupQueryArguments(subscriptionId, clusterName)).ConfigureAwait(false);
 
         if (result.ExitCode != 0)
         {
@@ -573,17 +741,68 @@ public partial class AzureKubernetesEnvironmentResource
                 $"az resource list failed (exit code {result.ExitCode}): {result.StandardError}");
         }
 
-        resourceGroup = result.StandardOutput.Trim().ReplaceLineEndings("").Trim();
+        // With '-o tsv' the query emits one resource group per matching cluster, newline separated:
+        //   my-rg
+        //   other-rg
+        // A cluster name is only unique within a resource group, not within a subscription, so the
+        // query can legitimately return several rows. Picking one would silently deploy into, and
+        // hand back credentials for, an unrelated cluster.
+        var resourceGroups = result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (string.IsNullOrEmpty(resourceGroup))
+        if (resourceGroups.Length == 0)
         {
             throw new InvalidOperationException(
                 $"Could not resolve resource group for AKS cluster '{clusterName}'. " +
                 "Ensure Azure provisioning has completed.");
         }
 
-        return resourceGroup;
+        if (resourceGroups.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"Found {resourceGroups.Length} AKS clusters named '{clusterName}' in subscription " +
+                $"'{subscriptionId}' (resource groups: {string.Join(", ", resourceGroups)}). " +
+                "Specify which one to use by calling AsExistingInResourceGroup on the resource.");
+        }
+
+        return resourceGroups[0];
     }
+
+    /// <summary>
+    /// Fetches the kubeconfig content for the cluster from the Azure CLI.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the credential
+    /// fetch is scoped to the deployment subscription without invoking the real az CLI.
+    /// </remarks>
+    internal static async Task<string> FetchKubeConfigAsync(
+        string azPath,
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        var result = await runAzCommandAsync(
+            azPath,
+            BuildGetCredentialsArguments(subscriptionId, resourceGroup, clusterName)).ConfigureAwait(false);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
+        }
+
+        return result.StandardOutput;
+    }
+
+    internal static string BuildGetCredentialsArguments(
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName)
+        => $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\"";
+
+    internal static string BuildResourceGroupQueryArguments(string subscriptionId, string clusterName)
+        => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
 
     /// <summary>
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
@@ -620,7 +839,7 @@ public partial class AzureKubernetesEnvironmentResource
         }
     }
 
-    private sealed record AzCommandResult(int ExitCode, string StandardOutput, string StandardError);
+    internal sealed record AzCommandResult(int ExitCode, string StandardOutput, string StandardError);
 
     /// <summary>
     /// Validates that an Azure resource name contains only expected characters.

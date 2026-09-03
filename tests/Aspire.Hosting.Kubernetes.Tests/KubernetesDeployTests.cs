@@ -1507,6 +1507,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine("=== Override file ===");
         outputHelper.WriteLine(content);
 
+        // Snapshot tests cover YAML scalar style. These assertions only verify that resolution
+        // populated every path, so ignore the quotes required to preserve string values for Helm.
+        content = content.Replace("\"", string.Empty, StringComparison.Ordinal);
+
         // Phase 1: Both cache and server should have the resolved password
         Assert.Contains("cache_password: test-password-123", content);
 
@@ -1574,6 +1578,141 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EmbeddedParametersInEnvironmentExpressions_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        // Numeric-looking strings must retain their lexical form when the deploy values file is
+        // parsed by Helm instead of being normalized as numeric YAML scalars.
+        var host = builder.AddParameter("host", "01", publishValueAsDefault: true);
+        var token = builder.AddParameter("token", "1.0", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "host" &&
+            captured.Parameter == host.Resource);
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "secrets" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "token" &&
+            captured.Parameter == token.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task ConditionalParameterWithoutDefault_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Configuration["Parameters:enable-tls"] = "1.0";
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var enableTls = builder.AddParameter("enable-tls");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
+                    enableTls.Resource,
+                    "1.0",
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task DeferredValueProvider_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var provider = new TestValueProvider("resolved-value", "{outputs.deferred}");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["DEFERRED_VALUE"] = provider;
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "DEFERRED_VALUE" &&
+            captured.ValueProvider == provider);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "myapp", "config.yaml")),
+                "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
     public void AddKubernetesEnvironment_CreatesDashboardByDefault()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1615,8 +1754,14 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.NotNull(httpEndpoint);
     }
 
-    [Fact]
-    public async Task Dashboard_OtlpConfigured_ForComputeResources()
+    [Theory]
+    [InlineData(OtlpProtocol.Grpc, 18889, "grpc")]
+    [InlineData(OtlpProtocol.HttpProtobuf, 18890, "http/protobuf")]
+    [InlineData(OtlpProtocol.HttpJson, 18890, "http/json")]
+    public async Task Dashboard_HonorsRequiredOtlpProtocol(
+        OtlpProtocol protocol,
+        int expectedPort,
+        string expectedProtocol)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -1631,22 +1776,25 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
 
-        // Use a project resource — projects get OtlpExporterAnnotation by default
-        builder.AddProject<Projects.ServiceA>("api");
+        builder.AddProject<Projects.ServiceA>("api")
+            .WithOtlpExporter(protocol);
 
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Check that values.yaml contains OTLP configuration for the project resource
         var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath));
         var content = await File.ReadAllTextAsync(valuesPath);
         outputHelper.WriteLine(content);
 
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
-        Assert.Contains("env-dashboard-service:18889", content);
+        Assert.Contains($"env-dashboard-service:{expectedPort}", content);
         Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL", content);
+        Assert.Contains(expectedProtocol, content);
         Assert.Contains("OTEL_SERVICE_NAME", content);
+
+        await Verify(content, "yaml")
+            .UseParameters(protocol);
     }
 
     [Fact]
@@ -1682,6 +1830,77 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("OTEL_SERVICE_NAME", content);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dashboard_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+        outputHelper.WriteLine(content);
+
+        var hasEndpoint = content.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = content.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task Dashboard_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", content);
+        Assert.False(content.Contains("OTEL_DENO", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Dashboard_ResourceHasCorrectEndpoints()
     {
@@ -1692,8 +1911,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(dashboard.PrimaryEndpoint);
         Assert.NotNull(dashboard.OtlpGrpcEndpoint);
+        Assert.NotNull(dashboard.OtlpHttpEndpoint);
         Assert.Equal("http", dashboard.PrimaryEndpoint.EndpointName);
         Assert.Equal("otlp-grpc", dashboard.OtlpGrpcEndpoint.EndpointName);
+        Assert.Equal("otlp-http", dashboard.OtlpHttpEndpoint.EndpointName);
     }
 
     [Fact]

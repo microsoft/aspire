@@ -865,7 +865,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                     new SkillBundleFile
                     {
                         RelativePath = "SKILL.md",
-                        Sha256 = ComputeSha256(skillPath)
+                        Sha512 = ComputeSha512(skillPath)
                     }
                 ]
             });
@@ -883,25 +883,33 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
+        await File.WriteAllTextAsync(manifestPath, manifestJson);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            bundleDirectory,
+            CancellationToken.None);
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
-    [Fact]
-    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient()
+    [Theory]
+    [InlineData(nameof(AgentClientKind.CopilotCli), "GitHub Copilot CLI")]
+    [InlineData(nameof(AgentClientKind.CopilotApp), "GitHub Copilot App")]
+    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient(string clientKind, string displayName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interactionService = new TestInteractionService();
+        var client = Enum.Parse<AgentClientKind>(clientKind);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(AgentClientKind.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(client);
+            options.InteractionServiceFactory = _ => interactionService;
         });
 
         using var provider = services.BuildServiceProvider();
@@ -913,6 +921,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var hookFile = Path.Combine(homeDirectory.FullName, ".copilot", "hooks", "aspire-telemetry.json");
         Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Message.Contains(displayName, StringComparison.Ordinal));
     }
 
     [Fact]

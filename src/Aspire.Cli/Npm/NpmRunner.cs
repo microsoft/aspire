@@ -15,11 +15,15 @@ namespace Aspire.Cli.Npm;
 internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
-    /// The internal npm registry URL. Commands that resolve packages from the registry
-    /// pass this explicitly via <c>--registry</c> to avoid inheriting project-level
-    /// npm configuration.
+    /// The canonical public npm registry URL. Commands that resolve, pack, or install
+    /// packages pass this explicitly via <c>--registry</c> so resolution and install use
+    /// the public feed and cannot inherit a project-level <c>.npmrc</c> that redirects to a
+    /// private feed (for example an Azure DevOps Artifacts feed). Such a private feed would
+    /// otherwise return 401 for packages (including transitive dependencies) it has not
+    /// mirrored, breaking <c>aspire agent init</c>.
+    /// See https://github.com/microsoft/aspire/issues/19370.
     /// </summary>
-    private const string InternalRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+    private const string PublicRegistry = "https://registry.npmjs.org/";
 
     private readonly Lazy<string?> _npmPath = new(() => PathLookupHelper.FindFullPathFromPath("npm"));
 
@@ -46,7 +50,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
             // Resolve version: npm view <package>@<range> version
             var versionOutput = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", InternalRegistry],
+                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, versionRange), "version", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -94,7 +98,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         var output = await RunNpmCommandInDirectoryAsync(
             npmPath,
-            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", InternalRegistry],
+            ["pack", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--pack-destination", outputDirectory, "--registry", PublicRegistry],
             outputDirectory,
             cancellationToken);
 
@@ -145,7 +149,7 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
             // Prevent dependency lifecycle scripts from executing during installation.
             var output = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", "-g", tarballPath, "--ignore-scripts", "--registry", InternalRegistry],
+                ["install", "-g", tarballPath, "--ignore-scripts", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -203,6 +207,11 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     {
         var startInfo = new ProcessStartInfo
         {
+            // Redirect stdin so the child npm process (and any lifecycle scripts it invokes)
+            // does not inherit the CLI's TTY. The caller closes stdin immediately after Start()
+            // so any read surfaces as EOF instead of hanging waiting on the terminal. NpmRunner
+            // is intended to be fully non-interactive. See https://github.com/microsoft/aspire/issues/16791.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -284,6 +293,17 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
             using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
             process.Start();
+            // Close stdin so any npm lifecycle script that tries to read terminal input
+            // sees EOF instead of blocking on the inherited TTY. See ProcessGuestLauncher
+            // and https://github.com/microsoft/aspire/issues/16791.
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // The child may have already closed its stdin; ignore.
+            }
             activity.SetProcessId(process.Id);
 
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);

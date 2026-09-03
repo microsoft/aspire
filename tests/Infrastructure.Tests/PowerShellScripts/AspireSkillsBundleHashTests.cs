@@ -22,10 +22,10 @@ namespace Infrastructure.Tests;
 /// </remarks>
 public sealed class AspireSkillsBundleHashTests : IDisposable
 {
-    // SHA-256 of the LF, UTF-8 (no BOM) bytes of CanonicalText, computed independently of the script
+    // SHA-512 of the LF, UTF-8 (no BOM) bytes of CanonicalText, computed independently of the script
     // under test (so this is a real oracle, not a tautology). Every line-ending variant of the same
     // logical content must normalize to this one hash.
-    private const string ExpectedSha256 = "83fd2d53ae2f0c5f2326321934026cf6f0c3397f17aa1ba0887178155c220931";
+    private const string ExpectedSha512 = "00957ac0d67fb6cb43c6dc38038de8dc96f75375d278c907484686d38faf812eeaec1153a0e523507b4afb49cf8f39f9075afb20ab13e71e753a455d3abb78b0";
 
     // Canonical hook-like content using LF placeholders; each test rewrites the newlines per style.
     private const string CanonicalText = "#!/usr/bin/env bash\necho 'aspire'\n";
@@ -56,7 +56,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
         var hash = await RunHashDriverAsync(inputPath);
 
-        Assert.Equal(ExpectedSha256, hash);
+        Assert.Equal(ExpectedSha512, hash);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
             $bytes = [System.IO.File]::ReadAllBytes($InputFile)
             $normalized = ConvertTo-LfUtf8Bytes -Bytes $bytes
-            Write-Output (Get-AspireSkillsSha256Hex -Bytes $normalized)
+            Write-Output (Get-AspireSkillsSha512Hex -Bytes $normalized)
             """);
 
         var result = await RunDriverAsync(
@@ -106,9 +106,9 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
             "-InputFile", $"\"{inputPath}\"");
 
         var hash = ReadLines(result.Output)
-            .FirstOrDefault(static l => l.Length == 64 && l.All(static c => char.IsAsciiHexDigitLower(c)));
+            .FirstOrDefault(static l => l.Length == 128 && l.All(static c => char.IsAsciiHexDigitLower(c)));
 
-        Assert.True(hash is not null, $"Expected a SHA-256 line in driver output:{Environment.NewLine}{result.Output}");
+        Assert.True(hash is not null, $"Expected a SHA-512 line in driver output:{Environment.NewLine}{result.Output}");
         return hash!;
     }
 

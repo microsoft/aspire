@@ -1,0 +1,12 @@
+﻿---
+apiVersion: "v1"
+kind: "Secret"
+metadata:
+  name: "myapp-secrets"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+stringData:
+  SECRET_URL: "http://{{ .Values.config.myapp.host }}/test?token={{ .Values.secrets.myapp.token }}"
+type: "Opaque"

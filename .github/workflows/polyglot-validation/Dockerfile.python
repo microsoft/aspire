@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
+# Type-check validation AppHosts against their generated SDKs so missing symbols,
+# missing members, and invalid calls fail without per-integration scripts.
+RUN uv tool install 'pyright[nodejs]==1.1.411'
+
 # Pre-configure Aspire CLI path
 ENV PATH="/root/.aspire/bin:${PATH}"
 ENV ASPIRE_CLI_TELEMETRY_OPTOUT=1
@@ -35,6 +39,7 @@ WORKDIR /workspace
 COPY setup-local-cli.sh /scripts/setup-local-cli.sh
 COPY test-python.sh /scripts/test-python.sh
 COPY test-python-playground.sh /scripts/test-python-playground.sh
+COPY pyrightconfig.json /scripts/pyrightconfig.json
 RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-python.sh /scripts/test-python-playground.sh
 
 # Entrypoint: Set up Aspire CLI and run validation

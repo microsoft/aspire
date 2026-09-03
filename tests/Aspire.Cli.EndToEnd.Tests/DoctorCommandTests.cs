@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
+using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
 
@@ -13,11 +16,14 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class DoctorCommandTests(ITestOutputHelper output)
 {
+    private const string SpinnerCharacters = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+
     public static TheoryData<string> AlternativeToolchains => new()
     {
         "bun",
         "yarn",
-        "pnpm"
+        "pnpm",
+        "deno"
     };
 
     [Fact]
@@ -97,6 +103,60 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
+    [Fact]
+    public async Task DoctorCommand_WithDebugLogging_DoesNotRenderSpinner()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var testName = nameof(DoctorCommand_WithDebugLogging_DoesNotRenderSpinner);
+        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(testName);
+
+        // The recording path is stable across retries, so remove stale output before the recorder starts.
+        File.Delete(recordingPath);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace, testName: testName);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.ClearScreenAsync(counter);
+
+        var recordingOffset = File.Exists(recordingPath) ? new FileInfo(recordingPath).Length : 0;
+        await auto.TypeAsync("aspire doctor -l debug");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        var commandOutput = ReadRecordingOutput(recordingPath, recordingOffset);
+        Assert.Contains("[dbug]", commandOutput, StringComparison.Ordinal);
+        Assert.Contains(DoctorCommandStrings.EnvironmentCheckHeader, commandOutput, StringComparison.Ordinal);
+        Assert.Contains(DoctorCommandStrings.CheckingPrerequisites, commandOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain(commandOutput, SpinnerCharacters.Contains);
+    }
+
+    private static string ReadRecordingOutput(string recordingPath, long recordingOffset)
+    {
+        using var stream = new FileStream(recordingPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        stream.Position = recordingOffset;
+        using var reader = new StreamReader(stream);
+        var outputBuilder = new StringBuilder();
+
+        while (reader.ReadLine() is { } eventLine)
+        {
+            using var eventDocument = JsonDocument.Parse(eventLine);
+            var recordingEvent = eventDocument.RootElement;
+            if (recordingEvent.GetArrayLength() >= 3 && recordingEvent[1].GetString() == "o")
+            {
+                outputBuilder.Append(recordingEvent[2].GetString());
+            }
+        }
+
+        return outputBuilder.ToString();
+    }
+
     [Theory]
     [MemberData(nameof(AlternativeToolchains))]
     [CaptureWorkspaceOnFailure]
@@ -135,6 +195,16 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         // before doctor is asked to report that the toolchain is missing from PATH.
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
+
+        if (toolchain == "deno")
+        {
+            await auto.TypeAsync("aspire doctor");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(
+                "TypeScript AppHost tooling found (deno).",
+                timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForAnyPromptAsync(counter);
+        }
 
         await auto.TypeAsync("""mkdir -p ./doctor-path && ln -sf "$(command -v aspire)" ./doctor-path/aspire && ln -sf "$(command -v dotnet)" ./doctor-path/dotnet && if command -v docker >/dev/null 2>&1; then ln -sf "$(command -v docker)" ./doctor-path/docker; fi && export PATH="$PWD/doctor-path" """);
         await auto.EnterAsync();

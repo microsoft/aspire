@@ -36,6 +36,28 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 
 ## Code Review Instructions
 
+### Conditional Test Selection
+
+When reviewing a pull request, check whether `eng/github-ci/test-trigger-map.yml`
+needs to change if the diff:
+
+* Adds, removes, or renames a test project.
+* Adds or changes a CI job, reusable workflow, or `run_*` selection gate.
+* Adds or changes a script, configuration file, or other loose input consumed by
+  CI or tests but not represented by an MSBuild project reference.
+
+Do not request manual mappings for files evaluated by projects in the
+`Aspire.slnx`-rooted ProjectGraph; Layer 1 owns them. For Layer 2 blind spots,
+verify that the map routes each path to its actual consumer, uses `ALL` for
+broad shared inputs, or explicitly classifies paths handled by unconditional or
+dedicated workflows and paths with no PR-CI consumer. A gated job implemented by
+a reusable workflow must route changes to that workflow file to the job target
+and keep its `run_*` output wiring consistent.
+
+Selector behavior changes should include focused coverage in
+`tests/Infrastructure.Tests/TestTriggerMap/`. See
+`docs/ci/test-trigger-map.md` for the map vocabulary and maintenance guidance.
+
 ### API Files and Public API Surface
 
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
@@ -527,7 +549,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
 - **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
-- **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
+- **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
 - **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
 

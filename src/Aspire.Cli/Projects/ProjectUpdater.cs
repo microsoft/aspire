@@ -11,6 +11,8 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -66,12 +68,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             interactionService.DisplayEmptyLine();
         }
 
-        // Display the channel-pin update (aspire.config.json#channel) so users see it in the
-        // pre-confirmation summary alongside package updates. At most one is ever enqueued
-        // because each `aspire update` invocation targets a single AppHost project.
-        if (updateSteps.OfType<ChannelUpdateStep>().SingleOrDefault() is { } channelUpdateStep)
+        // Display the project config update so users see it in the pre-confirmation summary
+        // alongside package updates. At most one is ever enqueued because each `aspire update`
+        // invocation targets a single AppHost project.
+        if (updateSteps.OfType<ProjectConfigUpdateStep>().SingleOrDefault() is { } projectConfigUpdateStep)
         {
-            interactionService.DisplayMessage(KnownEmojis.Package, channelUpdateStep.GetFormattedDisplayText(), allowMarkup: true);
+            interactionService.DisplayMessage(KnownEmojis.Package, projectConfigUpdateStep.GetFormattedDisplayText(), allowMarkup: true);
             interactionService.DisplayEmptyLine();
         }
 
@@ -229,52 +231,69 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             await analyzeStep.Callback();
         }
 
-        // Persist the project's channel pin into aspire.config.json when the user picked an
-        // persistable Explicit channel that differs from the currently-persisted value. Mirrors
-        // the polyglot path's behavior in `GuestAppHostProject.UpdatePackagesAsync`.
-        // Implicit channels and `stable` are intentionally NOT persisted (no pinning of the
-        // default public-feed behavior).
-        //
-        // aspire.config.json lives next to the AppHost project file:
-        //   - C# single-file init: <dir>/apphost.cs + <dir>/aspire.config.json
-        //   - C# project-mode (aspire-apphost template): <dir>/MyApp.AppHost.csproj + <dir>/aspire.config.json
-        // If no aspire.config.json is present (legacy split layouts or pre-init projects),
-        // skip the rewrite — `aspire update` must not create a fresh aspire.config.json for a
-        // project that never had one; that is the responsibility of `aspire init`.
+        // Persist the resolved channel and SDK version together so subsequent local integration
+        // discovery uses the same version that `aspire update` applied to the AppHost. The config
+        // can live above a nested AppHost, so use the nearest config rather than only checking the
+        // project directory. If no config is present, skip the rewrite: creating one is the
+        // responsibility of `aspire init`.
         if (channel.ShouldPersistChannelName() && projectFile.Directory is { } projectDirectory)
         {
-            var existingConfig = AspireConfigFile.Load(projectDirectory.FullName);
-            if (existingConfig is not null)
+            var configPath = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory);
+            var targetSdkVersion = context.TargetSdkVersion;
+            if (configPath is not null &&
+                ConfigurationHelper.TryLoadSettingsFile(configPath, out var existingConfig) &&
+                targetSdkVersion is not null)
             {
-                var existingChannel = existingConfig.Channel;
-                if (!string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput))
-                {
-                    var description = string.Format(
-                        CultureInfo.InvariantCulture,
-                        UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
-                        existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
-                        channel.Name);
+                var existingChannel = existingConfig["channel"];
+                var existingSdkVersion = existingConfig["sdk:version"] ?? existingConfig["sdkVersion"];
+                var channelChanged = !string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput);
+                var sdkVersionChanged = !string.Equals(existingSdkVersion, targetSdkVersion, StringComparison.OrdinalIgnoreCase);
 
-                    context.UpdateSteps.Enqueue(new ChannelUpdateStep(
-                        description,
+                if (channelChanged || sdkVersionChanged)
+                {
+                    var descriptions = new List<string>();
+                    if (channelChanged)
+                    {
+                        descriptions.Add(string.Format(
+                            CultureInfo.InvariantCulture,
+                            UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
+                            existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
+                            channel.Name));
+                    }
+                    if (sdkVersionChanged)
+                    {
+                        descriptions.Add(string.Format(
+                            CultureInfo.InvariantCulture,
+                            UpdateCommandStrings.UpdatePackageFormat,
+                            "aspire.config.json#sdk.version",
+                            existingSdkVersion ?? "unknown",
+                            targetSdkVersion));
+                    }
+
+                    context.UpdateSteps.Enqueue(new ProjectConfigUpdateStep(
+                        string.Join("; ", descriptions),
                         () =>
                         {
-                            // Re-load inside the callback so we don't race with anything else that may
-                            // have rewritten aspire.config.json between analysis and apply. The file
-                            // was confirmed present above; `Load` returning null here would only
-                            // happen if it was deleted mid-update, in which case we skip the rewrite
-                            // rather than recreate the file behind the user's back.
-                            var configToSave = AspireConfigFile.Load(projectDirectory.FullName);
-                            if (configToSave is null)
+                            // Re-discover inside the callback so a config deleted after analysis is
+                            // not recreated behind the user's back. LoadOrCreate intentionally
+                            // migrates a legacy .aspire/settings.json during this mutating command.
+                            var currentConfigPath = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory);
+                            if (currentConfigPath is null)
                             {
                                 return Task.CompletedTask;
                             }
+
+                            var configRoot = ConfigurationHelper.GetConfigRootDirectory(projectDirectory);
+                            var configToSave = AspireConfigFile.LoadOrCreate(configRoot.FullName);
                             configToSave.Channel = channel.Name;
-                            configToSave.Save(projectDirectory.FullName);
+                            configToSave.SdkVersion = targetSdkVersion;
+                            configToSave.Save(configRoot.FullName);
                             return Task.CompletedTask;
                         },
                         existingChannel,
-                        channel.Name));
+                        channel.Name,
+                        existingSdkVersion,
+                        targetSdkVersion));
                 }
             }
         }
@@ -321,7 +340,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // Try normal MSBuild evaluation first
             return await GetItemsAndPropertiesAsync(projectFile, items, properties, cancellationToken);
         }
-        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context))
+        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context.AppHostProjectFile))
         {
             // Only use fallback for AppHost projects
             logger.LogWarning("Falling back to parsing for '{ProjectFile}'. Reason: {Message}", projectFile.FullName, ex.Message);
@@ -336,9 +355,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    private static bool IsAppHostProject(FileInfo projectFile, UpdateContext context)
+    internal static bool IsAppHostProject(FileInfo projectFile, FileInfo appHostProjectFile)
     {
-        return string.Equals(projectFile.FullName, context.AppHostProjectFile.FullName, StringComparison.OrdinalIgnoreCase);
+        var projectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+        var appHostProjectPath = PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName);
+
+        return string.Equals(projectPath, appHostProjectPath, StringComparisons.FileSystemPath);
     }
 
     private Task AnalyzeAppHostAsync(UpdateContext context, CancellationToken cancellationToken)
@@ -390,6 +412,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var sdkVersion = sdkVersionElement.GetString();
 
         var latestSdkPackage = await GetLatestVersionOfPackageAsync(context, "Aspire.AppHost.Sdk", cancellationToken: cancellationToken);
+        context.TargetSdkVersion = latestSdkPackage?.Version;
 
         // Treat unparseable versions (including range expressions) like wildcards - always update them
         // Only skip if the version is a valid semantic version that matches the latest
@@ -918,7 +941,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
 
         // Use fallback wrapper for AppHost project, normal method for others
-        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context)
+        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context.AppHostProjectFile)
             ? await GetItemsAndPropertiesWithFallbackAsync(projectFile, context, cancellationToken)
             : await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
 
@@ -1465,6 +1488,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public bool FallbackParsing { get; set; }
+    public string? TargetSdkVersion { get; set; }
 }
 
 internal abstract record UpdateStep(string Description, Func<Task> Callback)
@@ -1493,22 +1517,37 @@ internal record PackageUpdateStep(
 }
 
 /// <summary>
-/// Represents an update step that rewrites <c>aspire.config.json#channel</c> when the
-/// resolved update channel differs from the project's currently-pinned channel. Mirrors
-/// the polyglot path's channel persistence in <c>GuestAppHostProject.UpdatePackagesInternalAsync</c>.
+/// Represents an update step that aligns <c>aspire.config.json</c> with the channel and SDK
+/// version selected by <c>aspire update</c>.
 /// </summary>
-internal record ChannelUpdateStep(
+internal record ProjectConfigUpdateStep(
     string Description,
     Func<Task> Callback,
     string? CurrentChannel,
-    string NewChannel) : UpdateStep(Description, Callback)
+    string NewChannel,
+    string? CurrentSdkVersion,
+    string NewSdkVersion) : UpdateStep(Description, Callback)
 {
     public override string GetFormattedDisplayText()
     {
-        var current = string.IsNullOrEmpty(CurrentChannel)
-            ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
-            : $"[bold green]{CurrentChannel.EscapeMarkup()}[/]";
-        return $"[bold yellow]aspire.config.json#channel[/] {current} to [bold green]{NewChannel.EscapeMarkup()}[/]";
+        var changes = new List<string>();
+        if (!string.Equals(CurrentChannel, NewChannel, StringComparisons.CliInputOrOutput))
+        {
+            var currentChannel = string.IsNullOrEmpty(CurrentChannel)
+                ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
+                : $"[bold green]{CurrentChannel.EscapeMarkup()}[/]";
+            changes.Add($"[bold yellow]aspire.config.json#channel[/] {currentChannel} to [bold green]{NewChannel.EscapeMarkup()}[/]");
+        }
+
+        if (!string.Equals(CurrentSdkVersion, NewSdkVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            var currentSdkVersion = string.IsNullOrEmpty(CurrentSdkVersion)
+                ? $"[grey]{UpdateCommandStrings.SdkVersionUnknownPlaceholder.EscapeMarkup()}[/]"
+                : $"[bold green]{CurrentSdkVersion.EscapeMarkup()}[/]";
+            changes.Add($"[bold yellow]aspire.config.json#sdk.version[/] {currentSdkVersion} to [bold green]{NewSdkVersion.EscapeMarkup()}[/]");
+        }
+
+        return string.Join(", ", changes);
     }
 }
 

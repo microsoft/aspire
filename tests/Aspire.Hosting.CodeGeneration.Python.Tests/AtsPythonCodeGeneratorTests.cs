@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
@@ -327,6 +329,112 @@ public class AtsPythonCodeGeneratorTests
         Assert.DoesNotContain("Version=", aspirePy);
     }
 
+    [Fact]
+    public void GeneratedCode_DistinguishesOmittedAndExplicitNoneForNullableUnionParameters()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextWithNullableUnionParameters());
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains(
+            """
+            # Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+            _ASPIRE_UNSET = object()
+            """,
+            aspirePy);
+        Assert.Contains(
+            "def with_nullable_unions(client: AspireClient, optional_union: int | None | str = None, nullable_union: int | None | str = typing.cast(int | None | str, _ASPIRE_UNSET), nullable_items: typing.Iterable[int | None] | None = None)",
+            aspirePy);
+        Assert.Contains(
+            """
+                if optional_union is not None:
+                    rpc_args['optionalUnion'] = optional_union
+                if nullable_union is not _ASPIRE_UNSET:
+                    rpc_args['nullableUnion'] = nullable_union
+            """,
+            aspirePy);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnUnix()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnWindows()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python");
+
+    private async Task GeneratedCallback_WrapsGenericResourceBuilderHandle(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var modulePath = Path.Combine(tempDirectory.FullName, "aspire_app.py");
+            var testPath = Path.Combine(tempDirectory.FullName, "test_callback.py");
+            await File.WriteAllTextAsync(modulePath, files["aspire_app.py"]);
+            await File.WriteAllTextAsync(
+                testPath,
+                """
+                import aspire_app
+
+                client = aspire_app.AspireClient("unused")
+                invocations = []
+
+                def invoke_capability(capability_id, args, kwargs=None):
+                    invocations.append(capability_id)
+                    if capability_id.endswith("/withPythonBuilderCallback"):
+                        callback = client._callback_registry[args["configure"]]
+                        callback({
+                            "p0": {
+                                "$handle": "callback-resource",
+                                "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceBuilder`1[[Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource, Aspire.Hosting.CodeGeneration.Python.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                            }
+                        }, client)
+                    return args["builder"]
+
+                client.invoke_capability = invoke_capability
+                resource = aspire_app.TestRedisResource(
+                    aspire_app.Handle({
+                        "$handle": "resource",
+                        "$type": "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                    }),
+                    client
+                )
+                resource.with_python_builder_callback(lambda configured: configured.with_persistence())
+
+                assert invocations == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence",
+                ]
+                """);
+
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo(pythonExecutable)
+            {
+                WorkingDirectory = tempDirectory.FullName,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+            process.StartInfo.ArgumentList.Add(testPath);
+            process.Start();
+            var standardOutput = process.StandardOutput.ReadToEndAsync();
+            var standardError = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            Assert.True(
+                process.ExitCode == 0,
+                $"Python callback validation failed.{Environment.NewLine}{await standardOutput}{await standardError}");
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -578,6 +686,204 @@ public class AtsPythonCodeGeneratorTests
         };
     }
 
+    private static AtsContext CreateContextWithNullableUnionParameters()
+    {
+        var unionType = new AtsTypeRef
+        {
+            TypeId = "Tests/NullableUnion",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef
+                {
+                    TypeId = "Tests/NestedNullableUnion",
+                    Category = AtsTypeCategory.Union,
+                    UnionTypes =
+                    [
+                        new AtsTypeRef
+                        {
+                            TypeId = AtsConstants.Number,
+                            Category = AtsTypeCategory.Primitive,
+                            IsNullable = true
+                        }
+                    ]
+                },
+                new AtsTypeRef
+                {
+                    TypeId = AtsConstants.String,
+                    Category = AtsTypeCategory.Primitive
+                }
+            ]
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests/withNullableUnions",
+                    MethodName = "withNullableUnions",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "optionalUnion",
+                            Type = unionType,
+                            IsOptional = true
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "nullableUnion",
+                            Type = unionType,
+                            IsOptional = true,
+                            IsNullable = true,
+                            DefaultValue = 1
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "nullableItems",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = "Tests/NullableItems",
+                                Category = AtsTypeCategory.Array,
+                                ElementType = new AtsTypeRef
+                                {
+                                    TypeId = AtsConstants.Number,
+                                    Category = AtsTypeCategory.Primitive,
+                                    IsNullable = true
+                                }
+                            },
+                            IsOptional = true
+                        }
+                    ],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
+    [Fact]
+    public void GeneratedCode_DisambiguatesParameterMappingsWhenCapabilityIdMatchesMethodName()
+    {
+        // A capability declared with a bare [AspireExport] has a capability ID whose trailing segment
+        // is its method name, so the capability-ID fallback collapses onto the method name it was
+        // meant to escape. Builder classes are emitted in name order, so CollidingAlphaResource
+        // claims VolumeParameters and the bare CollidingBetaResource capability has to be qualified
+        // by its declaring namespace. Snapshot coverage cannot reach this: the shipped volume
+        // capabilities happen to emit in the opposite order.
+        var files = _generator.GenerateDistributedApplication(CreateContextWithCollidingParameterMappings());
+
+        // The generator composes output with StringBuilder.AppendLine, which writes Environment.NewLine,
+        // so the raw text is CRLF on Windows and LF elsewhere. Normalize before matching the multi-line
+        // expectations below, which assert exact field order and so cannot be collapsed to single lines.
+        var aspirePy = files["aspire_app.py"].ReplaceLineEndings("\n");
+
+        Assert.Contains("class VolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: typing.Required[str]\n    env: typing.Required[str]\n    is_read_only: bool", aspirePy);
+        Assert.Contains("class TestsBetaVolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: str\n    is_read_only: bool", aspirePy);
+    }
+
+    private static AtsContext CreateContextWithCollidingParameterMappings()
+    {
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var boolType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Boolean,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var projectType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingAlphaResource",
+            ClrType = typeof(CollidingAlphaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        var containerType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingBetaResource",
+            ClrType = typeof(CollidingBetaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                // Emitted first (name order), so this claims VolumeParameters for its own shape.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Alpha/withAlphaVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = projectType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType },
+                        new AtsParameterInfo { Name = "env", Type = stringType },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = projectType,
+                    TargetTypeId = projectType.TypeId,
+                    TargetType = projectType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [projectType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                },
+                // Bare-export shape: the capability ID also ends in withVolume, so it has no
+                // capability-ID fallback and must be qualified by its declaring namespace.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Beta/withVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = containerType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType, IsOptional = true },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = containerType,
+                    TargetTypeId = containerType.TypeId,
+                    TargetType = containerType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [containerType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = projectType.TypeId,
+                    ClrType = typeof(CollidingAlphaResource)
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = containerType.TypeId,
+                    ClrType = typeof(CollidingBetaResource)
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
     private sealed class KeywordResource;
 
     private sealed class AcronymResource;
@@ -589,4 +895,18 @@ public class AtsPythonCodeGeneratorTests
     private sealed class GenericTypeArgument<TLeft, TRight>;
 
     private sealed class GenericResource : GenericBaseResource<GenericTypeArgument<int, string>>, IGenericResource<GenericTypeArgument<int, string>>;
+
+    private sealed class CollidingAlphaResource : IResource
+    {
+        public string Name => nameof(CollidingAlphaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
+
+    private sealed class CollidingBetaResource : IResource
+    {
+        public string Name => nameof(CollidingBetaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
 }

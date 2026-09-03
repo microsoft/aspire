@@ -612,25 +612,31 @@ public static class CertManagerExtensions
                     // attach to the Gateway being validated. Without parentRefs, the route is
                     // orphaned and the ACME challenge URL is unreachable.
                     // See https://cert-manager.io/docs/configuration/acme/http01/#configuring-the-http01-gateway-api-solver
+                    // Route-less gateways are excluded because they are skipped during
+                    // materialization: a parentRef to a Gateway that is never created is just as
+                    // orphaned, and it would also mask the warning below.
                     var nameComparer = new ResourceNameComparer();
                     var parentGateways = model.Resources
                         .OfType<KubernetesGatewayResource>()
                         .Where(g => nameComparer.Equals(g.Parent, certManager.Parent)
+                                    && g.ShouldMaterialize
                                     && g.GatewayAnnotations.TryGetValue(ClusterIssuerAnnotationKey, out var v)
                                     && string.Equals(v.Format, issuer.Name, StringComparison.Ordinal))
                         .ToList();
 
                     if (parentGateways.Count == 0)
                     {
-                        // No annotated gateway found. cert-manager will accept this manifest but
-                        // the HTTP-01 challenge can never be satisfied because there's no parent
-                        // Gateway for the solver's HTTPRoute to attach to. Emit a warning so the
+                        // No eligible gateway found — either none is annotated for this issuer, or
+                        // the annotated ones have no routes and are therefore skipped during
+                        // materialization. Either way cert-manager will accept this manifest but the
+                        // HTTP-01 challenge can never be satisfied, because there's no parent Gateway
+                        // for the solver's HTTPRoute to attach to. Emit a warning so the
                         // misconfiguration is visible at deploy time instead of leaving the user
                         // to discover it via Certificates stuck in 'Pending' indefinitely.
                         logger.LogWarning(
-                            "ClusterIssuer '{IssuerName}' has an HTTP-01 solver but no Gateway in environment '{EnvironmentName}' is annotated with " +
-                            ClusterIssuerAnnotationKey + "={IssuerName}. cert-manager will not be able to satisfy ACME challenges until at least " +
-                            "one Gateway adopts this issuer (e.g. via WithTls(issuer)).",
+                            "ClusterIssuer '{IssuerName}' has an HTTP-01 solver but no Gateway in environment '{EnvironmentName}' is both annotated with " +
+                            ClusterIssuerAnnotationKey + "={IssuerName} and configured with at least one route. cert-manager will not be able to satisfy " +
+                            "ACME challenges until at least one routed Gateway adopts this issuer (e.g. via WithRoute(...) and WithTls(issuer)).",
                             issuer.Name,
                             certManager.Parent.Name,
                             issuer.Name);

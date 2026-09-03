@@ -141,6 +141,17 @@ public sealed class AzurePublishingContext(
         var principalId = ParameterLookup[environment.PrincipalId];
         MainInfrastructure.Add(principalId);
 
+        ProvisioningParameter? deploymentPrincipalType = null;
+        if (bicepResourcesToPublish.Any(resource =>
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+            userPrincipalId is null &&
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) &&
+            principalType is null))
+        {
+            deploymentPrincipalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
+            MainInfrastructure.Add(deploymentPrincipalType);
+        }
+
         var rg = new ResourceGroup("rg")
         {
             Name = resourceGroupParam,
@@ -328,6 +339,14 @@ public sealed class AzurePublishingContext(
                 if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
+                    continue;
+                }
+                if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalType &&
+                    parameter.Value is null &&
+                    resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+                    userPrincipalId is null)
+                {
+                    module.Parameters.Add(parameter.Key, deploymentPrincipalType!);
                     continue;
                 }
 

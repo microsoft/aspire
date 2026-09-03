@@ -19,6 +19,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
@@ -126,6 +127,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
     /// <inheritdoc />
     public string DisplayName => "C# (.NET)";
+
+    /// <inheritdoc />
+    public bool SupportsLaunchProfiles => true;
 
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
@@ -1394,7 +1398,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
 
         if (information.ExitCode == 0 && information.IsAspireHost)
@@ -1426,7 +1429,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Use the same MSBuild-based inspection as validation so version resolution
         // follows the project model that run/publish already rely on, including
         // SDK-style projects, package references, and Central Package Management.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
         return information.ExitCode == 0 && information.IsAspireHost
             ? information.AspireHostingVersion
@@ -1511,8 +1513,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //    is fine for non-CliBundle AppHosts that don't use WithTerminal() — the lease
         //    is best-effort and a missing layout just means no terminal host env vars.
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
-        var injectDcpAndDashboard = canQueryCliBundleProperty
-            && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
+        var appHostInfo = canQueryCliBundleProperty
+            ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
+            : null;
+        var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
@@ -1541,6 +1545,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             KillOnParentExit = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
+            LaunchProfile = context.LaunchProfile,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1555,7 +1560,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
-            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
+            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
@@ -1575,6 +1580,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             if (directRun is not null)
             {
+                // The direct command line has no "--" separator, so the forwarded-argument boundary
+                // has to be carried alongside it for logging. Clone rather than mutate because the
+                // caller may reuse runOptions for other invocations.
+                var directRunOptions = runOptions.Clone();
+                directRunOptions.AppHostArgumentStartIndex = directRun.AppHostArgumentStartIndex;
+
                 return await _runner.RunAppHostCommandAsync(
                     effectiveAppHostFile,
                     directRun.Command,
@@ -1582,7 +1593,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     directRun.Arguments,
                     directRun.Environment,
                     backchannelCompletionSource,
-                    runOptions,
+                    directRunOptions,
                     cancellationToken);
             }
 
@@ -1770,6 +1781,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         string[] unmatchedTokens,
         bool noLaunchProfile,
+        string? launchProfile,
         CancellationToken cancellationToken)
     {
         if (await IsDirectLaunchDisabledAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false))
@@ -1800,6 +1812,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 directEnv,
                 arguments,
                 noLaunchProfile,
+                launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
                 hasRunArguments))
         {
@@ -1813,13 +1826,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         arguments.AddRange(unmatchedTokens);
 
+        // Everything before this index came from MSBuild RunArguments or the launch profile; the
+        // tail is user-supplied AppHost input that can carry connection strings and API keys.
+        var appHostArgumentStartIndex = arguments.Count - unmatchedTokens.Length;
+
         _logger.LogDebug(
             "Launching AppHost directly via {Command} in {WorkingDirectory} with arguments {Arguments}.",
             command,
             workingDirectory.FullName,
-            string.Join(" ", arguments));
+            AppHostArgumentRedactor.RedactFromToString(arguments, appHostArgumentStartIndex));
 
-        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv);
+        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv, appHostArgumentStartIndex);
     }
 
     private async Task<bool> IsDirectLaunchDisabledAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
@@ -1935,6 +1952,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
+        string? launchProfile,
         bool hasExplicitApplicationArgs,
         bool hasRunArguments)
     {
@@ -1947,16 +1965,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             if (!TryGetLaunchSettingsPath(effectiveAppHostFile, out var launchSettingsPath))
             {
-                return true;
+                // An explicitly selected profile must not be silently ignored. Let the SDK path
+                // remain authoritative for its missing launch-settings/profile diagnostic.
+                return string.IsNullOrEmpty(launchProfile);
             }
 
-            var launchSettings = LaunchSettingsReader.ReadLaunchSettingsFile(
-                launchSettingsPath,
-                $"AppHost project '{effectiveAppHostFile.FullName}'",
-                AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchSettings);
-            if (!TryGetDefaultSupportedLaunchProfile(launchSettings, out var profileName, out var profile))
+            if (!TryGetLaunchProfile(launchSettingsPath, launchProfile, out var profileName, out var profile))
             {
-                _logger.LogDebug("Falling back to dotnet run for {Project}; launch settings do not contain a supported profile.", effectiveAppHostFile.FullName);
+                _logger.LogDebug(
+                    "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
+                    effectiveAppHostFile.FullName);
                 return false;
             }
 
@@ -2013,7 +2031,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (JsonException ex)
         {
             _logger.LogDebug(ex, "Falling back to dotnet run because launch settings could not be parsed for {Project}.", effectiveAppHostFile.FullName);
             return false;
@@ -2036,9 +2054,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         // Keep this lookup in sync with the SDK's `dotnet run` launch-settings discovery:
         // first check Properties/launchSettings.json (or My Project/launchSettings.json for VB),
-        // then fall back to the flat <ProjectName>.run.json file. The shared reader owns parsing
-        // once a file is selected, but it intentionally does not encode the SDK's project-file
-        // discovery rules.
+        // then fall back to the flat <ProjectName>.run.json file. Profile parsing intentionally
+        // stays separate because it must preserve raw JSON property enumeration to match SDK
+        // duplicate-profile detection.
         // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
         var propertiesDirectoryName = projectFile.Extension.Equals(".vbproj", StringComparison.OrdinalIgnoreCase)
             ? "My Project"
@@ -2062,48 +2080,102 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
-    private static bool TryGetDefaultSupportedLaunchProfile(AppHostLaunchSettings? launchSettings, out string profileName, out AppHostLaunchProfile profile)
+    private static bool TryGetLaunchProfile(
+        string launchSettingsPath,
+        string? requestedProfileName,
+        out string profileName,
+        out AppHostLaunchProfile profile)
     {
-        if (launchSettings?.Profiles is null)
+        using var stream = File.OpenRead(launchSettingsPath);
+        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions
         {
-            // launchSettings.json with `"profiles": null` (or no profiles map at all) deserializes
-            // the Profiles property to null even though it is declared non-nullable. Treat that
-            // shape the same as a missing launchSettings.json and fall through to `dotnet run`.
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        });
+
+        if (document.RootElement.ValueKind is not JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("profiles", out var profiles) ||
+            profiles.ValueKind is not JsonValueKind.Object)
+        {
             profileName = null!;
             profile = null!;
             return false;
         }
 
-        foreach (var (candidateProfileName, candidateProfile) in launchSettings.Profiles)
+        JsonProperty selectedProfile = default;
+
+        if (!string.IsNullOrEmpty(requestedProfileName))
         {
-            // A profile entry can be explicitly null in JSON (e.g. `"http": null`). Skip those
-            // rather than crashing inside IsSupportedLaunchProfile when reading CommandName.
-            if (candidateProfile is null)
+            var hasMatch = false;
+            foreach (var candidate in profiles.EnumerateObject())
             {
-                continue;
+                if (!string.Equals(candidate.Name, requestedProfileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // The SDK enumerates raw JSON properties so both duplicate names and names that
+                // differ only by casing remain visible. Preserve that behavior instead of letting
+                // dictionary deserialization silently replace an earlier property.
+                if (hasMatch)
+                {
+                    profileName = null!;
+                    profile = null!;
+                    return false;
+                }
+
+                selectedProfile = candidate;
+                hasMatch = true;
             }
 
-            if (IsSupportedLaunchProfile(candidateProfile))
+            if (!hasMatch || selectedProfile.Value.ValueKind is not JsonValueKind.Object)
             {
-                profileName = candidateProfileName;
-                profile = candidateProfile;
-                return true;
+                profileName = null!;
+                profile = null!;
+                return false;
+            }
+        }
+        else
+        {
+            foreach (var candidate in profiles.EnumerateObject())
+            {
+                if (candidate.Value.ValueKind is not JsonValueKind.Object ||
+                    !candidate.Value.TryGetProperty("commandName", out var commandName) ||
+                    commandName.ValueKind is not JsonValueKind.String ||
+                    commandName.GetString() is not ("Project" or "Executable"))
+                {
+                    continue;
+                }
+
+                selectedProfile = candidate;
+                break;
+            }
+
+            if (selectedProfile.Value.ValueKind is not JsonValueKind.Object)
+            {
+                profileName = null!;
+                profile = null!;
+                return false;
             }
         }
 
-        profileName = null!;
-        profile = null!;
-        return false;
+        var selectedProfileValue = selectedProfile.Value.Deserialize(AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchProfile);
+        if (selectedProfileValue is null)
+        {
+            profileName = null!;
+            profile = null!;
+            return false;
+        }
+
+        profileName = string.IsNullOrEmpty(requestedProfileName)
+            ? selectedProfile.Name
+            : requestedProfileName;
+        profile = selectedProfileValue;
+        return true;
     }
 
-    private static bool IsSupportedLaunchProfile(AppHostLaunchProfile profile)
-        => IsProjectLaunchProfile(profile) || IsExecutableLaunchProfile(profile);
-
     private static bool IsProjectLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Project", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsExecutableLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Executable", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(profile.CommandName, "Project", StringComparison.Ordinal);
 
     private static bool IsProjectFile(FileInfo appHostFile)
         => ProjectExtensions.Contains(appHostFile.Extension.ToLowerInvariant());
@@ -2208,8 +2280,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // this AppHost. (Covers layouts where multiple AppHosts share a directory.)
         if (!string.IsNullOrEmpty(config.AppHost?.Path))
         {
-            var resolvedAppHostPath = Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path));
-            if (!string.Equals(resolvedAppHostPath, appHostFile.FullName, StringComparison.OrdinalIgnoreCase))
+            var configuredAppHostPath = PathNormalizer.ResolveToFilesystemPath(
+                Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path)));
+            var selectedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
+            if (!string.Equals(configuredAppHostPath, selectedAppHostPath, StringComparisons.FileSystemPath))
             {
                 return false;
             }
@@ -2278,9 +2352,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var effectiveAppHostFile = context.AppHostFile;
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
-        var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
 
         // Check compatibility for project-based apphosts
         if (!isSingleFileAppHost)
@@ -2304,12 +2375,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 throw exception;
             }
         }
-
-        // See RunAsync for the rationale: terminal host env vars are injected even when
-        // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
-        // not (they would clobber per-RID NuGet metadata).
-        var injectDcpAndDashboardForPublish = await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboardForPublish);
 
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
@@ -2403,21 +2468,21 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
     {
-        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var matchingSockets = AppHostSocketManager.FindSockets(
             appHostFile.FullName,
             homeDirectory.FullName,
             Environment.ProcessId,
             _logger);
 
         // Check if any socket files exist
-        if (matchingSockets.Length == 0)
+        if (matchingSockets.Count == 0)
         {
             return RunningInstanceResult.NoRunningInstance;
         }
 
         // Stop all running instances
-        var stopTasks = matchingSockets.Select(socketPath =>
-            _runningInstanceManager.StopRunningInstanceAsync(socketPath, cancellationToken));
+        var stopTasks = matchingSockets.Select(socket =>
+            _runningInstanceManager.StopRunningInstanceAsync(socket, cancellationToken));
         var results = await Task.WhenAll(stopTasks);
         return results.All(r => r) ? RunningInstanceResult.InstanceStopped : RunningInstanceResult.StopFailed;
     }
@@ -2470,14 +2535,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<bool> IsUsingCliBundleAsync(FileInfo projectFile, CancellationToken cancellationToken)
-    {
-        // Reuse the cached MSBuild result so `AspireUseCliBundle` is fetched alongside the
-        // IsAspireHost/version inspection rather than triggering a third project evaluation.
-        var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
-        return info.IsUsingCliBundle;
-    }
-
     private Task<BundleLayoutLease?> AcquireCliBundleLayoutAsync(CancellationToken cancellationToken)
         => _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
 
@@ -2494,28 +2551,32 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // disk) and would otherwise spam the debug log on every run.
             if (injectDcpAndDashboard)
             {
-                _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process.");
+                _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process. The AppHost will resolve configured, inherited, or assembly-metadata paths.");
             }
             // Don't return yet — repo-mode runs (DEBUG, `dotnet run --project src/Aspire.Cli`)
             // can still inject the terminal host path from the just-built artifact even when
             // no bundle layout exists at all (e.g. clean dev machine with no `aspire` install).
         }
 
-        if (!env.ContainsKey("AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
+        if (!HasEnvironmentOverride(env, "AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
         {
             env["AspireCliBundlePath"] = layout.LayoutPath;
         }
 
         if (injectDcpAndDashboard && layout is not null)
         {
-            if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar) && layout.GetDcpPath() is { } dcpPath)
+            if (!IsUsableDcpDirectory(GetEffectiveEnvironmentValue(env, BundleDiscovery.DcpPathEnvVar)) &&
+                layout.GetDcpPath() is { } layoutDcpPath &&
+                IsUsableDcpDirectory(layoutDcpPath))
             {
-                env[BundleDiscovery.DcpPathEnvVar] = dcpPath;
+                env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!env.ContainsKey(BundleDiscovery.DashboardPathEnvVar) && layout.GetManagedPath() is { } managedPath)
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
+                layout.GetManagedPath() is { } layoutManagedPath &&
+                IsUsableDashboardPath(layoutManagedPath))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
             }
         }
 
@@ -2539,13 +2600,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //     "older CLI" diagnostic. Installed CLIs are unaffected because DetectRepositoryRoot
         //     only resolves via env var in release builds.
         //  3) Bundle layout aspire-managed (normal `aspire run` install path).
-        if (!env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar))
+        if (!HasEnvironmentOverride(env, BundleDiscovery.TerminalHostPathEnvVar))
         {
             var terminalHostPath = TryGetRepoLocalManagedPath() ?? layout?.GetManagedPath();
-            if (terminalHostPath is not null)
+            if (terminalHostPath is not null && IsUsableDashboardPath(terminalHostPath))
             {
                 env[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
-                if (!env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+                if (!HasEnvironmentOverride(env, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
                 {
                     env[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
                 }
@@ -2555,11 +2616,20 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         layoutLease?.AddEnvironment(env);
     }
 
-    /// <summary>
-    /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
-    /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
-    /// Returns <c>null</c> in release builds and when no repo-local build exists.
-    /// </summary>
+    private bool HasEnvironmentOverride(IReadOnlyDictionary<string, string> env, string name)
+        => !string.IsNullOrWhiteSpace(GetEffectiveEnvironmentValue(env, name));
+
+    private string? GetEffectiveEnvironmentValue(IReadOnlyDictionary<string, string> env, string name)
+        => env.TryGetValue(name, out var value) ? value : _environment.GetEnvironmentVariable(name);
+
+    private static bool IsUsableDcpDirectory(string? path)
+        => !string.IsNullOrWhiteSpace(path) &&
+            Directory.Exists(path) &&
+            File.Exists(BundleDiscovery.GetDcpExecutablePath(path));
+
+    private static bool IsUsableDashboardPath(string? path)
+        => !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+
     /// <summary>
     /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
     /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
@@ -2612,5 +2682,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         string Command,
         DirectoryInfo WorkingDirectory,
         string[] Arguments,
-        Dictionary<string, string> Environment);
+        Dictionary<string, string> Environment,
+        int AppHostArgumentStartIndex);
 }

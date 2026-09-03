@@ -1,4 +1,4 @@
-import './plotly-basic-2.35.2.min.js'
+import './plotly-basic-4.0.0-rc.0.min.js'
 
 export function initializeChart(id, traces, exemplarTrace, rangeStartTime, rangeEndTime, serverLocale, chartInterop) {
     registerLocale(serverLocale);
@@ -80,7 +80,19 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
         }
     };
 
-    var options = { scrollZoom: false, displayModeBar: false };
+    // Plotly 4.x flipped the `showSendToCloud` default to true and points `plotlyServerURL`
+    // at https://cloud.plotly.com/newchart. That surfaces a "Share Chart" modebar button which
+    // uploads the full chart JSON — i.e. the user's telemetry — to a third-party service.
+    // `displayModeBar: false` already hides the button today, but these are set explicitly so
+    // enabling the modebar later can never silently re-introduce outbound data egress.
+    // Neither window.open nor postMessage is governed by our CSP, so this is the only guard.
+    // See https://github.com/plotly/plotly.js/blob/master/CHANGELOG.md (v4.0.0 breaking changes).
+    var options = {
+        scrollZoom: false,
+        displayModeBar: false,
+        showSendToCloud: false,
+        plotlyServerURL: ''
+    };
 
     var plot = Plotly.newPlot(chartDiv, data, layout, options);
 

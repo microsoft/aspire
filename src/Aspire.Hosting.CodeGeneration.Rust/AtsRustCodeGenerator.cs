@@ -43,6 +43,13 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 //! Aspire Rust SDK
                 //! GENERATED CODE - DO NOT EDIT
 
+                // The SDK mirrors the whole app model surface, so any single AppHost leaves most of it
+                // unused and would otherwise emit hundreds of dead_code/unused warnings on every build.
+                // Lint levels are inherited by child modules, so allowing them here covers transport,
+                // base and aspire, and keeps cargo output limited to diagnostics that come from the
+                // AppHost's own code.
+                #![allow(dead_code, unused_imports, unused_variables)]
+
                 pub mod transport;
                 pub mod base;
                 pub mod aspire;
@@ -919,7 +926,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             _ => "Value"
         };
 
-        return isOptional ? $"Option<{baseType}>" : baseType;
+        return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     /// <summary>
@@ -963,7 +970,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             _ => "Value"
         };
 
-        return isOptional ? $"Option<{baseType}>" : baseType;
+        return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     private string MapTypeRefToRustForExportedValue(AtsTypeRef? typeRef)
@@ -978,7 +985,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             return "ReferenceExpression";
         }
 
-        return typeRef.Category switch
+        var baseType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -988,6 +995,8 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union or AtsTypeCategory.Unknown => "Value",
             _ => "Value"
         };
+
+        return ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     private string MapHandleType(string typeId) =>
@@ -1039,13 +1048,18 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 AtsConstants.CancellationToken => "&CancellationToken",
                 _ => "&Value"
             };
-            return isOptional ? $"Option<{baseType}>" : baseType;
+            return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
         }
 
         // For arrays/lists of strings, use Vec<String> since we need owned values
         // For other types, use the standard mapping
         return MapTypeRefToRust(typeRef, isOptional);
     }
+
+    private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
+        typeRef.IsNullable == true
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     private static bool IsHandleType(AtsTypeRef? typeRef) =>
         typeRef?.Category == AtsTypeCategory.Handle

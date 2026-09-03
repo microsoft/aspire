@@ -69,4 +69,5 @@ Aspire.Hosting.Azure.Network/withNatGateway(natGateway: Aspire.Hosting.Azure.Net
 Aspire.Hosting.Azure.Network/withNetworkSecurityGroup(nsg: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureNetworkSecurityGroupResource) -> Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource
 Aspire.Hosting.Azure.Network/withPublicIPAddress(publicIPAddress: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzurePublicIPAddressResource) -> Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureNatGatewayResource
 Aspire.Hosting.Azure.Network/withSecurityRule(rule: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSecurityRule) -> Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureNetworkSecurityGroupResource
+Aspire.Hosting.Azure.Network/withServiceDelegation(serviceName: string, name?: string) -> Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource
 Aspire.Hosting.Azure.Network/withSubnetDelegatedSubnet(subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureDelegatedSubnetResource

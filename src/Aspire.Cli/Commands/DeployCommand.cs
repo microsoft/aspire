@@ -34,7 +34,7 @@ internal sealed class DeployCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => DeployCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => DeployCommandStrings.OutputPathArgumentDescription;
 
-    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "deploy" };
 

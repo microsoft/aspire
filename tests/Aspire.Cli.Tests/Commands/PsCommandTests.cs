@@ -20,6 +20,15 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class PsCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(AppHostDisplayStatus.Running, "[green]running[/]")]
+    [InlineData(AppHostDisplayStatus.Stopped, "[red]stopped[/]")]
+    [InlineData("unknown[status]", "unknown[[status]]")]
+    public void GetStatusMarkup_ReturnsExpectedMarkup(string status, string expectedMarkup)
+    {
+        Assert.Equal(expectedMarkup, PsCommand.GetStatusMarkup(status));
+    }
+
     [Fact]
     public async Task PsCommand_Help_Works()
     {
@@ -125,7 +134,6 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         };
         var connection2 = new TestAppHostAuxiliaryBackchannel
         {
-            Hash = "test-hash-2",
             SocketPath = "/tmp/test2.sock",
             IsInScope = true,
             AppHostInfo = new AppHostInformation
@@ -134,8 +142,8 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 ProcessId = 9012
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection1);
-        monitor.AddConnection("hash2", "socket.hash2", connection2);
+        monitor.AddConnection("socket.hash1", connection1);
+        monitor.AddConnection("socket.hash2", connection2);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -187,7 +195,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         using var connection = await server.ConnectAsync().DefaultTimeout();
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -225,7 +233,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 ProcessId = 1234
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -271,7 +279,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 AspireHostVersion = "9.9.9"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -313,7 +321,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 BaseUrlWithLoginToken = "http://localhost:18888"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -358,7 +366,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 BaseUrlWithLoginToken = "http://localhost:18888/login?t=abc123"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -391,7 +399,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         using var connection = await server.ConnectAsync().DefaultTimeout();
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -432,7 +440,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 ProcessId = 1234
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -484,7 +492,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", new TestAppHostAuxiliaryBackchannel
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel
         {
             IsInScope = true,
             AppHostInfo = new AppHostInformation
@@ -523,7 +531,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         {
             DisplayRawTextCallback = _ => throw new IOException("Broken pipe")
         };
-        monitor.AddConnection("hash1", "socket.hash1", new TestAppHostAuxiliaryBackchannel
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel
         {
             IsInScope = true,
             AppHostInfo = new AppHostInformation
@@ -578,7 +586,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             outputLines.Add(line);
             if (outputLines.Count == 1)
             {
-                monitor.RemoveConnection("hash1", "socket.hash1");
+                monitor.RemoveConnection("socket.hash1");
                 monitor.NotifyConnectionsChanged();
             }
             else if (outputLines.Count == 2)
@@ -597,7 +605,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 CliProcessId = 5678
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -641,7 +649,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 CliLogFilePath = "/logs/cli_20260516T120000_abcd1234.log"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -688,7 +696,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 CliLogFilePath = "/logs/v2_override_path.log"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -727,7 +735,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                 ProcessId = 1234
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -783,7 +791,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
-            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
+            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(new TestAppHostSocket("socket.hash1"), isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
         }
 
         public void Dispose()
