@@ -433,9 +433,13 @@ class ResourceGraph {
             .append("g")
             .attr("class", "resource-menu-cog")
             .attr("transform", "translate(35,43)")
+            .attr("role", "button")
+            .attr("tabindex", 0)
+            .attr("aria-label", this.menuIcon ? this.menuIcon.tooltip : null)
             // D3's drag handler is attached to the ancestor resource group. Stop drag-start
             // events here so an imprecise cog click can never move the resource node.
             .on('mousedown touchstart', event => event.stopPropagation())
+            .on('keydown', this.cogMenuKeyDown)
             .on('click', this.cogMenuClick);
         cogGroup
             .append("circle")
@@ -597,6 +601,22 @@ class ResourceGraph {
         event.stopPropagation();
 
         await this.openResourceContextMenu(data.id, event.clientX, event.clientY);
+    };
+
+    cogMenuKeyDown = async (event) => {
+        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var data = event.currentTarget.__data__;
+        var bounds = event.currentTarget.getBoundingClientRect();
+        await this.openResourceContextMenu(
+            data.id,
+            bounds.left + bounds.width / 2,
+            bounds.top + bounds.height / 2);
     };
 
     openResourceContextMenu = async (id, clientX, clientY) => {

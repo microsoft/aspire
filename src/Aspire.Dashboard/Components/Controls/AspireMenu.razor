@@ -11,7 +11,8 @@
             OpenChanged="OnOpenChanged"
             Style="@Style"
             VerticalThreshold="@CalculatedVerticalThreshold"
-            HorizontalThreshold="200">
+            HorizontalThreshold="200"
+            aria-labelledby="@HeaderId">
     @foreach (var item in Items)
     {
         @RenderMenuItem(item)
@@ -31,8 +32,8 @@
             // context menu was opened on). role="presentation" keeps it out of the menu's item
             // semantics (matching the FluentDivider above) so it isn't announced as a menu item
             // or reached by keyboard navigation.
-            return @<div class="aspire-menu-header" role="presentation">
-                @if (item.Icon != null)
+            return @<div id="@item.Id" class="aspire-menu-header" role="presentation">
+                @if (item.Icon is not null)
                 {
                     <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" />
                 }
