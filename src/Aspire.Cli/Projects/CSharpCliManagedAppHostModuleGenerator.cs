@@ -61,14 +61,20 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger, nugetServiceIndexOverride)
             .ResolveAsync(config.Channel, packageSourceOverride, cancellationToken)
             .ConfigureAwait(false);
+        string? globalPackagesFolder = null;
         if (restoreSources.PackageSourceMappings is not null)
         {
             using var temporaryConfig = await TemporaryNuGetConfig.CreateAsync(
                 restoreSources.PackageSourceMappings,
-                restoreSources.ConfigureGlobalPackagesFolder,
-                restoreSources.ConfigureGlobalPackagesFolder
-                    ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(aspireHomeDirectory ?? new DirectoryInfo(CliPathHelper.GetDefaultAspireHomeDirectory()), restoreSources.GlobalPackagesFolderSource)
-                    : null).ConfigureAwait(false);
+                restoreSources.ConfigureGlobalPackagesFolder).ConfigureAwait(false);
+            if (restoreSources.ConfigureGlobalPackagesFolder)
+            {
+                globalPackagesFolder = CliPathHelper.GetStagingNuGetPackagesFeedDirectory(
+                    aspireHomeDirectory ?? new DirectoryInfo(CliPathHelper.GetDefaultAspireHomeDirectory()),
+                    temporaryConfig.CacheIdentity);
+                await temporaryConfig.SetGlobalPackagesFolderAsync(globalPackagesFolder).ConfigureAwait(false);
+            }
+
             var nuGetConfigContent = await File.ReadAllTextAsync(temporaryConfig.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
             await GeneratedFileWriter.WriteIfChangedAsync(nuGetConfigFile.FullName, nuGetConfigContent, cancellationToken).ConfigureAwait(false);
         }
@@ -98,7 +104,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         // because Microsoft.Common.props has already consumed them.
         await File.WriteAllTextAsync(
             Path.Combine(modulesDirectory.FullName, "Directory.Build.props"),
-            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(integrationRestoreDir).ToString(),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                integrationRestoreDir,
+                Path.Combine(integrationRestoreDir, "obj"),
+                globalPackagesFolder).ToString(),
             cancellationToken).ConfigureAwait(false);
 
         // Write sentinel targets/packages files to prevent upstream imports from overriding generated project behavior.
