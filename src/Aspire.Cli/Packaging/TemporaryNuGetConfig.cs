@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -14,11 +16,13 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     private TemporaryNuGetConfig(
         FileInfo configFile,
         bool containsCredentialMaterial,
-        IReadOnlyList<string> credentialBearingSources)
+        IReadOnlyList<string> credentialBearingSources,
+        string cacheIdentity)
     {
         _configFile = configFile;
         ContainsCredentialMaterial = containsCredentialMaterial;
         CredentialBearingSources = credentialBearingSources;
+        CacheIdentity = cacheIdentity;
     }
 
     public FileInfo ConfigFile => _configFile;
@@ -26,6 +30,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     public bool ContainsCredentialMaterial { get; }
 
     public IReadOnlyList<string> CredentialBearingSources { get; }
+
+    public string CacheIdentity { get; }
 
     public static async Task<TemporaryNuGetConfig> CreateAsync(
         PackageMapping[] mappings,
@@ -42,6 +48,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             {
                 await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue);
             }
+            var document = await LoadAsync(configFile, CancellationToken.None).ConfigureAwait(false);
             return new TemporaryNuGetConfig(
                 configFile,
                 mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)),
@@ -49,7 +56,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
                     .Select(static mapping => mapping.Source)
                     .Where(static source => PackageSourceOverrideMappings.HasCredentialMaterial(source))
                     .Distinct(StringComparer.Ordinal)
-                    .ToArray());
+                    .ToArray(),
+                ComputeCacheIdentity(document));
         }
         catch
         {
@@ -95,7 +103,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             return new TemporaryNuGetConfig(
                 configFile,
                 DocumentContainsCredentialMaterial(document),
-                GetCredentialBearingSources(document));
+                GetCredentialBearingSources(document),
+                ComputeCacheIdentity(document));
         }
         catch
         {
@@ -125,8 +134,8 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     {
         var distinctSources = mappings
             .Select(m => m.Source)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select((source, index) => new { Source = source, Key = source })
+            .Distinct(PackageSourceIdentity.Comparer)
+            .Select((source, index) => new { Source = source, Key = $"aspire-{index}" })
             .ToArray();
 
         await using var fileStream = configFile.Create();
@@ -165,11 +174,11 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             await xmlWriter.WriteStartElementAsync(null, "packageSourceMapping", null);
 
             var groupedBySource = mappings
-                .GroupBy(m => m.Source, StringComparer.OrdinalIgnoreCase);
+                .GroupBy(m => m.Source, PackageSourceIdentity.Comparer);
 
             foreach (var sourceGroup in groupedBySource)
             {
-                var sourceInfo = distinctSources.First(s => string.Equals(s.Source, sourceGroup.Key, StringComparison.OrdinalIgnoreCase));
+                var sourceInfo = distinctSources.First(s => PackageSourceIdentity.Comparer.Equals(s.Source, sourceGroup.Key));
 
                 await xmlWriter.WriteStartElementAsync(null, "packageSource", null);
                 await xmlWriter.WriteAttributeStringAsync(null, "key", null, sourceInfo.Key);
@@ -207,6 +216,24 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             ? document.ToString()
             : $"{document.Declaration}{Environment.NewLine}{document}";
         await File.WriteAllTextAsync(configFile.FullName, content);
+    }
+
+    public Task SetGlobalPackagesFolderAsync(string globalPackagesFolderValue)
+        => AddGlobalPackagesFolderToConfigAsync(_configFile, globalPackagesFolderValue);
+
+    private static string ComputeCacheIdentity(XDocument document)
+    {
+        var identityDocument = new XDocument(document);
+        identityDocument
+            .Descendants("config")
+            .Elements("add")
+            .Where(static element => string.Equals(
+                (string?)element.Attribute("key"),
+                "globalPackagesFolder",
+                StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        var bytes = Encoding.UTF8.GetBytes(identityDocument.ToString(SaveOptions.DisableFormatting));
+        return Convert.ToHexString(XxHash3.Hash(bytes));
     }
 
     private static async Task<XDocument> LoadAsync(FileInfo configFile, CancellationToken cancellationToken)
@@ -292,11 +319,10 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         var mappedSourceKeys = packageSources?.Elements()
             .Where(element => string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
             .Where(element => mappings.Any(mapping =>
-                string.Equals(
+                PackageSourceIdentity.Comparer.Equals(
                     element.Attributes().FirstOrDefault(attribute =>
                         string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))?.Value,
-                    mapping.Source,
-                    StringComparison.OrdinalIgnoreCase)))
+                    mapping.Source)))
             .Select(element => element.Attributes().FirstOrDefault(attribute =>
                 string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value)
             .Where(static key => !string.IsNullOrEmpty(key))

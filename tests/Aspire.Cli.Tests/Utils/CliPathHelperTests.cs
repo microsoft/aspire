@@ -155,6 +155,21 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: -1));
     }
 
+    [Fact]
+    public void GetNuGetFallbackPackagesEnvironmentPaths_PreservesNormalizedOrder()
+    {
+        var first = Path.GetFullPath("fallback-a");
+        var second = Path.GetFullPath("fallback-b");
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliPathHelper.NuGetFallbackPackagesEnvironmentVariable] = $"{first};{second}"
+        });
+
+        var paths = CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(environment);
+
+        Assert.Equal([first, second], paths);
+    }
+
     [Theory]
     [InlineData("script")]
     [InlineData("localhive")]

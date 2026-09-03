@@ -4,6 +4,7 @@
 using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Packaging;
 using Aspire.Hosting.Backchannel;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
     internal const string NuGetPackagesEnvironmentVariable = "NUGET_PACKAGES";
+    internal const string NuGetFallbackPackagesEnvironmentVariable = "NUGET_FALLBACK_PACKAGES";
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -98,6 +100,22 @@ internal static class CliPathHelper
         return Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
     }
 
+    internal static IReadOnlyList<string>? GetNuGetFallbackPackagesEnvironmentPaths(IEnvironment environment)
+    {
+        var value = environment.GetEnvironmentVariable(NuGetFallbackPackagesEnvironmentVariable);
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        return value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static path => Path.IsPathRooted(path)
+                ? Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar))
+                : path)
+            .ToArray();
+    }
+
     /// <summary>
     /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
     /// </summary>
@@ -144,13 +162,7 @@ internal static class CliPathHelper
             return null;
         }
 
-        var normalized = feedUrl.Trim();
-        if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-        {
-            normalized = uri.AbsoluteUri;
-        }
-
+        var normalized = PackageSourceIdentity.Normalize(feedUrl);
         var bytes = Encoding.UTF8.GetBytes(normalized);
         // XxHash3 emits 8 bytes (64 bits) -> 16 hex chars; truncate to the requested length.
         var hex = Convert.ToHexString(XxHash3.Hash(bytes)).ToLowerInvariant();

@@ -97,7 +97,19 @@ internal static class PackageSourceOverrideMappings
 
     public static bool HasCredentialMaterial(string source)
     {
-        return Uri.TryCreate(source.Trim(), UriKind.Absolute, out var uri) &&
+        var trimmedSource = source.Trim();
+        var looksHttp =
+            trimmedSource.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trimmedSource.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+        if (!Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri))
+        {
+            // Malformed HTTP-shaped sources fail closed because their unparseable authority may
+            // contain credentials that NuGet repeats verbatim in diagnostics.
+            return looksHttp;
+        }
+
+        return
             (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
                 uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) &&
             (!string.IsNullOrEmpty(uri.UserInfo) ||

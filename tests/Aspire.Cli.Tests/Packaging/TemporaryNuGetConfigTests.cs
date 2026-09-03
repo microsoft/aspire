@@ -4,6 +4,7 @@
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -45,14 +46,14 @@ public class TemporaryNuGetConfigTests
         Assert.Equal(2, packageSourceNodes.Count); // Two distinct sources
 
         // Verify that the AllPackages mapping is included
-        var allPackagesMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed2']/package[@pattern='*']");
+        var allPackagesMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='aspire-1']/package[@pattern='*']");
         Assert.NotNull(allPackagesMapping);
 
         // Verify other specific mappings are also included
-        var aspireMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed1']/package[@pattern='Aspire.*']");
+        var aspireMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='aspire-0']/package[@pattern='Aspire.*']");
         Assert.NotNull(aspireMapping);
 
-        var microsoftMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://example.com/feed1']/package[@pattern='Microsoft.*']");
+        var microsoftMapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='aspire-0']/package[@pattern='Microsoft.*']");
         Assert.NotNull(microsoftMapping);
     }
 
@@ -84,10 +85,10 @@ public class TemporaryNuGetConfigTests
         Assert.Equal(2, packageSourceNodes.Count); // Two distinct sources
 
         // Verify that both AllPackages mappings are included
-        var feed1Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://feed1.example.com']/package[@pattern='*']");
+        var feed1Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='aspire-0']/package[@pattern='*']");
         Assert.NotNull(feed1Mapping);
 
-        var feed2Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='https://feed2.example.com']/package[@pattern='*']");
+        var feed2Mapping = xmlDoc.SelectSingleNode("//packageSourceMapping/packageSource[@key='aspire-1']/package[@pattern='*']");
         Assert.NotNull(feed2Mapping);
     }
 
@@ -207,7 +208,6 @@ public class TemporaryNuGetConfigTests
         foreach (XmlNode add in addNodes)
         {
             addKeys.Add(add.Attributes!["key"]!.Value);
-            Assert.Equal(add.Attributes!["key"]!.Value, add.Attributes!["value"]!.Value);
         }
 
         // Collect <packageSourceMapping><packageSource key="X"> entries.
@@ -224,8 +224,39 @@ public class TemporaryNuGetConfigTests
             Assert.Contains(mappingKey, addKeys);
         }
 
-        // The mapping for our source must be present and exactly equal the input source.
-        Assert.Contains(source, mappingKeys);
+        var sourceKey = addNodes
+            .Cast<XmlNode>()
+            .Single(add => add.Attributes!["value"]!.Value == source)
+            .Attributes!["key"]!
+            .Value;
+        Assert.Contains(sourceKey, mappingKeys);
+    }
+
+    [Fact]
+    public async Task CreateAsync_PreservesCaseSensitiveSourcePaths()
+    {
+        using var config = await TemporaryNuGetConfig.CreateAsync(
+        [
+            new PackageMapping("Upper.*", "https://example.com/Feed/index.json"),
+            new PackageMapping("Lower.*", "https://example.com/feed/index.json")
+        ]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var sourcesByKey = document.Descendants("packageSources")
+            .Elements("add")
+            .ToDictionary(
+                static element => element.Attribute("key")!.Value,
+                static element => element.Attribute("value")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+        var mappingsBySource = document.Descendants("packageSourceMapping")
+            .Elements("packageSource")
+            .ToDictionary(
+                element => sourcesByKey[element.Attribute("key")!.Value],
+                element => element.Elements("package").Single().Attribute("pattern")!.Value,
+                PackageSourceIdentity.Comparer);
+
+        Assert.Equal("Upper.*", mappingsBySource["https://example.com/Feed/index.json"]);
+        Assert.Equal("Lower.*", mappingsBySource["https://example.com/feed/index.json"]);
     }
 
     [Fact]
@@ -289,6 +320,69 @@ public class TemporaryNuGetConfigTests
             element.Attribute("key")?.Value == "private");
         Assert.Empty(document.Descendants("disabledPackageSources").Elements("add"));
         Assert.True(config.ContainsCredentialMaterial);
+    }
+
+    [Fact]
+    public async Task CreateComposedAsync_PreservesCaseSensitiveSourcePaths()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, "<configuration />");
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [configPath],
+            [
+                new PackageMapping("Upper.*", "https://example.com/Feed/index.json"),
+                new PackageMapping("Lower.*", "https://example.com/feed/index.json")
+            ]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var sourcesByKey = document.Descendants("packageSources")
+            .Elements("add")
+            .ToDictionary(
+                static element => element.Attribute("key")!.Value,
+                static element => element.Attribute("value")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+        var mappingsBySource = document.Descendants("packageSourceMapping")
+            .Elements("packageSource")
+            .ToDictionary(
+                element => sourcesByKey[element.Attribute("key")!.Value],
+                element => element.Elements("package").Single().Attribute("pattern")!.Value,
+                PackageSourceIdentity.Comparer);
+
+        Assert.Equal("Upper.*", mappingsBySource["https://example.com/Feed/index.json"]);
+        Assert.Equal("Lower.*", mappingsBySource["https://example.com/feed/index.json"]);
+    }
+
+    [Fact]
+    public async Task CreateComposedAsync_CacheIdentityIncludesAmbientSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var firstConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "first.config");
+        var secondConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "second.config");
+        await File.WriteAllTextAsync(firstConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="private" value="https://example.com/private-a/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        await File.WriteAllTextAsync(secondConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="private" value="https://example.com/private-b/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        var mappings = new[] { new PackageMapping("Aspire*", "https://example.com/aspire/index.json") };
+
+        using var first = await TemporaryNuGetConfig.CreateComposedAsync([firstConfigPath], mappings);
+        using var second = await TemporaryNuGetConfig.CreateComposedAsync([secondConfigPath], mappings);
+
+        Assert.NotEqual(first.CacheIdentity, second.CacheIdentity);
+        Assert.NotEqual(
+            CliPathHelper.ComputeStagingFeedCacheKey(first.CacheIdentity),
+            CliPathHelper.ComputeStagingFeedCacheKey(second.CacheIdentity));
     }
 
     [Fact]
