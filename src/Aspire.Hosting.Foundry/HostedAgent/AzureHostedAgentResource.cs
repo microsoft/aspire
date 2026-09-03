@@ -468,7 +468,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var endpointReference = endpointReferenceExpression.Endpoint;
         var endpoint = endpointReference.EndpointAnnotation;
 
-        if (!ReferenceEquals(endpointReference.Resource, hostedAgent.Target) && !endpoint.IsExternal)
+        if (endpointReference.Resource != hostedAgent.Target && !endpoint.IsExternal)
         {
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, $"Endpoint '{endpoint.Name}' is internal. Foundry hosted agents can only reference externally exposed endpoints during publish.");
         }
