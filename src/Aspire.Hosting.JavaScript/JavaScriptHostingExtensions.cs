@@ -1903,7 +1903,7 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-            if (resource.AsContainer() is null)
+            if (resource.AsContainer() is not { } containerResource)
             {
                 throw new InvalidOperationException(
                     $"The published JavaScript app '{resource.Name}' does not have a container projection.");
@@ -1911,7 +1911,7 @@ public static partial class JavaScriptHostingExtensions
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
-                ValidateExistingDockerfileRunScript(resource, resource);
+                ValidateExistingDockerfileRunScript(resource, containerResource);
                 return context.WriteContainerAsync(resource);
             }
 
@@ -1924,7 +1924,7 @@ public static partial class JavaScriptHostingExtensions
                 Resource = resource,
                 Action = _ =>
                 {
-                    ValidateExistingDockerfileRunScript(resource, resource);
+                    ValidateExistingDockerfileRunScript(resource, containerResource);
                     return Task.CompletedTask;
                 }
             }));
@@ -1949,9 +1949,9 @@ public static partial class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
-    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, IResource containerResource)
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
     {
-        if (containerResource.AsContainer()?.Entrypoint is not null ||
+        if (containerResource.Entrypoint is not null ||
             !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
             dockerfileBuildAnnotation.DockerfileFactory is not null ||
             !containerResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript))
