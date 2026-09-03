@@ -675,11 +675,8 @@ internal sealed class RadiusInfrastructureBuilder
             resolved[resource] = resolvedType;
             var resourceType = resolvedType.ResourceType;
 
-            if ((resource is ProjectResource &&
-                 !resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>()) ||
-                ((resource is ContainerResource ||
-                  resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>()) &&
-                 resourceType == RadiusResourceTypes.Containers))
+            if ((resource is ProjectResource && !resource.IsContainer()) ||
+                (resource.IsContainer() && resourceType == RadiusResourceTypes.Containers))
             {
                 compute.Add(resource);
             }

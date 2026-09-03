@@ -1010,9 +1010,7 @@ internal static class AzureSandboxContainerDeployment
     private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
     {
         var modeledCommand = await ResolveModeledCommandAsync(context, resource).ConfigureAwait(false);
-        if ((resource is not ContainerResource &&
-             !resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>()) ||
-            !resource.RequiresImageBuildAndPush())
+        if (!resource.IsContainer() || !resource.RequiresImageBuildAndPush())
         {
             return new ContainerImageMetadata(
                 modeledCommand.Entrypoint ?? [],
