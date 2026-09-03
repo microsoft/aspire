@@ -11,16 +11,16 @@ async function main() {
 
     const request = JSON.parse(await fs.readFile(inputPath, 'utf8'));
     process.env.GH_AW_AGENT_OUTPUT = request.agentOutputPath;
-    process.env.ENABLE_RERUN = 'true';
+    process.env.ENABLE_RERUN = request.enableRerun ?? 'true';
 
     const calls = { failed: [], reruns: [], infos: [], warnings: [] };
     const github = {
         rest: {
             pulls: {
-                get: async () => ({ data: { state: 'open' } }),
+                get: async () => ({ data: { state: request.prState ?? 'open' } }),
             },
             actions: {
-                getWorkflowRun: async () => ({ data: { run_attempt: 1 } }),
+                getWorkflowRun: async () => ({ data: { run_attempt: request.currentRunAttempt ?? 1 } }),
                 reRunWorkflowFailedJobs: async args => { calls.reruns.push(args.run_id); },
             },
         },

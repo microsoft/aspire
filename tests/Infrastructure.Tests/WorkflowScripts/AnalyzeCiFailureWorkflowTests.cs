@@ -190,6 +190,71 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task CollectionResolvesPrNumberForBranchNameContainingQueryDelimiters()
+    {
+        // A crafted branch name containing '&' must not be able to inject an
+        // extra query parameter into the PR lookup and select the wrong PR.
+        var fakeGh = """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$1 $2" in
+              "api repos/microsoft/aspire/actions/runs/123")
+                cat <<'JSON'
+            {"id":123,"path":".github/workflows/ci.yml","run_attempt":1,"event":"pull_request","head_sha":"abc","head_branch":"feature&pr=999","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure","pull_requests":[],"head_repository":{"owner":{"login":"radical"}}}
+            JSON
+                ;;
+              "api --method")
+                # gh api --method GET repos/.../pulls -f state=open -f head=owner:branch --jq '.[].number'
+                if [ "$3" = "GET" ] && [ "$4" = "repos/microsoft/aspire/pulls" ]; then
+                  echo '42'
+                else
+                  exit 98
+                fi
+                ;;
+              "api --paginate")
+                # Job-attribution lookups performed after PR resolution are irrelevant to
+                # this test; emit nothing so `jq -s '.'` collapses to an empty array.
+                :
+                ;;
+              *)
+                exit 99
+                ;;
+            esac
+            """;
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
+        await File.WriteAllTextAsync(fakeGhPath, fakeGh);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                fakeGhPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Collect CI failure data");
+        var githubOutputPath = Path.Combine(_workspace.Path, "github-output");
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["EVENT_NAME"] = "workflow_dispatch",
+                ["GITHUB_OUTPUT"] = githubOutputPath,
+                ["GH_CALL_LOG"] = Path.Combine(_workspace.Path, "gh-calls.log"),
+                ["MANUAL_RUN_ID"] = "123",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["REPO"] = "microsoft/aspire",
+                ["WORKFLOW_RUN_ATTEMPT"] = string.Empty,
+                ["WORKFLOW_RUN_ID"] = string.Empty,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        var githubOutput = await File.ReadAllTextAsync(githubOutputPath);
+        Assert.Contains("pr_numbers=42", githubOutput.Split('\n'), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsMismatchedTrustedScope()
     {
         await WriteValidationFixtureAsync(
@@ -1287,7 +1352,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteRerunFixtureAsync(
             """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"id":"nuget-timeout","type":"infra-failure"}""");
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
 
         var result = await RunRerunScriptAsync();
 
@@ -1301,7 +1366,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteRerunFixtureAsync(
             """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[{"name":"Tests.Deterministic","job":"Tests","error":"boom","classification":"code-issue","reason":"Deterministic"}],"causes":["nuget-timeout"]}""",
-            """{"id":"nuget-timeout","type":"infra-failure"}""");
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
 
         var result = await RunRerunScriptAsync();
 
@@ -1315,7 +1380,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteRerunFixtureAsync(
             """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"id":"nuget-timeout","type":"infra-failure"}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
             """{"id":"nuget-timeout","type":"flaky-test"}""");
 
         var result = await RunRerunScriptAsync();
@@ -1330,7 +1395,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteRerunFixtureAsync(
             """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"id":"nuget-timeout","type":"infra-failure"}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
             """{"id":"nuget-timeout","type":""");
 
         var result = await RunRerunScriptAsync();
@@ -1345,12 +1410,90 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteRerunFixtureAsync(
             """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"id":"nuget-timeout","type":"infra-failure"}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
             "null");
 
         var result = await RunRerunScriptAsync();
 
         Assert.Equal(["Prior rerun cause nuget-timeout.json must be an object with a string type"], result.Failed);
+        Assert.Empty(result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunSkipsWhenRunAttemptAdvancedPastTrustedAttempt()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
+
+        var result = await RunRerunScriptAsync(currentRunAttempt: 2);
+
+        Assert.Empty(result.Failed);
+        Assert.Empty(result.Reruns);
+        Assert.Contains(
+            "Run 123 advanced from attempt 1 to 2. Skipping stale rerun request.",
+            result.Warnings);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunSkipsWhenAssociatedPrIsClosed()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
+
+        var result = await RunRerunScriptAsync(prState: "closed");
+
+        Assert.Empty(result.Failed);
+        Assert.Empty(result.Reruns);
+        Assert.Contains("All associated PRs are closed. Skipping rerun.", result.Infos);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunSkipsWhenRerunIsDisabled()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
+
+        var result = await RunRerunScriptAsync(enableRerun: "false");
+
+        Assert.Empty(result.Failed);
+        Assert.Empty(result.Reruns);
+        Assert.Contains(
+            "Dry-run mode (ENABLE_RERUN is not 'true'). Would have rerun failed jobs for run 123. Reason: Transient infrastructure failure",
+            result.Infos);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsCauseJobIdsNotDrawnFromTrustedFailedJobs()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[999]}""");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(["Rerun cause nuget-timeout.json has invalid or untrusted job_ids"], result.Failed);
+        Assert.Empty(result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsWhenCauseJobIdsDoNotCoverEveryTrustedFailedJob()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"},{"id":789,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            trustedFailedJobsJson: """[{"id":456,"name":"Tests"},{"id":789,"name":"Tests2"}]""");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(["Rerun cause job_ids do not cover every trusted failed job"], result.Failed);
         Assert.Empty(result.Reruns);
     }
 
@@ -1980,7 +2123,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private Task<CommandResult> RunJqAsync(string selector, string input)
         => RunProcessAsync("jq", ["-c", selector], standardInput: input);
 
-    private async Task WriteRerunFixtureAsync(string analysis, string cause, string? priorCause = null)
+    private async Task WriteRerunFixtureAsync(
+        string analysis,
+        string cause,
+        string? priorCause = null,
+        string trustedFailedJobsJson = """[{"id":456,"name":"Tests"}]""")
     {
         var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
         var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
@@ -1995,7 +2142,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_attempt":1,"run_scope":"pull-request","pr_numbers":"42"}""");
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "failed-jobs.json"),
-            """[{"id":456,"name":"Tests"}]""");
+            trustedFailedJobsJson);
         if (priorCause is not null)
         {
             var priorCausesDirectory = Directory.CreateDirectory(Path.Combine(failureDataDirectory, "prior-causes")).FullName;
@@ -2003,7 +2150,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         }
     }
 
-    private async Task<RerunHarnessResult> RunRerunScriptAsync()
+    private async Task<RerunHarnessResult> RunRerunScriptAsync(
+        int? currentRunAttempt = null,
+        string? prState = null,
+        string? enableRerun = null)
     {
         var requestPath = Path.Combine(_workspace.Path, "rerun-request.json");
         var outputPath = Path.Combine(_workspace.Path, "rerun-result.json");
@@ -2014,6 +2164,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 script,
                 agentOutputPath = Path.Combine(_workspace.Path, "output.json"),
+                currentRunAttempt,
+                prState,
+                enableRerun,
             }));
 
         var result = await RunProcessAsync(

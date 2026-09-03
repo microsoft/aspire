@@ -140,7 +140,12 @@ jobs:
             if [ -z "${PR_NUMBERS}" ]; then
               HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
               if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
-                PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
+                # Branch names may contain '&' and '=', so pass state/head as
+                # separate -f fields rather than concatenating a query string;
+                # gh api URL-encodes -f values, preventing query injection.
+                PR_NUMBERS=$(gh api --method GET "repos/${REPO}/pulls" \
+                  -f state=open \
+                  -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" \
                   --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
               fi
             fi
@@ -1137,6 +1142,7 @@ safe-outputs:
                 core.setFailed('Rerun requires unique analysis cause IDs matching the generated cause files');
                 return;
               }
+              const causeJobIdCoverage = new Set();
               for (const causeFileName of causeFiles) {
                 let cause;
                 try {
@@ -1153,6 +1159,18 @@ safe-outputs:
                     !summaryCauseIds.includes(causeId)) {
                   core.setFailed(`Rerun cause ${causeFileName} must be a valid infra-failure cause`);
                   return;
+                }
+
+                if (!Array.isArray(cause.job_ids) ||
+                    cause.job_ids.length === 0 ||
+                    !cause.job_ids.every(jobId => Number.isInteger(jobId) && jobId > 0) ||
+                    new Set(cause.job_ids).size !== cause.job_ids.length ||
+                    !cause.job_ids.every(jobId => trustedJobIdSet.has(jobId))) {
+                  core.setFailed(`Rerun cause ${causeFileName} has invalid or untrusted job_ids`);
+                  return;
+                }
+                for (const jobId of cause.job_ids) {
+                  causeJobIdCoverage.add(jobId);
                 }
 
                 const priorCauseFile = path.join(priorCausesDir, causeFileName);
@@ -1173,6 +1191,11 @@ safe-outputs:
                     return;
                   }
                 }
+              }
+
+              if (!analysisJobIds.every(jobId => causeJobIdCoverage.has(jobId))) {
+                core.setFailed('Rerun cause job_ids do not cover every trusted failed job');
+                return;
               }
 
               if (!enableRerun) {
