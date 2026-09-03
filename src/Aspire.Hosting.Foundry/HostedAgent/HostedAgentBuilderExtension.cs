@@ -519,7 +519,7 @@ public static class HostedAgentResourceBuilderExtensions
         // AzureResourcePreparer then grants the "Azure AI User" role on the owning Foundry
         // account to every consumer that references this agent, and provisions the identity that
         // makes ACA inject AZURE_CLIENT_ID.
-        StampHostedAgentConsumerRoleAnnotation(resource, projectResource.Parent);
+        StampHostedAgentConsumerRoleAnnotation(target, projectResource.Parent);
     }
 
     private static void StampHostedAgentConsumerRoleAnnotation(IResourceWithEnvironment target, FoundryResource account)
