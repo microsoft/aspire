@@ -78,7 +78,9 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource)
+        if (context.ExecutionContext.IsPublishMode ||
+            context.Resource is ContainerResource ||
+            context.Resource.HasContainerProjection())
         {
             var mountPath = MountPath ?? throw new InvalidOperationException(
                 $"Volume '{VolumeName}' on resource '{context.Resource.Name}' does not declare a mount path.");

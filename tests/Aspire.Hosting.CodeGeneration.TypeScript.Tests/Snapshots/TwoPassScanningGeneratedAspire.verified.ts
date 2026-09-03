@@ -21560,7 +21560,7 @@ export interface CSharpAppResource {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -22193,7 +22193,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -22939,7 +22939,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -25572,7 +25572,7 @@ export interface DotnetToolResource {
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -26227,7 +26227,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -27014,7 +27014,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -29681,7 +29681,7 @@ export interface ExecutableResource {
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -30303,7 +30303,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -30986,7 +30986,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -38079,7 +38079,7 @@ export interface ProjectResource {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -38712,7 +38712,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -39459,7 +39459,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.

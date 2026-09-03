@@ -4444,7 +4444,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(type);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource.GetOwnerOrSelf(), type));
     }
 
     /// <summary>
@@ -4483,7 +4483,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resource);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, KnownRelationshipTypes.Reference));
+        return builder.WithRelationship(resource, KnownRelationshipTypes.Reference);
     }
 
     /// <summary>
@@ -4563,7 +4563,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resourceBuilder);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resourceBuilder.Resource, KnownRelationshipTypes.Reference));
+        return builder.WithReferenceRelationship(resourceBuilder.Resource);
     }
 
     /// <summary>

@@ -374,16 +374,90 @@ public class ResourceProjectionTests
     public void ProjectionRegistrationIsOperationScoped()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var callbackInvoked = false;
 
         var executable = builder.AddExecutable("worker", "worker", ".")
             .WithContainerProjection(
                 DistributedApplicationOperation.Run,
-                container => container.WithImage("run-image"));
+                container =>
+                {
+                    callbackInvoked = true;
+                    container.WithImage("run-image");
+                });
         var model = new DistributedApplicationModel(builder.Resources);
 
+        Assert.False(callbackInvoked);
+        Assert.Single(executable.Resource.Annotations.OfType<ResourceProjectionAnnotation>());
+        Assert.Empty(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
         Assert.False(executable.Resource.IsContainer());
         Assert.False(builder.TryCreateResourceBuilder<ContainerResource>("worker", out _));
         Assert.Collection(model.GetExecutableResources(), resource => Assert.Same(executable.Resource, resource));
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void OnlyProjectionForActiveOperationIsApplied(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var runCallbackInvoked = false;
+        var publishCallbackInvoked = false;
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Run,
+                container =>
+                {
+                    runCallbackInvoked = true;
+                    container.WithImage("run-image");
+                })
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container =>
+                {
+                    publishCallbackInvoked = true;
+                    container.WithImage("publish-image");
+                });
+
+        Assert.Equal(operation == DistributedApplicationOperation.Run, runCallbackInvoked);
+        Assert.Equal(operation == DistributedApplicationOperation.Publish, publishCallbackInvoked);
+        Assert.Equal(2, executable.Resource.Annotations.OfType<ResourceProjectionAnnotation>().Count());
+        Assert.Single(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        Assert.True(executable.Resource.TryGetContainerImageName(out var image));
+        Assert.Equal(operation == DistributedApplicationOperation.Run ? "run-image:latest" : "publish-image:latest", image);
+    }
+
+    [Fact]
+    public void ProjectionRelationshipTargetsCanonicalOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var child = builder.AddContainer("child", "image");
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithChildRelationship(child));
+
+        var relationship = Assert.Single(child.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
+        Assert.Same(executable.Resource, relationship.Resource);
+    }
+
+    [Fact]
+    public void RunProjectionUsesContainerVolumeMountPath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(DistributedApplicationOperation.Run, _ => { });
+        var binding = new VolumeMountBindingAnnotation("data")
+        {
+            MountPath = "/srv/data"
+        };
+
+        var path = binding.ResolvePath(new EnvironmentCallbackContext(
+            builder.ExecutionContext,
+            executable.Resource));
+
+        Assert.Equal("/srv/data", path);
     }
 
     [Fact]

@@ -18,14 +18,20 @@ internal static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(configure);
 
         var executionContext = builder.ApplicationBuilder.ExecutionContext;
-        if (executionContext.Operation != operation)
+        var source = builder.Resource.Annotations
+            .OfType<ResourceProjectionAnnotation>()
+            .Select(static annotation => annotation.Source)
+            .OfType<IContainerResourceProjectionSource>()
+            .SingleOrDefault(source => source.Operation == operation);
+
+        if (source is not null)
         {
+            source.Configure(configure);
             return builder;
         }
 
-        // Reuse the shared selection helper so registering a second projection and resolving the
-        // effective resource fail the same way instead of one silently picking the first match.
-        if (builder.Resource.TrySelectProjection(executionContext, out var selectedProjection))
+        if (executionContext.Operation == operation &&
+            builder.Resource.TrySelectProjection(executionContext, out var selectedProjection))
         {
             if (selectedProjection is not ContainerResource containerProjection)
             {
@@ -38,21 +44,75 @@ internal static class ResourceProjectionBuilderExtensions
             return builder;
         }
 
-        // A projection is configured through a builder but is deliberately not added to Resources.
-        // The owner remains the only model member so references, events, and notifications keep
-        // using the canonical object identity established before projection registration.
-        var projection = new ContainerResourceProjection<T>(builder.Resource);
-        var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder<ContainerResource>(projection);
-        var projectionAnnotation = new ContainerResourceProjectionAnnotation(projection);
-        var sourceAnnotation = new ResourceProjectionAnnotation(
-            new OperationResourceProjectionSource(operation, projection));
+        source = new ContainerResourceProjectionSource<T>(builder, operation);
+        source.Configure(configure);
+        builder.Resource.Annotations.Add(new ResourceProjectionAnnotation(source));
 
-        // Register before configuration so APIs invoked by the callback can resolve the typed view
-        // by name. The projection itself is never added to the logical resource collection.
-        builder.Resource.Annotations.Add(projectionAnnotation);
-        builder.Resource.Annotations.Add(sourceAnnotation);
-        configure(projectionBuilder);
+        // Selection realizes only the source for this AppHost invocation. Registrations for other
+        // operations remain inert and do not add an effective-shape marker to the owner.
+        builder.Resource.TrySelectProjection(executionContext, out _);
 
         return builder;
+    }
+
+    private interface IContainerResourceProjectionSource : IResourceProjectionSource
+    {
+        DistributedApplicationOperation Operation { get; }
+
+        void Configure(Action<IResourceBuilder<ContainerResource>> configure);
+    }
+
+    private sealed class ContainerResourceProjectionSource<T>(
+        IResourceBuilder<T> ownerBuilder,
+        DistributedApplicationOperation operation) : IContainerResourceProjectionSource
+        where T : IResource
+    {
+        private readonly List<Action<IResourceBuilder<ContainerResource>>> _configurations = [];
+        private ContainerResource? _projection;
+
+        public DistributedApplicationOperation Operation { get; } = operation;
+
+        public void Configure(Action<IResourceBuilder<ContainerResource>> configure)
+        {
+            if (_projection is not null)
+            {
+                configure(ownerBuilder.ApplicationBuilder.CreateResourceBuilder(_projection));
+                return;
+            }
+
+            _configurations.Add(configure);
+        }
+
+        public bool TrySelect(
+            DistributedApplicationExecutionContext executionContext,
+            out IResource? projection)
+        {
+            if (executionContext.Operation != Operation)
+            {
+                projection = null;
+                return false;
+            }
+
+            if (_projection is null)
+            {
+                // The projection is a typed configuration view, not a logical model member. Assign it
+                // before invoking callbacks so builder lookups made during configuration can resolve
+                // the selected view without recursively realizing it.
+                _projection = new ContainerResourceProjection<T>(ownerBuilder.Resource);
+                ownerBuilder.Resource.Annotations.Add(new ContainerResourceProjectionAnnotation(_projection));
+
+                var projectionBuilder = ownerBuilder.ApplicationBuilder.CreateResourceBuilder<ContainerResource>(_projection);
+                var configurations = _configurations.ToArray();
+                _configurations.Clear();
+
+                foreach (var configure in configurations)
+                {
+                    configure(projectionBuilder);
+                }
+            }
+
+            projection = _projection;
+            return true;
+        }
     }
 }

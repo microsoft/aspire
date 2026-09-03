@@ -10,8 +10,6 @@ internal interface IResourceProjection
 
 internal interface IResourceProjectionSource
 {
-    IResource Projection { get; }
-
     bool TrySelect(
         DistributedApplicationExecutionContext executionContext,
         out IResource? projection);
@@ -31,16 +29,16 @@ internal sealed class OperationResourceProjectionSource : IResourceProjectionSou
         IResource projection)
     {
         _operation = operation;
-        Projection = projection;
+        _projection = projection;
     }
 
-    public IResource Projection { get; }
+    private readonly IResource _projection;
 
     public bool TrySelect(
         DistributedApplicationExecutionContext executionContext,
         out IResource? projection)
     {
-        projection = executionContext.Operation == _operation ? Projection : null;
+        projection = executionContext.Operation == _operation ? _projection : null;
         return projection is not null;
     }
 }
