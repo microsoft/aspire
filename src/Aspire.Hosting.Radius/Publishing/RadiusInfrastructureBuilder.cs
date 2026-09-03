@@ -50,7 +50,11 @@ internal sealed class RadiusInfrastructureBuilder
     // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
     // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
     private readonly Dictionary<string, ParameterResource> _deployParametersByIdentifier = new(StringComparer.Ordinal);
-    private readonly Dictionary<ParameterResource, IResource> _rabbitMqUserNames = new(ReferenceEqualityComparer.Instance);
+    // One parameter can be the user name of several brokers: sharing an input parameter across UDT
+    // resources is supported, so every owner is kept rather than the last one written. Dropping the
+    // earlier owners would let a surviving broker deploy with 'guest' unchecked once a callback
+    // removed whichever broker happened to be recorded last.
+    private readonly Dictionary<ParameterResource, List<IResource>> _rabbitMqUserNames = new(ReferenceEqualityComparer.Instance);
 
     // Bicep `param`s allocated for recipe-parameter and inline-secret values that bind an Aspire
     // ParameterResource. Keyed by the Aspire parameter name so repeated references reuse a single
@@ -598,21 +602,27 @@ internal sealed class RadiusInfrastructureBuilder
     // check is skipped for the replacement — which is the safe direction: the publisher no longer
     // owns the substituted resource, so it cannot claim the user name it emitted is still the one
     // being provisioned.
-    private Dictionary<ParameterResource, IResource> BuildLiveRabbitMqUserNames(RadiusInfrastructureOptions options)
+    private Dictionary<ParameterResource, IReadOnlyList<IResource>> BuildLiveRabbitMqUserNames(RadiusInfrastructureOptions options)
     {
-        var live = new Dictionary<ParameterResource, IResource>(ReferenceEqualityComparer.Instance);
+        var live = new Dictionary<ParameterResource, IReadOnlyList<IResource>>(ReferenceEqualityComparer.Instance);
         if (_rabbitMqUserNames.Count == 0)
         {
             return live;
         }
 
         var liveInstances = new HashSet<RadiusResourceTypeConstruct>(options.ResourceTypeInstances);
-        foreach (var (parameter, resource) in _rabbitMqUserNames)
+        foreach (var (parameter, owners) in _rabbitMqUserNames)
         {
-            if (_typeInstancesByResourceName.TryGetValue(resource.Name, out var construct) &&
-                liveInstances.Contains(construct))
+            // The parameter stays under validation while *any* of its brokers survives: the value is
+            // shared, so one live broker is enough for 'guest' to reach a deployed workload.
+            var liveOwners = owners
+                .Where(owner => _typeInstancesByResourceName.TryGetValue(owner.Name, out var construct) &&
+                                liveInstances.Contains(construct))
+                .ToList();
+
+            if (liveOwners.Count > 0)
             {
-                live[parameter] = resource;
+                live[parameter] = liveOwners;
             }
         }
 
@@ -2733,7 +2743,13 @@ internal sealed class RadiusInfrastructureBuilder
                 RadiusResourceTypes.RabbitMQ,
                 StringComparison.Ordinal))
             {
-                _rabbitMqUserNames[userNameParameter] = resource;
+                if (!_rabbitMqUserNames.TryGetValue(userNameParameter, out var owners))
+                {
+                    owners = [];
+                    _rabbitMqUserNames[userNameParameter] = owners;
+                }
+
+                owners.Add(resource);
             }
         }
 

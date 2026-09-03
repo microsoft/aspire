@@ -110,7 +110,8 @@ internal sealed class RadiusDeploymentPipelineStep
     /// <see cref="RadiusWorkspaceKubeContext"/> — the same resolver
     /// <see cref="SealedSecretApplyStep"/> uses, including the
     /// <c>ASPIRE_RADIUS_KUBE_CONTEXT</c> override — then flattens that single context into a
-    /// throwaway kubeconfig with <c>kubectl config view --minify</c> and runs the child
+    /// throwaway, self-contained kubeconfig with <c>kubectl config view --minify --flatten</c> and
+    /// runs the child
     /// <c>rad version</c> against a private home directory holding that kubeconfig. When the
     /// context cannot be resolved the gate is skipped rather than falling back to ambient state,
     /// because a verdict about the wrong cluster is worse than no verdict.
@@ -150,9 +151,14 @@ internal sealed class RadiusDeploymentPipelineStep
             var kubeConfigPath = Path.Combine(kubeConfigHome.FullName, ".kube", "config");
             Directory.CreateDirectory(Path.GetDirectoryName(kubeConfigPath)!);
 
+            // --flatten inlines file-backed credentials (client certificates, keys, token files)
+            // into the exported document. Without it --minify still emits *paths*, and kubeconfig
+            // resolves relative paths against the file's own location — so relocating the export
+            // under the temporary home would break them, `rad version` would fail, and the gate
+            // would skip and let an unsupported control plane through.
             var minified = await RunAsync(
                 "kubectl",
-                ["config", "view", "--raw", "--minify", "--context", kubeContext, "--output", "yaml"],
+                ["config", "view", "--raw", "--minify", "--flatten", "--context", kubeContext, "--output", "yaml"],
                 environment: null,
                 cancellationToken).ConfigureAwait(false);
 
@@ -596,10 +602,10 @@ internal sealed class RadiusDeploymentPipelineStep
         foreach (var (identifier, parameter) in parameters)
         {
             var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? string.Empty;
-            if (rabbitMqUserNames.TryGetValue(parameter, out var rabbitMq) &&
+            if (rabbitMqUserNames.TryGetValue(parameter, out var rabbitMqOwners) &&
                 string.Equals(value, "guest", StringComparison.Ordinal))
             {
-                throw RadiusInfrastructureBuilder.CreateRabbitMqGuestUserNameException(rabbitMq);
+                throw RadiusInfrastructureBuilder.CreateRabbitMqGuestUserNameException(rabbitMqOwners[0]);
             }
 
             parametersNode[identifier] = new JsonObject { ["value"] = value };

@@ -132,7 +132,7 @@ public class RadiusDeployParametersTests
         using var app = builder.Build();
         radius.Resource.Annotations.Add(new RadiusDeployParametersAnnotation(
             new Dictionary<string, ParameterResource> { ["rabbituser"] = userName.Resource },
-            new Dictionary<ParameterResource, IResource> { [userName.Resource] = rabbit.Resource }));
+            new Dictionary<ParameterResource, IReadOnlyList<IResource>> { [userName.Resource] = new[] { (IResource)rabbit.Resource } }));
 
         var step = new RadiusDeploymentPipelineStep(radius.Resource);
         var ex = await Assert.ThrowsAsync<RadiusBackingResourceProjectionException>(
@@ -156,7 +156,7 @@ public class RadiusDeployParametersTests
         _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
 
         var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
-        Assert.Same(rabbit.Resource, annotation.RabbitMqUserNames[userName.Resource]);
+        Assert.Same(rabbit.Resource, Assert.Single(annotation.RabbitMqUserNames[userName.Resource]));
     }
 
     [Fact]
@@ -180,6 +180,35 @@ public class RadiusDeployParametersTests
 
         var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
         Assert.Empty(annotation.RabbitMqUserNames);
+    }
+
+    /// <summary>
+    /// A user-name parameter can be shared by several brokers. Removing one of them must not drop
+    /// the deploy-time guest check for the brokers that remain, which would let a surviving broker
+    /// deploy with a user name RabbitMQ restricts to loopback connections.
+    /// </summary>
+    [Fact]
+    public void BuildOptions_KeepsRabbitMqUserName_WhenOnlyOneOfSeveralSharingBrokersIsRemoved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(infra =>
+            {
+                var removed = infra.ResourceTypeInstances.Single(i => i.BicepIdentifier.Contains("rabbit2", StringComparison.Ordinal));
+                infra.ResourceTypeInstances.Remove(removed);
+            });
+        var surviving = builder.AddRabbitMQ("rabbit1", userName: userName);
+        builder.AddRabbitMQ("rabbit2", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Same(surviving.Resource, Assert.Single(annotation.RabbitMqUserNames[userName.Resource]));
     }
 
     /// <summary>
