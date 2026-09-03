@@ -467,9 +467,9 @@ jobs:
               if [ -f "${LOG_FILE}" ]; then
                 JOB_ID=$(basename "${LOG_FILE}" | sed 's/job-\(.*\)\.log/\1/')
                 echo "### Logs for trusted job ID ${JOB_ID}"
-                echo '```'
-                cat "${LOG_FILE}"
-                echo '```'
+                bash .github/workflows/analyze-ci-failure-persistence.sh \
+                  render-untrusted-text "${LOG_FILE}" 65536 || \
+                  echo "    (Unable to render job log.)"
                 echo ""
               fi
             done

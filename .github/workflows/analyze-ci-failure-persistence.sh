@@ -111,6 +111,21 @@ render_untrusted_json()
   ' "$input_file" | sed 's/^/    /'
 }
 
+render_untrusted_text()
+{
+  local input_file="$1"
+  local max_length="${2:-65536}"
+
+  # A log line can terminate a fixed Markdown fence. Bound the sanitized text
+  # before adding indentation so truncation can never remove the literal-data prefix.
+  jq -Rrs --argjson max_length "$max_length" "$JQ_SANITIZE_DEFS"'
+    sanitize_multiline |
+    .[0:$max_length] |
+    split("\n")[] |
+    "    " + .
+  ' "$input_file"
+}
+
 trusted_pr_number()
 {
   local run_scope
@@ -152,6 +167,11 @@ case "$COMMAND" in
     MAX_LENGTH="${3:-500}"
     STRING_FORMAT="${4:-single-line}"
     render_untrusted_json "$INPUT_FILE" "$MAX_LENGTH" "$STRING_FORMAT"
+    ;;
+  render-untrusted-text)
+    INPUT_FILE="${2:?input file is required}"
+    MAX_LENGTH="${3:-65536}"
+    render_untrusted_text "$INPUT_FILE" "$MAX_LENGTH"
     ;;
   pr-number)
     trusted_pr_number

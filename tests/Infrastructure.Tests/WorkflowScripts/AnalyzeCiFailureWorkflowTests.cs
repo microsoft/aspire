@@ -1593,6 +1593,17 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "echo \"\"\nbash .github/workflows/analyze-ci-failure-persistence.sh \\\nrender-untrusted-json ci-failure-data/candidate-merges.json",
                 workflow,
                 StringComparison.Ordinal);
+            var logSection = GetSection(
+                workflow,
+                "## Job Logs (Error-Focused)",
+                "## Job Annotations");
+            Assert.Contains(
+                "render-untrusted-text \"${LOG_FILE}\" 65536 ||",
+                logSection,
+                StringComparison.Ordinal);
+            Assert.Contains("echo \"    (Unable to render job log.)\"", logSection, StringComparison.Ordinal);
+            Assert.DoesNotContain("cat \"${LOG_FILE}\"", logSection, StringComparison.Ordinal);
+            Assert.DoesNotContain("echo '```'", workflow, StringComparison.Ordinal);
             Assert.Contains("render-prior-cause \"$CAUSE_FILE\"", workflow, StringComparison.Ordinal);
             Assert.DoesNotContain("- **Error pattern**: \\(.error_pattern", workflow, StringComparison.Ordinal);
         });
@@ -2545,6 +2556,33 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var stackTrace = rendered.RootElement.GetProperty("stack_trace").GetString()!;
         Assert.StartsWith("first\nsecond\n", stackTrace, StringComparison.Ordinal);
         Assert.Equal(2000, stackTrace.Length);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task UntrustedTextRendererKeepsFenceBreakoutsInsideBoundedIndentedBlock()
+    {
+        var logPath = Path.Combine(_workspace.Path, "job.log");
+        await File.WriteAllTextAsync(
+            logPath,
+            "first\r\n\u001b[31m```\r\n@reviewers [details](https://evil.example)\u202E\n" + new string('x', 70000));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-untrusted-text", logPath, "65536"]);
+
+        Assert.Equal(0, result.ExitCode);
+        var outputLines = result.Output.ReplaceLineEndings("\n").Split('\n');
+        Assert.Equal(string.Empty, outputLines[^1]);
+        Assert.All(outputLines[..^1], line => Assert.StartsWith("    ", line, StringComparison.Ordinal));
+        Assert.Contains("    ```", outputLines);
+        Assert.Contains("    @reviewers [details](https://evil.example)", outputLines);
+        Assert.DoesNotContain("\u001b", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u202E", result.Output, StringComparison.Ordinal);
+
+        var renderedText = string.Join('\n', outputLines[..^1].Select(line => line[4..]));
+        Assert.Equal(65536, renderedText.Length);
+        Assert.EndsWith("x", renderedText, StringComparison.Ordinal);
     }
 
     [Fact]
