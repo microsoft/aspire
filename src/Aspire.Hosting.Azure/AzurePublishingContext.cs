@@ -47,6 +47,26 @@ public sealed class AzurePublishingContext(
     };
 
     /// <summary>
+    /// Gets or sets a value indicating whether generation of the root main.bicep template is skipped.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Callers of this class might not need main.bicep. A publisher that deploys each resource module
+    /// directly from its own deployment manifest never consumes the root template, and compiling it can
+    /// even fail for models the individual modules handle correctly. For example, the generated root always
+    /// passes <c>location</c> to each module, but a tenant-scoped module does not declare a <c>location</c>
+    /// parameter, so compiling the root fails with <c>BCP037</c>.
+    /// </para>
+    /// <para>
+    /// When set to <see langword="true"/>, <see cref="WriteModelAsync"/> still writes every per-resource
+    /// Bicep module and populates <see cref="ParameterLookup"/> and <see cref="OutputLookup"/> against
+    /// <see cref="MainInfrastructure"/>, but <see cref="MainInfrastructure"/> is never built, compiled,
+    /// or written to disk. The default is <see langword="false"/>.
+    /// </para>
+    /// </remarks>
+    public bool SkipMainBicepGeneration { get; set; }
+
+    /// <summary>
     /// Gets a dictionary that maps parameter resources to provisioning parameters.
     /// </summary>
     /// <remarks>
@@ -539,6 +559,15 @@ public sealed class AzurePublishingContext(
     /// <returns>A task that represents the asynchronous save operation.</returns>
     private async Task SaveToDiskAsync(string outputDirectoryPath)
     {
+        if (SkipMainBicepGeneration)
+        {
+            // Building the root is skipped entirely rather than compiled and discarded, because a model that
+            // only the individual modules support (such as a tenant-scoped module without a location parameter)
+            // makes compiling the root throw.
+            logger.LogDebug("Skipping generation of {BicepName}.bicep because {PropertyName} is set.", MainInfrastructure.BicepName, nameof(SkipMainBicepGeneration));
+            return;
+        }
+
         var plan = MainInfrastructure.Build(provisioningOptions.ProvisioningBuildOptions);
         var compiledBicep = plan.Compile().First();
 

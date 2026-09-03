@@ -2,12 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -243,6 +247,79 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
 
         await Verify(mainBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_SkipMainBicepGeneration_WritesModulesWithoutMainBicep()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        builder.AddBicepTemplateString("mod",
+            """
+            param location string
+
+            output value string = 'mod'
+            """);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "skip-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+        context.SkipMainBicepGeneration = true;
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(outputPath, "main.bicep")));
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+
+        // The lookups are still populated so callers can resolve parameters and outputs
+        // even though the root template was never compiled.
+        Assert.Contains(environment.Location, context.ParameterLookup.Keys);
+        Assert.Contains(environment.ResourceGroupName, context.ParameterLookup.Keys);
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_WritesMainBicepByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        builder.AddBicepTemplateString("mod",
+            """
+            param location string
+
+            output value string = 'mod'
+            """);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "write-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+
+        Assert.False(context.SkipMainBicepGeneration);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.True(File.Exists(Path.Combine(outputPath, "main.bicep")));
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+    }
+
+    private async Task<AzurePublishingContext> CreatePublishingContextAsync(DistributedApplication app, string outputPath)
+    {
+        var provisioningOptions = app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>().Value;
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AzurePublishingContext>();
+        var step = await new TestPipelineActivityReporter(output).CreateStepAsync("Publishing Azure resources");
+
+        return new AzurePublishingContext(outputPath, provisioningOptions, app.Services, logger, step);
     }
 
     private sealed class TestProject : IProjectMetadata
