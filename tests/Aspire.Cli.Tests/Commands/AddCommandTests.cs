@@ -112,6 +112,79 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandStopsRunningInstanceWhenProjectRequiresStopForAddPackage()
+    {
+        var stopWasCalled = false;
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RequiresStopForAddPackage = true,
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                addPackageWasCalled = true;
+                Assert.Equal(appHostFile.FullName, context.AppHostFile.FullName);
+                Assert.Equal("Aspire.Hosting.Redis", context.PackageId);
+                Assert.Equal("9.2.0", context.PackageVersion);
+                return Task.FromResult(true);
+            },
+            FindAndStopRunningInstanceAsyncCallback = (projectFile, _, _) =>
+            {
+                stopWasCalled = true;
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                return Task.FromResult(RunningInstanceResult.NoRunningInstance);
+            }
+        };
+
+        var services = CreateAddPackageServiceCollection(workspace, appHostFile, projectFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(stopWasCalled);
+        Assert.True(addPackageWasCalled);
+    }
+
+    [Fact]
+    public async Task AddCommandDoesNotStopRunningInstanceWhenProjectDoesNotRequireStopForAddPackage()
+    {
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RequiresStopForAddPackage = false,
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                addPackageWasCalled = true;
+                Assert.Equal(appHostFile.FullName, context.AppHostFile.FullName);
+                Assert.Equal("Aspire.Hosting.Redis", context.PackageId);
+                Assert.Equal("9.2.0", context.PackageVersion);
+                return Task.FromResult(true);
+            },
+            FindAndStopRunningInstanceAsyncCallback = (_, _, _) => throw new InvalidOperationException("Should not stop a running instance when the project does not require it.")
+        };
+
+        var services = CreateAddPackageServiceCollection(workspace, appHostFile, projectFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(addPackageWasCalled);
+    }
+
+    [Fact]
     public async Task IntegrationListCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
     {
         var addPackageWasCalled = false;
@@ -510,6 +583,84 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
         Assert.True(stagingHits > 0, "Staging channel was not queried — pinned channel is being dropped from discovery.");
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("1.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithCliManagedCSharpAppHostPinnedToDailyChannelAlsoSearchesConfiguredChannel()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        await File.WriteAllTextAsync(appHostFile.FullName, """
+            #:project .aspire/modules/Aspire.csproj
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "daily",
+              "features": {
+                "experimentalCliManagedAppHost": true
+              }
+            }
+            """);
+
+        var implicitHits = 0;
+        var dailyHits = 0;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
+        };
+        var dailyCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures(), NullLogger.Instance)
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestAppHostProjectFactory
+        {
+            UsesAspireConfigForPackageResolution = true,
+            CanHandleCallback = file => file.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase),
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(implicitHits > 0, "Implicit channel must always be searched.");
+        Assert.True(dailyHits > 0, "CLI-managed C# apphost persisted channel must also be searched.");
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
@@ -2993,6 +3144,32 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
+    }
+
+    private IServiceCollection CreateAddPackageServiceCollection(TemporaryWorkspace workspace, FileInfo appHostFile, TestAppHostProjectFactory projectFactory)
+    {
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestAddCommandPrompter(interactionService);
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                    (0, new[] { CreatePackage("Aspire.Hosting.Redis", "9.2.0") });
+                return runner;
+            };
+        });
     }
 
     /// <summary>

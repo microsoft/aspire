@@ -142,7 +142,8 @@ internal sealed class IntegrationPackageSearchService(
         // For non-.NET projects, read the channel from the local Aspire configuration if available.
         // Unlike .NET projects which have a nuget.config, polyglot apphosts persist the channel
         // in aspire.config.json (or the legacy settings.json during migration).
-        if (project.LanguageId == KnownLanguageId.CSharp)
+        if (project.LanguageId == KnownLanguageId.CSharp &&
+            !project.UsesAspireConfigForPackageResolution)
         {
             return (ConfiguredChannel: null, ExitCode: null);
         }

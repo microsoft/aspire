@@ -30,7 +30,7 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Handler for .NET AppHost projects (.csproj and single-file .cs).
 /// </summary>
-internal sealed partial class DotNetAppHostProject : IAppHostProject
+internal partial class DotNetAppHostProject : IAppHostProject
 {
     private readonly IDotNetCliRunner _runner;
     private readonly IInteractionService _interactionService;
@@ -129,18 +129,24 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     public string DisplayName => "C# (.NET)";
 
     /// <inheritdoc />
-    public bool SupportsLaunchProfiles => true;
+    public virtual bool RequiresStopForAddPackage => true;
+
+    /// <inheritdoc />
+    public virtual bool SupportsLaunchProfiles => true;
+
+    /// <inheritdoc />
+    public virtual bool UsesAspireConfigForPackageResolution => false;
 
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
+    public virtual Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(s_detectionPatterns);
 
     /// <inheritdoc />
-    public bool CanHandle(FileInfo appHostFile)
+    public virtual bool CanHandle(FileInfo appHostFile)
     {
         var extension = appHostFile.Extension.ToLowerInvariant();
 
@@ -154,14 +160,18 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Handle single-file apphosts (apphost.cs)
         if (extension == ".cs" && appHostFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase))
         {
-            // Check for #:sdk Aspire.AppHost.Sdk directive
             return IsValidSingleFileAppHost(appHostFile);
         }
 
         return false;
     }
 
-    private static bool IsValidSingleFileAppHost(FileInfo candidateFile)
+    internal static bool IsValidSingleFileAppHost(FileInfo candidateFile)
+    {
+        return IsSingleFileAppHostCandidate(candidateFile) && HasAspireAppHostSdkDirective(candidateFile);
+    }
+
+    internal static bool IsSingleFileAppHostCandidate(FileInfo candidateFile)
     {
         // Check no sibling .csproj files exist
         var siblingCsprojFiles = candidateFile.Directory!.EnumerateFiles("*.csproj", SearchOption.TopDirectoryOnly);
@@ -170,7 +180,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return false;
         }
 
-        // Check for #:sdk Aspire.AppHost.Sdk directive
+        return true;
+    }
+
+    internal static bool HasAspireAppHostSdkDirective(FileInfo candidateFile)
+    {
         try
         {
             using var reader = candidateFile.OpenText();
@@ -1372,7 +1386,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    public virtual async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
         if (IsUnsupported)
         {
@@ -1385,7 +1399,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             // For single-file apphosts, validate that:
             // 1. No sibling .csproj files exist (otherwise it's part of a project)
-            // 2. The file contains the #:sdk Aspire.AppHost.Sdk directive
+            // 2. The file contains the #:sdk Aspire.AppHost.Sdk directive.
             return new AppHostValidationResult(IsValid: IsValidSingleFileAppHost(appHostFile));
         }
 
@@ -1439,7 +1453,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     public async Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
     {
         // .NET projects require the SDK to be installed
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _telemetry, cancellationToken: cancellationToken))
+        if (!await EnsureSdkInstalledAsync(cancellationToken))
         {
             // Signal build failure so RunCommand doesn't wait forever
             context.BuildCompletionSource?.TrySetResult(false);
@@ -1453,7 +1467,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         using var activity = _profilingTelemetry.StartAppHostRun();
 
-        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile);
+        var isSingleFileAppHost = IsSingleFileAppHost(effectiveAppHostFile);
 
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
@@ -1487,9 +1501,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         await EnsureDevCertificatesTrustedAsync(context, env, cancellationToken);
 
-        var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
+        await PrepareForRunAsync(effectiveAppHostFile, cancellationToken);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var preparationExitCode = await PrepareAppHostAsync(
@@ -1512,12 +1524,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //    no per-RID NuGet ships the terminal host today. Skipping ResolveAspireCliBundle
         //    is fine for non-CliBundle AppHosts that don't use WithTerminal() — the lease
         //    is best-effort and a missing layout just means no terminal host env vars.
-        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
-        var appHostInfo = canQueryCliBundleProperty
-            ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
-            : null;
-        var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
+        BundleLayoutLease? cliBundleLease = await ConfigureCliBundleEnvironmentForRunAsync(
+            effectiveAppHostFile,
+            env,
+            isSingleFileAppHost,
+            context,
+            cancellationToken);
+        using var cliBundleLeaseScope = cliBundleLease;
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -1547,6 +1560,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ShutdownService = _shutdownService,
             LaunchProfile = context.LaunchProfile,
         };
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, runOptions);
 
         // The backchannel completion source is the contract with RunCommand
         // We signal this when the backchannel is ready, RunCommand uses it for UX
@@ -1650,6 +1664,47 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
+    protected virtual bool IsSingleFileAppHost(FileInfo appHostFile)
+        => !IsProjectFile(appHostFile);
+
+    protected virtual Task PrepareForRunAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    protected virtual Task PrepareForPublishAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    protected virtual void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
+    {
+    }
+
+    protected virtual async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentForRunAsync(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        bool isSingleFileAppHost,
+        AppHostProjectContext context,
+        CancellationToken cancellationToken)
+    {
+        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        var injectDcpAndDashboard = canQueryCliBundleProperty
+            && await IsUsingCliBundleAsync(appHostFile, cancellationToken);
+        return await ConfigureCliBundleEnvironmentAsync(env, injectDcpAndDashboard, cancellationToken);
+    }
+
+    protected virtual async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentForPublishAsync(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        return null;
+    }
+
+    private async Task<bool> IsUsingCliBundleAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var appHostInfo = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
+        return appHostInfo.IsUsingCliBundle;
+    }
+
     private async Task<int?> PrepareAppHostAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
@@ -1721,6 +1776,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = buildOutputCollector.AppendOutput,
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, buildOptions);
 
         var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
@@ -2338,11 +2394,34 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
     }
 
+    /// <summary>
+    /// Ensures the .NET Aspire SDK workload is installed.
+    /// </summary>
+    protected async Task<bool> EnsureSdkInstalledAsync(CancellationToken cancellationToken)
+        => await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _telemetry, cancellationToken: cancellationToken);
+
+    public virtual async Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        if (!await EnsureSdkInstalledAsync(cancellationToken))
+        {
+            return CliExitCodes.SdkNotInstalled;
+        }
+
+        var restoreExitCode = await _runner.RestoreAsync(
+            appHostFile,
+            outputCollector,
+            cancellationToken);
+
+        return restoreExitCode == CliExitCodes.Success
+            ? CliExitCodes.Success
+            : CliExitCodes.FailedToBuildArtifacts;
+    }
+
     /// <inheritdoc />
     public async Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
     {
         // .NET projects require the SDK to be installed
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _telemetry, cancellationToken: cancellationToken))
+        if (!await EnsureSdkInstalledAsync(cancellationToken))
         {
             // Throw an exception that will be caught by the command and result in SdkNotInstalled exit code
             // This is cleaner than trying to signal through the backchannel pattern
@@ -2350,7 +2429,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         var effectiveAppHostFile = context.AppHostFile;
-        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
+        var isSingleFileAppHost = IsSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
         // Check compatibility for project-based apphosts
@@ -2376,6 +2455,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
         }
 
+        // See RunAsync for the rationale: terminal host env vars are injected even when
+        // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
+        // not (they would clobber per-RID NuGet metadata).
+        using var cliBundleLease = await ConfigureCliBundleEnvironmentForPublishAsync(effectiveAppHostFile, env, cancellationToken);
+
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
         {
@@ -2385,6 +2469,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 StandardOutputCallback = buildOutputCollector.AppendOutput,
                 StandardErrorCallback = buildOutputCollector.AppendError,
             };
+            ConfigureAppHostInvocationOptions(effectiveAppHostFile, buildOptions);
 
             var buildExitCode = await AppHostHelper.BuildAppHostAsync(
                 _runner,
@@ -2405,6 +2490,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 return CliExitCodes.FailedToBuildArtifacts;
             }
         }
+        else if (isSingleFileAppHost)
+        {
+            await PrepareForPublishAsync(effectiveAppHostFile, cancellationToken);
+        }
 
         // Create collector and store in context for exception handling
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
@@ -2417,6 +2506,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             NoLaunchProfile = true,
             StartDebugSession = context.StartDebugSession
         };
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, runOptions);
 
         if (isSingleFileAppHost)
         {
@@ -2436,10 +2526,20 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     }
 
     /// <inheritdoc />
-    public async Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
+    public virtual async Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
         var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Package);
         context.OutputCollector = outputCollector;
+
+        if (await TryAddPackageAsync(context, outputCollector, cancellationToken))
+        {
+            return true;
+        }
+
+        if (!FallbackToDotNetPackageAdd)
+        {
+            return false;
+        }
 
         var options = new ProcessInvocationOptions
         {
@@ -2457,6 +2557,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         return result == 0;
     }
+
+    protected virtual bool FallbackToDotNetPackageAdd => true;
+
+    protected virtual Task<bool> TryAddPackageAsync(AddPackageContext context, OutputCollector outputCollector, CancellationToken cancellationToken)
+        => Task.FromResult(false);
 
     /// <inheritdoc />
     public async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
@@ -2537,6 +2642,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
     private Task<BundleLayoutLease?> AcquireCliBundleLayoutAsync(CancellationToken cancellationToken)
         => _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
+
+    protected async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentAsync(
+        Dictionary<string, string> env,
+        bool injectDcpAndDashboard,
+        CancellationToken cancellationToken)
+    {
+        var layoutLease = await AcquireCliBundleLayoutAsync(cancellationToken);
+        ConfigureCliBundleEnvironment(env, layoutLease, injectDcpAndDashboard);
+        return layoutLease;
+    }
 
     private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,

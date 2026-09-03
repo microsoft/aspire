@@ -117,6 +117,22 @@ internal static class CliPathHelper
     }
 
     /// <summary>
+    /// Escapes a value that will be written into an MSBuild condition string literal.
+    /// </summary>
+    /// <remarks>
+    /// Generated AppHost paths can contain apostrophes (for example, <c>O'Brien/apphost.csproj</c>).
+    /// MSBuild condition parsing treats quotes and percent escapes specially, so path literals must
+    /// use MSBuild's <c>%xx</c> escaping before they are embedded in generated props/targets files.
+    /// </remarks>
+    internal static string EscapeMSBuildConditionStringLiteral(string value)
+    {
+        return value
+            .Replace("%", "%25", StringComparison.Ordinal)
+            .Replace("\"", "%22", StringComparison.Ordinal)
+            .Replace("'", "%27", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Returns the stable per-feed NuGet package cache used by generated staging-channel configs.
     /// </summary>
     /// <remarks>
