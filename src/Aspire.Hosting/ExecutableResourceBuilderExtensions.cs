@@ -158,7 +158,7 @@ public static class ExecutableResourceBuilderExtensions
         }
 
         return builder.WithManifestPublishingCallback(
-            context => context.WriteProjectedContainerAsync(resource));
+            context => context.WriteContainerAsync(resource));
     }
 
     /// <summary>

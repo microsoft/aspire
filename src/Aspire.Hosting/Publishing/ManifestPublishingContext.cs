@@ -314,7 +314,31 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
     public Task WriteContainerAsync(ContainerResource container)
     {
-        return WriteContainerCoreAsync(container, container.Entrypoint);
+        ArgumentNullException.ThrowIfNull(container);
+
+        return WriteContainerAsync((IResource)container);
+    }
+
+    /// <summary>
+    /// Writes JSON elements to the manifest which represent the explicit or projected container for a resource.
+    /// </summary>
+    /// <param name="resource">The resource represented by the container manifest entry.</param>
+    /// <returns>A task that represents the asynchronous write operation.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    /// <exception cref="DistributedApplicationException">Thrown when the resource does not have an explicit or projected container view.</exception>
+    public Task WriteContainerAsync(IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        if (resource.AsContainer() is not { } container)
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{resource.Name}' does not have an explicit or projected container view for the '{ExecutionContext.Operation}' operation.");
+        }
+
+        // The projection supplies only container-specific property state. Annotations and callback
+        // identity remain on the canonical owner under the typed-configuration-view model.
+        return WriteContainerCoreAsync(resource, container.Entrypoint);
     }
 
     private async Task WriteContainerCoreAsync(IResource resource, string? entrypoint)
@@ -368,19 +392,6 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         await WriteEnvironmentVariablesAsync(resource).ConfigureAwait(false);
         WriteBindings(resource);
-    }
-
-    internal Task WriteProjectedContainerAsync(IResource owner)
-    {
-        if (owner.AsContainer() is not { } container)
-        {
-            throw new DistributedApplicationException(
-                $"Resource '{owner.Name}' does not have a container projection for the '{ExecutionContext.Operation}' operation.");
-        }
-
-        // The projection supplies only container-specific property state. Annotations and callback
-        // identity remain on the canonical owner under the typed-configuration-view model.
-        return WriteContainerCoreAsync(owner, container.Entrypoint);
     }
 
     private async Task WriteBuildContextAsync(IResource resource)

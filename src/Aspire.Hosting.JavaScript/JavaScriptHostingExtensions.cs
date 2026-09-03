@@ -1903,17 +1903,16 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-            if (!resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var publishingAnnotation) ||
-                publishingAnnotation.Callback is not { } publishContainer)
+            if (resource.AsContainer() is null)
             {
                 throw new InvalidOperationException(
-                    $"The published JavaScript app '{resource.Name}' does not have a container manifest callback.");
+                    $"The published JavaScript app '{resource.Name}' does not have a container projection.");
             }
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
                 ValidateExistingDockerfileRunScript(resource, resource);
-                return publishContainer(context);
+                return context.WriteContainerAsync(resource);
             }
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);

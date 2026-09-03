@@ -1016,7 +1016,7 @@ public static class ProjectResourceBuilderExtensions
         }
 
         return builder.WithManifestPublishingCallback(
-            context => context.WriteProjectedContainerAsync(resource));
+            context => context.WriteContainerAsync(resource));
     }
 
     private static IConfiguration GetConfiguration(IResource projectResource)
