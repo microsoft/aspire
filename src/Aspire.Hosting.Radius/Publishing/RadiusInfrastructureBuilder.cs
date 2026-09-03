@@ -1970,8 +1970,9 @@ internal sealed class RadiusInfrastructureBuilder
         string resourceType)
     {
         // Legacy Applications.* types register their recipe under the "default" name on the
-        // legacy environment. The outer map is keyed by recipe name so a future PR can register
-        // multiple named recipes per type; this PR only emits the single default recipe.
+        // legacy environment. Radius keys recipes by name within a type, so the inner map is
+        // keyed that way even though only the default recipe is emitted today; a type that grows
+        // named recipes then adds entries rather than changing the shape.
         const string recipeName = "default";
 
         if (!entries.TryGetValue(resourceType, out var byName))
@@ -2037,8 +2038,9 @@ internal sealed class RadiusInfrastructureBuilder
         BicepValue<string> environmentId)
     {
         var construct = new LegacyApplicationConstruct(identifier);
-        // Share the UDT application's `name:` — rubber-duck feedback: only the
-        // Bicep identifier is suffixed with `_legacy`.
+        // The legacy application is the same Radius application as the UDT one, so it must carry
+        // the same `name:`; only the Bicep identifier is suffixed with `_legacy`, to keep the two
+        // declarations from colliding in the generated template.
         construct.ApplicationName = applicationName;
         construct.EnvironmentId = environmentId;
         return construct;

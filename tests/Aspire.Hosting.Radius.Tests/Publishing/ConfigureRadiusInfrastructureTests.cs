@@ -215,9 +215,10 @@ public class ConfigureRadiusInfrastructureTests
     [Fact]
     public void ConfigureCallback_CanEditRecipeEntryViaRecipeLocation()
     {
-        // L5: Callbacks can reach into recipe entries via typed access and edit the
-        // RecipeLocation property (L1). The C# member keeps its name; Radius 0.60 renamed only
-        // the emitted schema key, from `recipeLocation` to `source`.
+        // A callback can reach a recipe entry through typed access and edit its location, and the
+        // edit survives into the emitted template. The C# member keeps the `RecipeLocation` name
+        // while Radius 0.60 renamed only the emitted schema key, from `recipeLocation` to
+        // `source`, so the assertion below looks for `source:` rather than the member name.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("myenv")
             .ConfigureRadiusInfrastructure(opts =>
