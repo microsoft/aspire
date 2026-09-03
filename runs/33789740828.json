@@ -1,0 +1,29 @@
+{
+  "run_id": 33789740828,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33789740828",
+  "analyzed_at": "2026-09-03T19:17:02Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19868,
+    "title": "Clarify VS Code CLI debug log location",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-clarify-vscode-cli-debug-logs",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19868"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 100766925544,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33789740828/job/100766925544",
+      "classification": "flaky-test",
+      "reason": "PR only modifies localization files (extension/loc/xlf/aspire-vscode.xlf, extension/package.nls.json), completely unrelated to VS Code extension E2E debug-configuration test behavior. Job logs were unavailable ('Failed to fetch logs for job') and only a generic 'Process completed with exit code 1' annotation was produced, with no TRX test failures extracted. This matches a known recurring flaky pattern for this specific shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
