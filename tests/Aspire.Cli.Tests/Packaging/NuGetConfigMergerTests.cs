@@ -317,6 +317,51 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_MapsSamePatternToEveryRequiredSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="feed1" value="https://feed1.example" />
+                    <add key="feed2" value="https://feed2.example" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="feed1">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("*", "https://feed1.example"),
+            new PackageMapping("*", "https://feed2.example")
+        };
+        var channel = CreateChannel(mappings);
+
+        Assert.True(NuGetConfigMerger.HasMissingSources(root, channel));
+
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        Assert.False(NuGetConfigMerger.HasMissingSources(root, channel));
+
+        var document = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var mappedSources = document.Descendants("packageSourceMapping")
+            .Elements("packageSource")
+            .Where(element => element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "*"))
+            .Select(element => element.Attribute("key")!.Value)
+            .ToArray();
+
+        Assert.Equal(["feed1", "feed2"], mappedSources);
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_ReusesExistingSourceKeys_WhenMappingToExistingSourcesByUrl()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

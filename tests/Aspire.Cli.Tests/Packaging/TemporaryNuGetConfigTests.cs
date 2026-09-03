@@ -323,6 +323,42 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_MapsSamePatternToMultipleSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, """
+            <configuration>
+              <packageSources>
+                <add key="feed1" value="https://feed1.example" />
+                <add key="feed2" value="https://feed2.example" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="feed1">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [configPath],
+            [
+                new PackageMapping("*", "https://feed1.example"),
+                new PackageMapping("*", "https://feed2.example")
+            ]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var mappedSources = document.Descendants("packageSourceMapping")
+            .Elements("packageSource")
+            .Where(element => element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "*"))
+            .Select(element => element.Attribute("key")!.Value)
+            .ToArray();
+
+        Assert.Equal(["feed1", "feed2"], mappedSources);
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_PreservesCaseSensitiveSourcePaths()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

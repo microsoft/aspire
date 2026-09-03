@@ -3480,6 +3480,40 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    public async Task ReadClosureManifestAsync_PreservesTrailingWhitespaceInPaths()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var sourcePath = Path.Combine(restoreDirectory.FullName, "MyIntegration.dll ");
+        var relativePath = "MyIntegration.dll ";
+        File.WriteAllText(sourcePath, "integration");
+        File.WriteAllLines(
+            Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureSourcesFileName),
+            [sourcePath]);
+        File.WriteAllLines(
+            Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureMetadataFileName),
+            ["|||"]);
+        File.WriteAllLines(
+            Path.Combine(restoreDirectory.FullName, IntegrationClosureBuilder.ClosureTargetsFileName),
+            [relativePath]);
+        var intermediateOutputPath = Path.Combine(restoreDirectory.FullName, "obj");
+        WriteProjectAssetsFile(intermediateOutputPath, packageMetadata: null);
+
+        var manifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
+            restoreDirectory.FullName,
+            Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
+            "{}",
+            ClosureFileMissingBehavior.Throw,
+            logger: null,
+            CancellationToken.None);
+
+        var entry = Assert.Single(Assert.IsType<AppHostServerClosureManifest>(manifest).Entries);
+        Assert.Equal(sourcePath, entry.SourcePath);
+        Assert.Equal(relativePath, entry.RelativePath);
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenOnlyPackageTimestampChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

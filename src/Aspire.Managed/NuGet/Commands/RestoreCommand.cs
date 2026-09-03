@@ -232,7 +232,7 @@ public static class RestoreCommand
         }
     }
 
-    private static List<PackageSource> ResolvePackageSources(ISettings settings, string[] cliSources, bool noNugetOrg)
+    internal static List<PackageSource> ResolvePackageSources(ISettings settings, string[] cliSources, bool noNugetOrg)
     {
         // Load enabled sources from NuGet config
         var provider = new PackageSourceProvider(settings);
@@ -241,7 +241,7 @@ public static class RestoreCommand
         // Append CLI --source values (matching NuGet's behavior of merging, not replacing)
         foreach (var cliSource in cliSources)
         {
-            if (!sources.Any(s => s.Source.Equals(cliSource, StringComparison.OrdinalIgnoreCase)))
+            if (!sources.Any(s => s.Source.Equals(cliSource, StringComparison.Ordinal)))
             {
                 sources.Add(new PackageSource(cliSource));
             }

@@ -3,6 +3,7 @@
 
 using Aspire.Managed.NuGet.Commands;
 using Microsoft.DotNet.RemoteExecutor;
+using NuGet.Configuration;
 using Xunit;
 
 namespace Aspire.Managed.Tests.NuGet;
@@ -111,6 +112,27 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var assetsContent = File.ReadAllText(Path.Combine(_workspace.Path, "obj", "project.assets.json"));
         Assert.Contains(JsonEncodedPath(configSourcePath), assetsContent);
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
+    }
+
+    [Fact]
+    public void RestoreCommand_PreservesCaseDistinctCliSources()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            "<configuration><packageSources><clear /></packageSources></configuration>");
+        var settings = Settings.LoadSpecificSettings(_workspace.Path, Path.GetFileName(nugetConfigPath));
+        const string upperCasePathSource = "https://example.invalid/Feed/index.json";
+        const string lowerCasePathSource = "https://example.invalid/feed/index.json";
+
+        var sources = RestoreCommand.ResolvePackageSources(
+            settings,
+            [upperCasePathSource, lowerCasePathSource],
+            noNugetOrg: true);
+
+        Assert.Equal(
+            [upperCasePathSource, lowerCasePathSource],
+            sources.Select(static source => source.Source));
     }
 
     [Fact]
