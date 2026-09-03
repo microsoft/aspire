@@ -67,11 +67,16 @@ internal sealed class SealedSecretApplyStep
 
         await EnsureKubectlAsync(cancellationToken).ConfigureAwait(false);
 
+        // Resolved the same way the control plane version gate resolves it — by asking `rad`
+        // before reading the config file — so the two steps cannot disagree about which cluster is
+        // being touched. That matters more here than for the gate: applying a SealedSecret to the
+        // wrong cluster writes to it, where a misresolved gate only reads a version.
         var workspaceConfigPath = RadiusWorkspaceKubeContext.GetWorkspaceConfigPath();
-        var parsedKubeContext = await RadiusWorkspaceKubeContext.ResolveWorkspaceContextAsync(workspaceConfigPath, cancellationToken).ConfigureAwait(false);
+        var resolvedKubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(
+            RadiusDeploymentPipelineStep.RunAsync, cancellationToken).ConfigureAwait(false);
         var kubeContext = RequireKubeContext(
             Environment.GetEnvironmentVariable(KubeContextOverrideEnvironmentVariable),
-            parsedKubeContext,
+            resolvedKubeContext,
             workspaceConfigPath);
 
         // Same-run publish copies each manifest under the environment output directory; deploy

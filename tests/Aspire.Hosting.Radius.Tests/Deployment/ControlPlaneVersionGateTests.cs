@@ -296,23 +296,23 @@ public class ControlPlaneVersionGateTests
         await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
             NullLogger.Instance, kubeContext: null, ThrowingRunner, CancellationToken.None);
 
-        await RunWithAsync((fileName, _) => fileName == "kubectl" ? null : new RadiusDeploymentPipelineStep.ProcessRunResult(0, ""));
-        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(1, "") : new RadiusDeploymentPipelineStep.ProcessRunResult(0, ""));
-        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1") : null);
-        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1") : new RadiusDeploymentPipelineStep.ProcessRunResult(1, ""));
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? null : new ProcessRunResult(0, ""));
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new ProcessRunResult(1, "") : new ProcessRunResult(0, ""));
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new ProcessRunResult(0, "apiVersion: v1") : null);
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new ProcessRunResult(0, "apiVersion: v1") : new ProcessRunResult(1, ""));
 
         // A successful `rad` whose payload carries no readable control plane version. Guarded here
         // as well as in the parsing tests because reaching the comparison with an unknown version
         // would fail every deploy on a cluster the gate simply cannot describe.
         await RunWithAsync((fileName, _) => fileName == "kubectl"
-            ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1")
-            : new RadiusDeploymentPipelineStep.ProcessRunResult(0, """{"controlPlane":{"version":"edge","status":"Installed"}}"""));
+            ? new ProcessRunResult(0, "apiVersion: v1")
+            : new ProcessRunResult(0, """{"controlPlane":{"version":"edge","status":"Installed"}}"""));
 
-        static Task<RadiusDeploymentPipelineStep.ProcessRunResult?> ThrowingRunner(
+        static Task<ProcessRunResult?> ThrowingRunner(
             string fileName, string[] arguments, IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken)
             => throw new XunitException($"The gate ran '{fileName}' with no resolvable workspace context.");
 
-        static Task RunWithAsync(Func<string, string[], RadiusDeploymentPipelineStep.ProcessRunResult?> run)
+        static Task RunWithAsync(Func<string, string[], ProcessRunResult?> run)
             => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
                 NullLogger.Instance,
                 "kind-radius",
@@ -326,7 +326,7 @@ public class ControlPlaneVersionGateTests
 
         public List<Invocation> Invocations { get; } = [];
 
-        public Task<RadiusDeploymentPipelineStep.ProcessRunResult?> RunAsync(
+        public Task<ProcessRunResult?> RunAsync(
             string fileName,
             string[] arguments,
             IReadOnlyDictionary<string, string?>? environment,
@@ -341,10 +341,10 @@ public class ControlPlaneVersionGateTests
 
             Invocations.Add(new Invocation(fileName, arguments, environment, kubeConfigContents));
 
-            return Task.FromResult<RadiusDeploymentPipelineStep.ProcessRunResult?>(fileName switch
+            return Task.FromResult<ProcessRunResult?>(fileName switch
             {
-                "kubectl" => new RadiusDeploymentPipelineStep.ProcessRunResult(0, ExportedKubeConfig),
-                "rad" => new RadiusDeploymentPipelineStep.ProcessRunResult(
+                "kubectl" => new ProcessRunResult(0, ExportedKubeConfig),
+                "rad" => new ProcessRunResult(
                     0,
                     $$$"""{"controlPlane":{"version":"{{{controlPlaneVersion}}}","status":"Installed"}}"""),
                 _ => throw new XunitException($"The gate ran an unexpected command: '{fileName}'."),

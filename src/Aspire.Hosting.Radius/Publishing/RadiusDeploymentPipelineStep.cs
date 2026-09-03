@@ -135,7 +135,7 @@ internal sealed class RadiusDeploymentPipelineStep
     /// </remarks>
     internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
     {
-        var kubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(cancellationToken).ConfigureAwait(false);
+        var kubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(RunAsync, cancellationToken).ConfigureAwait(false);
         await VerifyControlPlaneVersionAsync(logger, kubeContext, RunAsync, cancellationToken).ConfigureAwait(false);
     }
 
@@ -150,7 +150,7 @@ internal sealed class RadiusDeploymentPipelineStep
     internal static async Task VerifyControlPlaneVersionAsync(
         ILogger logger,
         string? kubeContext,
-        ControlPlaneCommandRunner runCommand,
+        RadiusCommandRunner runCommand,
         CancellationToken cancellationToken)
     {
         if (kubeContext is null)
@@ -319,23 +319,10 @@ internal sealed class RadiusDeploymentPipelineStep
         }
     }
 
-    internal readonly record struct ProcessRunResult(int ExitCode, string StandardOutput);
-
-    /// <summary>
-    /// Runs one external command for the control plane version gate. Returns <see langword="null"/>
-    /// when the executable is not on PATH, which the gate treats as "unknown" rather than
-    /// "unsupported". A <see langword="null"/> value in <paramref name="environment"/> removes that
-    /// variable from the child's environment.
-    /// </summary>
-    internal delegate Task<ProcessRunResult?> ControlPlaneCommandRunner(
-        string fileName,
-        string[] arguments,
-        IReadOnlyDictionary<string, string?>? environment,
-        CancellationToken cancellationToken);
-
     // Returns null when the executable is not on PATH, which every caller here treats as "unknown"
     // rather than "unsupported". A null value in `environment` removes that variable from the child.
-    private static async Task<ProcessRunResult?> RunAsync(
+    // Internal because it is the production RadiusCommandRunner shared by the deploy-time steps.
+    internal static async Task<ProcessRunResult?> RunAsync(
         string fileName,
         string[] arguments,
         IReadOnlyDictionary<string, string?>? environment,
