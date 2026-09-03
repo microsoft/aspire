@@ -362,6 +362,29 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ResolveStepsAsync_WithStepRegisteredThroughProjection_AssociatesStepWithOwner()
+    {
+        using var builder = CreatePipelineTestBuilder();
+
+        var owner = builder.AddExecutable("test-resource", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithPipelineStepFactory(
+                    "projected-step",
+                    _ => Task.CompletedTask));
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        // The projection facade is not a member of the model, so a step registered through it must still point at
+        // the owner. The pipeline only fills in a null Resource, so this cannot be fixed up during collection.
+        var projectedStep = Assert.Single(steps, step => step.Name == "projected-step");
+        Assert.Same(owner.Resource, projectedStep.Resource);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
         using var builder = CreatePipelineTestBuilder();
