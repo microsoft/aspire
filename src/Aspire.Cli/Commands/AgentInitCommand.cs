@@ -322,12 +322,12 @@ internal sealed class AgentInitCommand : BaseCommand
         // Chained flows (`aspire new`, `aspire init`) never construct a binding for it, so MCP
         // configuration is unreachable from those flows by construction rather than by a runtime
         // visibility flag. Selectable MCP server definitions (currently just "aspire") are kept
-        // separate from the detected configuration targets scanners discover for each agent
+        // separate from the detected McpConfigurationTargets scanners discover for each agent
         // environment (VS Code, GitHub Copilot, etc.); a selected definition is applied to every
         // matching target exactly once in Phase 5.
         IReadOnlyList<McpServerDefinition> selectedMcpServers = [];
         var mcpConfigurationTargets = mcpsBinding is not null
-            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
+            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).Select(a => new McpConfigurationTarget(a)).ToList()
             : [];
 
         // An explicitly provided --mcps value must be validated even when zero configuration
