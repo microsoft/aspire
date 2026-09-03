@@ -8,6 +8,7 @@ import {
     resourceCommandCustomChoice,
     resourceCommandCustomChoiceDescription,
     resourceCommandDynamicInputsUnsupported,
+    resourceCommandFileInputsUnsupported,
     resourceCommandLoadingDynamicInputs,
     resourceCommandInvalidNumber,
     resourceCommandMaxLength,
@@ -281,11 +282,48 @@ async function promptForArgumentValue(title: string, input: ResourceCommandArgum
             return promptForChoiceArgument(title, input, step, totalSteps);
         case ResourceCommandInputType.Boolean:
             return promptForBooleanArgument(title, input, step, totalSteps);
+        case ResourceCommandInputType.File:
+            if (!input.filePathValueSupported) {
+                await vscode.window.showWarningMessage(resourceCommandFileInputsUnsupported, { modal: true });
+                return undefined;
+            }
+            return promptForFileArgument(title, input);
         case ResourceCommandInputType.Text:
         case ResourceCommandInputType.SecretText:
         case ResourceCommandInputType.Number:
             return promptForTextArgument(title, input, step, totalSteps);
     }
+}
+
+async function promptForFileArgument(title: string, input: ResourceCommandArgumentInputJson): Promise<string | undefined> {
+    const selectedFiles = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: input.allowMultipleFiles ?? false,
+        filters: createFilePickerFilters(input.fileFilter),
+        openLabel: getArgumentLabel(input),
+        title: getArgumentInputTitle(title, input),
+    });
+
+    if (!selectedFiles) {
+        return input.required ? undefined : '';
+    }
+
+    return JSON.stringify(selectedFiles.map(file => file.fsPath));
+}
+
+function createFilePickerFilters(fileFilter: string | null | undefined): Record<string, string[]> | undefined {
+    const extensions = fileFilter
+        ?.split(',')
+        .map(filter => filter.trim())
+        .filter(filter => filter.startsWith('.') && filter.length > 1)
+        .map(filter => filter.slice(1));
+
+    if (!fileFilter || !extensions || extensions.length === 0) {
+        return undefined;
+    }
+
+    return { [fileFilter]: extensions };
 }
 
 async function promptForTextArgument(title: string, input: ResourceCommandArgumentInputJson, step: number, totalSteps: number): Promise<string | undefined> {
