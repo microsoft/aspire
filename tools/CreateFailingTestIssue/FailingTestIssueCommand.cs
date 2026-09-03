@@ -246,9 +246,13 @@ internal static class FailingTestIssueCommand
                 {
                     Log($"Created issue #{result.Number}: {result.Url}");
                 }
-                else
+                else if (!result.Skipped || result.Reopened || result.DuplicatesClosed.Count > 0)
                 {
                     Log($"Updated existing issue #{result.Number}: {result.Url}");
+                }
+                else
+                {
+                    Log($"Found existing issue #{result.Number}: {result.Url}");
                 }
             }
 

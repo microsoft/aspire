@@ -179,11 +179,9 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
         });
     }
 
-    // Reuse the initial all-state inventory while recording failures so a recurring
-    // failure reopens its canonical tracker instead of filing a duplicate. Trusted
-    // success handling re-lists through the selected transport immediately before
-    // auto-close, and that live or simulated inventory becomes the shared snapshot
-    // for later watched workflows.
+    // Start each polling window from one all-state inventory. Reconciliation refreshes
+    // this snapshot so later runs and watched workflows observe canonicalization,
+    // comments, and closures performed by earlier entries in the same window.
     const liveTransport = tracking.createOctokitIssueTransport(github, context);
     let issues = await liveTransport.listIssues(label);
     const transport = dryRun
@@ -256,6 +254,7 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                     comment, issues,
                     closeDuplicates: true,
                 });
+                issues = await transport.listIssues(label);
                 if (dryRun) {
                     for (const duplicateNumber of result.duplicatesClosed) {
                         log(`would CLOSE duplicate issue #${duplicateNumber} as not_planned (canonical #${result.number})`);
@@ -267,20 +266,6 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                         log(`would RECORD failure for ${wf.file} on ${recordingIssue ? formatIssueReference(recordingIssue) : 'a new issue'}`);
                     }
                     continue;
-                }
-                for (const duplicateNumber of result.duplicatesClosed) {
-                    const duplicateIssue = issues.find(issue => issue.number === duplicateNumber);
-                    if (duplicateIssue !== undefined) {
-                        duplicateIssue.state = 'closed';
-                    }
-                }
-                if (result.created) {
-                    issues.push({ number: result.number, body: issueBody, labels: issueLabels, state: 'open' });
-                } else if (result.reopened) {
-                    const recordedIssue = tracking.findIssueForMarker(issues, marker);
-                    if (recordedIssue !== null) {
-                        recordedIssue.state = 'open';
-                    }
                 }
 
                 if (!result.skipped) {
@@ -335,6 +320,7 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
             }
 
             const result = await tracking.executeIssueReconciliation(transport, core, closeOptions);
+            issues = await transport.listIssues(label);
             const canonicalClosed = result.appliedActions.some(candidate =>
                 candidate.type === 'close' && candidate.issueNumber === result.number);
             if (dryRun) {
@@ -346,13 +332,6 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                     log(`would CLOSE ${formatIssueReference(canonical)} (${wf.file})`);
                 }
                 continue;
-            }
-
-            for (const action of result.appliedActions.filter(candidate => candidate.type === 'close')) {
-                const closedIssue = closeIssues.find(candidate => candidate.number === action.issueNumber);
-                if (closedIssue !== undefined) {
-                    closedIssue.state = 'closed';
-                }
             }
 
             if (canonicalClosed) {

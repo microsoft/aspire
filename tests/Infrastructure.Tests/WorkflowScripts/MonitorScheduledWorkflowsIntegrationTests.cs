@@ -113,6 +113,44 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RefreshesCanonicalIssueAfterCreateRaceBeforeRecordingNextFailure()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            nextNumber = 1000,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 999, body = Marker, state = "open", comments = Array.Empty<string>() },
+                new { number = 1000, body = Marker, state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(1, result.Calls.Count(call => call == "create"));
+        Assert.Equal(2, result.Issues.Length);
+
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 999);
+        Assert.Equal("open", canonical.State);
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:9 -->", StringComparison.Ordinal));
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:10 -->", StringComparison.Ordinal));
+
+        var throwaway = Assert.Single(result.Issues, issue => issue.Number == 1000);
+        Assert.Equal("closed", throwaway.State);
+        Assert.Equal("not_planned", throwaway.StateReason);
+        Assert.DoesNotContain(result.Issues, issue => issue.Number > 1000);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DedupsWhenLatestFailedRunAlreadyRecorded()
     {
         // The scanner runs every 2h but watched workflows run less often, so the same

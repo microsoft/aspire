@@ -395,9 +395,11 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.Contains("Found closed issue #44444. Reopening...", diagnosticsLog, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("open")]
+    [InlineData("closed")]
     [RequiresTools(["node"])]
-    public async Task CreateFlagDoesNotReopenOrCommentWhenRunIsAlreadyRecordedOnCanonical()
+    public async Task CreateFlagDoesNotReopenOrCommentWhenRunIsAlreadyRecordedOnCanonical(string issueState)
     {
         var fixtureDirectory = CreateFixtureDirectory();
 
@@ -408,7 +410,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
               {
                 "number": 44444,
                 "html_url": "https://github.com/microsoft/aspire/issues/44444",
-                "state": "closed",
+                "state": "{{issueState}}",
                 "body": "{{StableMetadataMarker}}"
               }
             ]
@@ -439,6 +441,8 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.Contains("Run 123 is already recorded on issue #44444", diagnosticsLog, StringComparison.Ordinal);
         Assert.DoesNotContain("Reopening", diagnosticsLog, StringComparison.Ordinal);
         Assert.DoesNotContain("Adding comment", diagnosticsLog, StringComparison.Ordinal);
+        Assert.Contains("Found existing issue #44444: https://github.com/microsoft/aspire/issues/44444", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Updated existing issue", diagnosticsLog, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -494,6 +498,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.Contains("Run 123 is already recorded on issue #44444; skipping duplicate comment.", diagnosticsLog, StringComparison.Ordinal);
         Assert.DoesNotContain("Recorded run 123", diagnosticsLog, StringComparison.Ordinal);
         Assert.DoesNotContain("Adding comment", diagnosticsLog, StringComparison.Ordinal);
+        Assert.Contains("Updated existing issue #44444: https://github.com/microsoft/aspire/issues/44444", diagnosticsLog, StringComparison.Ordinal);
     }
 
     [Fact]
