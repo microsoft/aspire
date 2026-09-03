@@ -2245,6 +2245,15 @@ public static partial class JavaScriptHostingExtensions
             .WithHttpEndpoint(env: "PORT")
             .WithOtlpExporter();
 
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            resourceBuilder
+                .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
+                .ClearContainerFilesSources()
+                .WithEnvironment("HOSTNAME", "0.0.0.0");
+            MarkDockerfileAsExecutable(resourceBuilder);
+        }
+
         // Add a publish prereq step that validates the Next.js config has standalone output enabled.
         // This runs at deploy time (not resource creation time) so it doesn't block `aspire start`.
         // Can be disabled with .DisableBuildValidation().
@@ -2268,15 +2277,6 @@ public static partial class JavaScriptHostingExtensions
                 }
             }
         ]));
-
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            resourceBuilder
-                .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
-                .ClearContainerFilesSources()
-                .WithEnvironment("HOSTNAME", "0.0.0.0");
-            MarkDockerfileAsExecutable(resourceBuilder);
-        }
 
         return resourceBuilder;
     }
