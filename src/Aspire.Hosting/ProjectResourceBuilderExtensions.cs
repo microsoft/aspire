@@ -995,11 +995,16 @@ public static class ProjectResourceBuilderExtensions
                 container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
                 container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
 
-                // The image entrypoint replaces dotnet run, so arguments configured before the
-                // first conversion often contain host-only paths and must not reach the container.
-                container.WithArgs(context => context.Args.Clear());
-            },
-            configure);
+                // Preserve the existing PublishAsDockerFile behavior: project conversion clears arguments only on
+                // its first call, so arguments configured after that call survive later conversions. Executable
+                // conversion differs and clears on every call. See https://github.com/microsoft/aspire/issues/19922.
+                if (!hasProjection)
+                {
+                    container.WithArgs(context => context.Args.Clear());
+                }
+
+                configure?.Invoke(container);
+            });
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
         // manifest callback that an integration installed after the first conversion.

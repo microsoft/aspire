@@ -140,13 +140,12 @@ public static class ExecutableResourceBuilderExtensions
             {
                 container.WithImage(resource.Name);
                 container.WithDockerfile(contextPath: resource.WorkingDirectory);
-            },
-            container =>
-            {
-                // The image entrypoint replaces the host executable, so arguments configured before
-                // this conversion often contain host-only paths and must not reach the container. This runs on
-                // every conversion so a repeat conversion also discards arguments added since the last one.
+
+                // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on
+                // every call, so only arguments configured by or after the most recent call reach the container.
+                // Project conversion differs and clears only on its first call. See https://github.com/microsoft/aspire/issues/19922.
                 container.WithArgs(context => context.Args.Clear());
+
                 configure?.Invoke(container);
             });
 

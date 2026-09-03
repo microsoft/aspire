@@ -631,6 +631,100 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void PublishAsContainerImageAppliesTheImageFromTheMostRecentCall()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Re-projecting reconfigures the existing projection, so the image has to be re-applied on every call.
+        // Applying it only when the projection is created would silently keep the first image after validating
+        // the second one.
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsContainerImage("contoso/worker:1.0")
+            .PublishAsContainerImage("contoso/worker:2.0");
+
+        var container = executable.Resource.AsContainer();
+        Assert.NotNull(container);
+
+        // Exactly one annotation, because appending a second one leaves readers that take the first and readers
+        // that take the last disagreeing about the current image.
+        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("contoso/worker", image.Image);
+        Assert.Equal("2.0", image.Tag);
+    }
+
+    [Fact]
+    public void RunAsContainerImageAppliesTheImageFromTheMostRecentCall()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .RunAsContainerImage("contoso/worker:1.0")
+            .RunAsContainerImage("contoso/worker:2.0");
+
+        var container = executable.Resource.AsContainer();
+        Assert.NotNull(container);
+
+        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("contoso/worker", image.Image);
+        Assert.Equal("2.0", image.Tag);
+    }
+
+    [Fact]
+    public void ReprojectingWithATagClearsADigestFromTheEarlierImage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Tag and SHA256 are mutually exclusive, so overwriting has to leave the annotation carrying only the
+        // form the newest reference used.
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsContainerImage("contoso/worker@sha256:0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c")
+            .PublishAsContainerImage("contoso/worker:2.0");
+
+        var container = executable.Resource.AsContainer();
+        Assert.NotNull(container);
+
+        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("2.0", image.Tag);
+        Assert.Null(image.SHA256);
+    }
+
+    [Fact]
+    public void ReprojectingWithADigestClearsATagFromTheEarlierImage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        const string digest = "0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c";
+
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsContainerImage("contoso/worker:1.0")
+            .PublishAsContainerImage($"contoso/worker@sha256:{digest}");
+
+        var container = executable.Resource.AsContainer();
+        Assert.NotNull(container);
+
+        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal(digest, image.SHA256);
+        Assert.Null(image.Tag);
+    }
+
+    [Fact]
+    public void TheProjectionCallbackTakesPrecedenceOverTheImageArgument()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // The image is applied ahead of the caller's callback, so an explicit WithImageTag inside the callback
+        // still wins rather than being overwritten by the argument.
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .PublishAsContainerImage("contoso/worker:1.0", container => container.WithImageTag("override"));
+
+        var container = executable.Resource.AsContainer();
+        Assert.NotNull(container);
+
+        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("override", image.Tag);
+    }
+
+    [Fact]
     public async Task PublishAsContainerImageWritesTheOwnerAsAContainerInTheManifest()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

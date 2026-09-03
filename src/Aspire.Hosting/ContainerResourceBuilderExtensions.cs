@@ -53,7 +53,19 @@ public static class ContainerResourceBuilderExtensions
     {
         var resource = ((IResource)builder.Resource).GetOwnerOrSelf();
 
-        builder.WithAnnotation(new PipelineStepAnnotation((factoryContext) =>
+        // These annotations are added at most once, which is what makes the callers idempotent: WithDockerfile can
+        // run again for a repeat container projection without corrupting the pipeline.
+        //
+        // ResourceAnnotationMutationBehavior.Replace cannot be used for this. It asserts that the annotation type is
+        // a singleton on the resource, and PipelineStepAnnotation is the opposite: resource constructors,
+        // integrations, and the public WithPipelineStep APIs all append their own. Against that collection, Replace
+        // silently removes an unrelated step when one other exists and throws once two do.
+        if (builder.Resource.Annotations.OfType<ContainerBuildPipelineStepAnnotation>().Any())
+        {
+            return builder;
+        }
+
+        builder.WithAnnotation(new ContainerBuildPipelineStepAnnotation((factoryContext) =>
         {
             var factoryResource = factoryContext.Resource.GetOwnerOrSelf();
             var steps = new List<PipelineStep>();
@@ -97,7 +109,7 @@ public static class ContainerResourceBuilderExtensions
             }
 
             return steps;
-        }), ResourceAnnotationMutationBehavior.Replace);
+        }));
 
         return builder.WithAnnotation(new PipelineConfigurationAnnotation(context =>
         {
@@ -1888,12 +1900,19 @@ public static class ContainerResourceBuilderExtensions
     /// Applies a full container image reference, keeping the registry, image, and tag or digest separate.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This deliberately does not reuse <see cref="WithImage{T}(IResourceBuilder{T}, string, string?)"/>. That
     /// method folds a registry present in the reference into <see cref="ContainerImageAnnotation.Image"/> for
     /// continuity with Aspire 9.0 and earlier, which leaves <see cref="ContainerImageAnnotation.Registry"/> unset
     /// and hides the registry from registry-aware features such as image mirroring and
     /// <c>WithContainerRegistry</c>. The projection APIs are new surface with no such continuity requirement, so
     /// they record the reference the way the rest of the model expects to read it.
+    /// </para>
+    /// <para>
+    /// The reference overwrites any image already recorded instead of being appended. Projecting a resource again
+    /// re-applies the image, and appending would leave two <see cref="ContainerImageAnnotation"/> instances whose
+    /// readers disagree: consumers are split between taking the first and taking the last.
+    /// </para>
     /// </remarks>
     internal static void WithImageReference<TContainer>(this IResourceBuilder<TContainer> container, string image)
         where TContainer : ContainerResource
@@ -1906,11 +1925,7 @@ public static class ContainerResourceBuilderExtensions
         //   mcr.microsoft.com/dotnet/aspnet@sha256:0f27a0...
         var reference = ContainerReferenceParser.Parse(image);
 
-        var annotation = new ContainerImageAnnotation
-        {
-            Registry = reference.Registry,
-            Image = reference.Image
-        };
+        string? digestValue = null;
 
         if (reference.Digest is { } digest)
         {
@@ -1920,7 +1935,38 @@ public static class ContainerResourceBuilderExtensions
                 throw new ArgumentOutOfRangeException(nameof(image), digest, "invalid digest format");
             }
 
-            annotation.SHA256 = digest[prefix.Length..];
+            digestValue = digest[prefix.Length..];
+        }
+
+        // Mutate the annotation already present rather than adding a second one, matching how WithImage records an
+        // image. Tag and SHA256 are mutually exclusive and each setter clears the other, so exactly one is assigned:
+        // writing both would clear whichever was set second.
+        if (container.Resource.Annotations.OfType<ContainerImageAnnotation>().LastOrDefault() is { } existing)
+        {
+            existing.Registry = reference.Registry;
+            existing.Image = reference.Image;
+
+            if (digestValue is not null)
+            {
+                existing.SHA256 = digestValue;
+            }
+            else
+            {
+                existing.Tag = reference.Tag ?? "latest";
+            }
+
+            return;
+        }
+
+        var annotation = new ContainerImageAnnotation
+        {
+            Registry = reference.Registry,
+            Image = reference.Image
+        };
+
+        if (digestValue is not null)
+        {
+            annotation.SHA256 = digestValue;
         }
         else
         {

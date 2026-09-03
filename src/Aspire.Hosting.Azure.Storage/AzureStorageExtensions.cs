@@ -228,8 +228,8 @@ public static class AzureStorageExtensions
                 // --disableProductStyleUrl is required to ensure the emulator uses path-style URLs, and not “product-style” URLs which have the account name in the host name of the URL.
                 container.WithArgs("azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--disableProductStyleUrl", SkipApiVersionCheckArgument);
 
-            },
-            configureContainer);
+                configureContainer?.Invoke(container);
+            });
 
         BlobServiceClient? blobServiceClient = null;
         QueueServiceClient? queueServiceClient = null;

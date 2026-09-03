@@ -26,8 +26,7 @@ public static class ResourceProjectionBuilderExtensions
     /// Creates the container the owner is projected as. The container must use the owner's name and return the
     /// owner's <see cref="IResource.Annotations"/> collection.
     /// </param>
-    /// <param name="configureDefaults">The integration's defaults for the projection.</param>
-    /// <param name="configure">Caller-supplied configuration applied on top of the defaults.</param>
+    /// <param name="configure">Configuration applied to the projection.</param>
     /// <returns>The <paramref name="builder"/>, so the owner keeps its original type.</returns>
     /// <remarks>
     /// <para>
@@ -43,14 +42,16 @@ public static class ResourceProjectionBuilderExtensions
     /// pair. That keeps references, events, and notifications addressed to a single canonical identity.
     /// </para>
     /// <para>
-    /// Nothing is created and neither callback runs when the AppHost is not performing <paramref name="operation"/>,
+    /// Nothing is created and the callback does not run when the AppHost is not performing <paramref name="operation"/>,
     /// so a run-mode projection contributes no configuration to a publish and vice versa.
     /// </para>
     /// <para>
     /// Projecting the same resource again reconfigures the projection that already exists instead of replacing it:
-    /// <paramref name="createProjection"/> and <paramref name="configureDefaults"/> run only for the first
-    /// projection, while <paramref name="configure"/> runs every time. Defaults are applied once because they
-    /// commonly add named endpoints, which cannot be added twice.
+    /// <paramref name="createProjection"/> runs only for the first projection because the projection is an identity,
+    /// while <paramref name="configure"/> runs every time. An integration nests the caller's callback inside its own,
+    /// so its defaults and the caller's configuration are a single callback and are applied together on every call.
+    /// That matches the pre-projection <c>RunAsEmulator</c> conventions, which also re-applied their defaults on each
+    /// call, and it is what lets a repeat call override a value such as the image.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
@@ -64,14 +65,13 @@ public static class ResourceProjectionBuilderExtensions
         this IResourceBuilder<T> builder,
         DistributedApplicationOperation operation,
         Func<TContainer> createProjection,
-        Action<IResourceBuilder<TContainer>> configureDefaults,
-        Action<IResourceBuilder<TContainer>>? configure)
+        Action<IResourceBuilder<TContainer>> configure)
         where T : IResource
         where TContainer : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(createProjection);
-        ArgumentNullException.ThrowIfNull(configureDefaults);
+        ArgumentNullException.ThrowIfNull(configure);
 
         // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. Projecting a
         // container onto a container is always an authoring mistake: the projection shares the owner's annotation
@@ -100,10 +100,7 @@ public static class ResourceProjectionBuilderExtensions
                     $"and cannot also be projected as '{typeof(TContainer).Name}'.");
             }
 
-            if (configure is not null)
-            {
-                existing.Configure(() => configure(builder.ApplicationBuilder.CreateResourceBuilder(existingProjection)));
-            }
+            existing.Configure(() => configure(builder.ApplicationBuilder.CreateResourceBuilder(existingProjection)));
 
             return builder;
         }
@@ -133,25 +130,10 @@ public static class ResourceProjectionBuilderExtensions
 
         var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(projection);
 
-        annotation.Configure(() => configureDefaults(projectionBuilder));
-
-        if (configure is not null)
-        {
-            annotation.Configure(() => configure(projectionBuilder));
-        }
+        annotation.Configure(() => configure(projectionBuilder));
 
         return builder;
     }
-
-    /// <summary>
-    /// Projects the resource onto a plain <see cref="ContainerResource"/> for the specified operation.
-    /// </summary>
-    internal static IResourceBuilder<T> WithContainerProjection<T>(
-        this IResourceBuilder<T> builder,
-        DistributedApplicationOperation operation,
-        Action<IResourceBuilder<ContainerResource>> configureDefaults)
-        where T : IResource
-        => builder.WithContainerProjection(operation, configureDefaults, configure: null);
 
     /// <summary>
     /// Projects the resource onto a plain <see cref="ContainerResource"/> for the specified operation.
@@ -162,8 +144,7 @@ public static class ResourceProjectionBuilderExtensions
     internal static IResourceBuilder<T> WithContainerProjection<T>(
         this IResourceBuilder<T> builder,
         DistributedApplicationOperation operation,
-        Action<IResourceBuilder<ContainerResource>> configureDefaults,
-        Action<IResourceBuilder<ContainerResource>>? configure)
+        Action<IResourceBuilder<ContainerResource>> configure)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -171,7 +152,6 @@ public static class ResourceProjectionBuilderExtensions
         return builder.WithContainerProjection(
             operation,
             () => new ContainerResourceProjection<T>(builder.Resource),
-            configureDefaults,
             configure);
     }
 
@@ -200,10 +180,13 @@ public static class ResourceProjectionBuilderExtensions
 
         return builder.WithContainerProjection(
             DistributedApplicationOperation.Run,
-            // The image identifies the container source, so it belongs to creating the projection and is applied
-            // once. The callback carries per-call configuration and runs every time.
-            container => container.WithImageReference(image),
-            configure);
+            // The image is applied ahead of the caller's configuration so a repeat call overrides the previous
+            // image, and so an explicit WithImage inside the callback still takes precedence over it.
+            container =>
+            {
+                container.WithImageReference(image);
+                configure?.Invoke(container);
+            });
     }
 
     /// <summary>
@@ -233,8 +216,11 @@ public static class ResourceProjectionBuilderExtensions
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            container => container.WithImageReference(image),
-            configure);
+            container =>
+            {
+                container.WithImageReference(image);
+                configure?.Invoke(container);
+            });
 
         return builder.EnsureContainerManifestPublishingCallback(hadProjection);
     }
@@ -277,8 +263,11 @@ public static class ResourceProjectionBuilderExtensions
             // The projection type declares how it is built from its owner, so no factory has to be passed in.
             // Dispatch is static, keeping model building free of reflection and safe to trim.
             () => TContainer.CreateProjection(builder.Resource),
-            container => container.WithImageReference(image),
-            configure);
+            container =>
+            {
+                container.WithImageReference(image);
+                configure?.Invoke(container);
+            });
     }
 
     /// <summary>
@@ -312,8 +301,11 @@ public static class ResourceProjectionBuilderExtensions
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
             () => TContainer.CreateProjection(builder.Resource),
-            container => container.WithImageReference(image),
-            configure);
+            container =>
+            {
+                container.WithImageReference(image);
+                configure?.Invoke(container);
+            });
 
         return builder.EnsureContainerManifestPublishingCallback(hadProjection);
     }

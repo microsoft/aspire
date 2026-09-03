@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -429,7 +431,29 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishProjectAsDockerFile_CalledMultipleTimes_IsIdempotent()
+    public async Task PublishExecutableAsDockerFile_CalledMultipleTimes_PreservesExistingArgumentBehavior()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+
+        var executable = builder.AddExecutable("worker", "worker", path)
+            .WithArgs("before")
+            .PublishAsDockerFile(container => container.WithArgs("first"))
+            .WithArgs("between")
+            .PublishAsDockerFile(container => container.WithArgs("second"))
+            .WithArgs("after");
+
+        var containerResource = GetContainerConfiguredOwner(executable.Resource);
+
+        // Executable conversion historically clears on every call. The second clear removes the owner argument,
+        // the first callback's argument, and the argument registered between calls.
+        Assert.Equal(["second", "after"], await ArgumentEvaluator.GetArgumentListAsync(containerResource));
+    }
+
+    [Fact]
+    public async Task PublishProjectAsDockerFile_CalledMultipleTimes_PreservesExistingArgumentBehavior()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -438,13 +462,17 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
-            .PublishAsDockerFile()
-            .WithArgs("--retained")
-            .PublishAsDockerFile(); // Call again - should not throw
+            .WithArgs("before")
+            .PublishAsDockerFile(container => container.WithArgs("first"))
+            .WithArgs("between")
+            .PublishAsDockerFile(container => container.WithArgs("second"))
+            .WithArgs("after");
 
         var containerResource = GetContainerConfiguredOwner(project.Resource);
-        Assert.Equal("project", containerResource.Name);
-        Assert.Equal(["--retained"], await ArgumentEvaluator.GetArgumentListAsync(containerResource));
+
+        // Project conversion historically clears only on its first call. Arguments registered by or after that
+        // call therefore remain when the resource is converted again.
+        Assert.Equal(["first", "between", "second", "after"], await ArgumentEvaluator.GetArgumentListAsync(containerResource));
     }
 
     [Fact]
@@ -475,6 +503,29 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         
         // Both callbacks should have been invoked
         Assert.Equal(2, callbackCount);
+    }
+
+    [Fact]
+    public void WithDockerfilePreservesUnrelatedPipelineStepsAndIsIdempotent()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var container = builder.AddContainer("api", "api:latest");
+
+        container.WithPipelineStepFactory(_ => new PipelineStep
+        {
+            Name = "custom",
+            Resource = container.Resource,
+            Action = _ => Task.CompletedTask
+        });
+
+        container
+            .WithDockerfile(".")
+            .WithDockerfile(".");
+
+        // PipelineStepAnnotation supports multiple independent factories. WithDockerfile must own and replace only
+        // its build/push factory rather than deleting the caller's factory or appending another copy of its own.
+        Assert.Equal(2, container.Resource.Annotations.OfType<PipelineStepAnnotation>().Count());
+        Assert.Single(container.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
     }
 
     [Fact]
