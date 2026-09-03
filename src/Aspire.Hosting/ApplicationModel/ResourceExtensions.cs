@@ -23,7 +23,7 @@ public static class ResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.TryGetAppliedContainerProjection(out var projection) ? projection : resource;
+        return resource.AsContainer() ?? resource;
     }
 
     /// <summary>
@@ -42,19 +42,7 @@ public static class ResourceExtensions
     // IsContainer also recognizes legacy ContainerImageAnnotation-based conversion. Callers use
     // this narrower check only when an applied projection intentionally overrides legacy behavior.
     internal static bool HasAppliedContainerProjection(this IResource resource) =>
-        resource.TryGetAppliedContainerProjection(out _);
-
-    internal static bool TryGetAppliedContainerProjection(
-        this IResource resource,
-        [NotNullWhen(true)] out ContainerResource? projection)
-    {
-        projection = resource.Annotations
-            .OfType<ContainerResourceProjectionAnnotation>()
-            .SingleOrDefault()
-            ?.Projection;
-
-        return projection is not null;
-    }
+        resource is not ContainerResource && resource.AsContainer() is not null;
 
     /// <summary>
     /// Attempts to get the last annotation of the specified type from the resource.

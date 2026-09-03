@@ -22,7 +22,7 @@ internal static class ResourceProjectionBuilderExtensions
             return builder;
         }
 
-        if (builder.Resource.TryGetAppliedContainerProjection(out var existingProjection))
+        if (builder.Resource.AsContainer() is { } existingProjection)
         {
             var existingProjectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(existingProjection);
             configure(existingProjectionBuilder);

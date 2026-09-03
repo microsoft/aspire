@@ -68,6 +68,10 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.GetEffectiveResource() as ContainerResource;
+        return resource as ContainerResource ??
+            resource.Annotations
+                .OfType<ContainerResourceProjectionAnnotation>()
+                .SingleOrDefault()
+                ?.Projection;
     }
 }
