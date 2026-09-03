@@ -484,16 +484,9 @@ internal sealed class AddCommand : BaseCommand
     {
         var effectiveConfig = await NuGetConfigComposer.ComposeAsync(configPaths, cancellationToken);
         return effectiveConfig.Root?
-            .Elements()
-            .FirstOrDefault(element => string.Equals(
-                element.Name.LocalName,
-                "packageSourceMapping",
-                StringComparison.OrdinalIgnoreCase))?
-            .Elements()
-            .Any(element => string.Equals(
-                element.Name.LocalName,
-                "packageSource",
-                StringComparison.OrdinalIgnoreCase)) == true;
+            .Element("packageSourceMapping")?
+            .Elements("packageSource")
+            .Any() == true;
     }
 
     internal static void CreateAdditiveLocalSourceNuGetConfig(
