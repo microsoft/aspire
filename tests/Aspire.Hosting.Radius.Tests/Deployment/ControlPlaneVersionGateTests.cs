@@ -6,6 +6,8 @@
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit.Sdk;
 
 namespace Aspire.Hosting.Radius.Tests.Deployment;
 
@@ -204,6 +206,156 @@ public class ControlPlaneVersionGateTests
 
         Assert.Equal([WellKnownPipelineSteps.DeployPrereq], gate.DependsOnSteps);
         Assert.DoesNotContain("publish-radius-myenv", gate.RequiredBySteps);
+    }
+
+    /// <summary>
+    /// The end-to-end gate: a control plane below the minimum has to stop the deploy. The parsing
+    /// and message tests above pin the pieces, but only this exercises the path that decides —
+    /// issuing the commands, reading the result and throwing — so a regression that mishandles a
+    /// successful response cannot pass unnoticed while the deployment tests keep installing a
+    /// supported v0.60 control plane.
+    /// </summary>
+    [Fact]
+    public async Task ControlPlaneGate_WithAnUnsupportedControlPlane_FailsTheDeploy()
+    {
+        var runner = new RecordingCommandRunner(controlPlaneVersion: "0.59.0");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+                NullLogger.Instance,
+                "kind-radius",
+                runner.RunAsync,
+                CancellationToken.None));
+
+        Assert.Contains("ASPIRERADIUS091", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("0.59.0", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("kind-radius", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The counterpart: the minimum supported version must proceed. Pinned alongside the failure
+    /// case so a change that makes the comparison reject everything — turning the gate into a
+    /// blanket deploy failure — is caught here rather than by users on a supported cluster.
+    /// </summary>
+    [Fact]
+    public async Task ControlPlaneGate_WithASupportedControlPlane_AllowsTheDeploy()
+    {
+        var runner = new RecordingCommandRunner(controlPlaneVersion: "0.60.0");
+
+        await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+            NullLogger.Instance,
+            "kind-radius",
+            runner.RunAsync,
+            CancellationToken.None);
+
+        Assert.Equal(["kubectl", "rad"], runner.Invocations.Select(invocation => invocation.FileName));
+    }
+
+    /// <summary>
+    /// The gate has to inspect the workspace's cluster, not whichever one is ambient. That means
+    /// exporting the workspace context and running <c>rad</c> against an isolated home containing
+    /// the exported kubeconfig — asserted here on the real invocations rather than on the
+    /// environment builder alone, so the wiring between the two cannot silently come apart.
+    /// </summary>
+    [Fact]
+    public async Task ControlPlaneGate_RunsRadAgainstTheExportedWorkspaceKubeconfig()
+    {
+        var runner = new RecordingCommandRunner(controlPlaneVersion: "0.60.0");
+
+        await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+            NullLogger.Instance,
+            "kind-radius",
+            runner.RunAsync,
+            CancellationToken.None);
+
+        var export = runner.Invocations[0];
+        Assert.Equal(["config", "view", "--raw", "--minify", "--flatten", "--context", "kind-radius", "--output", "yaml"], export.Arguments);
+        Assert.Null(export.Environment);
+
+        var version = runner.Invocations[1];
+        Assert.Equal(["version", "--output", "json"], version.Arguments);
+        var kubeConfig = Assert.Contains("KUBECONFIG", version.Environment!);
+
+        // The export has to be the file `rad` reads, and it has to still be on disk while `rad`
+        // runs: the gate deletes the temporary home afterwards, so capturing the contents here is
+        // the only point at which that can be verified.
+        Assert.Equal(Path.Combine(version.Environment!["HOME"]!, ".kube", "config"), kubeConfig);
+        Assert.Equal(RecordingCommandRunner.ExportedKubeConfig, version.KubeConfigContentsAtInvocation);
+    }
+
+    /// <summary>
+    /// The gate fails open on anything it cannot read, because it exists to convert one silent
+    /// failure into a loud one and must never become a new way for a valid deploy to fail. Each
+    /// case here is a way the environment can be uncooperative rather than unsupported: no
+    /// resolvable workspace context, no <c>kubectl</c> on PATH, an export that fails, no <c>rad</c>
+    /// on PATH, and a <c>rad</c> that fails.
+    /// </summary>
+    [Fact]
+    public async Task ControlPlaneGate_WithAnUnreadableEnvironment_SkipsInsteadOfFailing()
+    {
+        await RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+            NullLogger.Instance, kubeContext: null, ThrowingRunner, CancellationToken.None);
+
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? null : new RadiusDeploymentPipelineStep.ProcessRunResult(0, ""));
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(1, "") : new RadiusDeploymentPipelineStep.ProcessRunResult(0, ""));
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1") : null);
+        await RunWithAsync((fileName, _) => fileName == "kubectl" ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1") : new RadiusDeploymentPipelineStep.ProcessRunResult(1, ""));
+
+        // A successful `rad` whose payload carries no readable control plane version. Guarded here
+        // as well as in the parsing tests because reaching the comparison with an unknown version
+        // would fail every deploy on a cluster the gate simply cannot describe.
+        await RunWithAsync((fileName, _) => fileName == "kubectl"
+            ? new RadiusDeploymentPipelineStep.ProcessRunResult(0, "apiVersion: v1")
+            : new RadiusDeploymentPipelineStep.ProcessRunResult(0, """{"controlPlane":{"version":"edge","status":"Installed"}}"""));
+
+        static Task<RadiusDeploymentPipelineStep.ProcessRunResult?> ThrowingRunner(
+            string fileName, string[] arguments, IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken)
+            => throw new XunitException($"The gate ran '{fileName}' with no resolvable workspace context.");
+
+        static Task RunWithAsync(Func<string, string[], RadiusDeploymentPipelineStep.ProcessRunResult?> run)
+            => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+                NullLogger.Instance,
+                "kind-radius",
+                (fileName, arguments, environment, cancellationToken) => Task.FromResult(run(fileName, arguments)),
+                CancellationToken.None);
+    }
+
+    private sealed class RecordingCommandRunner(string controlPlaneVersion)
+    {
+        internal const string ExportedKubeConfig = "apiVersion: v1\nkind: Config\nclusters: []\n";
+
+        public List<Invocation> Invocations { get; } = [];
+
+        public Task<RadiusDeploymentPipelineStep.ProcessRunResult?> RunAsync(
+            string fileName,
+            string[] arguments,
+            IReadOnlyDictionary<string, string?>? environment,
+            CancellationToken _)
+        {
+            // Read the exported kubeconfig now rather than after the gate returns: the gate deletes
+            // the temporary home in its finally block, so this is the only moment it exists.
+            var kubeConfigPath = environment?.GetValueOrDefault("KUBECONFIG");
+            var kubeConfigContents = kubeConfigPath is not null && File.Exists(kubeConfigPath)
+                ? File.ReadAllText(kubeConfigPath)
+                : null;
+
+            Invocations.Add(new Invocation(fileName, arguments, environment, kubeConfigContents));
+
+            return Task.FromResult<RadiusDeploymentPipelineStep.ProcessRunResult?>(fileName switch
+            {
+                "kubectl" => new RadiusDeploymentPipelineStep.ProcessRunResult(0, ExportedKubeConfig),
+                "rad" => new RadiusDeploymentPipelineStep.ProcessRunResult(
+                    0,
+                    $$$"""{"controlPlane":{"version":"{{{controlPlaneVersion}}}","status":"Installed"}}"""),
+                _ => throw new XunitException($"The gate ran an unexpected command: '{fileName}'."),
+            });
+        }
+
+        internal sealed record Invocation(
+            string FileName,
+            string[] Arguments,
+            IReadOnlyDictionary<string, string?>? Environment,
+            string? KubeConfigContentsAtInvocation);
     }
 
     private static async Task<List<PipelineStep>> CreateEnvironmentStepsAsync(string environmentName, bool withCloudProvider)

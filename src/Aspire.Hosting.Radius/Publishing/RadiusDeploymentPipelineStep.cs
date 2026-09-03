@@ -136,6 +136,23 @@ internal sealed class RadiusDeploymentPipelineStep
     internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
     {
         var kubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(cancellationToken).ConfigureAwait(false);
+        await VerifyControlPlaneVersionAsync(logger, kubeContext, RunAsync, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The gate's decision logic, with the two things that need a real cluster — resolving the
+    /// workspace's Kubernetes context and running <c>kubectl</c>/<c>rad</c> — supplied by the
+    /// caller. Everything the gate actually decides (which commands it issues, the environment it
+    /// isolates them with, how it reads the version, and whether it throws or lets the deploy
+    /// through) runs unchanged, so a regression that lets an unsupported control plane pass is
+    /// caught here rather than only against a live v0.59 cluster.
+    /// </summary>
+    internal static async Task VerifyControlPlaneVersionAsync(
+        ILogger logger,
+        string? kubeContext,
+        ControlPlaneCommandRunner runCommand,
+        CancellationToken cancellationToken)
+    {
         if (kubeContext is null)
         {
             logger.LogDebug(
@@ -160,7 +177,7 @@ internal sealed class RadiusDeploymentPipelineStep
             // resolves relative paths against the file's own location — so relocating the export
             // under the temporary home would break them, `rad version` would fail, and the gate
             // would skip and let an unsupported control plane through.
-            var minified = await RunAsync(
+            var minified = await runCommand(
                 "kubectl",
                 ["config", "view", "--raw", "--minify", "--flatten", "--context", kubeContext, "--output", "yaml"],
                 environment: null,
@@ -176,7 +193,7 @@ internal sealed class RadiusDeploymentPipelineStep
 
             await File.WriteAllTextAsync(kubeConfigPath, minifiedResult.StandardOutput, cancellationToken).ConfigureAwait(false);
 
-            var version = await RunAsync(
+            var version = await runCommand(
                 "rad",
                 ["version", "--output", "json"],
                 environment: BuildIsolatedKubeConfigEnvironment(
@@ -302,7 +319,19 @@ internal sealed class RadiusDeploymentPipelineStep
         }
     }
 
-    private readonly record struct ProcessRunResult(int ExitCode, string StandardOutput);
+    internal readonly record struct ProcessRunResult(int ExitCode, string StandardOutput);
+
+    /// <summary>
+    /// Runs one external command for the control plane version gate. Returns <see langword="null"/>
+    /// when the executable is not on PATH, which the gate treats as "unknown" rather than
+    /// "unsupported". A <see langword="null"/> value in <paramref name="environment"/> removes that
+    /// variable from the child's environment.
+    /// </summary>
+    internal delegate Task<ProcessRunResult?> ControlPlaneCommandRunner(
+        string fileName,
+        string[] arguments,
+        IReadOnlyDictionary<string, string?>? environment,
+        CancellationToken cancellationToken);
 
     // Returns null when the executable is not on PATH, which every caller here treats as "unknown"
     // rather than "unsupported". A null value in `environment` removes that variable from the child.
