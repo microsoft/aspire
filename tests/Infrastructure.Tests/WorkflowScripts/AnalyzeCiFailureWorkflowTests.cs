@@ -713,6 +713,42 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Theory]
+    [InlineData("pull-request", "transient-infra", "infra-failure")]
+    [InlineData("pull-request", "flaky-test", "flaky-test")]
+    [InlineData("main", "main-repository-breakage", "main-repository-breakage")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsFailedJobWithoutMatchingCause(
+        string runScope,
+        string classification,
+        string causeType)
+    {
+        var isMain = runScope == "main";
+        var causeId = $"{causeType}-cause";
+        var pr = isMain ? "null" : """{"number":42}""";
+        await WriteValidationFixtureAsync(
+            $$"""
+            {"run_id":123,"run_scope":"{{runScope}}","verdict":"{{classification}}","pr":{{pr}},
+             "failed_jobs":[
+               {"id":1,"classification":"{{classification}}"},
+               {"id":2,"classification":"{{classification}}"}],
+             "failed_tests":[],
+             "causes":["{{causeId}}"]}
+            """,
+            $$"""{"run_id":123,"run_scope":"{{runScope}}","pr_numbers":"{{(isMain ? "" : "42")}}"}""",
+            """[{"id":1,"name":"Setup"},{"id":2,"name":"Build"}]""",
+            $"{causeId}.json",
+            CreateCause(causeId, causeType, 1));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("main")]
     [InlineData("pull-request")]
     [RequiresTools(["bash", "jq"])]
@@ -1023,7 +1059,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "For every non-code failed-job classification present, write at least one cause file with the matching cause type.",
+            "`causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -1641,6 +1677,41 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal("Tests.Flaky", root.GetProperty("failed_tests")[0].GetProperty("name").GetString());
         Assert.Equal(JsonValueKind.Null, root.GetProperty("triggering_merge_pr").ValueKind);
         Assert.Equal(JsonValueKind.Null, root.GetProperty("main_context").ValueKind);
+    }
+
+    [Theory]
+    [InlineData("Tests", "Tests")]
+    [InlineData("Forged job", "")]
+    [InlineData("Tests extra", "")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PersistedFailedTestKeepsOnlyExactTrustedJobName(string reportedJob, string expectedJob)
+    {
+        await WritePersistenceFixtureAsync(
+            $$"""
+            {
+              "run_id": 123,
+              "run_scope": "pull-request",
+              "verdict": "flaky-test",
+              "pr": {"number":42},
+              "failed_jobs": [{"id":123,"classification":"flaky-test","reason":"known flaky test"}],
+              "failed_tests": [{"name":"Tests.Flaky","job":"{{reportedJob}}","error":"boom","stack_trace":"","classification":"flaky","reason":"known signature"}],
+              "causes": ["flaky-test"]
+            }
+            """,
+            """{"run_id":123,"run_attempt":1,"run_scope":"pull-request","head_sha":"trusted-pr-sha","pr_numbers":"42"}""",
+            """{"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""",
+            """[{"id":123,"name":"Tests","conclusion":"failure","html_url":"https://github.com/job/123","steps":[]}]""",
+            "{}",
+            "{}",
+            "[]",
+            """{"number":42}""");
+
+        var outputPath = Path.Combine(_workspace.Path, "persisted-pr.json");
+        var result = await RunPersistenceScriptAsync("write-run-summary", outputPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(expectedJob, document.RootElement.GetProperty("failed_tests")[0].GetProperty("job").GetString());
     }
 
     [Theory]

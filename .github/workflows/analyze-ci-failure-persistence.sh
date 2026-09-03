@@ -112,6 +112,7 @@ case "$COMMAND" in
         ($last_successful_run[0] // {}) as $last_success |
         ($candidate_merges[0] // []) as $candidates |
         ($analysis.failed_jobs | map({key: (.id | tostring), value: .}) | from_entries) as $analysis_jobs |
+        ($trusted_jobs | map(.name) | map(select(type == "string" and length > 0)) | unique) as $trusted_job_names |
         {
           run_id: $context.run_id,
           run_attempt: $context.run_attempt,
@@ -202,7 +203,7 @@ case "$COMMAND" in
             select(type == "object") |
             {
               name: (.name // ""),
-              job: (.job // ""),
+              job: (.job as $job | if ($trusted_job_names | index($job)) != null then $job else "" end),
               error: (.error // ""),
               stack_trace: (.stack_trace // ""),
               classification: (.classification // ""),

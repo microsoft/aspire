@@ -93,6 +93,9 @@ CAUSE_COUNT=0
 INFRA_CAUSE_COUNT=0
 FLAKY_CAUSE_COUNT=0
 MAIN_BREAK_CAUSE_COUNT=0
+INFRA_CAUSE_JOB_IDS='[]'
+FLAKY_CAUSE_JOB_IDS='[]'
+MAIN_BREAK_CAUSE_JOB_IDS='[]'
 SUMMARY_CAUSE_COUNT=$(jq '.causes | length' "$ANALYSIS_FILE")
 UNIQUE_SUMMARY_CAUSE_COUNT=$(jq '.causes | unique | length' "$ANALYSIS_FILE")
 FAILED_JOB_COUNT=$(jq '[.failed_jobs[]?] | length' "$ANALYSIS_FILE")
@@ -206,12 +209,15 @@ if [ -d "$CAUSES_DIR" ]; then
     case "$CAUSE_TYPE" in
       infra-failure)
         INFRA_CAUSE_COUNT=$((INFRA_CAUSE_COUNT + 1))
+        INFRA_CAUSE_JOB_IDS=$(jq -c --argjson covered "$INFRA_CAUSE_JOB_IDS" '$covered + .job_ids | unique' "$CAUSE_FILE")
         ;;
       flaky-test)
         FLAKY_CAUSE_COUNT=$((FLAKY_CAUSE_COUNT + 1))
+        FLAKY_CAUSE_JOB_IDS=$(jq -c --argjson covered "$FLAKY_CAUSE_JOB_IDS" '$covered + .job_ids | unique' "$CAUSE_FILE")
         ;;
       main-repository-breakage)
         MAIN_BREAK_CAUSE_COUNT=$((MAIN_BREAK_CAUSE_COUNT + 1))
+        MAIN_BREAK_CAUSE_JOB_IDS=$(jq -c --argjson covered "$MAIN_BREAK_CAUSE_JOB_IDS" '$covered + .job_ids | unique' "$CAUSE_FILE")
         ;;
     esac
   done
@@ -221,7 +227,6 @@ if [ "$SUMMARY_CAUSE_COUNT" -ne "$UNIQUE_SUMMARY_CAUSE_COUNT" ] ||
   echo "::error::Analysis cause IDs must uniquely match the generated cause files"
   exit 1
 fi
-
 case "$VERDICT" in
   transient-infra)
     if [ "$FAILED_TEST_COUNT" -ne 0 ]; then
@@ -295,5 +300,25 @@ if { [ "$INFRA_JOB_COUNT" -eq 0 ] && [ "$INFRA_CAUSE_COUNT" -ne 0 ]; } ||
    { [ "$MAIN_BREAK_JOB_COUNT" -eq 0 ] && [ "$MAIN_BREAK_CAUSE_COUNT" -ne 0 ]; } ||
    { [ "$MAIN_BREAK_JOB_COUNT" -ne 0 ] && [ "$MAIN_BREAK_CAUSE_COUNT" -eq 0 ]; }; then
   echo "::error::Failed-job classifications and persisted cause types do not match"
+  exit 1
+fi
+
+if ! jq -e \
+  --argjson infra_job_ids "$INFRA_CAUSE_JOB_IDS" \
+  --argjson flaky_job_ids "$FLAKY_CAUSE_JOB_IDS" \
+  --argjson main_break_job_ids "$MAIN_BREAK_CAUSE_JOB_IDS" '
+  all(.failed_jobs[];
+    .id as $job_id |
+    if .classification == "transient-infra" then
+      ($infra_job_ids | index($job_id)) != null
+    elif .classification == "flaky-test" then
+      ($flaky_job_ids | index($job_id)) != null
+    elif .classification == "main-repository-breakage" then
+      ($main_break_job_ids | index($job_id)) != null
+    else
+      true
+    end)
+' "$ANALYSIS_FILE" >/dev/null; then
+  echo "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause"
   exit 1
 fi
