@@ -6,6 +6,12 @@ using System.Xml.Linq;
 
 namespace Aspire.Cli.Packaging;
 
+/// <summary>
+/// Flattens a NuGet configuration hierarchy into one standalone document while preserving precedence and origin-relative paths.
+/// The Native AOT CLI cannot reference NuGet.Configuration, and that library has no public API for serializing effective settings:
+/// its XML conversion is internal and <c>SaveToDisk</c> writes back to the source hierarchy. Keeping raw XML composition here also
+/// supports unbundled source builds where <c>aspire-managed</c> is unavailable.
+/// </summary>
 internal static class NuGetConfigComposer
 {
     private static readonly Dictionary<string, string> s_mergerSectionNames = new(StringComparer.OrdinalIgnoreCase)
