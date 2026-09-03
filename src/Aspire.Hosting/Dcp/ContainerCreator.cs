@@ -330,11 +330,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         var args = configuration.Arguments.ToList();
-        var projectedContainer = modelContainer.Annotations
-            .OfType<ContainerResourceProjectionAnnotation>()
-            .LastOrDefault();
-        var shellExecution = modelContainer is ContainerResource { ShellExecution: true } ||
-            projectedContainer?.ShellExecution is true;
+        var shellExecution = modelContainer.GetEffectiveResource() is ContainerResource { ShellExecution: true };
         if (shellExecution)
         {
             spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
@@ -351,9 +347,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;
-        spec.Command = modelContainer is ContainerResource containerResource
-            ? containerResource.Entrypoint
-            : projectedContainer?.Entrypoint;
+        spec.Command = modelContainer.GetContainerEntrypoint();
         spec.PemCertificates = pemCertificates;
 
         // Configure the terminal spec if the resource has a TerminalAnnotation.

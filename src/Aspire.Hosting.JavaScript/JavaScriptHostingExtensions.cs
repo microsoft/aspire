@@ -1951,9 +1951,7 @@ public static partial class JavaScriptHostingExtensions
 
     private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, IResource containerResource)
     {
-        var entrypoint = containerResource is ContainerResource container
-            ? container.Entrypoint
-            : containerResource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault()?.Entrypoint;
+        var entrypoint = containerResource.GetContainerEntrypoint();
 
         if (entrypoint is not null ||
             !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||

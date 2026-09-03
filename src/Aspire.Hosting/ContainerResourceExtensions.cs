@@ -46,4 +46,21 @@ public static class ContainerResourceExtensions
         return resource.HasAppliedContainerProjection() ||
             resource.Annotations.OfType<ContainerImageAnnotation>().Any();
     }
+
+    /// <summary>
+    /// Gets the entrypoint configured for the resource's effective container shape.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <returns>The configured container entrypoint, or <see langword="null"/> when none is configured.</returns>
+    /// <remarks>
+    /// Returns the property from an explicit <see cref="ContainerResource"/> or from the container
+    /// projection applied to the owner for the current AppHost invocation.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
+    public static string? GetContainerEntrypoint(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.GetEffectiveResource() is ContainerResource container ? container.Entrypoint : null;
+    }
 }
