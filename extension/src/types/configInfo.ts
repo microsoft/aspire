@@ -82,6 +82,14 @@ export const isolatedLaunchCapability = 'isolated-launch.v1';
 export const launchProfileCapability = 'launch-profile.v1';
 
 /**
+ * Capability advertised by the CLI when guest AppHost code generation writes the CLI identity
+ * version to `.codegen-version` in the generated modules directory.
+ * Keep in sync with `KnownCapabilities.CodeGenerationVersionMarker` in
+ * src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const codeGenerationVersionMarkerCapability = 'codegen-version-marker.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';

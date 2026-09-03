@@ -915,6 +915,9 @@ suite('AspireAppHostTreeProvider', () => {
 
             await provider.openResourceTerminal(resourceItem as any);
             proof.run(commandLines[1], ['terminal', 'attach', resourceName, '--apphost', appHostPath]);
+
+            await provider.restoreAppHost({ appHostPath } as WorkspaceAppHostItem);
+            proof.run(commandLines[2], ['restore', '--apphost', appHostPath]);
         }
         finally {
             provider.dispose();
@@ -959,6 +962,9 @@ suite('AspireAppHostTreeProvider', () => {
 
             await provider.openResourceTerminal(resourceItem as any);
             proof.runPowerShell(commandLines[1], ['terminal', 'attach', resourceName, '--apphost', appHostPath], powerShellPath);
+
+            await provider.restoreAppHost({ appHostPath } as WorkspaceAppHostItem);
+            proof.runPowerShell(commandLines[2], ['restore', '--apphost', appHostPath], powerShellPath);
         }
         finally {
             platformStub.restore();
@@ -995,6 +1001,7 @@ suite('AspireAppHostTreeProvider', () => {
 
             await assert.rejects(() => provider.viewResourceLogs(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.openResourceTerminal(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
+            await assert.rejects(() => provider.restoreAppHost({ appHostPath } as WorkspaceAppHostItem), { message: terminalCommandArgumentControlCharacters });
             // restartResource no longer flows through the terminal: it spawns the CLI directly with
             // shell:false, so control characters in the resource name are passed as an inert argv
             // element rather than rejected. That path is covered by the resource-command tests below.
@@ -2341,6 +2348,50 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         assert.ok(result, 'Expected to find the workspace AppHost candidate');
         assert.strictEqual(result?.id, appHostItem.id);
         assert.strictEqual(result?.contextValue, 'workspaceAppHost');
+        provider.dispose();
+    });
+
+    test('workspace mode gives non-.NET AppHosts a restore action that targets the selected AppHost', async () => {
+        const appHostPath = '/repo/AppHost/apphost.mts';
+        const sendAspireCommand = sandbox.stub().resolves();
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: sendAspireCommand,
+        } as unknown as AspireTerminalProvider;
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+
+        const [appHostItem] = provider.getChildren();
+        const appHostChildren = provider.getChildren(appHostItem);
+        assert.deepStrictEqual(appHostChildren.map(item => item.contextValue), [
+            'workspaceAppHostAction:openSource',
+            'workspaceAppHostAction:restore',
+            'workspaceAppHostAction:run',
+            'workspaceAppHostAction:debug',
+            'workspaceAppHostPath',
+        ]);
+
+        const restoreItem = appHostChildren[1];
+        assert.strictEqual(restoreItem.command?.command, 'aspire-vscode.restoreAppHost');
+        await provider.restoreAppHost(appHostItem as WorkspaceAppHostItem);
+
+        assert.ok(sendAspireCommand.calledOnce);
+        assert.deepStrictEqual(sendAspireCommand.firstCall.args[0], [
+            'restore',
+            '--apphost',
+            shellArg(appHostPath),
+        ]);
+        assert.strictEqual(sendAspireCommand.firstCall.args[1], true);
         provider.dispose();
     });
 
