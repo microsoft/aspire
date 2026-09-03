@@ -333,9 +333,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// for a skipped restore at all.
     /// </summary>
     /// <remarks>
-    /// The generated project file and optional synthesized NuGet.config encode package identities
-    /// and versions, project reference paths, and channel sources. Referenced project files are hashed
-    /// as well because restore resolves their dependencies too: a referenced project bumping its own
+    /// The generated project file encodes package identities and versions, project reference paths,
+    /// channel sources, and the synthesized NuGet.config path. Referenced project files are hashed as
+    /// well because restore resolves their dependencies too: a referenced project bumping its own
     /// Aspire.Hosting version changes the resolved closure without changing a single byte of the
     /// generated project file.
     /// <para>
@@ -356,21 +356,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         IReadOnlyList<IntegrationReference> packageRefs,
         IReadOnlyList<IntegrationReference> projectRefs,
         CancellationToken cancellationToken)
-        => await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent: null, cancellationToken).ConfigureAwait(false);
-
-    internal static async Task<RestoreInputs> ComputeRestoreInputsAsync(
-        string projectContent,
-        IReadOnlyList<IntegrationReference> packageRefs,
-        IReadOnlyList<IntegrationReference> projectRefs,
-        string? restoreConfigContent,
-        CancellationToken cancellationToken)
     {
         var hash = new XxHash3();
         hash.Append(Encoding.UTF8.GetBytes(projectContent));
-        if (restoreConfigContent is not null)
-        {
-            hash.Append(Encoding.UTF8.GetBytes(restoreConfigContent));
-        }
 
         var isFloating = HasFloatingPackageVersion(packageRefs);
 
@@ -746,67 +734,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         Directory.CreateDirectory(restoreDir);
 
         var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        var useMappedRestoreConfig = !string.IsNullOrWhiteSpace(packageSourceOverride) &&
-            restoreSources.PackageSourceMappings is not null;
-        var hasCredentialBearingMappedSource = useMappedRestoreConfig &&
-            restoreSources.PackageSourceMappings!.Any(
-                static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source));
-        var hasCredentialBearingAdditionalSource = !useMappedRestoreConfig &&
-            restoreSources.AdditionalSources.Any(
-                static source => PackageSourceOverrideMappings.HasCredentialMaterial(source));
-        var hasCredentialBearingRestoreSource =
-            hasCredentialBearingMappedSource || hasCredentialBearingAdditionalSource;
-
-        if (!useMappedRestoreConfig || hasCredentialBearingMappedSource)
-        {
-            var persistentRestoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
-            if (persistentRestoreConfigFile.Exists)
-            {
-                persistentRestoreConfigFile.Delete();
-            }
-        }
-
-        if (hasCredentialBearingRestoreSource)
-        {
-            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
-            if (restoreStampFile.Exists)
-            {
-                restoreStampFile.Delete();
-            }
-        }
-
-        using var temporaryRestoreConfig = hasCredentialBearingMappedSource
+        // Preserve the existing restore behavior in this shared-infrastructure layer: explicit
+        // overrides use a temporary mapped config, while channel-only restores remain additive
+        // so NuGet continues discovering the user's ambient configuration.
+        using var temporaryRestoreConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
             ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
             : null;
-        using var temporaryRestoreSourcesProps = hasCredentialBearingAdditionalSource
-            ? await TemporaryRestoreSourcesProps.CreateAsync(restoreSources.AdditionalSources, cancellationToken).ConfigureAwait(false)
-            : null;
-
-        FileInfo? restoreConfigFile;
-        string? restoreConfigContent;
-        if (!useMappedRestoreConfig)
-        {
-            // Channel-only restores remain additive so NuGet continues discovering the user's
-            // ambient configuration, including private feeds used by the project-reference graph.
-            restoreConfigFile = null;
-            restoreConfigContent = null;
-        }
-        else if (temporaryRestoreConfig is not null)
-        {
-            // Keep credential-bearing mappings out of the persistent generated NuGet.config.
-            // NuGet may still record evaluated sources in its normal restore intermediates.
-            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
-            restoreConfigContent = null;
-        }
-        else
-        {
-            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
-            restoreConfigContent = restoreConfigFile is null
-                ? null
-                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        }
-
-        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
+        var channelSources = temporaryRestoreConfig is null
             ? GetNuGetSources(restoreSources)
             : null;
         var projectContent = GenerateIntegrationProjectFile(
@@ -815,8 +749,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             channelSources,
             useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: restoreConfigFile?.FullName,
-            restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
+            restoreConfigFile: temporaryRestoreConfig?.ConfigFile.FullName);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -851,13 +784,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
         // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
         // restore rather than reported.
-        string? restoreFingerprint = null;
-        if (!hasCredentialBearingRestoreSource)
-        {
-            var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent, cancellationToken).ConfigureAwait(false);
-            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
-        }
-
+        var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, cancellationToken).ConfigureAwait(false);
+        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
         var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
 
         _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
@@ -918,8 +846,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
         bool useExactPackageVersions = false,
-        string? restoreConfigFile = null,
-        string? restoreSourcesPropsFile = null)
+        string? restoreConfigFile = null)
     {
         IEnumerable<string>? restoreAdditionalSources = additionalSources;
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
@@ -934,11 +861,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             restoreAdditionalSources,
             restoreConfigFile);
-
-        if (!string.IsNullOrWhiteSpace(restoreSourcesPropsFile))
-        {
-            projectFile.Imports.Add(new CSharpProjectImport(restoreSourcesPropsFile));
-        }
 
         foreach (var packageReference in packageRefs)
         {
@@ -1014,30 +936,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreSources.ConfigureGlobalPackagesFolder
                 ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
                 : null).ConfigureAwait(false);
-    }
-
-    private async Task<FileInfo?> WriteRestoreNuGetConfigAsync(string restoreDir, IntegrationRestoreSources restoreSources, CancellationToken cancellationToken)
-    {
-        var restoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
-        if (restoreSources.PackageSourceMappings is null)
-        {
-            if (restoreConfigFile.Exists)
-            {
-                restoreConfigFile.Delete();
-            }
-
-            return null;
-        }
-
-        using var temporaryConfig = await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
-        if (temporaryConfig is null)
-        {
-            return null;
-        }
-
-        var content = await File.ReadAllTextAsync(temporaryConfig.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        await WriteIfChangedAsync(restoreConfigFile.FullName, content, cancellationToken).ConfigureAwait(false);
-        return restoreConfigFile;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
@@ -1356,58 +1254,4 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         public OutputCollector Output { get; } = output;
     }
 
-    private sealed class TemporaryRestoreSourcesProps : IDisposable
-    {
-        private readonly DirectoryInfo _directory;
-
-        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile)
-        {
-            _directory = directory;
-            PropsFile = propsFile;
-        }
-
-        public FileInfo PropsFile { get; }
-
-        public static async Task<TemporaryRestoreSourcesProps> CreateAsync(
-            IReadOnlyList<string> sources,
-            CancellationToken cancellationToken)
-        {
-            var directory = Directory.CreateTempSubdirectory("aspire-restore-sources");
-            try
-            {
-                var propsFile = new FileInfo(Path.Combine(directory.FullName, "IntegrationRestoreSources.props"));
-                var document = new XDocument(
-                    new XElement("Project",
-                        new XElement("PropertyGroup",
-                            new XElement("RestoreAdditionalProjectSources", string.Join(";", sources)))));
-                await File.WriteAllTextAsync(propsFile.FullName, document.ToString(), cancellationToken).ConfigureAwait(false);
-                return new TemporaryRestoreSourcesProps(directory, propsFile);
-            }
-            catch
-            {
-                try
-                {
-                    directory.Delete(recursive: true);
-                }
-                catch
-                {
-                    // Ignore cleanup failures; surface the original exception instead.
-                }
-
-                throw;
-            }
-        }
-
-        public void Dispose()
-        {
-            try
-            {
-                _directory.Delete(recursive: true);
-            }
-            catch
-            {
-                // Temporary source properties are best-effort cleanup after the build completes.
-            }
-        }
-    }
 }
