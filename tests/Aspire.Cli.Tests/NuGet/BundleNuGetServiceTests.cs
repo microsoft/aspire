@@ -502,6 +502,30 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComputePackageHash_DistinguishesGlobalPackagesPathFromAppendedFallbackPath()
+    {
+        var packages = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+
+        var embeddedFallbackHash = BundleNuGetService.ComputePackageHash(
+            packages,
+            "net10.0",
+            runtimeIdentifier: null,
+            nugetPackagesPath: "/x;fallback-packages:2:/y",
+            nugetFallbackPackagesPaths: []);
+        var separateFallbackHash = BundleNuGetService.ComputePackageHash(
+            packages,
+            "net10.0",
+            runtimeIdentifier: null,
+            nugetPackagesPath: "/x",
+            nugetFallbackPackagesPaths: ["/y"]);
+
+        Assert.NotEqual(embeddedFallbackHash, separateFallbackHash);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
