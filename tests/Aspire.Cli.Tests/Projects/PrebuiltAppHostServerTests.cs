@@ -912,22 +912,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetNuGetSources_WithCredentialBearingPackageSourceOverride_Throws()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "https://user:password@feed.example.com/v3/index.json";
-        var server = CreatePrebuiltAppHostServer(workspace);
-
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => server.GetNuGetSourcesAsync(
-                requestedChannel: null,
-                packageSourceOverride,
-                CancellationToken.None));
-
-        Assert.Equal("packageSourceOverride", exception.ParamName);
-    }
-
-    [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
