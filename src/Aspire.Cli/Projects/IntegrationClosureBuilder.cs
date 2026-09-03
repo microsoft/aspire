@@ -289,7 +289,7 @@ internal static class IntegrationClosureBuilder
     private static async Task<List<string>> ReadManifestLinesAsync(string filePath, CancellationToken cancellationToken)
     {
         var lines = await File.ReadAllLinesAsync(filePath, cancellationToken).ConfigureAwait(false);
-        return lines.Where(static l => !string.IsNullOrWhiteSpace(l)).Select(static l => l.Trim()).ToList();
+        return lines.Where(static line => !string.IsNullOrWhiteSpace(line)).ToList();
     }
 
     private static async Task<Dictionary<string, string>> ReadPackageFingerprintsAsync(
