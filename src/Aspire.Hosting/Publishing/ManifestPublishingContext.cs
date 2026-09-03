@@ -336,13 +336,14 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 $"Resource '{resource.Name}' does not have an explicit or projected container view for the '{ExecutionContext.Operation}' operation.");
         }
 
-        // The projection supplies only container-specific property state. Annotations and callback
-        // identity remain on the canonical owner under the typed-configuration-view model.
-        return WriteContainerCoreAsync(resource, container);
+        return WriteContainerCoreAsync(container);
     }
 
-    private async Task WriteContainerCoreAsync(IResource owner, ContainerResource container)
+    private async Task WriteContainerCoreAsync(ContainerResource container)
     {
+        // The projection shares annotations with its owner, but callback contexts also expose the
+        // resource instance. Canonicalize that identity while retaining the typed container state.
+        var owner = ((IResource)container).GetOwnerOrSelf();
         var deploymentTarget = owner.GetDeploymentTargetAnnotation();
 
         if (owner.Annotations.OfType<DockerfileBuildAnnotation>().Any())
