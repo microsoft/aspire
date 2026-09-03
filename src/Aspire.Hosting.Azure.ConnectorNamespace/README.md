@@ -40,7 +40,14 @@ var outlook = connectorNamespace.AddConnection(
     {
         ConnectionName = "office365-outlook",
         DisplayName = "Office 365 Outlook"
-    });
+    })
+    .WithAccessPolicy(
+        "worker-access",
+        new AzureConnectorNamespaceAccessPolicyOptions
+        {
+            ObjectId = "33333333-3333-3333-3333-333333333333",
+            TenantId = "22222222-2222-2222-2222-222222222222"
+        });
 
 builder.AddProject<Projects.Worker>("worker")
     .WithReference(outlook);
@@ -81,6 +88,10 @@ const outlook = await connectorNamespace.addConnection("outlook", "office365", {
     connectionName: "office365-outlook",
     displayName: "Office 365 Outlook"
 });
+await outlook.withAccessPolicy("worker-access", {
+    objectId: "33333333-3333-3333-3333-333333333333",
+    tenantId: "22222222-2222-2222-2222-222222222222"
+});
 
 const worker = await builder.addContainer(
     "worker",
@@ -104,7 +115,7 @@ await outlookMcp.withAccessPolicy("developer-access", {
 });
 ```
 
-Referencing `outlook` injects `outlook__connectorGatewayName` and `outlook__connectionName` into the workload for the Azure Connector SDK. Pass a connection-name override to `WithReference` when the consuming application uses a different configuration prefix.
+Referencing `outlook` injects `outlook__connectorGatewayName` and `outlook__connectionName` into the workload for the Azure Connector SDK. It does not authorize the workload to use the connection. The connection access policy must identify the Microsoft Entra principal used by the deployed workload. Pass a connection-name override to `WithReference` when the consuming application uses a different configuration prefix.
 
 After deployment, open `https://connectors.azure.com/<subscription-id>/<resource-group>/<connector-namespace-name>/overview` and authorize connections that require user consent. Aspire does not automate or store OAuth credentials.
 
