@@ -302,6 +302,11 @@ public partial class ResourcesTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
 
         var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);
+        var headerItem = contextMenu.Instance.Items[0];
+        Assert.True(headerItem.IsHeader);
+        Assert.Equal("Resource1", headerItem.Text);
+        Assert.NotNull(headerItem.Icon);
+
         await cut.InvokeAsync(() => contextMenu.Instance.OpenChanged.InvokeAsync(false));
 
         await showContextMenuTask.WaitAsync(TimeSpan.FromSeconds(1));

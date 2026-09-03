@@ -2,8 +2,8 @@ import './d3.v7.min.js'
 
 let resourceGraph = null;
 
-export function initializeResourcesGraph(resourcesInterop) {
-    resourceGraph = new ResourceGraph(resourcesInterop);
+export function initializeResourcesGraph(resourcesInterop, graphIcons) {
+    resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
 
     const observer = new ResizeObserver(function () {
@@ -28,10 +28,13 @@ export function updateResourcesGraphSelected(resourceName) {
 }
 
 class ResourceGraph {
-    constructor(resourcesInterop) {
+    constructor(resourcesInterop, graphIcons) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
         this.openContextMenu = false;
+
+        // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
+        this.menuIcon = graphIcons ? graphIcons.menu : null;
 
         this.nodes = [];
         this.links = [];
@@ -421,6 +424,45 @@ class ResourceGraph {
             .append("title")
             .text(n => n.label);
 
+        // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
+        // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
+        // so mirroring it vertically puts the cog at the bottom-right ~(35,43). Hidden until the node is
+        // hovered (see .resource-menu-cog CSS); it makes the node's interactivity discoverable by opening
+        // the same context menu as right-clicking the node.
+        var cogGroup = newNodesContainer
+            .append("g")
+            .attr("class", "resource-menu-cog")
+            .attr("transform", "translate(35,43)")
+            // D3's drag handler is attached to the ancestor resource group. Stop drag-start
+            // events here so an imprecise cog click can never move the resource node.
+            .on('mousedown touchstart', event => event.stopPropagation())
+            .on('click', this.cogMenuClick);
+        cogGroup
+            .append("circle")
+            .attr("r", 14)
+            .attr("class", "resource-menu-cog-background");
+        cogGroup
+            .append("title")
+            .text(this.menuIcon ? this.menuIcon.tooltip : "");
+        if (this.menuIcon) {
+            var cogIcon = cogGroup
+                .append("path")
+                .attr("class", "resource-menu-cog-icon")
+                .attr("d", this.menuIcon.path);
+
+            // Scale and center the icon inside the cog background, matching how resource icons are sized.
+            cogIcon.each(function () {
+                const iconSize = 18;
+                const path = d3.select(this);
+                const bbox = this.getBBox();
+                const scale = iconSize / Math.max(bbox.width, bbox.height);
+                const cx = bbox.x + bbox.width / 2;
+                const cy = bbox.y + bbox.height / 2;
+
+                path.attr("transform", `scale(${scale}) translate(${-cx},${-cy})`);
+            });
+        }
+
         newNodes.transition()
             .attr("opacity", 1);
 
@@ -542,11 +584,27 @@ class ResourceGraph {
         // Prevent default browser context menu.
         event.preventDefault();
 
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY);
+    };
+
+    cogMenuClick = async (event) => {
+        // currentTarget is the cog group the handler is attached to. Its datum is inherited from the
+        // node group (d3 propagates data to appended children).
+        var data = event.currentTarget.__data__;
+
+        // Stop the click from also reaching the node's click handler (which would select/deselect it).
+        event.preventDefault();
+        event.stopPropagation();
+
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY);
+    };
+
+    openResourceContextMenu = async (id, clientX, clientY) => {
         this.openContextMenu = true;
 
         try {
             // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, window.innerWidth, window.innerHeight, event.clientX, event.clientY);
+            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY);
         } finally {
             this.openContextMenu = false;
 

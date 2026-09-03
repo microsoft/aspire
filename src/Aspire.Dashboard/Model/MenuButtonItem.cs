@@ -8,6 +8,12 @@ namespace Aspire.Dashboard.Model;
 public class MenuButtonItem
 {
     public bool IsDivider { get; set; }
+    /// <summary>
+    /// Whether the item is a non-interactive header used to label the menu (e.g. the resource
+    /// a context menu was opened for). Header items render <see cref="Text"/> and <see cref="Icon"/>
+    /// but ignore <see cref="OnClick"/> and are skipped by keyboard navigation.
+    /// </summary>
+    public bool IsHeader { get; set; }
     public List<MenuButtonItem>? NestedMenuItems { get; set; }
     public string? Text { get; set; }
     public string? Tooltip { get; set; }

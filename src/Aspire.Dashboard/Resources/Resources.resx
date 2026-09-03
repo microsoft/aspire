@@ -306,6 +306,10 @@
   <data name="ResourcesGraphResetButton" xml:space="preserve">
     <value>Reset</value>
   </data>
+  <data name="ResourcesGraphResourceActionsButton" xml:space="preserve">
+    <value>Resource actions</value>
+    <comment>Tooltip for the cog affordance on a graph resource node that opens the resource actions menu.</comment>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>
