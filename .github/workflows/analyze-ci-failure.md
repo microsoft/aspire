@@ -132,30 +132,51 @@ jobs:
 
           PR_NUMBERS=""
           if [ "${RUN_SCOPE}" = "pull-request" ]; then
+            PR_LOOKUP_AMBIGUOUS=false
+
+            consider_pr_candidates()
+            {
+              local candidates="$1"
+              local candidate_count
+
+              candidate_count=$(jq -r 'unique | length' <<< "${candidates}")
+              if [ "${candidate_count}" -eq 1 ]; then
+                PR_NUMBERS=$(jq -r 'unique | .[0]' <<< "${candidates}")
+              elif [ "${candidate_count}" -gt 1 ]; then
+                PR_LOOKUP_AMBIGUOUS=true
+              fi
+            }
+
             # Workflow metadata can include pull requests from forks that happen
             # to reference this commit, so only accept PRs targeting this repository.
-            PR_NUMBERS=$(jq -r --arg repo_url "https://api.github.com/repos/${REPO}" \
-              '[.pull_requests[]? | select(.base.repo.url == $repo_url) | .number] | join(",")' \
+            PR_CANDIDATES=$(jq -c --arg repo_url "https://api.github.com/repos/${REPO}" \
+              '[.pull_requests[]? | select(.base.repo.url == $repo_url and (.number | type) == "number") | .number]' \
               ci-failure-data/run.json)
-            if [ -z "${PR_NUMBERS}" ]; then
+            consider_pr_candidates "${PR_CANDIDATES}"
+            if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ]; then
               HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
               if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
                 # Branch names may contain '&' and '=', so pass state/head as
                 # separate -f fields rather than concatenating a query string;
                 # gh api URL-encodes -f values, preventing query injection.
-                PR_NUMBERS=$(gh api --method GET "repos/${REPO}/pulls" \
+                PR_CANDIDATES=$(gh api --method GET "repos/${REPO}/pulls" \
                   -f state=open \
                   -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" \
-                  --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+                  --jq '[.[] | select((.number | type) == "number") | .number]' 2>/dev/null || echo "[]")
+                consider_pr_candidates "${PR_CANDIDATES}"
               fi
             fi
-            if [ -z "${PR_NUMBERS}" ] && [ -n "${HEAD_SHA}" ]; then
-              PR_NUMBERS=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
-                --jq "[.[] | select(.base.repo.full_name == \"${REPO}\") | .number] | join(\",\")" \
-                2>/dev/null || echo "")
+            if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ] && [ -n "${HEAD_SHA}" ]; then
+              PR_CANDIDATES=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+                --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and (.number | type) == \"number\") | .number]" \
+                2>/dev/null || echo "[]")
+              consider_pr_candidates "${PR_CANDIDATES}"
             fi
 
-            if [ -z "${PR_NUMBERS}" ]; then
+            if [ "${PR_LOOKUP_AMBIGUOUS}" = "true" ]; then
+              PR_NUMBERS=""
+              echo "::warning::Multiple associated PRs found. Analysis will proceed without subject PR context."
+            elif [ -z "${PR_NUMBERS}" ]; then
               echo "No associated PR found. Analysis will proceed without PR context."
             fi
           else
@@ -281,15 +302,15 @@ jobs:
           done
 
           # Fetch the PR diff to compare against failures
-          FIRST_PR=$(echo "${PR_NUMBERS}" | cut -d',' -f1)
-          if [ -n "${FIRST_PR}" ]; then
-            gh api "repos/${REPO}/pulls/${FIRST_PR}/files" --paginate \
+          SUBJECT_PR="${PR_NUMBERS}"
+          if [[ "${SUBJECT_PR}" =~ ^[0-9]+$ ]]; then
+            gh api "repos/${REPO}/pulls/${SUBJECT_PR}/files" --paginate \
               --jq '.[]' | jq -s '[.[] | {filename, status, additions, deletions, changes}]' \
               > ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > ci-failure-data/pr-files.json
 
             # Fetch PR metadata (state, title, author) so the agent doesn't need
             # to make MCP pull_request_read calls at runtime.
-            gh api "repos/${REPO}/pulls/${FIRST_PR}" \
+            gh api "repos/${REPO}/pulls/${SUBJECT_PR}" \
               --jq '{number, title, state, user: .user.login, head_branch: .head.ref, base_branch: .base.ref, html_url}' \
               > ci-failure-data/pr-metadata.json 2>/dev/null || echo "{}" > ci-failure-data/pr-metadata.json
           fi
@@ -419,7 +440,7 @@ jobs:
             jq -r '"- **Event**: \(.event)\n- **Branch**: \(.head_branch)\n- **Failed SHA**: \(.head_sha)"' \
               ci-failure-data/run-context.json
             if [ "${RUN_SCOPE}" = "pull-request" ]; then
-              echo "- **Associated PRs**: ${PR_NUMBERS}"
+              echo "- **Subject PR**: ${PR_NUMBERS:-unavailable}"
             fi
             echo ""
 
@@ -614,7 +635,7 @@ safe-outputs:
           required: true
           type: number
         pr_numbers:
-          description: "Comma-separated list of associated PR numbers."
+          description: "The unambiguous subject PR number, or an empty string."
           required: true
           type: string
       env:
@@ -963,16 +984,16 @@ safe-outputs:
               exit 0
             fi
 
-            FIRST_PR=$(echo "$PR_NUMBERS" | cut -d',' -f1)
-            if [ -z "$FIRST_PR" ] || [ "$FIRST_PR" = "null" ]; then
-              echo "No PR number found in analysis. Skipping comment."
+            SUBJECT_PR="$PR_NUMBERS"
+            if [[ ! "$SUBJECT_PR" =~ ^[0-9]+$ ]]; then
+              echo "No unambiguous subject PR found. Skipping comment."
               exit 0
             fi
 
             # Check PR is not locked (still comment on closed PRs)
-            PR_LOCKED=$(gh api "repos/${REPO}/pulls/${FIRST_PR}" --jq '.locked' 2>/dev/null || echo "false")
+            PR_LOCKED=$(gh api "repos/${REPO}/pulls/${SUBJECT_PR}" --jq '.locked' 2>/dev/null || echo "false")
             if [ "$PR_LOCKED" = "true" ]; then
-              echo "PR #${FIRST_PR} is locked. Skipping comment."
+              echo "PR #${SUBJECT_PR} is locked. Skipping comment."
               exit 0
             fi
 
@@ -986,17 +1007,17 @@ safe-outputs:
             # otherwise create a new one. This prevents stacking duplicate
             # comments on PRs with repeated CI failures.
             MARKER="<!-- analyze-ci-failure -->"
-            EXISTING_COMMENT_ID=$(gh api "repos/${REPO}/issues/${FIRST_PR}/comments" --paginate \
+            EXISTING_COMMENT_ID=$(gh api "repos/${REPO}/issues/${SUBJECT_PR}/comments" --paginate \
               --jq ".[] | select(.user.login == \"github-actions[bot]\" and ((.body // \"\") | startswith(\"${MARKER}\\n\"))) | .id" \
               2>/dev/null | head -1 || true)
 
             if [ -n "$EXISTING_COMMENT_ID" ]; then
               gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
                 -f body="$(cat "$COMMENT_FILE")" > /dev/null
-              echo "Updated existing analysis comment (ID: ${EXISTING_COMMENT_ID}) on PR #${FIRST_PR}"
+              echo "Updated existing analysis comment (ID: ${EXISTING_COMMENT_ID}) on PR #${SUBJECT_PR}"
             else
-              gh pr comment "$FIRST_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
-              echo "Posted new analysis comment on PR #${FIRST_PR}"
+              gh pr comment "$SUBJECT_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
+              echo "Posted new analysis comment on PR #${SUBJECT_PR}"
             fi
             rm -f "$COMMENT_FILE"
     rerun-failed-jobs:
@@ -1017,7 +1038,7 @@ safe-outputs:
           required: true
           type: number
         pr_numbers:
-          description: "Comma-separated list of associated PR numbers."
+          description: "The unambiguous subject PR number, or an empty string."
           required: true
           type: string
         reason:
@@ -1204,22 +1225,20 @@ safe-outputs:
               }
 
               if (trustedRunScope === 'pull-request') {
-                const trustedPrNumbers = trustedPrNumberText.split(',').map(Number).filter(n => n > 0);
-                let hasOpenPr = false;
-                for (const prNumber of trustedPrNumbers) {
-                  try {
-                    const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-                    if (pr.state === 'open') {
-                      hasOpenPr = true;
-                      break;
-                    }
-                  } catch (e) {
-                    core.warning(`Failed to check PR #${prNumber}: ${e.message}`);
-                  }
+                if (!/^[1-9][0-9]*$/.test(trustedPrNumberText)) {
+                  core.info('No unambiguous subject PR is available. Skipping rerun.');
+                  return;
                 }
 
-                if (!hasOpenPr) {
-                  core.info('All associated PRs are closed. Skipping rerun.');
+                const trustedPrNumber = Number(trustedPrNumberText);
+                try {
+                  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: trustedPrNumber });
+                  if (pr.state !== 'open') {
+                    core.info('The subject PR is closed. Skipping rerun.');
+                    return;
+                  }
+                } catch (e) {
+                  core.warning(`Failed to check PR #${trustedPrNumber}: ${e.message}`);
                   return;
                 }
               }

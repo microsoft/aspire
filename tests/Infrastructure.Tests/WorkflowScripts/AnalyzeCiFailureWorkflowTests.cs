@@ -188,9 +188,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         }
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("[42]", "42")]
+    [InlineData("[42,43]", "")]
     [RequiresTools(["bash", "jq"])]
-    public async Task CollectionResolvesPrNumberForBranchNameContainingQueryDelimiters()
+    public async Task CollectionResolvesOnlyUnambiguousPrForBranchNameContainingQueryDelimiters(
+        string branchCandidates,
+        string expectedPrNumber)
     {
         // A crafted branch name containing '&' must not be able to inject an
         // extra query parameter into the PR lookup and select the wrong PR.
@@ -206,7 +210,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               "api --method")
                 # gh api --method GET repos/.../pulls -f state=open -f head=owner:branch --jq '.[].number'
                 if [ "$3" = "GET" ] && [ "$4" = "repos/microsoft/aspire/pulls" ]; then
-                  echo '42'
+                  echo '__BRANCH_CANDIDATES__'
                 else
                   exit 98
                 fi
@@ -220,7 +224,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 exit 99
                 ;;
             esac
-            """;
+            """.Replace("__BRANCH_CANDIDATES__", branchCandidates, StringComparison.Ordinal);
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
         await File.WriteAllTextAsync(fakeGhPath, fakeGh);
@@ -250,7 +254,104 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         var githubOutput = await File.ReadAllTextAsync(githubOutputPath);
-        Assert.Contains("pr_numbers=42", githubOutput.Split('\n'), StringComparer.Ordinal);
+        Assert.Contains($"pr_numbers={expectedPrNumber}", githubOutput.Split('\n'), StringComparer.Ordinal);
+        if (expectedPrNumber.Length == 0)
+        {
+            Assert.DoesNotContain(
+                "commits/abc/pulls",
+                await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
+                StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData(
+        """
+        [
+          {"number":42,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"},"ref":"main"}},
+          {"number":43,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"},"ref":"release/9.5"}}
+        ]
+        """,
+        "")]
+    [InlineData(
+        """
+        [
+          {"number":42,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"},"ref":"release/9.5"}}
+        ]
+        """,
+        "42")]
+    [InlineData(
+        """
+        [
+          {"number":42,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"},"ref":"main"}},
+          {"number":42,"base":{"repo":{"url":"https://api.github.com/repos/microsoft/aspire"},"ref":"main"}}
+        ]
+        """,
+        "42")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CollectionUsesOnlyOneUnambiguousSubjectPr(
+        string pullRequests,
+        string expectedPrNumber)
+    {
+        var fakeGh = $$$$"""
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$1 $2" in
+              "api repos/microsoft/aspire/actions/runs/123")
+                cat <<'JSON'
+            {"id":123,"path":".github/workflows/ci.yml","run_attempt":1,"event":"pull_request","head_sha":"abc","head_branch":"feature","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure","pull_requests":{{{{pullRequests}}}},"head_repository":{"owner":{"login":"radical"}}}
+            JSON
+                ;;
+              "api --paginate")
+                :
+                ;;
+              "api repos/microsoft/aspire/pulls/42/files")
+                echo '[]'
+                ;;
+              "api repos/microsoft/aspire/pulls/42")
+                echo '{"number":42,"title":"Subject","state":"open","user":{"login":"radical"},"head":{"ref":"feature"},"base":{"ref":"main"},"html_url":"https://github.com/microsoft/aspire/pull/42"}'
+                ;;
+              *)
+                exit 99
+                ;;
+            esac
+            """;
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
+        await File.WriteAllTextAsync(fakeGhPath, fakeGh);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                fakeGhPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var githubOutputPath = Path.Combine(_workspace.Path, "github-output");
+        var callLogPath = Path.Combine(_workspace.Path, "gh-calls.log");
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Collect CI failure data");
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["EVENT_NAME"] = "workflow_dispatch",
+                ["GITHUB_OUTPUT"] = githubOutputPath,
+                ["GH_CALL_LOG"] = callLogPath,
+                ["MANUAL_RUN_ID"] = "123",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["REPO"] = "microsoft/aspire",
+                ["WORKFLOW_RUN_ATTEMPT"] = string.Empty,
+                ["WORKFLOW_RUN_ID"] = string.Empty,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains($"pr_numbers={expectedPrNumber}", await File.ReadAllLinesAsync(githubOutputPath));
+        var ghCalls = await File.ReadAllLinesAsync(callLogPath);
+        if (expectedPrNumber.Length == 0)
+        {
+            Assert.DoesNotContain(ghCalls, call => call.Contains("-f head=", StringComparison.Ordinal));
+            Assert.DoesNotContain(ghCalls, call => call.Contains("commits/abc/pulls", StringComparison.Ordinal));
+        }
     }
 
     [Fact]
@@ -297,6 +398,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
         """[{"id":123,"name":"Tests"}]""",
         "::error::Pull request analysis must identify a trusted subject PR")]
+    [InlineData(
+        """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+        """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42,43"}""",
+        """[{"id":123,"name":"Tests"}]""",
+        "::error::Trusted run context must contain one unambiguous subject PR")]
     [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsUntrustedAssociations(
         string analysis,
@@ -1522,7 +1628,23 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Empty(result.Failed);
         Assert.Empty(result.Reruns);
-        Assert.Contains("All associated PRs are closed. Skipping rerun.", result.Infos);
+        Assert.Contains("The subject PR is closed. Skipping rerun.", result.Infos);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunSkipsAmbiguousLegacyPrContext()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            prNumbers: "42,43");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Empty(result.Failed);
+        Assert.Empty(result.Reruns);
+        Assert.Contains("No unambiguous subject PR is available. Skipping rerun.", result.Infos);
     }
 
     [Fact]
@@ -1601,6 +1723,44 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(20, output.RootElement.GetProperty("id").GetInt64());
         Assert.Equal("latest", output.RootElement.GetProperty("head_sha").GetString());
         Assert.Contains("per_page=100", await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "gh-calls.log")), StringComparison.Ordinal);
+        Assert.All(
+            await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
+            call =>
+            {
+                Assert.Contains("branch=main", call, StringComparison.Ordinal);
+                Assert.Contains("event=push", call, StringComparison.Ordinal);
+                Assert.Contains("status=success", call, StringComparison.Ordinal);
+            });
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task LastSuccessfulMainRunKeepsPushFilterAcrossPages()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            if [[ "$*" == *"page=2"* ]]; then
+              echo '{"total_count":101,"workflow_runs":[{"id":20,"created_at":"2026-08-30T09:30:00Z","head_sha":"page-two"}]}'
+            else
+              echo '{"total_count":101,"workflow_runs":[{"id":10,"created_at":"2026-08-30T09:00:00Z","head_sha":"page-one"}]}'
+            fi
+            """;
+
+        var outputPath = Path.Combine(_workspace.Path, "last-success.json");
+        var result = await RunHistoryScriptAsync(fakeGh, "2026-08-30T10:00:00Z", outputPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(20, output.RootElement.GetProperty("id").GetInt64());
+        Assert.All(
+            await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
+            call =>
+            {
+                Assert.Contains("branch=main", call, StringComparison.Ordinal);
+                Assert.Contains("event=push", call, StringComparison.Ordinal);
+                Assert.Contains("status=success", call, StringComparison.Ordinal);
+            });
     }
 
     [Fact]
@@ -1965,7 +2125,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Theory]
     [InlineData("main", "", "0")]
-    [InlineData("pull-request", "42,43", "42")]
+    [InlineData("pull-request", "42", "42")]
+    [InlineData("pull-request", "42,43", "0")]
     [RequiresTools(["bash", "jq"])]
     public async Task PersistedOccurrenceUsesOnlyTrustedSubjectPr(
         string runScope,

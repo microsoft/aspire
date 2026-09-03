@@ -20,7 +20,7 @@ trusted_pr_number()
     return
   fi
 
-  pr_number=$(jq -r '.pr_numbers // ""' "$RUN_CONTEXT_FILE" | cut -d',' -f1)
+  pr_number=$(jq -r '.pr_numbers // ""' "$RUN_CONTEXT_FILE")
   if [[ "$pr_number" =~ ^[0-9]+$ ]]; then
     echo "$pr_number"
   else

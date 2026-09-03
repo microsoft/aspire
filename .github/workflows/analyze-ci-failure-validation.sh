@@ -30,6 +30,10 @@ if [ "$TRUSTED_RUN_SCOPE" = "main" ] && [ "$(jq -r '.pr // null' "$ANALYSIS_FILE
 fi
 if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
   TRUSTED_PR_NUMBERS=$(jq -r '.pr_numbers // ""' "$RUN_CONTEXT_FILE")
+  if [ -n "$TRUSTED_PR_NUMBERS" ] && [[ ! "$TRUSTED_PR_NUMBERS" =~ ^[0-9]+$ ]]; then
+    echo "::error::Trusted run context must contain one unambiguous subject PR"
+    exit 1
+  fi
   ANALYSIS_PR_NUMBER=$(jq -r '
     if ((.pr | type) == "object") and ((.pr.number | type) == "number")
     then (.pr.number | tostring)
@@ -42,14 +46,9 @@ if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
   elif [ -z "$TRUSTED_PR_NUMBERS" ] || [ -z "$ANALYSIS_PR_NUMBER" ]; then
     echo "::error::Pull request analysis must identify a trusted subject PR"
     exit 1
-  else
-    case ",${TRUSTED_PR_NUMBERS}," in
-      *",${ANALYSIS_PR_NUMBER},"*) ;;
-      *)
-        echo "::error::Pull request analysis must identify a trusted subject PR"
-        exit 1
-        ;;
-    esac
+  elif [ "$ANALYSIS_PR_NUMBER" != "$TRUSTED_PR_NUMBERS" ]; then
+    echo "::error::Pull request analysis must identify a trusted subject PR"
+    exit 1
   fi
 fi
 if ! jq -e '
