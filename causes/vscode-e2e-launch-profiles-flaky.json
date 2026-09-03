@@ -1,0 +1,17 @@
+{
+  "id": "vscode-e2e-launch-profiles-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Linux/Windows, launch-profiles) shard fails with generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (launch-profiles)",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'launch-profiles' shard unrelated to PR changes touching only .github/extensions/aspire-team-app scripts.",
+  "occurrences": [
+    {
+      "run_id": 33811778450,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33811778450",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests...) / Azure.Npgsql.EntityFrameworkCore.PostgreSQL (windows-latest)",
+      "pr_number": 19918,
+      "observed_at": "2026-09-03T22:45:50Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19921"
+}

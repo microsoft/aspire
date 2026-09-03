@@ -1,16 +1,9 @@
 {
-  "id": "polyglot-typescript-sdk-validation-node24-failure",
+  "id": "polyglot-typescript-sdk-validation-node22-failure",
   "type": "infra-failure",
-  "title": "Polyglot SDK Validation: TypeScript SDK Validation (Node 24.x) job fails with exit code 1, unrelated to PR-changed files; job logs unavailable for detailed diagnosis",
+  "title": "Polyglot SDK Validation: TypeScript SDK Validation (Node 22.x) job fails with exit code 1, unrelated to PR-changed files; job logs unavailable for detailed diagnosis",
   "error_pattern": "Process completed with exit code 1. (job logs failed to fetch); downstream 'Polyglot Validation Results / Check validation results' job also fails as a result (exit code 1)",
   "occurrences": [
-    {
-      "run_id": 31728585505,
-      "run_url": "https://github.com/microsoft/aspire/actions/runs/31728585505",
-      "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
-      "pr_number": 19077,
-      "observed_at": "2026-08-13T19:21:43Z"
-    },
     {
       "run_id": 33811778450,
       "run_url": "https://github.com/microsoft/aspire/actions/runs/33811778450",
@@ -19,5 +12,5 @@
       "observed_at": "2026-09-03T22:45:50Z"
     }
   ],
-  "issue_url": "https://github.com/microsoft/aspire/issues/19361"
+  "issue_url": "https://github.com/microsoft/aspire/issues/19920"
 }
