@@ -1903,11 +1903,12 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-            var publishContainer = resource.Annotations
-                .OfType<ManifestPublishingCallbackAnnotation>()
-                .Last()
-                .Callback ?? throw new InvalidOperationException(
+            if (!resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var publishingAnnotation) ||
+                publishingAnnotation.Callback is not { } publishContainer)
+            {
+                throw new InvalidOperationException(
                     $"The published JavaScript app '{resource.Name}' does not have a container manifest callback.");
+            }
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
