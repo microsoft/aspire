@@ -63,6 +63,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private string? _integrationProbeManifestPath;
     private AppHostServerProjectLayout? _selectedProjectLayout;
     private readonly List<PackageRestoreResult> _temporaryPackageRestores = [];
+    private readonly List<TemporaryCacheDirectory> _temporaryCredentialRestoreDirectories = [];
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -183,12 +184,19 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
                 _projectLayoutStore.CleanupStagingDirectories();
 
-                var closureManifest = await BuildIntegrationClosureManifestAsync(
+                var closureBuild = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
                     projectRefs,
                     requestedChannel,
                     effectivePackageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
+                var closureManifest = closureBuild.Manifest;
+                if (closureBuild.CredentialRestoreDirectory is { } credentialRestoreDirectory)
+                {
+                    // Package-backed probe entries keep their source paths, so the private package
+                    // cache must remain leased until this server is disposed or prepared again.
+                    _temporaryCredentialRestoreDirectories.Add(credentialRestoreDirectory);
+                }
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
                 {
@@ -808,7 +816,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// then builds it to get the full transitive DLL closure via CopyLocalLockFileAssemblies.
     /// Requires .NET SDK.
     /// </summary>
-    private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
+    private async Task<(AppHostServerClosureManifest Manifest, TemporaryCacheDirectory? CredentialRestoreDirectory)> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string? requestedChannel,
@@ -861,177 +869,192 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // Credential-bearing intermediates therefore use the same leased, owner-only temporary cache
         // pattern as package-only restores. If cleanup is interrupted, a later restore reclaims the
         // private directory without risking deletion of one still in use.
-        using var temporaryIntermediateDirectory = hasCredentialBearingRestoreSource
+        var temporaryIntermediateDirectory = hasCredentialBearingRestoreSource
             ? CreateTemporaryCredentialRestoreDirectory(restoreDir)
             : null;
-        var intermediateOutputPath = temporaryIntermediateDirectory?.FullName ?? Path.Combine(restoreDir, "obj");
-
-        FileInfo? restoreConfigFile;
-        string? restoreConfigContent;
-        if (temporaryRestoreConfig is not null)
+        try
         {
-            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
-            restoreConfigContent = hasCredentialBearingRestoreSource
+            var intermediateOutputPath = temporaryIntermediateDirectory?.FullName ?? Path.Combine(restoreDir, "obj");
+            var temporaryGlobalPackagesFolder = temporaryIntermediateDirectory is null
                 ? null
-                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        }
-        else if (!usePersistentRestoreConfig)
-        {
-            // With no single requested channel there is no unambiguous mapping to apply. Preserve
-            // ambient discovery and add every explicit channel source, matching the existing fallback.
-            restoreConfigFile = null;
-            restoreConfigContent = null;
-        }
-        else
-        {
-            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
-            restoreConfigContent = restoreConfigFile is null
-                ? null
-                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
-        }
+                : Path.Combine(temporaryIntermediateDirectory.FullName, "packages");
 
-        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
-            ? GetNuGetSources(restoreSources)
-            : null;
-        var projectContent = GenerateIntegrationProjectFile(
-            packageRefs,
-            projectRefs,
-            restoreDir,
-            channelSources,
-            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: temporaryRestoreConfig?.ConfigFile.FullName);
-        var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
-        await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
-        var fingerprintProjectContent = temporaryRestoreConfig is null
-            ? projectContent
-            : GenerateIntegrationProjectFile(
+            FileInfo? restoreConfigFile;
+            string? restoreConfigContent;
+            if (temporaryRestoreConfig is not null)
+            {
+                restoreConfigFile = temporaryRestoreConfig.ConfigFile;
+                restoreConfigContent = hasCredentialBearingRestoreSource
+                    ? null
+                    : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+            }
+            else if (!usePersistentRestoreConfig)
+            {
+                // With no single requested channel there is no unambiguous mapping to apply. Preserve
+                // ambient discovery and add every explicit channel source, matching the existing fallback.
+                restoreConfigFile = null;
+                restoreConfigContent = null;
+            }
+            else
+            {
+                restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
+                restoreConfigContent = restoreConfigFile is null
+                    ? null
+                    : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+            }
+
+            var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
+                ? GetNuGetSources(restoreSources)
+                : null;
+            var projectContent = GenerateIntegrationProjectFile(
                 packageRefs,
                 projectRefs,
                 restoreDir,
                 channelSources,
                 useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-                restoreConfigFile: "__temporary_nuget_config__",
+                restoreConfigFile: restoreConfigFile?.FullName,
                 restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
+            var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
+            await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
+            var fingerprintProjectContent = temporaryRestoreConfig is null
+                ? projectContent
+                : GenerateIntegrationProjectFile(
+                    packageRefs,
+                    projectRefs,
+                    restoreDir,
+                    channelSources,
+                    useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
+                    restoreConfigFile: "__temporary_nuget_config__",
+                    restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
 
-        // Write a Directory.Packages.props to opt out of Central Package Management
-        var directoryPackagesProps = """
+            // Write a Directory.Packages.props to opt out of Central Package Management
+            var directoryPackagesProps = """
             <Project>
               <PropertyGroup>
                 <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
               </PropertyGroup>
             </Project>
             """;
-        await WriteIfChangedAsync(
-            Path.Combine(restoreDir, "Directory.Packages.props"), directoryPackagesProps, cancellationToken);
+            await WriteIfChangedAsync(
+                Path.Combine(restoreDir, "Directory.Packages.props"), directoryPackagesProps, cancellationToken);
 
-        // Directory.Build.props sets output paths before the SDK consumes them and also prevents
-        // parent props from affecting the generated project.
-        await WriteIfChangedAsync(
-            Path.Combine(restoreDir, "Directory.Build.props"),
-            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDir, intermediateOutputPath).ToString(),
-            cancellationToken);
+            // Directory.Build.props sets output paths before the SDK consumes them and also prevents
+            // parent props from affecting the generated project.
+            await WriteIfChangedAsync(
+                Path.Combine(restoreDir, "Directory.Build.props"),
+                IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
+                    restoreDir,
+                    intermediateOutputPath,
+                    temporaryGlobalPackagesFolder).ToString(),
+                cancellationToken);
 
-        // Write empty Directory.Build.targets to prevent parent targets imports.
-        await WriteIfChangedAsync(
-            Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
+            // Write empty Directory.Build.targets to prevent parent targets imports.
+            await WriteIfChangedAsync(
+                Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
 
-        // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
-        // run again when something restore actually reads has changed. That set of inputs is captured
-        // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
-        // written only after a restore succeeds.
-        //
-        // Skipping restore never skips the build itself, so an edit to a referenced project is still
-        // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
-        // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
-        // restore rather than reported.
-        string? restoreFingerprint = null;
-        var hasCompleteNuGetConfigurationFingerprint =
-            !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
-        if (!hasCredentialBearingRestoreSource && hasCompleteNuGetConfigurationFingerprint)
-        {
-            var restoreInputs = await ComputeRestoreInputsAsync(
-                fingerprintProjectContent,
-                packageRefs,
-                projectRefs,
-                restoreConfigContent,
-                GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
-                    CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
-                CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
-                cancellationToken).ConfigureAwait(false);
-            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
-        }
-
-        if (restoreFingerprint is null)
-        {
-            // A restore that cannot prove all of its inputs must invalidate any stamp from a
-            // previous source configuration before it replaces the assets file.
-            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
-            if (restoreStampFile.Exists)
+            // Restore dominates this build - measured at 5.6s of a 6.7s warm build - and it only needs to
+            // run again when something restore actually reads has changed. That set of inputs is captured
+            // as a content fingerprint rather than a timestamp comparison, and the stamp recording it is
+            // written only after a restore succeeds.
+            //
+            // Skipping restore never skips the build itself, so an edit to a referenced project is still
+            // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
+            // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
+            // restore rather than reported.
+            string? restoreFingerprint = null;
+            var hasCompleteNuGetConfigurationFingerprint =
+                !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
+            if (!hasCredentialBearingRestoreSource && hasCompleteNuGetConfigurationFingerprint)
             {
-                restoreStampFile.Delete();
+                var restoreInputs = await ComputeRestoreInputsAsync(
+                    fingerprintProjectContent,
+                    packageRefs,
+                    projectRefs,
+                    restoreConfigContent,
+                    GetIntegrationRestoreGlobalPackagesFolder(restoreSources, temporaryRestoreConfig) ??
+                        CliPathHelper.GetNuGetPackagesEnvironmentPath(_environment),
+                    CliPathHelper.GetNuGetFallbackPackagesEnvironmentPaths(_environment),
+                    cancellationToken).ConfigureAwait(false);
+                restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
             }
-        }
 
-        var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
+            if (restoreFingerprint is null)
+            {
+                // A restore that cannot prove all of its inputs must invalidate any stamp from a
+                // previous source configuration before it replaces the assets file.
+                var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
+                if (restoreStampFile.Exists)
+                {
+                    restoreStampFile.Delete();
+                }
+            }
 
-        _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
-            packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
+            var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
 
-        var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
-            projectFilePath,
-            noRestore: skipRestore,
-            restoreSources.ConfigureGlobalPackagesFolder,
-            suppressLogging: hasCredentialBearingRestoreSource,
-            sensitiveRestoreSources,
-            cancellationToken).ConfigureAwait(false);
-        if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
-        {
-            _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
-                string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
-            (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+            _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
+                packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
+
+            var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
                 projectFilePath,
-                noRestore: false,
+                noRestore: skipRestore,
                 restoreSources.ConfigureGlobalPackagesFolder,
                 suppressLogging: hasCredentialBearingRestoreSource,
                 sensitiveRestoreSources,
                 cancellationToken).ConfigureAwait(false);
-        }
+            if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
+            {
+                _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
+                    string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
+                (exitCode, buildOutput) = await BuildIntegrationProjectAsync(
+                    projectFilePath,
+                    noRestore: false,
+                    restoreSources.ConfigureGlobalPackagesFolder,
+                    suppressLogging: hasCredentialBearingRestoreSource,
+                    sensitiveRestoreSources,
+                    cancellationToken).ConfigureAwait(false);
+            }
 
-        if (exitCode != 0)
+            if (exitCode != 0)
+            {
+                var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
+                _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
+                throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
+            }
+
+            if (restoreFingerprint is not null && !skipRestore)
+            {
+                await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
+            }
+
+            var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
+                restoreDir,
+                _logger,
+                cancellationToken).ConfigureAwait(false);
+            var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
+
+            var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
+                restoreDir,
+                Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
+                appSettingsContent,
+                ClosureFileMissingBehavior.Throw,
+                _logger,
+                cancellationToken).ConfigureAwait(false);
+
+            // ReadClosureManifestAsync only returns null in ReturnNull mode; in Throw mode any
+            // missing/inconsistent state has already raised an exception.
+            Debug.Assert(closureManifest is not null);
+
+            await File.WriteAllLinesAsync(
+                Path.Combine(restoreDir, ClosureManifestFileName),
+                closureManifest!.GetManifestLines(),
+                cancellationToken).ConfigureAwait(false);
+            return (closureManifest, temporaryIntermediateDirectory);
+        }
+        catch
         {
-            var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
-            _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
-            throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
+            temporaryIntermediateDirectory?.Dispose();
+            throw;
         }
-
-        if (restoreFingerprint is not null && !skipRestore)
-        {
-            await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
-        }
-
-        var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
-            restoreDir,
-            _logger,
-            cancellationToken).ConfigureAwait(false);
-        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
-
-        var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
-            restoreDir,
-            Path.Combine(intermediateOutputPath, IntegrationClosureBuilder.ProjectAssetsFileName),
-            appSettingsContent,
-            ClosureFileMissingBehavior.Throw,
-            _logger,
-            cancellationToken).ConfigureAwait(false);
-
-        // ReadClosureManifestAsync only returns null in ReturnNull mode; in Throw mode any
-        // missing/inconsistent state has already raised an exception.
-        Debug.Assert(closureManifest is not null);
-
-        await File.WriteAllLinesAsync(
-            Path.Combine(restoreDir, ClosureManifestFileName),
-            closureManifest!.GetManifestLines(),
-            cancellationToken).ConfigureAwait(false);
-        return closureManifest;
     }
 
     private TemporaryCacheDirectory CreateTemporaryCredentialRestoreDirectory(string restoreDir)
@@ -1550,6 +1573,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         _temporaryPackageRestores.Clear();
+
+        foreach (var directory in _temporaryCredentialRestoreDirectories)
+        {
+            directory.Dispose();
+        }
+
+        _temporaryCredentialRestoreDirectories.Clear();
     }
 
     private static string CreateAppSettingsContent(
