@@ -209,6 +209,31 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public async Task TypedProjectionEventCallbackCanPublishOwnerNotification()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var executable = builder.AddExecutable("worker", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .OnResourceReady((resource, _, _) =>
+                        notificationService.PublishUpdateAsync(
+                            resource,
+                            state => state with { State = KnownResourceStates.Running })));
+
+        await notificationService.PublishUpdateAsync(executable.Resource, state => state);
+        await builder.Eventing.PublishAsync(
+            new ResourceReadyEvent(executable.Resource, TestServiceProvider.Instance),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(notificationService.TryGetCurrentState(executable.Resource.Name, out var resourceEvent));
+        Assert.Same(executable.Resource, resourceEvent.Resource);
+        Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
     public async Task OwnerNotificationReportsContainerShape()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
