@@ -76,6 +76,18 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('browser adapter exit does not duplicate the root session termination', () => {
+        (debugSession.configuration as AspireResourceExtendedDebugConfiguration).resourceType = 'browser';
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-msedge');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+        disposable.dispose();
+    });
+
     test('exit code 143 on macOS is converted to 0', async () => {
         // Mock process.platform to return 'darwin'
         const originalPlatform = process.platform;

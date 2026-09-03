@@ -80,6 +80,13 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         }
     }
 
+    // These fields identify and control the Aspire run, so workspace debugger settings cannot
+    // override them. `resourceType` also lets lifecycle code distinguish browser sessions from
+    // process-backed sessions without duplicating a termination policy across every debugger.
+    configuration.runId = launchOptions.runId;
+    configuration.debugSessionId = launchOptions.debugSessionId;
+    configuration.isApphost = launchOptions.isApphost;
+    configuration.resourceType = debuggerExtension.resourceType;
 
     let alreadyStartedSession: AlreadyStartedResourceDebugSession | undefined;
     if (debuggerExtension.createDebugSessionConfigurationCallback) {

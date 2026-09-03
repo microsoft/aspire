@@ -756,7 +756,10 @@ export async function executeE2eControlCommand(
           },
           debuggerExtension);
 
-        const loggableConfiguration = getLoggableDebugConfiguration(debugConfiguration, false);
+        const loggableConfiguration = {
+          ...getLoggableDebugConfiguration(debugConfiguration, false),
+          runtimeArgumentSummary: getE2eRuntimeArgumentSummary(debugConfiguration.runtimeArgs),
+        };
         const environmentKeys = getE2eStringArray(command.environmentKeys, 'environmentKeys');
         return environmentKeys
           ? {
@@ -1017,6 +1020,38 @@ function getE2eStringArray(value: unknown, propertyName: string): string[] | und
   }
 
   return [...value];
+}
+
+function getE2eRuntimeArgumentSummary(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const safelyReportableArguments = new Set([
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-mode',
+  ]);
+
+  return value.map(item => {
+    if (typeof item !== 'string') {
+      return '<redacted>';
+    }
+
+    if (safelyReportableArguments.has(item)) {
+      return item;
+    }
+
+    // E2E state files are uploaded as diagnostics, so preserve only enough of either Chromium form
+    // (`--user-data-dir=path` or `--user-data-dir path`) to prove that Aspire removed the override.
+    const separatorIndex = item.indexOf('=');
+    const switchName = (separatorIndex < 0 ? item : item.slice(0, separatorIndex)).trim();
+    if (switchName.toLowerCase() === '--user-data-dir' || switchName.toLowerCase() === '-user-data-dir') {
+      return separatorIndex < 0 ? switchName : `${switchName}=<redacted>`;
+    }
+
+    return '<redacted>';
+  });
 }
 
 function getE2eEnvVars(value: unknown): EnvVar[] {

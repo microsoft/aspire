@@ -225,32 +225,40 @@ export default class AspireDcpServer {
             scheduleTeardown: scheduleDebuggerTeardown,
             send: deliver,
         });
-        const stopDebuggerForDelete = async (run: RunSessionRecord): Promise<void> => {
-            if (!run.teardownPromise) {
-                run.teardownStarted = true;
-                const stops = run.debugSessions.map(debugSession => {
-                    try {
-                        return Promise.resolve(debugSession.stopSession());
-                    } catch (error) {
-                        return Promise.reject(error);
-                    }
-                });
-                const teardown = Promise.all(stops).then(() => undefined);
-                run.teardownPromise = teardown.catch(error => {
-                    run.teardownStarted = false;
-                    run.teardownPromise = undefined;
-                    throw error;
-                });
+        const teardownStops = new WeakMap<Promise<void>, {
+            debugSession: AspireResourceDebugSession;
+            stop: Promise<void>;
+        }[]>();
+        const resetDebuggerStopAttempt = (run: RunSessionRecord, teardown: Promise<void>): void => {
+            if (run.teardownPromise !== teardown) {
+                return;
             }
 
+            run.teardownStarted = false;
+            run.teardownPromise = undefined;
+            for (const { debugSession, stop } of teardownStops.get(teardown) ?? []) {
+                try {
+                    debugSession.resetStopSessionAttempt?.(stop);
+                } catch (error) {
+                    logTeardownFailure(run.runId, error);
+                }
+            }
+        };
+        const awaitDebuggerStopDeadline = async (
+            operation: Promise<void>,
+            deadline: number,
+            onTimeout?: () => void): Promise<void> => {
             let timeout: NodeJS.Timeout | undefined;
             try {
                 await Promise.race([
-                    run.teardownPromise,
+                    operation,
                     new Promise<never>((_, rejectTimeout) => {
                         timeout = setTimeout(
-                            () => rejectTimeout(new Error(`Timed out after ${debuggerStopTimeoutMs} ms.`)),
-                            debuggerStopTimeoutMs);
+                            () => {
+                                onTimeout?.();
+                                rejectTimeout(new Error(`Timed out after ${debuggerStopTimeoutMs} ms.`));
+                            },
+                            Math.max(0, deadline - Date.now()));
                     }),
                 ]);
             } finally {
@@ -258,6 +266,47 @@ export default class AspireDcpServer {
                     clearTimeout(timeout);
                 }
             }
+        };
+        const stopDebuggerForDelete = async (run: RunSessionRecord): Promise<void> => {
+            // A browser can finish starting after DELETE observes the run but before its session is
+            // handed off. The Aspire session's pending-start handle resolves only after that handoff
+            // or a definitive startup failure, so the confirmed response cannot miss a late stop.
+            const deadline = Date.now() + debuggerStopTimeoutMs;
+            await awaitDebuggerStopDeadline(run.startupCompletion, deadline);
+            if (runSessions.get(run.runId) !== run) {
+                return;
+            }
+
+            if (!run.teardownPromise) {
+                run.teardownStarted = true;
+                const stops = run.debugSessions.map(debugSession => {
+                    try {
+                        return {
+                            debugSession,
+                            stop: Promise.resolve(debugSession.stopSession()),
+                        };
+                    } catch (error) {
+                        return {
+                            debugSession,
+                            stop: Promise.reject<void>(error),
+                        };
+                    }
+                });
+                const teardown = Promise.all(stops.map(stop => stop.stop)).then(() => undefined);
+                let guardedTeardown: Promise<void>;
+                guardedTeardown = teardown.catch(error => {
+                    resetDebuggerStopAttempt(run, guardedTeardown);
+                    throw error;
+                });
+                teardownStops.set(guardedTeardown, stops);
+                run.teardownPromise = guardedTeardown;
+            }
+
+            const teardown = run.teardownPromise;
+            await awaitDebuggerStopDeadline(
+                teardown,
+                deadline,
+                () => resetDebuggerStopAttempt(run, teardown));
         };
 
         return new Promise(async (resolve, reject) => {
@@ -503,6 +552,7 @@ export default class AspireDcpServer {
                     return;
                 }
 
+                const pendingDebugSessionStart = aspireDebugSession.beginPendingDebugSessionStart(launchConfig.type);
                 runSessions.register({
                     debugSessions: processes,
                     kind: supportedResourceType === 'browser' ? 'confirmedStop' : 'adapter',
@@ -510,6 +560,7 @@ export default class AspireDcpServer {
                     // Aspire debug-session prefix remains stable.
                     ownerDcpId: debugSessionId,
                     runId,
+                    startupCompletion: pendingDebugSessionStart.completion,
                 });
                 runTelemetryById.set(runId, {
                     startTimeMs: runSessionStartTimeMs,
@@ -518,7 +569,6 @@ export default class AspireDcpServer {
                     debugSessionId,
                 });
 
-                const pendingDebugSessionStart = aspireDebugSession.beginPendingDebugSessionStart(launchConfig.type);
                 try {
                     const preparedSession = await prepareDebugSession(
                         aspireDebugSession.configuration,

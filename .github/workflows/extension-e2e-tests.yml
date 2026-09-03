@@ -151,6 +151,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: browser-debugger
+            spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: browser-debugger
+            spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: apphost-tree
             advisoryIssue: https://github.com/microsoft/aspire/issues/19282
             spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js

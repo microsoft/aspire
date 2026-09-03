@@ -80,6 +80,48 @@ suite('RunSessionRegistry', () => {
         assert.strictEqual(clock.countTimers(), 0);
     });
 
+    test('synchronous terminal delivery failure remains retryable until confirmed stop succeeds', () => {
+        const completions: Completion[] = [];
+        const deliveries: Delivery[] = [];
+        const deliveryError = new Error('terminal delivery failed');
+        const send = sinon.stub();
+        send.onFirstCall().throws(deliveryError);
+        send.onSecondCall().callsFake((ownerDcpId: string, notification: RunSessionNotification) => {
+            deliveries.push({ ownerDcpId, notification });
+        });
+        const registry = new RunSessionRegistry({
+            recordCompletion: (runId: string, exitCode: number) => completions.push({ runId, exitCode }),
+            retentionMs: 1_000,
+            scheduleTeardown: () => undefined,
+            send,
+        });
+        registry.register({
+            debugSessions: [],
+            kind: 'confirmedStop',
+            ownerDcpId: 'aspire-extension-run-owner-instance',
+            runId: 'run-1',
+            startupCompletion: Promise.resolve(),
+        });
+        registry.markRunning('run-1');
+
+        assert.throws(() => registry.terminate('run-1', 0), deliveryError);
+        assert.strictEqual(registry.confirmStop('run-1'), true);
+
+        assert.strictEqual(send.callCount, 2);
+        assert.deepStrictEqual(deliveries, [{
+            ownerDcpId: 'aspire-extension-run-owner-instance',
+            notification: {
+                notification_type: 'sessionTerminated',
+                session_id: 'run-1',
+                dcp_id: 'aspire-extension-run-owner-instance',
+            },
+        }]);
+        assert.deepStrictEqual(completions, [{ runId: 'run-1', exitCode: -1 }]);
+        assert.strictEqual(registry.size, 0);
+        assert.strictEqual(registry.confirmStop('run-1'), false);
+        assert.deepStrictEqual(completions, [{ runId: 'run-1', exitCode: -1 }]);
+    });
+
     test('retention expiry closes telemetry as canceled and evicts the run', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true, toFake: ['setTimeout', 'clearTimeout'] });
         const { completions, registry } = createRegistry(1_000);
@@ -147,6 +189,7 @@ function registerAdapterRun(registry: RunSessionRegistry, runId: string): void {
         kind: 'adapter',
         ownerDcpId: 'aspire-extension-run-owner-instance',
         runId,
+        startupCompletion: Promise.resolve(),
     });
     registry.markRunning(runId);
 }

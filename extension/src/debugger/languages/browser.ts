@@ -3,6 +3,12 @@ import { browserDisplayName, browserLabel, invalidLaunchConfiguration, unsupport
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 
+const browserRuntimeArgs = [
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-mode'
+];
+
 /**
  * Browsers VS Code's built-in js-debug can debug, mapped to the debug type it registers.
  *
@@ -95,9 +101,12 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
 
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
-        // Use an auto-managed temp user data directory so multiple browser debuggers
-        // can run concurrently without conflicting
+
+        // Let js-debug create and clean up the isolated profile. A workspace-provided profile
+        // path or command-line override would make Aspire stop a session without necessarily
+        // owning the browser instance that was launched.
         debugConfiguration.userDataDir = true;
+        debugConfiguration.runtimeArgs = mergeRuntimeArgs(debugConfiguration.runtimeArgs);
 
         // Remove program/args/cwd since browser debugging doesn't use them
         delete debugConfiguration.program;
@@ -105,3 +114,38 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.cwd;
     }
 };
+
+function mergeRuntimeArgs(runtimeArgs: unknown): string[] {
+    const existing = (Array.isArray(runtimeArgs) ? runtimeArgs : typeof runtimeArgs === 'string' ? [runtimeArgs] : [])
+        .filter((arg): arg is string => typeof arg === 'string');
+    const merged: string[] = [];
+
+    for (let i = 0; i < existing.length; i++) {
+        const arg = existing[i];
+        if (!isUserDataDirArg(arg)) {
+            merged.push(arg);
+            continue;
+        }
+
+        // Chromium accepts both `--user-data-dir=C:\profile` and
+        // `--user-data-dir C:\profile`. Windows launch configurations can preserve mixed-case
+        // switch names, so match the switch case-insensitively and remove the value only when split.
+        if (!arg.includes('=') && i + 1 < existing.length && !existing[i + 1].startsWith('-')) {
+            i++;
+        }
+    }
+
+    for (const arg of browserRuntimeArgs) {
+        if (!merged.includes(arg)) {
+            merged.push(arg);
+        }
+    }
+
+    return merged;
+}
+
+function isUserDataDirArg(arg: string): boolean {
+    const switchName = arg.split('=', 1)[0].trim().toLowerCase();
+
+    return switchName === '--user-data-dir' || switchName === '-user-data-dir';
+}
