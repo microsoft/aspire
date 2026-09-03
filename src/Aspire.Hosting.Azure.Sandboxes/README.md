@@ -37,7 +37,8 @@ builder.AddProject<Projects.WebFrontend>("frontend")
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
 
 ```csharp
-api.PublishAsAzureSandbox(new AzureSandboxOptions
+api.WithExternalHttpEndpoints()
+    .PublishAsAzureSandbox(new AzureSandboxOptions
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
@@ -86,7 +87,7 @@ await builder
 await builder.build().run();
 ```
 
-.NET projects automatically expose their first HTTP endpoint through an Entra ID-authenticated sandbox port and use the standard container target port when none is configured. The default authenticated port enables the Sandbox Entra ID provider without an allow-list, so any authenticated Entra ID user can access it. When the app model has the usual paired HTTP and HTTPS endpoints on that target port, Aspire exposes one sandbox HTTP port: the sandbox proxy terminates TLS, forwards HTTP to the container on port `8080`, and resolves references to either app-model endpoint to the same HTTPS URL. Endpoint access options apply to the shared target port, and conflicting policies are rejected. Other endpoints must be marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
+Sandbox ports are created only for endpoints explicitly marked external, such as with `WithExternalHttpEndpoints`. External endpoints are Entra ID-authenticated by default. The authenticated port enables the Sandbox Entra ID provider without an allow-list, so any authenticated Entra ID user can access it. When an external .NET project has the usual paired HTTP and HTTPS endpoints on the same target port, Aspire exposes one sandbox HTTP port: the sandbox proxy terminates TLS, forwards HTTP to the container on port `8080`, and resolves references to either app-model endpoint to the same HTTPS URL. Endpoint access options apply to the shared target port, and conflicting policies are rejected. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
 When an AppHost contains multiple compute environments, assign each compute resource explicitly with `WithComputeEnvironment`. `PublishAsAzureSandbox` uses that assignment and does not select an environment.
 

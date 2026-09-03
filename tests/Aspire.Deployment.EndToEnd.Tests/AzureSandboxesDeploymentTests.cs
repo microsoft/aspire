@@ -136,7 +136,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 7: Verifying the zero-configuration Entra-protected endpoint...");
+            output.WriteLine("Step 7: Verifying the explicitly exposed Entra-protected endpoint...");
             await auto.RunCommandAsync(
                 VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, defaultUrlFile, "frontend", anonymous: false),
                 counter,
@@ -455,9 +455,11 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             var blobs = builder.AddAzureStorage("storage")
                 .AddBlobs("blobs");
 
-            builder.AddProject("frontend", "{{defaultServiceName}}/{{defaultServiceName}}.csproj");
+            builder.AddProject("frontend", "{{defaultServiceName}}/{{defaultServiceName}}.csproj")
+                .WithExternalHttpEndpoints();
 
             builder.AddProject("anonymous", "{{anonymousServiceName}}/{{anonymousServiceName}}.csproj")
+                .WithExternalHttpEndpoints()
                 .WithReference(blobs)
                 .PublishAsAzureSandbox(new AzureSandboxOptions
                 {

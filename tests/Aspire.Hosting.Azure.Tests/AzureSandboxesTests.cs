@@ -2519,7 +2519,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task SandboxGroupAutomaticallyDeploysDotNetProjectWithDefaultEndpoint()
+    public async Task SandboxGroupAutomaticallyDeploysDotNetProjectWithoutExposingEndpoints()
     {
         using var tempDir = new TemporaryDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
@@ -2539,11 +2539,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             endpoint => Assert.Equal("https", endpoint.EndpointName));
         var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
             project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
-        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
-        Assert.Equal("http", endpoint.Name);
-        Assert.Equal(8080, endpoint.TargetPort);
-        Assert.True(endpoint.IsExternal);
-        Assert.False(endpoint.Anonymous);
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
 
         var pipelineContext = new PipelineContext(
             model,
@@ -2560,40 +2556,18 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(stepContext, project);
         Assert.Equal("8080", environment.Values["HTTP_PORTS"]);
         Assert.False(environment.Values.ContainsKey("HTTPS_PORTS"));
-
-        var stateManager = app.Services.GetRequiredService<IDeploymentStateManager>();
-        var state = await stateManager.AcquireSectionAsync(
-            AzureSandboxContainerDeployment.GetStateSectionName(deploymentTarget),
-            TestContext.Current.CancellationToken);
-        state.Data["Ports"] = new JsonArray(new JsonObject
-        {
-            ["Name"] = "http",
-            ["Port"] = 8080,
-            ["Url"] = "https://frontend.example.test"
-        });
-        await stateManager.SaveSectionAsync(state, TestContext.Current.CancellationToken);
-
-        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
-            project.GetEndpoint("http"),
-            sandboxGroup.Resource,
-            out var httpUrlExpression));
-        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
-            project.GetEndpoint("https"),
-            sandboxGroup.Resource,
-            out var httpsUrlExpression));
-        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpUrlExpression)).Value);
-        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpsUrlExpression)).Value);
     }
 
     [Fact]
-    public async Task SandboxProjectDefaultEndpointUsesPlaintextHttpListener()
+    public async Task SandboxProjectExternalHttpEndpointUsesPlaintextHttpListener()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpsEndpoint(targetPort: 7001)
-            .WithHttpEndpoint(targetPort: 5001);
+            .WithHttpEndpoint(targetPort: 5001)
+            .WithEndpoint("http", endpoint => endpoint.IsExternal = true);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -2644,6 +2618,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend")
+            .WithExternalHttpEndpoints()
             .PublishAsAzureSandbox(new AzureSandboxOptions
             {
                 Endpoints =
@@ -2659,8 +2634,9 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
 
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var project = Assert.Single(
-            app.Services.GetRequiredService<DistributedApplicationModel>().GetProjectResources(),
+            model.GetProjectResources(),
             resource => resource.Name == "frontend");
         var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
             project.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
@@ -2668,6 +2644,41 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal("http", endpoint.Name);
         Assert.Equal(8080, endpoint.TargetPort);
         Assert.True(endpoint.Anonymous);
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var stateManager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await stateManager.AcquireSectionAsync(
+            AzureSandboxContainerDeployment.GetStateSectionName(deploymentTarget),
+            TestContext.Current.CancellationToken);
+        state.Data["Ports"] = new JsonArray(new JsonObject
+        {
+            ["Name"] = "http",
+            ["Port"] = 8080,
+            ["Url"] = "https://frontend.example.test"
+        });
+        await stateManager.SaveSectionAsync(state, TestContext.Current.CancellationToken);
+
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            project.GetEndpoint("http"),
+            sandboxGroup.Resource,
+            out var httpUrlExpression));
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            project.GetEndpoint("https"),
+            sandboxGroup.Resource,
+            out var httpsUrlExpression));
+        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpUrlExpression)).Value);
+        Assert.Equal("https://frontend.example.test", (await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, project, httpsUrlExpression)).Value);
     }
 
     [Fact]
@@ -2694,8 +2705,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             backend.Resource.GetDeploymentTargetAnnotation(backendGroup.Resource)?.DeploymentTarget);
         Assert.Null(frontend.Resource.GetDeploymentTargetAnnotation(backendGroup.Resource));
         Assert.Null(backend.Resource.GetDeploymentTargetAnnotation(frontendGroup.Resource));
-        Assert.Equal(8080, Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(frontendTarget)).TargetPort);
-        Assert.Equal(8080, Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(backendTarget)).TargetPort);
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(frontendTarget));
+        Assert.Empty(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(backendTarget));
     }
 
     [Fact]

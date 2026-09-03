@@ -1473,19 +1473,10 @@ internal static class AzureSandboxContainerDeployment
             StringComparer.OrdinalIgnoreCase);
         var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparer.OrdinalIgnoreCase);
         var resolvedEndpoints = resource.TargetResource.ResolveEndpoints();
-        var defaultProjectEndpoint = resource.TargetResource is ProjectResource &&
-            !resolvedEndpoints.Any(static endpoint => endpoint.Endpoint.IsExternal)
-                ? resolvedEndpoints.FirstOrDefault(static endpoint =>
-                    string.Equals(endpoint.Endpoint.UriScheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
-                : null;
         var endpoints = new Dictionary<int, SandboxEndpoint>();
         foreach (var resolvedEndpoint in resolvedEndpoints)
         {
-            var isExternal = resolvedEndpoint.Endpoint.IsExternal ||
-                (defaultProjectEndpoint is not null &&
-                 resolvedEndpoint.Endpoint.Transport is "http" or "http2" &&
-                 resolvedEndpoint.TargetPort.Value == defaultProjectEndpoint.TargetPort.Value);
-            if (!isExternal)
+            if (!resolvedEndpoint.Endpoint.IsExternal)
             {
                 continue;
             }
@@ -1515,7 +1506,7 @@ internal static class AzureSandboxContainerDeployment
             var endpoint = new SandboxEndpoint(
                 resolvedEndpoint.Endpoint.Name,
                 resolvedTargetPort,
-                isExternal,
+                IsExternal: true,
                 IsHttp: true,
                 protocol,
                 resolvedEndpointOptions?.Anonymous);
