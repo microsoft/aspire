@@ -189,7 +189,9 @@ public static class ResourceProjectionBuilderExtensions
     /// written inside <paramref name="configure"/> applies only to the run-mode container; configuration written
     /// on <paramref name="builder"/> applies to the resource itself and is seen by every projection of it.
     /// </remarks>
-    [AspireExport(RunSyncOnBackgroundThread = true)]
+    // Hidden from container resources in the generated SDKs. Polyglot callers have no analyzer, so without
+    // this the method would be offered on every container type and only fail at run time.
+    [AspireExport(RunSyncOnBackgroundThread = true, ExcludeTargetTypes = [typeof(ContainerResource)])]
     public static IResourceBuilder<T> RunAsContainerImage<T>(this IResourceBuilder<T> builder, string image, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : IResource
     {
@@ -218,7 +220,9 @@ public static class ResourceProjectionBuilderExtensions
     /// written inside <paramref name="configure"/> applies only to the published container; configuration written
     /// on <paramref name="builder"/> applies to the resource itself and is seen by every projection of it.
     /// </remarks>
-    [AspireExport(RunSyncOnBackgroundThread = true)]
+    // Hidden from container resources in the generated SDKs. Polyglot callers have no analyzer, so without
+    // this the method would be offered on every container type and only fail at run time.
+    [AspireExport(RunSyncOnBackgroundThread = true, ExcludeTargetTypes = [typeof(ContainerResource)])]
     public static IResourceBuilder<T> PublishAsContainerImage<T>(this IResourceBuilder<T> builder, string image, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : IResource
     {

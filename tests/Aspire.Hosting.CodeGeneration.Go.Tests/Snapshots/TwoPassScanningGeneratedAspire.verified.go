@@ -1448,8 +1448,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	PublishAsContainer() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1786,60 +1784,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConta
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsContainerImage publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &PublishAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainerImage", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &RunAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7802,8 +7746,6 @@ type ContainerResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerResource
 	PublishAsConnectionString() ContainerResource
 	PublishAsContainer() ContainerResource
-	PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) ContainerResource
-	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ContainerResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerResource
 	TestWaitFor(dependency Resource) ContainerResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ContainerResource
@@ -8131,60 +8073,6 @@ func (s *containerResource) PublishAsContainer() ContainerResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsContainerImage publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-func (s *containerResource) PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &PublishAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainerImage", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-func (s *containerResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &RunAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24556,8 +24444,6 @@ type TestDatabaseResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestDatabaseResource
 	PublishAsConnectionString() TestDatabaseResource
 	PublishAsContainer() TestDatabaseResource
-	PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) TestDatabaseResource
-	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) TestDatabaseResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestDatabaseResource
 	TestWaitFor(dependency Resource) TestDatabaseResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource
@@ -24893,60 +24779,6 @@ func (s *testDatabaseResource) PublishAsContainer() TestDatabaseResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsContainerImage publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-func (s *testDatabaseResource) PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &PublishAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainerImage", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-func (s *testDatabaseResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &RunAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -26895,8 +26727,6 @@ type TestRedisResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestRedisResource
 	PublishAsConnectionString() TestRedisResource
 	PublishAsContainer() TestRedisResource
-	PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) TestRedisResource
-	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) TestRedisResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestRedisResource
 	TestWaitFor(dependency Resource) TestRedisResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
@@ -27370,60 +27200,6 @@ func (s *testRedisResource) PublishAsContainer() TestRedisResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsContainerImage publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-func (s *testRedisResource) PublishAsContainerImage(image string, options ...*PublishAsContainerImageOptions) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &PublishAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainerImage", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-func (s *testRedisResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &RunAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

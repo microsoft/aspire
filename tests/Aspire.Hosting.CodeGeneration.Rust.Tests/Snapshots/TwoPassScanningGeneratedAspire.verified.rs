@@ -6018,30 +6018,6 @@ impl ContainerResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Adds an interactive terminal session to a resource using the default terminal options.
     pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18240,30 +18216,6 @@ impl TestDatabaseResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Adds an interactive terminal session to a resource using the default terminal options.
     pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19868,30 +19820,6 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
-    }
-
-    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an interactive terminal session to a resource using the default terminal options.
@@ -21596,30 +21524,6 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
-    }
-
-    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an interactive terminal session to a resource using the default terminal options.

@@ -858,6 +858,38 @@ public static class AtsCapabilityScanner
                 };
                 capability.ExpandedTargetTypes = [targetTypeRef];
             }
+
+            ApplyTargetTypeExclusions(capability);
+        }
+    }
+
+    /// <summary>
+    /// Removes the capability's excluded target types, and anything assignable to them, from its expansion.
+    /// </summary>
+    /// <remarks>
+    /// Expansion is otherwise mechanical, so an export declared on a broad interface lands on every implementer.
+    /// The exclusion is assignability-based rather than an identity match so that excluding a base type also
+    /// excludes everything deriving from it, which is what an author asking to hide a capability from
+    /// <c>ContainerResource</c> means.
+    /// </remarks>
+    private static void ApplyTargetTypeExclusions(AtsCapabilityInfo capability)
+    {
+        if (capability.ExcludedTargetTypes.Count == 0)
+        {
+            return;
+        }
+
+        var retained = capability.ExpandedTargetTypes
+            .Where(expanded => expanded.ClrType is null ||
+                !capability.ExcludedTargetTypes.Any(excluded => excluded.IsAssignableFrom(expanded.ClrType)))
+            .ToList();
+
+        // Never leave the expansion empty. Several generators treat an empty expansion as "fall back to the
+        // declared target type", which would put the capability back on every implementer and invert the intent.
+        // An exclusion that removes every target is an authoring mistake, not a request to export nothing.
+        if (retained.Count > 0)
+        {
+            capability.ExpandedTargetTypes = retained;
         }
     }
 
@@ -2088,7 +2120,8 @@ public static class AtsCapabilityScanner
             ReturnsBuilder = returnsBuilder,
             SourceLocation = methodLocation,
             RunSyncOnBackgroundThread = exportAttr.RunSyncOnBackgroundThread ||
-                (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false))
+                (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false)),
+            ExcludedTargetTypes = exportAttr.ExcludeTargetTypes
         };
     }
 

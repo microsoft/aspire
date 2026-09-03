@@ -17513,28 +17513,6 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerResourcePromise;
     /**
@@ -18354,28 +18332,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerResourcePromise;
     /**
@@ -20585,68 +20541,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ContainerResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/runAsContainerImage',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerResourcePromise {
-        const configure = options?.configure;
-        return new ContainerResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ContainerResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerResourcePromise {
-        const configure = options?.configure;
-        return new ContainerResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -21671,14 +21565,6 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
-    }
-
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
-    }
-
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
     }
 
     withTerminal(): ContainerResourcePromise {
@@ -43987,28 +43873,6 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestDatabaseResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestDatabaseResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestDatabaseResourcePromise;
     /**
@@ -44828,28 +44692,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestDatabaseResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestDatabaseResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestDatabaseResourcePromise;
     /**
@@ -47058,68 +46900,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestDatabaseResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/runAsContainerImage',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestDatabaseResourcePromise {
-        const configure = options?.configure;
-        return new TestDatabaseResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestDatabaseResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestDatabaseResourcePromise {
-        const configure = options?.configure;
-        return new TestDatabaseResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -48146,14 +47926,6 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
-    }
-
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -48998,28 +48770,6 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestRedisResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestRedisResourcePromise;
     /**
@@ -49923,28 +49673,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestRedisResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestRedisResourcePromise;
     /**
@@ -52257,68 +51985,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestRedisResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/runAsContainerImage',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestRedisResourcePromise {
-        const configure = options?.configure;
-        return new TestRedisResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestRedisResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestRedisResourcePromise {
-        const configure = options?.configure;
-        return new TestRedisResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -53628,14 +53294,6 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
-    }
-
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -54528,28 +54186,6 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestVaultResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestVaultResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestVaultResourcePromise;
     /**
@@ -55371,28 +55007,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestVaultResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestVaultResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestVaultResourcePromise;
     /**
@@ -57603,68 +57217,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestVaultResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/runAsContainerImage',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestVaultResourcePromise {
-        const configure = options?.configure;
-        return new TestVaultResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<TestVaultResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestVaultResourcePromise {
-        const configure = options?.configure;
-        return new TestVaultResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -58704,14 +58256,6 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
-    }
-
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
-    }
-
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
     }
 
     withTerminal(): TestVaultResourcePromise {

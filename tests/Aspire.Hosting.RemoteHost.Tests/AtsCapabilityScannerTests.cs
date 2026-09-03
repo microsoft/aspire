@@ -522,6 +522,35 @@ public class AtsCapabilityScannerTests
                 && d.Message.Contains("has collisions", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ScanAssembly_ExcludedTargetTypes_AreRemovedFromExpansionAlongWithTheirDescendants()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/excludingExporter", StringComparison.Ordinal));
+
+        // The excluded type is dropped, and so is a type deriving from it: an author hiding a capability from a
+        // base type means the whole hierarchy, otherwise every subclass would have to be listed by hand.
+        Assert.DoesNotContain(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(ExcludedEnvironmentResource)));
+        Assert.DoesNotContain(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExcludedEnvironmentResource)));
+
+        // Unrelated implementers of the same target interface still get the capability.
+        Assert.Contains(capability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(OtherEnvironmentResource)));
+
+        // Both types do expand onto an equivalent capability without the exclusion, so the assertions above are
+        // testing the exclusion rather than a type that was never going to be in the expansion.
+        var unexcluded = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/shadowedExporter", StringComparison.Ordinal));
+        Assert.Contains(unexcluded.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(ExcludedEnvironmentResource)));
+        Assert.Contains(unexcluded.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExcludedEnvironmentResource)));
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -781,6 +810,10 @@ public class AtsCapabilityScannerTests
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
+    private class ExcludedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private sealed class DerivedExcludedEnvironmentResource(string name) : ExcludedEnvironmentResource(name);
+
     private enum TestUnionEnum
     {
         First,
@@ -880,6 +913,27 @@ public class AtsCapabilityScannerTests
 
         [AspireExport("otherEnvironmentProbe")]
         public static IResourceBuilder<OtherEnvironmentResource> OtherEnvironmentProbe(IResourceBuilder<OtherEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        // Target expansion only considers concrete types the scanner has seen, so these probes are what put the
+        // excluded types into the type graph. Without them the exclusion assertions would pass vacuously.
+        [AspireExport("excludedEnvironmentProbe")]
+        public static IResourceBuilder<ExcludedEnvironmentResource> ExcludedEnvironmentProbe(IResourceBuilder<ExcludedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("derivedExcludedEnvironmentProbe")]
+        public static IResourceBuilder<DerivedExcludedEnvironmentResource> DerivedExcludedEnvironmentProbe(IResourceBuilder<DerivedExcludedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("excludingExporter", ExcludeTargetTypes = [typeof(ExcludedEnvironmentResource)])]
+        public static IResourceBuilder<T> ExcludingExporter<T>(IResourceBuilder<T> builder)
+            where T : IResourceWithEnvironment
         {
             return builder;
         }
