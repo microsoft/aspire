@@ -25,7 +25,8 @@ namespace Aspire.Hosting.Maui.Lifecycle;
 /// </remarks>
 internal class MauiBuildQueueEventSubscriber(
     ResourceNotificationService notificationService,
-    ResourceLoggerService loggerService) : IDistributedApplicationEventingSubscriber
+    ResourceLoggerService loggerService,
+    ResourceCommandService resourceCommandService) : IDistributedApplicationEventingSubscriber
 {
     private const string DcpTerminatedState = "Terminated";
 
@@ -300,6 +301,8 @@ internal class MauiBuildQueueEventSubscriber(
         bool releaseOnRunning,
         ILogger logger, CancellationToken cancellationToken)
     {
+        var releaseSemaphore = true;
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -311,7 +314,35 @@ internal class MauiBuildQueueEventSubscriber(
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Timed out waiting for resource '{ResourceName}' to reach a launch handoff state after {Timeout}; releasing build lock.", resource.Name, LaunchHandoffTimeout);
+            if (releaseOnRunning)
+            {
+                logger.LogWarning(ex, "Timed out waiting for resource '{ResourceName}' to reach a launch handoff state after {Timeout}; releasing build lock.", resource.Name, LaunchHandoffTimeout);
+            }
+            else
+            {
+                // Android's Run target can still be writing shared build outputs after DCP reports Running.
+                // Stop it before releasing the queue so another platform build cannot overlap that work.
+                releaseSemaphore = false;
+                logger.LogWarning(ex, "Timed out waiting for Android resource '{ResourceName}' to finish its launch work after {Timeout}; stopping the resource before releasing the build lock.", resource.Name, LaunchHandoffTimeout);
+
+                try
+                {
+                    releaseSemaphore = await StopResourceAfterLaunchTimeoutAsync(resource, cancellationToken).ConfigureAwait(false);
+                    if (!releaseSemaphore)
+                    {
+                        logger.LogError("Failed to stop Android resource '{ResourceName}' after its launch handoff timed out. The build lock will remain held until the application stops.", resource.Name);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Application shutdown terminates DCP's resources, so it is safe to release the in-process lock.
+                    releaseSemaphore = true;
+                }
+                catch (Exception stopException)
+                {
+                    logger.LogError(stopException, "Failed to stop Android resource '{ResourceName}' after its launch handoff timed out. The build lock will remain held until the application stops.", resource.Name);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -319,9 +350,20 @@ internal class MauiBuildQueueEventSubscriber(
         }
         finally
         {
-            ReleaseSemaphoreSafely(semaphore);
-            logger.LogDebug("Released build lock (resource '{ResourceName}').", resource.Name);
+            if (releaseSemaphore)
+            {
+                ReleaseSemaphoreSafely(semaphore);
+                logger.LogDebug("Released build lock (resource '{ResourceName}').", resource.Name);
+            }
         }
+    }
+
+    internal virtual async Task<bool> StopResourceAfterLaunchTimeoutAsync(IResource resource, CancellationToken cancellationToken)
+    {
+        // The queue-aware stop command delegates to DCP after the pre-build completes. DCP does not
+        // report success until the executable is terminal, making command completion the handoff barrier.
+        var result = await resourceCommandService.ExecuteCommandAsync(resource, KnownResourceCommands.StopCommand, cancellationToken).ConfigureAwait(false);
+        return result.Success || (result.Canceled && cancellationToken.IsCancellationRequested);
     }
 
     internal static bool ShouldReleaseBuildLockForLaunchState(string? state, string? stateAtCallTime, bool releaseOnRunning)

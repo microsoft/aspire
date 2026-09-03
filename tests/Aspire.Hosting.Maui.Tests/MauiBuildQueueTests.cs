@@ -405,7 +405,8 @@ public class MauiBuildQueueTests
 
         var subscriber = new TestableBuildQueueSubscriber(
             notificationService,
-            loggerService);
+            loggerService,
+            app.Services.GetRequiredService<ResourceCommandService>());
         await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None);
 
         // Should return immediately — no annotation means no queue
@@ -440,7 +441,8 @@ public class MauiBuildQueueTests
         // there is no DCP launch phase in the test environment.
         var subscriber = new RealBuildQueueSubscriberWithImmediateRelease(
             notificationService,
-            loggerService);
+            loggerService,
+            app.Services.GetRequiredService<ResourceCommandService>());
         await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None);
 
         // Should throw InvalidOperationException — missing annotation means semaphore
@@ -647,7 +649,8 @@ public class MauiBuildQueueTests
         var logger = env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android);
         var subscriber = new MauiBuildQueueEventSubscriber(
             env.NotificationService,
-            env.Services.GetRequiredService<ResourceLoggerService>());
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
         var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
             env.Android,
             annotation.BuildSemaphore,
@@ -711,7 +714,8 @@ public class MauiBuildQueueTests
         var logger = env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android);
         var subscriber = new MauiBuildQueueEventSubscriber(
             env.NotificationService,
-            env.Services.GetRequiredService<ResourceLoggerService>());
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
         var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
             env.Android,
             annotation.BuildSemaphore,
@@ -753,7 +757,7 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
-    public async Task ReleaseSemaphoreAfterLaunchAsync_ReleasesOnLaunchHandoffTimeout()
+    public async Task ReleaseSemaphoreAfterLaunchAsync_NonAndroidReleasesOnLaunchHandoffTimeout()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
         Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
@@ -761,7 +765,78 @@ public class MauiBuildQueueTests
 
         var subscriber = new MauiBuildQueueEventSubscriber(
             env.NotificationService,
-            env.Services.GetRequiredService<ResourceLoggerService>())
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>())
+        {
+            LaunchHandoffTimeout = TimeSpan.FromMilliseconds(50)
+        };
+
+        await subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.MacCatalyst,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: true,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.MacCatalyst),
+            CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidStopsLaunchBeforeReleasingOnTimeout()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, async context =>
+        {
+            stopStarted.SetResult();
+            await stopCompletion.Task.WaitAsync(context.CancellationToken);
+            return CommandResults.Success();
+        });
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>())
+        {
+            LaunchHandoffTimeout = TimeSpan.FromMilliseconds(50)
+        };
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        await stopStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(releaseTask.IsCompleted);
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        stopCompletion.SetResult();
+        await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidRetainsLockWhenStopFails()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        AddOriginalStopCommand(env.Android, _ => Task.FromResult(CommandResults.Failure("Stop failed.")));
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>())
         {
             LaunchHandoffTimeout = TimeSpan.FromMilliseconds(50)
         };
@@ -773,6 +848,49 @@ public class MauiBuildQueueTests
             releaseOnRunning: false,
             env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
             CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        annotation.BuildSemaphore.Release();
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, async context =>
+        {
+            stopStarted.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            return CommandResults.Success();
+        });
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>())
+        {
+            LaunchHandoffTimeout = TimeSpan.FromMilliseconds(50)
+        };
+        using var cts = new CancellationTokenSource();
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            cts.Token);
+
+        await stopStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        await cts.CancelAsync();
+        await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
     }
@@ -786,7 +904,8 @@ public class MauiBuildQueueTests
 
         var subscriber = new MauiBuildQueueEventSubscriber(
             env.NotificationService,
-            env.Services.GetRequiredService<ResourceLoggerService>());
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
         using var cts = new CancellationTokenSource();
         var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
             env.Android,
@@ -876,15 +995,20 @@ public class MauiBuildQueueTests
 
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)
     {
+        AddOriginalStopCommand(resource, _ =>
+        {
+            onExecute?.Invoke();
+            return Task.FromResult(CommandResults.Success());
+        });
+    }
+
+    private static void AddOriginalStopCommand(IResource resource, Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand)
+    {
         resource.Annotations.Add(new ResourceCommandAnnotation(
             name: KnownResourceCommands.StopCommand,
             displayName: "Stop",
             updateState: _ => ResourceCommandState.Enabled,
-            executeCommand: _ =>
-            {
-                onExecute?.Invoke();
-                return Task.FromResult(CommandResults.Success());
-            },
+            executeCommand,
             displayDescription: null,
             parameter: null,
             confirmationMessage: null,
@@ -943,7 +1067,8 @@ public class MauiBuildQueueTests
     /// </summary>
     private sealed class TestableBuildQueueSubscriber(
         ResourceNotificationService notificationService,
-        ResourceLoggerService loggerService) : MauiBuildQueueEventSubscriber(notificationService, loggerService)
+        ResourceLoggerService loggerService,
+        ResourceCommandService resourceCommandService) : MauiBuildQueueEventSubscriber(notificationService, loggerService, resourceCommandService)
     {
         private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildCompletions = new();
         private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildStarted = new();
@@ -1050,7 +1175,8 @@ public class MauiBuildQueueTests
     /// </summary>
     private sealed class RealBuildQueueSubscriberWithImmediateRelease(
         ResourceNotificationService notificationService,
-        ResourceLoggerService loggerService) : MauiBuildQueueEventSubscriber(notificationService, loggerService)
+        ResourceLoggerService loggerService,
+        ResourceCommandService resourceCommandService) : MauiBuildQueueEventSubscriber(notificationService, loggerService, resourceCommandService)
     {
         internal override Task ReleaseSemaphoreAfterLaunchAsync(IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime, bool releaseOnRunning, ILogger logger, CancellationToken cancellationToken)
         {
@@ -1160,7 +1286,8 @@ public class MauiBuildQueueTests
             var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
             var execContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
 
-            var subscriber = new TestableBuildQueueSubscriber(notificationService, loggerService);
+            var resourceCommandService = app.Services.GetRequiredService<ResourceCommandService>();
+            var subscriber = new TestableBuildQueueSubscriber(notificationService, loggerService, resourceCommandService);
             await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None);
             return subscriber;
         }
