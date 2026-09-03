@@ -320,10 +320,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         // Container-specific fields come from the projection, but the connection string contract belongs to the
         // owner: the projection facade is a plain ContainerResource, so a projected owner implementing
-        // IResourceWithConnectionString would otherwise silently lose its connectionString field.
-        // The cast on the right operand is required: ?? has no target typing, and IResourceWithConnectionString
-        // and ContainerResource share no conversion, so without it this is CS0019.
-        IResource connectionStringSource = container.GetContractOwner<IResourceWithConnectionString>() ?? (IResource)container;
+        // IResourceWithConnectionString would otherwise silently lose its connectionString field. WriteConnectionString
+        // takes an IResource and re-tests the contract itself, so this only has to pick which resource to hand it.
+        IResource connectionStringSource = container.GetContractOwner<IResourceWithConnectionString>() is { } owner
+            ? owner
+            : container;
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
