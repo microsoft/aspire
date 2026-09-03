@@ -910,7 +910,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             isProxied: true));
 
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-        maui.AddiOSSimulator().WithOtlpDevTunnel();
+        var iosSimulator = maui.AddiOSSimulator().WithOtlpDevTunnel();
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
 
         await using var app = appBuilder.Build();
@@ -1098,17 +1098,24 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
 
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-        maui.AddAndroidEmulator()
+        var androidEmulator = maui.AddAndroidEmulator()
             .WithOtlpDevTunnel();
 
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
 
         await using var app = appBuilder.Build();
 
+        var environmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            androidEmulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services).AsTask();
+        Assert.False(environmentTask.IsCompleted);
+
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
             appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
 
         Assert.Contains("requires the Aspire dashboard", exception.Message);
+        await AssertEnvironmentResolutionFailsAsync(environmentTask, exception);
     }
 
     [Fact]
@@ -1185,7 +1192,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             isProxied: true));
 
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-        maui.AddiOSSimulator().WithOtlpDevTunnel();
+        var iosSimulator = maui.AddiOSSimulator().WithOtlpDevTunnel();
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
         tunnelConfig.RuntimeSnapshotResolutionTimeout = TimeSpan.FromMilliseconds(50);
 
@@ -1209,10 +1216,42 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                 CancellationToken.None));
 
         Assert.Contains("did not publish a concrete OTLP listener", exception.Message);
+
+        var environmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services).AsTask();
+        await AssertEnvironmentResolutionFailsAsync(environmentTask, exception);
+        Assert.Null(tunnelConfig.TunnelEndpoint.EndpointAnnotation.AllocatedEndpoint);
+
+        await app.Services.GetRequiredService<ResourceNotificationService>()
+            .PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
+            {
+                EnvironmentVariables =
+                [
+                    new(
+                        KnownConfigNames.DashboardOtlpHttpEndpointUrl,
+                        "http://localhost:55077",
+                        IsFromSpec: false)
+                ]
+            });
+        await appBuilder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
+            CancellationToken.None);
+
+        tunnelConfig.TunnelEndpoint.EndpointAnnotation.AllocatedEndpoint =
+            new AllocatedEndpoint(tunnelConfig.TunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+
+        var recoveredEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", recoveredEnvironment[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+        Assert.Equal("http/protobuf", recoveredEnvironment[KnownOtelConfigNames.ExporterOtlpProtocol]);
     }
 
     [Fact]
-    public async Task WithOtlpDevTunnel_ProtocolEvaluationTimesOutWhenDashboardResolutionFails()
+    public async Task WithOtlpDevTunnel_EnvironmentEvaluationTimesOutWhenDashboardResolutionDoesNotStart()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
@@ -1231,10 +1270,6 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var iosSimulator = maui.AddiOSSimulator().WithOtlpDevTunnel();
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
         tunnelConfig.RuntimeSnapshotResolutionTimeout = TimeSpan.FromMilliseconds(50);
-        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
-        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint =
-            new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
-
         await using var app = appBuilder.Build();
 
         var exception = await Assert.ThrowsAsync<AggregateException>(async () =>
@@ -1243,8 +1278,10 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                 DistributedApplicationOperation.Run,
                 app.Services));
 
-        var resolutionException = Assert.IsType<DistributedApplicationException>(Assert.Single(exception.InnerExceptions));
-        Assert.Contains("protocol could not be determined", resolutionException.Message);
+        Assert.Equal(2, exception.InnerExceptions.Count);
+        Assert.All(exception.InnerExceptions, innerException => Assert.IsType<DistributedApplicationException>(innerException));
+        Assert.Contains(exception.InnerExceptions, innerException => innerException.Message.Contains("endpoint could not be determined", StringComparison.Ordinal));
+        Assert.Contains(exception.InnerExceptions, innerException => innerException.Message.Contains("protocol could not be determined", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -1266,7 +1303,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             isProxied: true));
 
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-        maui.AddiOSSimulator().WithOtlpDevTunnel();
+        var iosSimulator = maui.AddiOSSimulator().WithOtlpDevTunnel();
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
 
         await using var app = appBuilder.Build();
@@ -1284,6 +1321,12 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             State = KnownResourceStates.Running
         });
 
+        var environmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services).AsTask();
+        Assert.False(environmentTask.IsCompleted);
+
         var beforeStartTask = appBuilder.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
             CancellationToken.None);
@@ -1297,6 +1340,9 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => beforeStartTask.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Contains("terminated", exception.Message);
+
+        await AssertEnvironmentResolutionFailsAsync(environmentTask, exception);
+
         Assert.False(tunnelConfig.IsOtlpEndpointResolved);
     }
 
@@ -1323,6 +1369,17 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     // Helper methods
+
+    private static async Task AssertEnvironmentResolutionFailsAsync(
+        Task<Dictionary<string, string>> environmentTask,
+        DistributedApplicationException expectedException)
+    {
+        var environmentException = await Assert.ThrowsAsync<AggregateException>(
+            () => environmentTask.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.All(
+            environmentException.InnerExceptions,
+            innerException => Assert.Same(expectedException, innerException));
+    }
 
     private static string CreateProjectContentWithout(string excludePlatform)
     {

@@ -32,6 +32,11 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
     public IResourceBuilder<DevTunnelResource> DevTunnel { get; }
 
     /// <summary>
+    /// The public dev tunnel endpoint used by MAUI platform environment variables.
+    /// </summary>
+    public EndpointReference TunnelEndpoint { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the dashboard OTLP listener has been resolved.
     /// </summary>
     public bool IsOtlpEndpointResolved => Volatile.Read(ref _isOtlpEndpointResolved) != 0;
@@ -45,11 +50,13 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
         OtlpLoopbackResource otlpStub,
         IResourceBuilder<OtlpLoopbackResource> otlpStubBuilder,
         IResourceBuilder<DevTunnelResource> devTunnel,
+        EndpointReference tunnelEndpoint,
         bool isOtlpEndpointResolved)
     {
         OtlpStub = otlpStub;
         OtlpStubBuilder = otlpStubBuilder;
         DevTunnel = devTunnel;
+        TunnelEndpoint = tunnelEndpoint;
         _isOtlpEndpointResolved = isOtlpEndpointResolved ? 1 : 0;
     }
 
@@ -69,6 +76,29 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
             endpoint.Transport = transport;
             endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", port);
             Volatile.Write(ref _isOtlpEndpointResolved, 1);
+
+            return true;
+        }
+    }
+
+    internal bool TryFailOtlpEndpointResolution(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        lock (_otlpEndpointLock)
+        {
+            if (_isOtlpEndpointResolved != 0)
+            {
+                return false;
+            }
+
+            // DCP can resolve MAUI environment variables while the tunnel startup callback is
+            // still waiting for the dashboard listener. Fault the synthetic target so the
+            // failure-aware endpoint and protocol providers stop waiting. Do not fault the public
+            // DevTunnel endpoint because its lifecycle reads the snapshot before replacing it on retry.
+#pragma warning disable CS0618 // Type or member is obsolete
+            OtlpStub.OtlpEndpoint.AllocatedEndpointSnapshot.SetException(exception);
+#pragma warning restore CS0618 // Type or member is obsolete
 
             return true;
         }
