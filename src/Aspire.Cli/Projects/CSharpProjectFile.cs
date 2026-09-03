@@ -246,7 +246,7 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
 
     private static XElement CreateNoneElement(CSharpNoneItem noneItem)
     {
-        var element = new XElement("None", new XAttribute("Include", noneItem.Include));
+        var element = new XElement("None", new XAttribute("Update", noneItem.Update));
 
         if (noneItem.CopyToOutputDirectory is not null)
         {
@@ -299,4 +299,4 @@ internal sealed record CSharpProjectImport(string ProjectPath);
 /// <summary>
 /// Represents a generated None item.
 /// </summary>
-internal sealed record CSharpNoneItem(string Include, string? CopyToOutputDirectory = null);
+internal sealed record CSharpNoneItem(string Update, string? CopyToOutputDirectory = null);
