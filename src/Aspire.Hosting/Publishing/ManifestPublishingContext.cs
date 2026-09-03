@@ -322,11 +322,8 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         // owner: the projection facade is a plain ContainerResource, so a projected owner implementing
         // IResourceWithConnectionString would otherwise silently lose its connectionString field. WriteConnectionString
         // takes an IResource and re-tests the contract itself, so this only has to pick which resource to hand it.
-        // The explicit IResource is what makes the conditional compile: it target-types both branches, and with var
-        // the two arms have no conversion between them (CS0173).
-        IResource connectionStringSource = container.GetContractOwner<IResourceWithConnectionString>() is { } owner
-            ? owner
-            : container;
+        var owner = container.GetOwnerOrSelf();
+        var connectionStringSource = owner is IResourceWithConnectionString ? owner : container;
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {

@@ -31,6 +31,33 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to canonicalize.</param>
     /// <returns>The projection owner when <paramref name="resource"/> is a projection; otherwise, <paramref name="resource"/>.</returns>
+    /// <remarks>
+    /// Callers resolving a contract such as <see cref="IResourceWithConnectionString"/> should test the result of
+    /// this method first and fall back to the original resource, because a projection shares its owner's annotations
+    /// but not its interfaces: an untyped projection facade is a plain <see cref="ContainerResource"/> and silently
+    /// fails an <c>is</c> test the owner would pass. Contracts resolve to the owner because they describe identity —
+    /// what other resources reference and what <c>WithReference</c> binds to — while the projection is authoritative
+    /// only for shape. The fallback is what still lets a typed projection carry a contract its owner does not have.
+    /// <para>
+    /// Owner-first does not stop a projection from changing a contract's value, so resist "flipping" it to make a
+    /// projection win. Both sanctioned mechanisms route through the owner, because the owner is the identity
+    /// consumers reference and must be the one that hands the value out:
+    /// </para>
+    /// <list type="number">
+    /// <item>The owner branches on its own shape, as in <c>AzureCosmosDBResource.IsEmulator => this.IsContainer()</c>
+    /// and <c>AzureSignalRResource.ConnectionStringExpression</c>. <c>IsContainer</c> resolves projections, so the
+    /// projection genuinely drives the answer.</item>
+    /// <item>The owner consults an annotation the projection wrote. Because the projection shares the owner's
+    /// annotation collection, a <see cref="ConnectionStringRedirectAnnotation"/> registered from the projected
+    /// builder is the same annotation the owner reads back — this is how <c>RunAsContainer</c> already overrides
+    /// connection strings for Redis, Postgres, SQL Server, and Key Vault.</item>
+    /// </list>
+    /// <para>
+    /// Consistent with that, none of the eight shipped Azure emulator resources declares a contract; they are all
+    /// shape-only <see cref="ContainerResource"/> types. Projection-first would instead let publish emit a value
+    /// that run never uses, since only the manifest writer and <c>WithReference</c> ever see a projection.
+    /// </para>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Projection identity helper is not part of the ATS surface.")]
     internal static IResource GetOwnerOrSelf(this IResource resource)
     {
@@ -53,46 +80,6 @@ public static class ResourceExtensions
         }
 
         return resource;
-    }
-
-    /// <summary>
-    /// Gets the projection owner when it carries the <typeparamref name="TContract"/> contract.
-    /// </summary>
-    /// <typeparam name="TContract">The resource contract being resolved, such as <see cref="IResourceWithEndpoints"/>.</typeparam>
-    /// <param name="resource">The resource, which may be a projection.</param>
-    /// <returns>The owner as <typeparamref name="TContract"/>, or <see langword="null"/> when it does not implement it. Callers pair this with <c>?? resource</c>.</returns>
-    /// <remarks>
-    /// A projection shares its owner's annotations but not its interfaces, so an untyped projection facade is a
-    /// plain <see cref="ContainerResource"/> and silently fails an <c>is</c> test the owner would pass. Contracts
-    /// resolve to the owner because they describe identity — what other resources reference and what
-    /// <c>WithReference</c> binds to — while the projection is authoritative only for shape. Falling back to the
-    /// projection is what still lets a typed projection carry a contract its owner does not have.
-    /// <para>
-    /// Owner-first does not stop a projection from changing a contract's value, so resist "flipping" this to make a
-    /// projection win. Both sanctioned mechanisms route through the owner, because the owner is the identity
-    /// consumers reference and must be the one that hands the value out:
-    /// </para>
-    /// <list type="number">
-    /// <item>The owner branches on its own shape, as in <c>AzureCosmosDBResource.IsEmulator => this.IsContainer()</c>
-    /// and <c>AzureSignalRResource.ConnectionStringExpression</c>. <c>IsContainer</c> resolves projections, so the
-    /// projection genuinely drives the answer.</item>
-    /// <item>The owner consults an annotation the projection wrote. Because the projection shares the owner's
-    /// annotation collection, a <see cref="ConnectionStringRedirectAnnotation"/> registered from the projected
-    /// builder is the same annotation the owner reads back — this is how <c>RunAsContainer</c> already overrides
-    /// connection strings for Redis, Postgres, SQL Server, and Key Vault.</item>
-    /// </list>
-    /// <para>
-    /// Consistent with that, none of the eight shipped Azure emulator resources declares a contract; they are all
-    /// shape-only <see cref="ContainerResource"/> types. Projection-first would instead let publish emit a value
-    /// that run never uses, since only the manifest writer and <c>WithReference</c> ever see a projection.
-    /// </para>
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Projection identity helper is not part of the ATS surface.")]
-    internal static TContract? GetContractOwner<TContract>(this IResource resource) where TContract : class
-    {
-        ArgumentNullException.ThrowIfNull(resource);
-
-        return resource.GetOwnerOrSelf() as TContract;
     }
 
     /// <summary>
@@ -834,7 +821,7 @@ public static class ResourceExtensions
     {
         if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            var owner = resource.GetContractOwner<IResourceWithEndpoints>() ?? resource;
+            var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
             return endpoints.Select(e => new EndpointReference(owner, e));
         }
 
@@ -852,7 +839,7 @@ public static class ResourceExtensions
     {
         if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            var owner = resource.GetContractOwner<IResourceWithEndpoints>() ?? resource;
+            var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
             return endpoints.Select(e => new EndpointReference(owner, e, contextNetworkId));
         }
 
@@ -868,7 +855,7 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
-        var owner = resource.GetContractOwner<IResourceWithEndpoints>() ?? resource;
+        var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
@@ -892,7 +879,7 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkId)
     {
-        var owner = resource.GetContractOwner<IResourceWithEndpoints>() ?? resource;
+        var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
