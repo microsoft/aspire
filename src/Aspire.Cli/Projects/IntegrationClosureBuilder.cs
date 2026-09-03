@@ -12,9 +12,11 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Projects;
 
 /// <summary>
-/// Shared MSBuild-side closure contract used by generated integration projects.
-/// Owns the cache-directory layout, file-name constants, project-file XML emission
-/// (properties + AfterBuild targets), and the post-build closure file reader.
+/// Shared MSBuild-side closure contract used by both the polyglot
+/// <see cref="PrebuiltAppHostServer"/> and the CLI-managed
+/// <see cref="CliManagedDotNetAppHostProject"/>. Owns the cache-directory layout,
+/// file-name constants, project-file XML emission (properties + AfterBuild targets),
+/// and the post-build closure file reader.
 /// </summary>
 /// <remarks>
 /// The MSBuild contract is intentionally narrow: a small set of <c>AspireClosure*File</c>
@@ -74,8 +76,7 @@ internal static class IntegrationClosureBuilder
             projectFile.AddProperty("RestoreConfigFile", restoreConfigFile);
         }
 
-        // Keep closure targets centralized so every generated integration project emits the
-        // same inputs consumed by the post-build reader.
+        // Closure targets shared by the CLI-managed module and polyglot server synthetic projects.
         projectFile.Targets.Add(
             new XElement("Target",
                 new XAttribute("Name", "_WriteAspireProjectRefAssemblyNames"),
@@ -374,8 +375,9 @@ internal static class IntegrationClosureBuilder
 
 /// <summary>
 /// Controls how <see cref="IntegrationClosureBuilder.ReadClosureManifestAsync"/> reacts to
-/// missing input files. Some restore paths treat missing files as hard errors, while others
-/// return <c>null</c> so the caller can surface the failure with its own diagnostics.
+/// missing input files. The polyglot prebuilt server treats missing files as hard errors
+/// (the build is expected to produce them); the CLI-managed restorer warns and returns
+/// <c>null</c> so the caller can surface the failure with its own diagnostics.
 /// </summary>
 internal enum ClosureFileMissingBehavior
 {
