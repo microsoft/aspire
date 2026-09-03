@@ -323,6 +323,42 @@ public class TemporaryNuGetConfigTests
     }
 
     [Fact]
+    public async Task CreateComposedAsync_EnablesNamedMappedSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, """
+            <configuration>
+              <packageSources>
+                <add key="private" value="https://private.example/v3/index.json" />
+                <add key="other" value="https://other.example/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="private" value="true" />
+                <add key="other" value="true" />
+              </disabledPackageSources>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [configPath],
+            [new PackageMapping("Aspire*", "private")]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var disabledSourceKeys = document.Descendants("disabledPackageSources")
+            .Elements("add")
+            .Select(element => element.Attribute("key")!.Value)
+            .ToArray();
+        var mappedSource = Assert.Single(
+            document.Descendants("packageSourceMapping").Elements("packageSource"),
+            element => element.Attribute("key")?.Value == "private");
+
+        Assert.Equal(["other"], disabledSourceKeys);
+        Assert.Equal("private", mappedSource.Attribute("key")?.Value);
+        Assert.Equal("Aspire*", Assert.Single(mappedSource.Elements("package")).Attribute("pattern")?.Value);
+    }
+
+    [Fact]
     public async Task CreateComposedAsync_MapsSamePatternToMultipleSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);

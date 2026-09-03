@@ -4,6 +4,7 @@
 using Aspire.Managed.NuGet.Commands;
 using Microsoft.DotNet.RemoteExecutor;
 using NuGet.Configuration;
+using NuGet.Frameworks;
 using Xunit;
 
 namespace Aspire.Managed.Tests.NuGet;
@@ -133,6 +134,39 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Equal(
             [upperCasePathSource, lowerCasePathSource],
             sources.Select(static source => source.Source));
+    }
+
+    [Fact]
+    public void RestoreCommand_IncludesNuGetConfigFallbackFoldersInRestoreMetadata()
+    {
+        var fallbackPackagesPath = Path.Combine(_workspace.Path, "fallback-packages");
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(nugetConfigPath, $"""
+            <configuration>
+              <fallbackPackageFolders>
+                <clear />
+                <add key="fallback" value="{fallbackPackagesPath}" />
+              </fallbackPackageFolders>
+            </configuration>
+            """);
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("NUGET_FALLBACK_PACKAGES");
+
+        RemoteExecutor.Invoke(static (tempDirPath) =>
+        {
+            var settings = Settings.LoadSpecificSettings(tempDirPath, "NuGet.config");
+            var packageSpec = RestoreCommand.BuildPackageSpec(
+                [("Fake.Package", "1.0.0")],
+                NuGetFramework.Parse("net10.0"),
+                runtimeIdentifier: null,
+                Path.Combine(tempDirPath, "obj"),
+                [],
+                settings);
+
+            Assert.Equal(
+                [Path.Combine(tempDirPath, "fallback-packages")],
+                packageSpec.RestoreMetadata.FallbackFolders);
+        }, _workspace.Path, options).Dispose();
     }
 
     [Fact]

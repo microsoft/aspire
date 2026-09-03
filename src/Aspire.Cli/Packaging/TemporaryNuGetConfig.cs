@@ -318,11 +318,17 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "packageSources", StringComparison.OrdinalIgnoreCase));
         var mappedSourceKeys = packageSources?.Elements()
             .Where(element => string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
-            .Where(element => mappings.Any(mapping =>
-                PackageSourceIdentity.Comparer.Equals(
-                    element.Attributes().FirstOrDefault(attribute =>
-                        string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))?.Value,
-                    mapping.Source)))
+            .Where(element =>
+            {
+                var sourceKey = element.Attributes().FirstOrDefault(attribute =>
+                    string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value;
+                var sourceValue = element.Attributes().FirstOrDefault(attribute =>
+                    string.Equals(attribute.Name.LocalName, "value", StringComparison.OrdinalIgnoreCase))?.Value;
+                return mappings.Any(mapping =>
+                    PackageSourceIdentity.Comparer.Equals(sourceValue, mapping.Source) ||
+                    PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
+                    string.Equals(sourceKey, mapping.Source, StringComparison.OrdinalIgnoreCase));
+            })
             .Select(element => element.Attributes().FirstOrDefault(attribute =>
                 string.Equals(attribute.Name.LocalName, "key", StringComparison.OrdinalIgnoreCase))?.Value)
             .Where(static key => !string.IsNullOrEmpty(key))
