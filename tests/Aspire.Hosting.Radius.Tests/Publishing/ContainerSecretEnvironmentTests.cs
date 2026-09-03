@@ -345,6 +345,52 @@ public class ContainerSecretEnvironmentTests
     }
 
     /// <summary>
+    /// A callback can re-point the key alone, leaving <c>secretName</c> aimed at the generated
+    /// secret. The reference then still resolves to a resource the publisher owns, so the key it
+    /// now names is checked against that resource: a key that is not there publishes an artifact
+    /// Radius accepts and surfaces only as a pod that never starts.
+    /// </summary>
+    [Fact]
+    public void CallbackThatRepointsTheSecretKeyToAMissingKey_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            var password = builder.AddParameter("pw", secret: true);
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PW", password);
+        }, opts => opts.Containers[0].Env["PW"].Value!.SecretKey = "not-a-key"));
+
+        Assert.Contains("ASPIRERADIUS084", ex.Message);
+        Assert.Contains("'PW'", ex.Message);
+        Assert.Contains("not-a-key", ex.Message);
+    }
+
+    /// <summary>
+    /// The counterpart to the check above: re-pointing the key at an entry the callback also added
+    /// is a legitimate use of the escape hatch, so it has to keep publishing.
+    /// </summary>
+    [Fact]
+    public void CallbackThatRepointsTheSecretKeyToAnExistingKey_IsPreserved()
+    {
+        var bicep = GenerateBicep(builder =>
+        {
+            var password = builder.AddParameter("pw", secret: true);
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PW", password);
+        }, opts =>
+        {
+            opts.SecuritySecrets[0].Data["extra-key"] = new RadiusSecuritySecretDataEntryConstruct
+            {
+                Encoding = "string",
+                Value = "extra-value",
+            };
+            opts.Containers[0].Env["PW"].Value!.SecretKey = "extra-key";
+        });
+
+        Assert.Contains("key: 'extra-key'", bicep);
+    }
+
+    /// <summary>
     /// The <c>value</c> and <c>valueFrom.secretKeyRef</c> forms are mutually exclusive, and
     /// Kubernetes rejects an environment variable that sets both. All three properties are public,
     /// so only a post-callback check can enforce it.

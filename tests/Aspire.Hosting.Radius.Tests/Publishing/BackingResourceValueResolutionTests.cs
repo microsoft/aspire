@@ -294,6 +294,32 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The same aliased model, but with an unreferenced child declared before the aliases. The
+    /// referenced children still name one physical database, so this must select that database
+    /// rather than the first child that happens to be declared — selecting the unreferenced one
+    /// configures the recipe for a database no consumer connects to, and the deferred selection
+    /// check then rejects a model that is actually supported.
+    /// </summary>
+    [Fact]
+    public void AliasedDatabaseChildrenDeclaredAfterAnUnreferencedChild_SelectTheReferencedDatabase()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            pg.AddDatabase("unused");
+            var a = pg.AddDatabase("orders-a", "orders");
+            var bDb = pg.AddDatabase("orders-b", "orders");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(a)
+                .WithReference(bDb);
+        });
+
+        Assert.Contains("database: 'orders'", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("database: 'unused'", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Annotations are the only reference signal available when the <c>database</c> property is
     /// chosen, and a <c>WithEnvironment</c> callback that composes a database's value inline records
     /// none. Picking the first child in that case creates a database the consumer does not use, so

@@ -1079,14 +1079,36 @@ internal sealed class RadiusInfrastructureBuilder
                     $"Diagnostic: ASPIRERADIUS084.");
             }
 
-            if (!reference.Secret.Data.TryGetValue(reference.SecretKey, out var liveEntry))
+            // Validate the key the variable *currently* carries rather than the one the publisher
+            // wrote. A callback can re-point the key alone — leaving SecretName aimed at this
+            // generated secret and so passing the guard above — and checking the original key would
+            // find it present and publish a `secretKeyRef` naming a key that does not exist. Radius
+            // accepts that artifact and the failure surfaces as a pod that never starts.
+            //
+            // Two shapes are deliberately left alone: a key rendered as a Bicep expression only
+            // resolves at deploy time, so there is nothing to compare it against, and a cleared key
+            // is already rejected by the SecretName/SecretKey pairing check (ASPIRERADIUS087).
+            if (IsBicepExpression(reference.EnvVar.SecretKey) ||
+                RenderBicepLiteral(reference.EnvVar.SecretKey) is not { } currentSecretKey)
             {
-                throw new InvalidOperationException(
-                    $"Environment variable '{reference.Key}' on container '{reference.ResourceName}' holds a credential " +
-                    $"and reads it from key '{reference.SecretKey}' of the '{RadiusResourceTypes.SecuritySecrets}' " +
-                    $"resource '{reference.Secret.BicepIdentifier}', but a ConfigureRadiusInfrastructure callback " +
-                    $"removed that key. Keep the key, or set '{reference.Key}' explicitly in the callback. " +
-                    $"Diagnostic: ASPIRERADIUS084.");
+                continue;
+            }
+
+            var keyRepointed = !string.Equals(currentSecretKey, reference.SecretKey, StringComparison.Ordinal);
+
+            if (!reference.Secret.Data.TryGetValue(currentSecretKey, out var liveEntry))
+            {
+                throw new InvalidOperationException(keyRepointed
+                    ? $"Environment variable '{reference.Key}' on container '{reference.ResourceName}' holds a credential " +
+                      $"and a ConfigureRadiusInfrastructure callback pointed it at key '{currentSecretKey}' of the " +
+                      $"'{RadiusResourceTypes.SecuritySecrets}' resource '{reference.Secret.BicepIdentifier}', which has " +
+                      $"no such key. Point it at an existing key, add that key to the resource, or set " +
+                      $"'{reference.Key}' explicitly in the callback. Diagnostic: ASPIRERADIUS084."
+                    : $"Environment variable '{reference.Key}' on container '{reference.ResourceName}' holds a credential " +
+                      $"and reads it from key '{reference.SecretKey}' of the '{RadiusResourceTypes.SecuritySecrets}' " +
+                      $"resource '{reference.Secret.BicepIdentifier}', but a ConfigureRadiusInfrastructure callback " +
+                      $"removed that key. Keep the key, or set '{reference.Key}' explicitly in the callback. " +
+                      $"Diagnostic: ASPIRERADIUS084.");
             }
 
             // A callback that supplied its own entry for this key owns the value; the reference
@@ -2571,7 +2593,13 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        var databaseChild = referenced.Count == 1 ? referenced[0] : databaseChildren[0];
+        // Any referenced child is a better choice than the first declared one, and every referenced
+        // child is equally correct here: the ASPIRERADIUS072 check above has already rejected the
+        // case where they name more than one physical database, so what remains is a set of aliases
+        // for the single database the recipe provisions. Selecting `databaseChildren[0]` once
+        // `referenced` is non-empty would pick an unreferenced child that happens to be declared
+        // first, configuring the recipe for a database no consumer connects to.
+        var databaseChild = referenced.Count > 0 ? referenced[0] : databaseChildren[0];
 
         // The server-level connection string carries no database name (see the no-child branch
         // above), so a consumer that references the *server* rather than one of its databases opens
