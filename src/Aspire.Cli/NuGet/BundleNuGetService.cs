@@ -431,7 +431,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
         if (nugetPackagesPath is not null)
         {
-            content += $";global-packages:{nugetPackagesPath}";
+            content += $";global-packages:{nugetPackagesPath.Length}:{nugetPackagesPath}";
         }
         if (nugetFallbackPackagesPaths is not null)
         {
