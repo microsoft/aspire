@@ -114,7 +114,7 @@ internal static class NuGetConfigComposer
 
             var item = new XElement(incomingItem);
             CanonicalizeMergerItemNames(sectionName, item);
-            ApplyEnvironmentTransforms(item);
+            ApplyEnvironmentTransforms(sectionName, item);
             ResolveRelativePaths(sectionName, item, originDirectory);
 
             var existingItem = section.Elements()
@@ -155,7 +155,7 @@ internal static class NuGetConfigComposer
             }
 
             var item = new XElement(incomingItem);
-            ApplyEnvironmentTransforms(item);
+            ApplyEnvironmentTransforms(incomingSection.Name.LocalName, item);
             ResolveRelativePaths(incomingSection.Name.LocalName, item, originDirectory);
 
             section.Elements()
@@ -326,9 +326,36 @@ internal static class NuGetConfigComposer
         }
     }
 
-    private static void ApplyEnvironmentTransforms(XElement item)
+    private static void ApplyEnvironmentTransforms(string sectionName, XElement item)
     {
-        foreach (var attribute in item.DescendantsAndSelf().Attributes())
+        if (string.Equals(item.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
+        {
+            ExpandEnvironmentVariableAttribute(item, "value");
+        }
+        else if (string.Equals(sectionName, "packageSourceCredentials", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var credential in item.Elements()
+                .Where(static element => string.Equals(element.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase)))
+            {
+                ExpandEnvironmentVariableAttribute(credential, "value");
+            }
+        }
+
+        if ((string.Equals(sectionName, "packageSources", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(sectionName, "auditSources", StringComparison.OrdinalIgnoreCase)) &&
+            string.Equals(item.Name.LocalName, "add", StringComparison.OrdinalIgnoreCase))
+        {
+            ExpandEnvironmentVariableAttribute(item, "protocolVersion");
+            ExpandEnvironmentVariableAttribute(item, "allowInsecureConnections");
+            ExpandEnvironmentVariableAttribute(item, "disableTLSCertificateValidation");
+            ExpandEnvironmentVariableAttribute(item, "minPublishAgeHours");
+        }
+    }
+
+    private static void ExpandEnvironmentVariableAttribute(XElement element, string attributeName)
+    {
+        if (element.Attributes()
+            .FirstOrDefault(candidate => string.Equals(candidate.Name.LocalName, attributeName, StringComparison.OrdinalIgnoreCase)) is { } attribute)
         {
             attribute.Value = Environment.ExpandEnvironmentVariables(attribute.Value);
         }
@@ -343,8 +370,7 @@ internal static class NuGetConfigComposer
             return;
         }
 
-        var expandedValue = Environment.ExpandEnvironmentVariables(attribute.Value);
-        attribute.Value = ResolvePathFromOrigin(originDirectory, expandedValue);
+        attribute.Value = ResolvePathFromOrigin(originDirectory, attribute.Value);
     }
 
     internal static string ResolvePathFromOrigin(string originDirectory, string path)

@@ -4,6 +4,7 @@
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Packaging;
@@ -696,6 +697,63 @@ public class TemporaryNuGetConfigTests
         using var config = await TemporaryNuGetConfig.CreateComposedAsync([configPath], []);
 
         Assert.True(config.ContainsCredentialMaterial);
+    }
+
+    [Fact]
+    public async Task CreateComposedAsync_ExpandsOnlyNuGetSupportedEnvironmentValues()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var variableName = $"ASPIRE_NUGET_CONFIG_TEST_{Guid.NewGuid():N}";
+        var variableReference = $"%{variableName}%";
+        using var environmentVariable = new EnvVarOverride(variableName, "expanded-value");
+        await File.WriteAllTextAsync(configPath, $$"""
+            <configuration>
+              <packageSources>
+                <add key="{{variableReference}}"
+                     value="https://example.invalid/{{variableReference}}"
+                     protocolVersion="{{variableReference}}"
+                     custom="{{variableReference}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <source>
+                  <add key="{{variableReference}}" value="{{variableReference}}" />
+                </source>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <packageSource key="{{variableReference}}">
+                  <package pattern="{{variableReference}}" />
+                </packageSource>
+              </packageSourceMapping>
+              <clientCertificates>
+                <fileCert packageSource="{{variableReference}}"
+                          path="{{variableReference}}"
+                          clearTextPassword="{{variableReference}}" />
+              </clientCertificates>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync([configPath], []);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var packageSource = Assert.Single(document.Descendants("packageSources").Elements("add"));
+        Assert.Equal(variableReference, packageSource.Attribute("key")?.Value);
+        Assert.Equal("https://example.invalid/expanded-value", packageSource.Attribute("value")?.Value);
+        Assert.Equal("expanded-value", packageSource.Attribute("protocolVersion")?.Value);
+        Assert.Equal(variableReference, packageSource.Attribute("custom")?.Value);
+
+        var credential = Assert.Single(document.Descendants("packageSourceCredentials").Descendants("add"));
+        Assert.Equal(variableReference, credential.Attribute("key")?.Value);
+        Assert.Equal("expanded-value", credential.Attribute("value")?.Value);
+
+        var sourceMapping = Assert.Single(document.Descendants("packageSourceMapping").Elements("packageSource"));
+        Assert.Equal(variableReference, sourceMapping.Attribute("key")?.Value);
+        Assert.Equal(variableReference, Assert.Single(sourceMapping.Elements("package")).Attribute("pattern")?.Value);
+
+        var clientCertificate = Assert.Single(document.Descendants("clientCertificates").Elements("fileCert"));
+        Assert.Equal(variableReference, clientCertificate.Attribute("packageSource")?.Value);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, variableReference), clientCertificate.Attribute("path")?.Value);
+        Assert.Equal(variableReference, clientCertificate.Attribute("clearTextPassword")?.Value);
     }
 
     [Fact]
