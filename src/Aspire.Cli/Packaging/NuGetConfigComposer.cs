@@ -355,6 +355,11 @@ internal static class NuGetConfigComposer
 
     internal static string ResolvePathFromOrigin(string originDirectory, string path)
     {
+        if (path.Length == 0)
+        {
+            return path;
+        }
+
         if (!Uri.TryCreate(path, UriKind.Relative, out _))
         {
             return path;

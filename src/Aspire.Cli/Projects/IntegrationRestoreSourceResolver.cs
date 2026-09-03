@@ -76,7 +76,7 @@ internal sealed class IntegrationRestoreSourceResolver(
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (hasOverride || string.IsNullOrEmpty(requestedChannel))
         {
             logger.LogWarning(ex, "Failed to resolve integration restore package channels, relying on configured NuGet sources.");
         }

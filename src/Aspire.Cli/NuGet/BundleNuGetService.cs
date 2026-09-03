@@ -49,6 +49,7 @@ internal interface INuGetService
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
+    internal const string ManagedComponentNotFoundMessage = "aspire-managed not found in layout.";
     internal const string TemporaryCredentialRestoreDirectoryName = "temporary";
     internal const string TemporaryCredentialRestoreDirectoryPrefix = "credential";
 
@@ -340,7 +341,7 @@ internal sealed class BundleNuGetService : INuGetService
         var managedPath = layout?.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
         {
-            throw new InvalidOperationException("aspire-managed not found in layout.");
+            throw new InvalidOperationException(ManagedComponentNotFoundMessage);
         }
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(

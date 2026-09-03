@@ -1203,6 +1203,25 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithExplicitChannelAndNoOverride_WhenChannelLookupFails_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channel lookup failed.")
+        };
+        var server = CreateServerWithPackagingService(workspace, packagingService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            InvokeTryCreateTemporaryNuGetConfigAsync(
+                server,
+                requestedChannel: "staging",
+                packageSourceOverride: null));
+
+        Assert.Equal("Channel lookup failed.", exception.Message);
+    }
+
+    [Fact]
     public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannel_OmitsChannelAspireFeedFromSources()
     {
         // Regression: the temp NuGet.config drops the matched channel's Aspire* mapping in
@@ -1933,14 +1952,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WhenPackagingServiceThrowsDuringAutoDiscovery_DegradesGracefully()
+    public async Task PrepareAsync_WhenPackagingServiceThrowsForExplicitChannel_Fails()
     {
-        // Regression guard: an unexpected failure from IPackagingService.GetChannelsAsync during
-        // hive-source auto-discovery must NOT turn `aspire new` into a hard failure. Both call
-        // sites that resolve channels for an effective package source — ResolveLocalPackageSource-
-        // OverrideAsync and TryCreateTemporaryNuGetConfigAsync's no-override branch — catch
-        // transient exceptions and fall through to "no override discovered" / "no PSM-bearing
-        // temp config", matching the defensive catch in GetNuGetSourcesAsync.
+        // An explicitly requested channel must not silently fall back to ambient NuGet sources
+        // when channel resolution fails, because that could restore a different package build
+        // while reporting the requested channel.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelName = "pr-12345";
         List<string>? restoreArgs = null;
@@ -1974,11 +1990,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 "13.4.0-pr.17141.gf142085f",
                 [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")]);
 
-            Assert.True(result.Success);
-            Assert.NotNull(restoreArgs);
-            // No override resolved → no exact version pinning, no synthesized [override, nuget.org] source set.
-            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,13.4.0-pr.17141.gf142085f", restoreArgs!);
-            Assert.DoesNotContain("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.False(result.Success);
+            Assert.Null(restoreArgs);
+            Assert.Contains(
+                result.Output!.GetLines(),
+                line => line.Line.Contains("simulated packaging service failure", StringComparison.Ordinal));
         }
         finally
         {
@@ -2358,6 +2374,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
         finally
         {
+            server.Dispose();
             DeleteWorkingDirectory(workingDirectory);
         }
     }
