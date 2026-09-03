@@ -495,6 +495,11 @@ internal sealed class NewCommand : BaseCommand
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
         var source = parseResult.GetValue(s_sourceOption);
+        if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
+        {
+            InteractionService.DisplayError(NewCommandStrings.SourceWithCredentialsCannotBePersisted);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
         if (!string.IsNullOrWhiteSpace(source))
         {
             source = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, ExecutionContext.WorkingDirectory);

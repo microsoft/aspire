@@ -215,6 +215,10 @@ internal sealed class TemplateNuGetConfigService(
         {
             return false;
         }
+        if (PackageSourceOverrideMappings.HasCredentialMaterial(sourceOverride))
+        {
+            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(sourceOverride));
+        }
 
         var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel, nugetServiceIndexOverride);
         await NuGetConfigMerger.CreateOrUpdateAsync(
