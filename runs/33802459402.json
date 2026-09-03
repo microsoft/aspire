@@ -1,0 +1,54 @@
+{
+  "run_id": 33802459402,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33802459402",
+  "analyzed_at": "2026-09-03T21:24:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19673,
+    "title": "Avoid live CLI rendering when stdout is redirected",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-fix-remote-tty-crash",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19673"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "id": 100805600149,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33802459402/job/100805600149",
+      "classification": "flaky-test",
+      "reason": "Node/Deno app fixture InitializeAsync timed out after 1 minute waiting for the app to start (Polly.Timeout.TimeoutRejectedException / TaskCanceledException). The PR only changes Aspire.Cli files (RunCommand.cs, ConsoleInteractionService.cs, CliHostEnvironment.cs) and their tests; it does not touch Aspire.Hosting.JavaScript.Tests or the Node/Deno app fixtures. This is an environmental startup timeout on a windows-latest runner, unrelated to the PR changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks",
+      "job": "Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at Polly.Utils.Pipeline.BridgeComponent`1.<ExecuteCore>g__ConvertValueTaskAsync|4_0[TResult,TState](ValueTask`1 valueTask, ResilienceContext resilienceContext)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, Resilien",
+      "classification": "flaky",
+      "reason": "Node app startup fixture timed out after 1 minute on a Windows runner; unrelated to PR changes (which only touch Aspire.Cli). Consistent with environmental slow-start/resource contention on shared CI runners."
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard",
+      "job": "Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoTelemetryFixture' threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at Polly.Utils.Pipeline.BridgeComponent`1.<ExecuteCore>g__ConvertValueTaskAsync|4_0[TResult,TState](ValueTask`1 valueTask, ResilienceContext resilienceContext)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, Resilien",
+      "classification": "flaky",
+      "reason": "Deno app startup fixture timed out after 1 minute on a Windows runner; unrelated to PR changes (which only touch Aspire.Cli). Consistent with environmental slow-start/resource contention on shared CI runners."
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNpmAppWorks",
+      "job": "Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at Polly.Utils.Pipeline.BridgeComponent`1.<ExecuteCore>g__ConvertValueTaskAsync|4_0[TResult,TState](ValueTask`1 valueTask, ResilienceContext resilienceContext)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, Resilien",
+      "classification": "flaky",
+      "reason": "Npm app startup fixture timed out after 1 minute on a Windows runner; unrelated to PR changes (which only touch Aspire.Cli). Consistent with environmental slow-start/resource contention on shared CI runners; all three JS/Node/Deno tests in the same job failed together with identical timeout symptoms, indicating a shared fixture/runner-level slowdown rather than test-specific bugs."
+    }
+  ],
+  "causes": ["hosting-javascript-nodeappfixture-initializeasync-timeout"]
+}

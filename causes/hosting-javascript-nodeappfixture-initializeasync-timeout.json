@@ -1,0 +1,17 @@
+{
+  "id": "hosting-javascript-nodeappfixture-initializeasync-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: Node/Deno app functional tests fail with 1-minute InitializeAsync timeout on windows-latest",
+  "test_name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks",
+  "error_pattern": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' (or DenoTelemetryFixture) threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+  "occurrences": [
+    {
+      "run_id": 33802459402,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33802459402",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "pr_number": 19673,
+      "observed_at": "2026-09-03T21:24:16Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19917"
+}
