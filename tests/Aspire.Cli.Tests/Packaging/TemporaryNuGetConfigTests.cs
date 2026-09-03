@@ -530,6 +530,42 @@ public class TemporaryNuGetConfigTests
         Assert.Empty(result);
     }
 
+    [Theory]
+    [InlineData("relative:feed", false)]
+    [InlineData("C:/feed", true)]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    public async Task CreateComposedAsync_UsesNuGetPathSemanticsForColonContainingPaths(
+        string relativePath,
+        bool sourceIsRebased)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var configDirectory = workspace.CreateDirectory("repo");
+        var configPath = Path.Combine(configDirectory.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(
+            configPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <add key="local" value="{relativePath}" />
+              </packageSources>
+              <clientCertificates>
+                <fileCert packageSource="local" path="{relativePath}" />
+              </clientCertificates>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync([configPath], []);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var rebasedPath = Path.GetFullPath(relativePath, configDirectory.FullName);
+        Assert.Equal(
+            sourceIsRebased ? rebasedPath : relativePath,
+            document.Descendants("packageSources").Elements("add").Single().Attribute("value")?.Value);
+        Assert.Equal(
+            rebasedPath,
+            document.Descendants("clientCertificates").Elements("fileCert").Single().Attribute("path")?.Value);
+    }
+
     [Fact]
     public async Task CreateComposedAsync_MoreLocalClearRemovesInheritedSources()
     {

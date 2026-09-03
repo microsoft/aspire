@@ -2798,6 +2798,30 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(cliVersion, selectedVersion);
     }
 
+    [Theory]
+    [InlineData("packageSourceMapping", true)]
+    [InlineData("PackageSourceMapping", false)]
+    public async Task HasPackageSourceMappingAsync_UsesCanonicalSectionIdentity(string sectionName, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(
+            configPath,
+            $"""
+            <configuration>
+              <{sectionName}>
+                <PackageSource key="source">
+                  <Package pattern="*" />
+                </PackageSource>
+              </{sectionName}>
+            </configuration>
+            """);
+
+        var result = await AddCommand.HasPackageSourceMappingAsync([configPath], CancellationToken.None);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public async Task AddCommand_WithInheritedPrHiveSource_WritesMatchingLocalSourceMapping()
     {

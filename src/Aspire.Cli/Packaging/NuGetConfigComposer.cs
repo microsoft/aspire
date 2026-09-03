@@ -322,7 +322,7 @@ internal static class NuGetConfigComposer
         else if (string.Equals(sectionName, "clientCertificates", StringComparison.Ordinal) &&
             string.Equals(item.Name.LocalName, "fileCert", StringComparison.OrdinalIgnoreCase))
         {
-            ResolveRelativePathAttribute(item, "path", originDirectory);
+            ResolveRelativeFilePathAttribute(item, "path", originDirectory);
         }
     }
 
@@ -371,6 +371,65 @@ internal static class NuGetConfigComposer
         }
 
         attribute.Value = ResolvePathFromOrigin(originDirectory, attribute.Value);
+    }
+
+    private static void ResolveRelativeFilePathAttribute(XElement element, string attributeName, string originDirectory)
+    {
+        var attribute = element.Attributes()
+            .FirstOrDefault(candidate => string.Equals(candidate.Name.LocalName, attributeName, StringComparison.OrdinalIgnoreCase));
+        if (attribute is null)
+        {
+            return;
+        }
+
+        attribute.Value = ResolveFilePathFromOrigin(originDirectory, attribute.Value);
+    }
+
+    private static string ResolveFilePathFromOrigin(string originDirectory, string path)
+    {
+        if (path.Length == 0 || Path.IsPathRooted(path) || HasUriSchemeWithAuthority(path))
+        {
+            return path;
+        }
+
+        try
+        {
+            // NuGet's client-certificate path validation recognizes only `scheme://...` as a URL.
+            // On Unix, values such as `relative:feed` and `C:/feed` are therefore relative paths.
+            // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Common/PathUtil/PathValidator.cs
+            return Path.GetFullPath(path, originDirectory);
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
+        catch (NotSupportedException)
+        {
+            return path;
+        }
+        catch (PathTooLongException)
+        {
+            return path;
+        }
+    }
+
+    private static bool HasUriSchemeWithAuthority(string path)
+    {
+        var separatorIndex = path.IndexOf("://", StringComparison.Ordinal);
+        if (separatorIndex <= 0)
+        {
+            return false;
+        }
+
+        foreach (var character in path.AsSpan(0, separatorIndex))
+        {
+            if (!char.IsLetterOrDigit(character) && character != '_')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal static string ResolvePathFromOrigin(string originDirectory, string path)
