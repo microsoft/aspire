@@ -362,9 +362,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// for a skipped restore at all.
     /// </summary>
     /// <remarks>
-    /// The generated project file encodes package identities and versions, project reference paths,
-    /// channel sources, and the synthesized NuGet.config path. Referenced project files are hashed as
-    /// well because restore resolves their dependencies too: a referenced project bumping its own
+    /// The generated project file and optional synthesized NuGet.config encode package identities
+    /// and versions, project reference paths, and channel sources. Referenced project files are hashed
+    /// as well because restore resolves their dependencies too: a referenced project bumping its own
     /// Aspire.Hosting version changes the resolved closure without changing a single byte of the
     /// generated project file.
     /// <para>
@@ -1129,7 +1129,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
         bool useExactPackageVersions = false,
-        string? restoreConfigFile = null)
+        string? restoreConfigFile = null,
+        string? restoreSourcesPropsFile = null)
     {
         IEnumerable<string>? restoreAdditionalSources = additionalSources;
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
@@ -1144,6 +1145,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             restoreAdditionalSources,
             restoreConfigFile);
+
+        if (!string.IsNullOrWhiteSpace(restoreSourcesPropsFile))
+        {
+            projectFile.Imports.Add(new CSharpProjectImport(restoreSourcesPropsFile));
+        }
 
         foreach (var packageReference in packageRefs)
         {
