@@ -1389,12 +1389,16 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("https://user:token@example.invalid/v3/index.json")]
     [InlineData("https://example.invalid/v3/index.json?sig=token")]
     [InlineData("https://example.invalid/v3/index.json#token")]
-    public async Task NewCommandWithCredentialBearingHttpSourceCreatesProject(string sourceOverride)
+    public async Task NewCommandWithCredentialBearingHttpSourceFailsBeforeCreatingProject(string sourceOverride)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldingInvoked = false;
+        TestInteractionService? interactionService = null;
 
-        var services = CreateServiceCollection(workspace);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+        });
 
         services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
         {
@@ -1408,13 +1412,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(scaffoldingInvoked);
-        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(scaffoldingInvoked);
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
+        Assert.NotNull(interactionService);
+        Assert.Contains(NewCommandStrings.SourceWithCredentialsCannotBePersisted, interactionService!.DisplayedErrors);
     }
 
     [Fact]
