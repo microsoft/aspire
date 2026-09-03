@@ -501,6 +501,28 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComputePackageHash_DistinguishesSourceListsContainingDelimiters()
+    {
+        var packages = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+
+        var delimiterInFirstSourceHash = BundleNuGetService.ComputePackageHash(
+            packages,
+            "net10.0",
+            runtimeIdentifier: null,
+            sources: ["/a|/b", "/c"]);
+        var delimiterInSecondSourceHash = BundleNuGetService.ComputePackageHash(
+            packages,
+            "net10.0",
+            runtimeIdentifier: null,
+            sources: ["/a", "/b|/c"]);
+
+        Assert.NotEqual(delimiterInFirstSourceHash, delimiterInSecondSourceHash);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

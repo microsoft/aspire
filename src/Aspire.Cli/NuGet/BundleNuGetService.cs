@@ -388,7 +388,10 @@ internal sealed class BundleNuGetService : INuGetService
         content += $";managed:{GetManagedToolFingerprint(managedPath)}";
         if (sources is not null)
         {
-            content += $";sources:{string.Join("|", sources.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}";
+            foreach (var source in sources.OrderBy(static source => source, StringComparer.OrdinalIgnoreCase))
+            {
+                content += $";source:{source.Length}:{source}";
+            }
         }
         if (nugetConfigCacheIdentity is not null)
         {
