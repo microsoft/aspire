@@ -415,6 +415,90 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.WaitForAnyPromptAsync(counter);
     }
 
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task InitTypeScriptAppHost_CreatesIsolatedPnpmWorkspaceInBrownfieldRepo()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        var expectedRootPnpmWorkspaceContent = """
+            packages:
+              - packages/*
+            allowBuilds:
+              esbuild: true
+              protobufjs: true
+
+            """;
+        var rootPnpmWorkspacePath = Path.Combine(workspace.WorkspaceRoot.FullName, "pnpm-workspace.yaml");
+        File.WriteAllText(rootPnpmWorkspacePath, expectedRootPnpmWorkspaceContent);
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"),
+            """
+            {
+              "name": "workspace-root",
+              "private": true
+            }
+            """);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "packages", "brownfield");
+        Directory.CreateDirectory(projectRoot);
+        File.WriteAllText(
+            Path.Combine(projectRoot, "package.json"),
+            """
+            {
+              "name": "brownfield",
+              "private": true,
+              "type": "module",
+              "packageManager": "pnpm@11.5.2"
+            }
+            """);
+
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
+        }
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnablePolyglotSupportAsync(counter);
+        await auto.RunCommandAsync("cd packages/brownfield", counter);
+
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created aspire-apphost/apphost.mts", timeout: TimeSpan.FromMinutes(3));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        var appHostDirectory = Path.Combine(projectRoot, "aspire-apphost");
+        Assert.Equal(expectedRootPnpmWorkspaceContent, File.ReadAllText(rootPnpmWorkspacePath));
+        Assert.Equal(
+            """
+            allowBuilds:
+              esbuild: true
+
+            """,
+            File.ReadAllText(Path.Combine(appHostDirectory, "pnpm-workspace.yaml")));
+        Assert.True(File.Exists(Path.Combine(appHostDirectory, "pnpm-lock.yaml")));
+
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.Equal(expectedRootPnpmWorkspaceContent, File.ReadAllText(rootPnpmWorkspacePath));
+    }
+
     [Theory]
     [InlineData("npm")]
     [InlineData("yarn")]

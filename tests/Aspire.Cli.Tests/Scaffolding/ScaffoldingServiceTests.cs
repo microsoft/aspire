@@ -125,6 +125,53 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void EnsureNestedBrownfieldTypeScriptToolchainFiles_WhenPnpmSelected_CreatesWorkspaceFile()
+    {
+        var appHostDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            ScaffoldingService.EnsureNestedBrownfieldTypeScriptToolchainFiles(
+                appHostDirectory,
+                TypeScriptAppHostToolchain.Pnpm);
+
+            Assert.Equal(
+                """
+                allowBuilds:
+                  esbuild: true
+
+                """,
+                File.ReadAllText(Path.Combine(appHostDirectory.FullName, "pnpm-workspace.yaml")));
+        }
+        finally
+        {
+            appHostDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnsureNestedBrownfieldTypeScriptToolchainFiles_WhenPnpmWorkspaceExists_PreservesContent()
+    {
+        var appHostDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var pnpmWorkspacePath = Path.Combine(appHostDirectory.FullName, "pnpm-workspace.yaml");
+            File.WriteAllText(pnpmWorkspacePath, "allowBuilds:\n  custom-package: true\n");
+
+            ScaffoldingService.EnsureNestedBrownfieldTypeScriptToolchainFiles(
+                appHostDirectory,
+                TypeScriptAppHostToolchain.Pnpm);
+
+            Assert.Equal("allowBuilds:\n  custom-package: true\n", File.ReadAllText(pnpmWorkspacePath));
+        }
+        finally
+        {
+            appHostDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void SerializePackageJson_PreservesTrailingNewLine_WhenOriginalHadOne()
     {
         var packageJson = JsonNode.Parse("""{ "scripts": { "aspire:start": "npm --prefix aspire-apphost run aspire:start" } }""")!.AsObject();

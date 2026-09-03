@@ -22,10 +22,17 @@ namespace Aspire.Cli.Scaffolding;
 internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
+    private const string PnpmWorkspaceFileName = "pnpm-workspace.yaml";
     private const string YarnLockFileName = "yarn.lock";
     private const string VsCodeSettingsFileName = ".vscode/settings.json";
     private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
     internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
+
+    private const string NestedPnpmWorkspaceContent = """
+        allowBuilds:
+          esbuild: true
+
+        """;
 
     private static readonly JsonSerializerOptions s_scaffoldJsonSerializerOptions = new()
     {
@@ -294,18 +301,29 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     internal static void EnsureNestedBrownfieldTypeScriptToolchainFiles(DirectoryInfo appHostDirectory, TypeScriptAppHostToolchain toolchain)
     {
-        if (toolchain != TypeScriptAppHostToolchain.Yarn)
+        switch (toolchain)
         {
-            return;
+            case TypeScriptAppHostToolchain.Yarn:
+                // Yarn 2+ rejects a nested package that is not listed in its parent's workspace. An empty
+                // lockfile establishes the generated AppHost as an independent project without changing
+                // the user's workspace package graph. See https://yarnpkg.com/features/workspaces.
+                EnsureFileExists(appHostDirectory, YarnLockFileName, string.Empty);
+                break;
+            case TypeScriptAppHostToolchain.Pnpm:
+                // pnpm 11 fails installs with unreviewed dependency build scripts. The generated AppHost
+                // owns tsx, whose esbuild dependency requires a postinstall, so approve only that reviewed
+                // package in the isolated AppHost. See https://pnpm.io/settings/build#allowbuilds.
+                EnsureFileExists(appHostDirectory, PnpmWorkspaceFileName, NestedPnpmWorkspaceContent);
+                break;
         }
+    }
 
-        // Yarn 2+ rejects a nested package that is not listed in its parent's workspace. An empty
-        // lockfile establishes the generated AppHost as an independent project without changing
-        // the user's workspace package graph. See https://yarnpkg.com/features/workspaces.
-        var yarnLockPath = Path.Combine(appHostDirectory.FullName, YarnLockFileName);
-        if (!File.Exists(yarnLockPath))
+    private static void EnsureFileExists(DirectoryInfo directory, string fileName, string content)
+    {
+        var filePath = Path.Combine(directory.FullName, fileName);
+        if (!File.Exists(filePath))
         {
-            File.WriteAllText(yarnLockPath, string.Empty);
+            File.WriteAllText(filePath, content);
         }
     }
 
