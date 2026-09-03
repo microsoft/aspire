@@ -157,8 +157,11 @@ public static class ExecutableResourceBuilderExtensions
             return builder;
         }
 
+        var container = resource.AsContainer() ??
+            throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.");
+
         return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(resource));
+            context => context.WriteContainerAsync(container));
     }
 
     /// <summary>

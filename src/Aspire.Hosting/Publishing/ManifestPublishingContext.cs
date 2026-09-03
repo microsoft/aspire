@@ -312,44 +312,16 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// </summary>
     /// <param name="container">The container resource to written to the manifest.</param>
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
-    public Task WriteContainerAsync(ContainerResource container)
+    public async Task WriteContainerAsync(ContainerResource container)
     {
         ArgumentNullException.ThrowIfNull(container);
 
-        return WriteContainerAsync((IResource)container);
-    }
-
-    /// <summary>
-    /// Writes JSON elements to the manifest which represent the explicit or projected container for a resource.
-    /// </summary>
-    /// <param name="resource">The resource represented by the container manifest entry.</param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
-    /// <exception cref="DistributedApplicationException">Thrown when the resource does not have an explicit or projected container view.</exception>
-    public Task WriteContainerAsync(IResource resource)
-    {
-        ArgumentNullException.ThrowIfNull(resource);
-
-        if (resource.AsContainer() is not { } container)
-        {
-            throw new DistributedApplicationException(
-                $"Resource '{resource.Name}' does not have an explicit or projected container view for the '{ExecutionContext.Operation}' operation.");
-        }
-
-        return WriteContainerCoreAsync(container);
-    }
-
-    private async Task WriteContainerCoreAsync(ContainerResource container)
-    {
-        // The projection shares annotations with its owner, but callback contexts also expose the
-        // resource instance. Canonicalize that identity while retaining the typed container state.
-        var owner = ((IResource)container).GetOwnerOrSelf();
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
-            WriteConnectionString(owner);
+            WriteConnectionString(container);
             await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
         else
@@ -368,7 +340,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Writer.WriteString("type", "container.v0");
             }
 
-            WriteConnectionString(owner);
+            WriteConnectionString(container);
             Writer.WriteString("image", image);
         }
 
@@ -383,7 +355,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         }
 
         // Write args if they are present
-        await WriteCommandLineArgumentsAsync(owner).ConfigureAwait(false);
+        await WriteCommandLineArgumentsAsync(container).ConfigureAwait(false);
 
         // Write container files destination if present
         WriteContainerFilesDestination(container);
@@ -391,7 +363,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         // Write volume & bind mount details
         WriteContainerMounts(container);
 
-        await WriteEnvironmentVariablesAsync(owner).ConfigureAwait(false);
+        await WriteEnvironmentVariablesAsync(container).ConfigureAwait(false);
         WriteBindings(container);
     }
 
@@ -628,9 +600,9 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         Writer.WriteEndArray();
     }
-    private void WriteContainerMounts(IResource resource)
+    private void WriteContainerMounts(ContainerResource container)
     {
-        if (resource.TryGetAnnotationsOfType<ContainerMountAnnotation>(out var mounts))
+        if (container.TryGetAnnotationsOfType<ContainerMountAnnotation>(out var mounts))
         {
             // Write out details for bind mounts
             var bindMounts = mounts.Where(mounts => mounts.Type == ContainerMountType.BindMount).ToList();

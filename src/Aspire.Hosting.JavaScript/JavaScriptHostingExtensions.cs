@@ -1912,7 +1912,7 @@ public static partial class JavaScriptHostingExtensions
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
                 ValidateExistingDockerfileRunScript(resource, containerResource);
-                return context.WriteContainerAsync(resource);
+                return context.WriteContainerAsync(containerResource);
             }
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
