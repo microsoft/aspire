@@ -211,15 +211,17 @@ public static class MauiOtlpExtensions
 
         // Create dev tunnel with anonymous access for OTLP. The dynamic unresolved-endpoint guard above
         // must be registered first so it can fail fast before the dev tunnel waits on the target endpoint.
+        var tunnelPortOptions = new DevTunnelPortOptions { Protocol = initialOtlpScheme };
         var devTunnel = appBuilder.AddDevTunnel(tunnelName)
             .WithAnonymousAccess()
-            .WithReference(stubBuilder, new DevTunnelPortOptions { Protocol = "https" });
+            .WithReference(stubBuilder, tunnelPortOptions);
         var tunnelEndpoint = devTunnel.GetEndpoint(stubResource, "otlp");
 
         tunnelConfig = new OtlpDevTunnelConfigurationAnnotation(
             stubResource,
             stubBuilder,
             devTunnel,
+            tunnelPortOptions,
             tunnelEndpoint,
             isOtlpEndpointResolved: configuredOtlpEndpoint is not null);
         return tunnelConfig;

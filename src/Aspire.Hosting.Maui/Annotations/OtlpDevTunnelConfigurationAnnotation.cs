@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Maui.Annotations;
 internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
 {
     private readonly object _otlpEndpointLock = new();
+    private readonly DevTunnelPortOptions _tunnelPortOptions;
     private int _isOtlpEndpointResolved;
 
     /// <summary>
@@ -50,12 +51,14 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
         OtlpLoopbackResource otlpStub,
         IResourceBuilder<OtlpLoopbackResource> otlpStubBuilder,
         IResourceBuilder<DevTunnelResource> devTunnel,
+        DevTunnelPortOptions tunnelPortOptions,
         EndpointReference tunnelEndpoint,
         bool isOtlpEndpointResolved)
     {
         OtlpStub = otlpStub;
         OtlpStubBuilder = otlpStubBuilder;
         DevTunnel = devTunnel;
+        _tunnelPortOptions = tunnelPortOptions;
         TunnelEndpoint = tunnelEndpoint;
         _isOtlpEndpointResolved = isOtlpEndpointResolved ? 1 : 0;
     }
@@ -70,6 +73,7 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
             }
 
             var endpoint = OtlpStub.OtlpEndpoint;
+            _tunnelPortOptions.Protocol = scheme;
             endpoint.UriScheme = scheme;
             endpoint.Port = port;
             endpoint.TargetPort = port;

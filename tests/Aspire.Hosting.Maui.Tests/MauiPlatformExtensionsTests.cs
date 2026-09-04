@@ -836,6 +836,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal(55077, stubEndpoint.TargetPort);
         Assert.Equal("http://localhost:55077", stubEndpoint.AllocatedEndpoint?.UriString);
         Assert.Equal("http", stubEndpoint.Transport);
+        Assert.Equal("http", Assert.Single(appBuilder.Resources.OfType<DevTunnelPortResource>()).Options.Protocol);
 
         httpEndpoint.AllocatedEndpoint = new AllocatedEndpoint(httpEndpoint, "localhost", 55088, targetPortExpression: "55089");
         await appBuilder.Eventing.PublishAsync(
@@ -1033,6 +1034,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal(18890, stubEndpoint.TargetPort);
         Assert.Equal("http://localhost:18890", stubEndpoint.AllocatedEndpoint?.UriString);
         Assert.Equal("http", stubEndpoint.Transport);
+        Assert.Equal("http", Assert.Single(appBuilder.Resources.OfType<DevTunnelPortResource>()).Options.Protocol);
 
         await using var app = appBuilder.Build();
         var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
