@@ -21,6 +21,11 @@ public sealed class ManifestUtils
     {
         manifestDirectory ??= Environment.CurrentDirectory;
 
+        // Manifest tests serialize resources directly without building an application. Evaluate the same projection
+        // callbacks that DistributedApplicationBuilder.Build runs so the resource has reached the model-build phase
+        // expected by projection-aware manifest callbacks.
+        resource.EvaluateContainerProjectionCallbacks();
+
         using var ms = new MemoryStream();
         var writer = new Utf8JsonWriter(ms);
 
@@ -45,6 +50,11 @@ public sealed class ManifestUtils
     public static async Task<JsonNode> GetManifestForModel(DistributedApplicationModel model, string? manifestDirectory = null)
     {
         manifestDirectory ??= Environment.CurrentDirectory;
+
+        foreach (var resource in model.Resources)
+        {
+            resource.EvaluateContainerProjectionCallbacks();
+        }
 
         using var ms = new MemoryStream();
         var writer = new Utf8JsonWriter(ms, new() { Indented = true });
@@ -78,6 +88,8 @@ public sealed class ManifestUtils
 
         foreach (var r in resources)
         {
+            r.EvaluateContainerProjectionCallbacks();
+
             writer.WriteStartObject();
             await context.WriteResourceAsync(r);
             writer.WriteEndObject();
