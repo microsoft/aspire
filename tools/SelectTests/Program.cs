@@ -354,7 +354,7 @@ internal static class Selection
         foreach (var name in selectedTestProjects.OrderBy(n => n, StringComparer.Ordinal))
         {
             // A selected name not in the slnx test-project set is not a buildable test project (e.g. a
-            // non-matrix project name from affected_project_rules); it contributes no OverrideProjectToBuild item.
+            // production/non-test project name from affected_project_rules); it contributes no OverrideProjectToBuild item.
             if (testProjectsByName.TryGetValue(name, out var relPath))
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    <OverrideProjectToBuild Include=\"$(RepoRoot){relPath}\" />");
@@ -485,7 +485,7 @@ internal static class Selection
     // Layer 1: build the MSBuild ProjectGraph from Aspire.slnx (HEAD-only) and report every project
     // hit by the diff — the union of *changed* (incl. cross-project linked-file consumers) and
     // *affected* (downstream dependents). We return the full set of project names: the selector
-    // intersects the matrix test projects and matches the non-matrix projects against
+    // intersects the matrix test projects and matches production/non-test projects against
     // affected_project_rules. See GraphAffectedProjects for why this replaced dotnet-affected.
     private static AffectedResult RunLayer1(RunOptions options, ChangedFileFilter filter, SelectionTrace trace)
     {
