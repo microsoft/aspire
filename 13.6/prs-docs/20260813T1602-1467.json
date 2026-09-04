@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found; custom resource command CLI docs fix",
+  "mergedAt": "2026-08-13T16:02:41Z",
+  "number": 1467,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "docs: correct custom resource command CLI arguments to named options"
+}

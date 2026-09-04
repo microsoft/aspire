@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bot-authored (app/copilot-swe-agent) branding/version bump; excluded per rule as non-notable engineering change, and app/copilot-swe-agent PRs should be evaluated but this is pure release automation with no user-facing effect",
+  "mergedAt": "2026-08-08T17:20:08Z",
+  "number": 19139,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Bump Aspire branding from 13.5 to 13.6"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backported to release/13.5 before milestone start; already shipped in 13.5",
+  "mergedAt": "2026-08-11T10:22:13Z",
+  "number": 19222,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Gate polyglot integration filtering behind an off-by-default feature flag"
+}

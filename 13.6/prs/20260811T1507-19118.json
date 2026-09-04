@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/CI docs-checkout determinism fix; not user-facing",
+  "mergedAt": "2026-08-11T15:07:01Z",
+  "number": 19118,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Make docs target checkout deterministic"
+}

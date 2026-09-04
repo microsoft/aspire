@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal terminology normalization in export attribute metadata; not user-facing",
+  "mergedAt": "2026-08-11T16:37:36Z",
+  "number": 19071,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Normalize AppHost terminology in export attributes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found; documents aspire doctor check timeouts, not in current batch",
+  "mergedAt": "2026-08-13T07:28:15Z",
+  "number": 1472,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "[docs] Document aspire doctor check timeouts"
+}

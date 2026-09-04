@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependabot dependency bump; not user-facing",
+  "mergedAt": "2026-08-10T18:07:32Z",
+  "number": 19193,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Bump js-yaml from 4.3.0 to 4.3.1 in /playground/AspireWithJavaScript/AspireJavaScript.Angular in the npm_and_yarn group across 1 directory"
+}

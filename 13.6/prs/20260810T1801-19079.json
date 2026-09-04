@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backported to release/13.5 before milestone start; internal DCP watch dedup fix already shipped in 13.5",
+  "mergedAt": "2026-08-10T18:01:23Z",
+  "number": 19079,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Improve handling of object change notifications during local run"
+}

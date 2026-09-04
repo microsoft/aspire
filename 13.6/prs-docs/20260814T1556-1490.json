@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs site UI component hardening (CustomSelect); not a product documentation change",
+  "mergedAt": "2026-08-14T15:56:38Z",
+  "number": 1490,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "Harden CustomSelect against a stale open-time scroll dismissing the menu"
+}

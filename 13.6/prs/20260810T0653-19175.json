@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backported to release/13.5 before milestone start; CI infra stabilization only",
+  "mergedAt": "2026-08-10T06:53:25Z",
+  "number": 19175,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Stabilize Azure Functions Core Tools install in CI"
+}

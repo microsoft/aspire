@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found; documents WithTerminal Shell option removal, not in current batch",
+  "mergedAt": "2026-08-14T15:57:17Z",
+  "number": 1478,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "[docs] Remove misleading WithTerminal Shell option"
+}

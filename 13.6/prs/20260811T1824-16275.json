@@ -1,0 +1,9 @@
+{
+  "author": "spboyer",
+  "comment": "Bug fix for duplicate default Azure Storage service",
+  "mergedAt": "2026-08-11T18:24:45Z",
+  "number": 16275,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "included",
+  "title": "Fix duplicate default blob/queue/data lake service when custom-named parent is added"
+}

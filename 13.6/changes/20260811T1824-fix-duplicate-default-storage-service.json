@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where adding a custom-named blob, queue, or data lake service and then calling AddBlobContainer/AddQueue/AddDataLakeFileSystem created a duplicate default-named service instead of reusing the custom one.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-08-11T18:24:45Z",
+  "lastMergedAt": "2026-08-11T18:24:45Z",
+  "name": "Fix duplicate default Azure Storage service",
+  "owner": "spboyer",
+  "prs": [
+    16275
+  ]
+}

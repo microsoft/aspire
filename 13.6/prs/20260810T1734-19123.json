@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dependency/security bump (js-yaml removal) across npm manifests; not user-facing",
+  "mergedAt": "2026-08-10T17:34:38Z",
+  "number": 19123,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "[auto-sec] remove js-yaml from 9 npm manifests (GHSA-5p4m-2wfm-xmqj); 2 deferred"
+}

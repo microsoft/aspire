@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backported to release/13.5 before milestone start; already shipped in 13.5",
+  "mergedAt": "2026-08-11T07:27:05Z",
+  "number": 19215,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Fix metric label selection behavior"
+}

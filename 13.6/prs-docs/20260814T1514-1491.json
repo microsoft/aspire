@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal CI automation for release-branch merge conflicts; not user-facing documentation",
+  "mergedAt": "2026-08-14T15:14:35Z",
+  "number": 1491,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "ci: auto-resolve data/content conflicts in release-branch merge"
+}

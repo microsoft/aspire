@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backported to release/13.5 before milestone start; already shipped in 13.5",
+  "mergedAt": "2026-08-11T03:26:56Z",
+  "number": 19203,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Fix persistent resources using port 0 (auto-allocated)"
+}

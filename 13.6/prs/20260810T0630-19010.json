@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backported to release/13.5 before milestone start; also internal test-infra stabilization, not user-facing",
+  "mergedAt": "2026-08-10T06:30:25Z",
+  "number": 19010,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "Stabilize Azure deployment test infrastructure"
+}

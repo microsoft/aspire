@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found; documents WithLaunchToolArgs diagnostic, not in current batch",
+  "mergedAt": "2026-08-12T14:03:25Z",
+  "number": 1458,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "[docs] Document WithLaunchToolArgs in ASPIREEXTENSION001 diagnostic page"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found; fixes TypeScript docs page unrelated to milestone changes",
+  "mergedAt": "2026-08-11T19:43:04Z",
+  "number": 1466,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "Fix TypeScript withEndpointsInEnvironment docs on project-resources page"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found; Aspire Skills bundle integrity docs, not in current batch",
+  "mergedAt": "2026-08-13T15:29:21Z",
+  "number": 1485,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "[docs] Use SHA-512 for Aspire Skills bundle integrity, hide remote-fetch toggle"
+}

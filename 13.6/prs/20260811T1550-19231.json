@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dependency/security bump (extension js-yaml); not user-facing",
+  "mergedAt": "2026-08-11T15:50:51Z",
+  "number": 19231,
+  "runDate": "2026-09-04T15:18:41Z",
+  "status": "excluded",
+  "title": "[auto-sec] extension: js-yaml 4.3.0 -> 4.3.1 (GHSA-5p4m-2wfm-xmqj)"
+}

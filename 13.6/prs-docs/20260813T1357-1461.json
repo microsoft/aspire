@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found; internal docs tooling hardening",
+  "mergedAt": "2026-08-13T13:57:57Z",
+  "number": 1461,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "Harden API data generation and fix C# deep links"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found; documents change-location delete confirmation, not in current batch",
+  "mergedAt": "2026-08-14T15:00:27Z",
+  "number": 1494,
+  "runDate": "2026-09-04T15:18:52Z",
+  "status": "excluded",
+  "title": "[docs] Document change-location delete confirmation for Azure resources"
+}
