@@ -129,7 +129,9 @@ public static class RustHostingExtensions
             .WithVSCodeDebugging()
             .PublishAsDockerFile();
 
-        // Build each container file source before the Rust image copies its generated files.
+        // The generated image copies files out of each container files source, so those sources have to be
+        // built first. PublishAsDockerFile registers the projected container's build steps against the Rust
+        // owner, allowing this callback to add those dependencies without replacing the resource in the model.
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
