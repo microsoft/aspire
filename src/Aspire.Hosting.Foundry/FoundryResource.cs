@@ -21,6 +21,8 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
 {
     internal Uri? EmulatorServiceUri { get; set; }
 
+    internal bool ManageLocalService { get; set; }
+
     private readonly List<FoundryDeploymentResource> _deployments = [];
 
     /// <summary>

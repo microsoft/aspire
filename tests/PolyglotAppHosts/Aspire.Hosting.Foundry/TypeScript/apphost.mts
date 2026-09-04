@@ -17,9 +17,13 @@ const model: FoundryModel = FoundryModels.OpenAI.Gpt41Mini;
 const _chatFromModel = await foundry.addDeployment('chat-from-model', model);
 
 const localFoundry = await builder.addFoundry('local-foundry')
-    .runAsFoundryLocal();
+    .runAsFoundryLocal({ endpoint: 'http://windows-host:5273' });
 
-const _localChat = await localFoundry.addDeployment('local-chat', 'Phi-3.5-mini-instruct', { modelVersion: '1', format: 'Microsoft' });
+const _localChat = await localFoundry
+    .addDeployment('local-chat', 'Phi-3.5-mini-instruct', { modelVersion: '1', format: 'Microsoft' })
+    .withProperties(async (deployment) => {
+        await deployment.localModelId.set('Phi-3.5-mini-instruct-generic-gpu:1');
+    });
 
 const registry = await builder.addAzureContainerRegistry('registry');
 const keyVault = await builder.addAzureKeyVault('vault');

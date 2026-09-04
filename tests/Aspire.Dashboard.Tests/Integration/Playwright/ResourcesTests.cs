@@ -104,6 +104,123 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceGraphCog_IsKeyboardAccessibleAndDoesNotDragNode()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await page.Locator("#tab-Graph").ClickAsync();
+
+            var node = page.Locator(".resource-group[resource-name='TestResource']");
+            await Assertions.Expect(node).ToBeVisibleAsync();
+            await node.HoverAsync();
+
+            var resourceActionsLabel = string.Format(
+                Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton,
+                "TestResource");
+            var otherResourceActionsLabel = string.Format(
+                Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton,
+                "OtherResource");
+            var cog = node.GetByRole(
+                AriaRole.Button,
+                new LocatorGetByRoleOptions
+                {
+                    Name = resourceActionsLabel,
+                    Exact = true
+                });
+            await Assertions.Expect(cog).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(
+                AriaRole.Button,
+                new PageGetByRoleOptions
+                {
+                    Name = otherResourceActionsLabel,
+                    Exact = true
+                })).ToHaveCountAsync(1);
+
+            // Attempt a large drag from the cog. D3's drag behavior is attached to the ancestor
+            // resource group, so this verifies the cog stops the initiating pointer event.
+            await page.WaitForTimeoutAsync(300);
+            var nodeBoundsBefore = await node.BoundingBoxAsync();
+            var cogBounds = await cog.BoundingBoxAsync();
+            Assert.NotNull(nodeBoundsBefore);
+            Assert.NotNull(cogBounds);
+
+            await page.Mouse.MoveAsync(
+                cogBounds.X + cogBounds.Width / 2,
+                cogBounds.Y + cogBounds.Height / 2);
+            await page.Mouse.DownAsync();
+            Assert.Equal(
+                "none",
+                await cog.EvaluateAsync<string>("element => getComputedStyle(element).outlineStyle"));
+            await page.Mouse.MoveAsync(
+                cogBounds.X + cogBounds.Width / 2 + 80,
+                cogBounds.Y + cogBounds.Height / 2 + 80,
+                new MouseMoveOptions { Steps = 5 });
+            await page.Mouse.UpAsync();
+
+            var nodeBoundsAfter = await node.BoundingBoxAsync();
+            Assert.NotNull(nodeBoundsAfter);
+            Assert.InRange(Math.Abs(nodeBoundsAfter.X - nodeBoundsBefore.X), 0, 5);
+            Assert.InRange(Math.Abs(nodeBoundsAfter.Y - nodeBoundsBefore.Y), 0, 5);
+            Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
+
+            var menu = page.GetByRole(
+                AriaRole.Menu,
+                new PageGetByRoleOptions { Name = "TestResource", Exact = true });
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+
+            await node.HoverAsync();
+            await cog.ClickAsync();
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
+            Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
+
+            await node.HoverAsync();
+            await cog.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-haspopup", "menu");
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
+            var header = menu.Locator(".aspire-menu-header");
+            await Assertions.Expect(header.Locator(".aspire-menu-header-text")).ToHaveTextAsync("TestResource");
+            var headerBounds = await header.BoundingBoxAsync();
+            Assert.NotNull(headerBounds);
+            Assert.InRange(headerBounds.Height, 39, 41);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+            await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(cog).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Enter");
+            await page.GetByRole(
+                AriaRole.Menuitem,
+                new PageGetByRoleOptions
+                {
+                    Name = ControlsStrings.ActionViewDetailsText,
+                    Exact = true
+                }).ClickAsync();
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveTextAsync("TestResource");
+
+            await page.GetByRole(
+                AriaRole.Button,
+                new PageGetByRoleOptions
+                {
+                    Name = ControlsStrings.SummaryDetailsViewCloseView,
+                    Exact = true
+                }).ClickAsync();
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
+            await Assertions.Expect(cog).ToBeFocusedAsync();
+        });
+    }
+
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
@@ -116,6 +233,10 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 [
                     new UrlViewModel("http", new Uri("about:blank#resource-url"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
                 ]),
+            ModelTestHelpers.CreateResource(
+                resourceName: "OtherResource",
+                resourceType: KnownResourceTypes.Project,
+                state: KnownResourceState.Running),
             ModelTestHelpers.CreateResource(
                 resourceName: "HiddenResource",
                 resourceType: KnownResourceTypes.Container,

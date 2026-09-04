@@ -347,7 +347,6 @@ internal sealed class RunCommand : BaseCommand
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            var startupStartTimestamp = _timeProvider.GetTimestamp();
             runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // When this is a detached child, watch the foreground launcher during startup. If the launcher
@@ -377,29 +376,39 @@ internal sealed class RunCommand : BaseCommand
             bool buildSuccess;
             using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
             {
-                try
+                // Restore and build happen before the AppHost can begin startup, so they must not
+                // consume ASPIRE_CLI_START_TIMEOUT. User cancellation still stops an unexpectedly long build.
+                var completedTask = await Task.WhenAny(buildCompletionSource.Task, runTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (completedTask == runTask)
                 {
-                    buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
-                }
-                catch (TimeoutException)
-                {
-                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
-                    return CreateStartupTimeoutResult(timeoutSeconds);
+                    // A project that faults or exits before signaling build completion must not leave
+                    // this unbounded wait pending. The existing build-failure path observes runTask.
+                    buildCompletionSource.TrySetResult(false);
                 }
 
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
             {
+                var runExitCode = await runTask;
+                if (cancellationToken.IsCancellationRequested && runExitCode == CliExitCodes.Cancelled)
+                {
+                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+                    return CommandResult.Cancelled(CliExitCodes.Success);
+                }
+
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
                 // Build failed - display captured output and return exit code
                 if (context.OutputCollector is { } outputCollector)
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return CommandResult.Failure(await runTask, InteractionServiceStrings.ProjectCouldNotBeBuilt);
+                return CommandResult.Failure(
+                    runExitCode == CliExitCodes.Success ? CliExitCodes.FailedToDotnetRunAppHost : runExitCode,
+                    InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
+            var startupStartTimestamp = _timeProvider.GetTimestamp();
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
@@ -656,7 +665,10 @@ internal sealed class RunCommand : BaseCommand
                 }
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (
+            ex.CancellationToken == cancellationToken ||
+            ex is ExtensionOperationCanceledException ||
+            (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
