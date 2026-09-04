@@ -63,7 +63,7 @@ paths.
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
 | `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are attributed by Layer 1; the curated entries cover only paths that still need an explicit exemption. See [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
-| `affected_project_rules` | an affected **non-matrix** project, matched by project-name glob against Layer 1's affected set, → a target set. Matrix test projects are excluded because Layer 1 already selects them directly; non-matrix support projects can still match broad globs. Follows the graph's transitive closure |
+| `affected_project_rules` | an affected **production/non-test** project, matched by project-name glob against Layer 1's affected set, → a target set. Every project under `tests/` is excluded because test projects are selected through the Layer 1 intersection or explicit test rules. Follows the graph's transitive closure |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
 | `groups` | named, reusable bundles of `test:`/`job:` targets that expand recursively |
 
@@ -209,13 +209,15 @@ Highlights:
 
 ### Project rules (`affected_project_rules`)
 
-An affected **non-matrix** project → a target set, matched by project-**name**
-glob against Layer 1's affected set. Matrix test projects are handled by the
-Layer 1 intersection and excluded here. Non-matrix test-support projects can
-still match broad globs. Narrow those matches for expensive or class-sharded
-gated targets; broader no-miss matching can be appropriate for smaller
-unsharded jobs when maintaining an exhaustive allowlist would be more fragile
-than the harmless over-selection.
+An affected **production/non-test** project → a target set, matched by
+project-**name** glob against Layer 1's affected set. Every project under
+`tests/`, including non-matrix fixtures and support projects, is excluded here.
+Test projects are selected through the Layer 1 intersection or explicit test
+rules; these rules describe dependencies from production projects to additional
+selector-gated jobs. Narrow those matches for expensive or class-sharded gated
+targets; broader no-miss matching can be appropriate for smaller unsharded jobs
+when maintaining an exhaustive allowlist would be more fragile than harmless
+over-selection.
 
 This is keyed by project identity rather than literal project-path
 globs, so it follows the graph's transitive closure and survives project
