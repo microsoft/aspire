@@ -387,6 +387,60 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FileAppRebuildCommandBuildsEditedSourceAndRestartsResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = Path.Combine(workspace.Path, "worker.cs");
+        var sentinelPath = Path.Combine(workspace.Path, "worker-ran.txt");
+        WriteFileApp("initial");
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var resource = builder.AddDotnetProject(
+                "worker",
+                appPath,
+                options => options.ExcludeLaunchProfile = true)
+            .WithEnvironment("SENTINEL_PATH", sentinelPath);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "initial",
+            "The initial file app should write its source-version marker.",
+            retries: 20);
+
+        WriteFileApp("updated");
+        var rebuildResult = await app.ResourceCommands.ExecuteCommandAsync(
+            resource.Resource,
+            KnownResourceCommands.RebuildCommand,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(rebuildResult.Success);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "updated",
+            "The rebuilt file app should restart from the edited source.",
+            retries: 20);
+
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
+
+        void WriteFileApp(string marker)
+        {
+            File.WriteAllText(appPath, $$"""
+                var sentinelPath = Environment.GetEnvironmentVariable("SENTINEL_PATH")!;
+                await File.WriteAllTextAsync(sentinelPath, "{{marker}}");
+                await Task.Delay(Timeout.InfiniteTimeSpan);
+                """);
+        }
+    }
+
+    [Fact]
     public void DuplicateProjectPathsProduceOneBuildEntryAndOneWait()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -1269,6 +1323,76 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var secondEnvironment = secondResult.EnvironmentVariables.ToDictionary();
         Assert.Equal(1, callbackCount);
         Assert.Equal("custom", secondEnvironment["BUILD_FLAVOR"]);
+    }
+
+    [Fact]
+    public async Task CancelingSoleConsumerCancelsSharedBuildEnvironmentEvaluationAndAllowsRetry()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var firstCallbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstCallbackCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callbackCount = 0;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(async context =>
+            {
+                var attempt = Interlocked.Increment(ref callbackCount);
+                if (attempt == 1)
+                {
+                    firstCallbackStarted.TrySetResult();
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                    {
+                        firstCallbackCanceled.TrySetResult();
+                        throw;
+                    }
+                }
+
+                context.EnvironmentVariables["BUILD_FLAVOR"] = $"custom-{attempt}";
+            });
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        using var firstConsumerCts = new CancellationTokenSource();
+
+        var firstEvaluation = EvaluateEnvironmentAsync(
+            buildResource,
+            app.Services,
+            firstConsumerCts.Token);
+        await firstCallbackStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        firstConsumerCts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstEvaluation);
+        await firstCallbackCanceled.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        ForgetCachedCallbackResults(rebuilder);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var retryResult = await EvaluateEnvironmentAsync(
+            rebuilder,
+            app.Services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, callbackCount);
+        Assert.Equal("custom-2", retryResult.EnvironmentVariables.Single().Value);
     }
 
     [Fact]

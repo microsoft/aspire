@@ -838,7 +838,8 @@ internal static class DotnetProjectBuildCoordinator
                         }
                         else
                         {
-                            _generation = new BuildEnvironmentGeneration(_generation.Evaluation)
+                            _generation = new BuildEnvironmentGeneration(
+                                _generation.Evaluation?.Task ?? _generation.PrecedingEvaluation)
                             {
                                 IsClaimedByBuildAttempt = true,
                             };
@@ -958,7 +959,7 @@ internal static class DotnetProjectBuildCoordinator
                 CancellationToken cancellationToken)
             {
                 BuildEnvironmentGeneration generation;
-                Task<IReadOnlyDictionary<string, string>> evaluation;
+                BuildEnvironmentEvaluation evaluation;
                 lock (_lock)
                 {
                     generation = _generation;
@@ -966,22 +967,152 @@ internal static class DotnetProjectBuildCoordinator
                     // can retry a transient failure. Every attempt starts from a fresh dictionary, so a retry can never
                     // observe a half-applied environment.
                     if (generation.Evaluation is null ||
-                        generation.Evaluation.IsFaulted ||
-                        generation.Evaluation.IsCanceled)
+                        generation.Evaluation.IsAbandoned ||
+                        generation.Evaluation.Task.IsFaulted ||
+                        generation.Evaluation.Task.IsCanceled)
                     {
-                        generation.Evaluation = EvaluateAsync(
-                            generation,
-                            executionContext,
-                            logger,
-                            _applicationStopping);
+                        var precedingEvaluation =
+                            generation.Evaluation?.Task ??
+                            generation.PrecedingEvaluation;
+                        var evaluationCancellationSource =
+                            CancellationTokenSource.CreateLinkedTokenSource(_applicationStopping);
+                        generation.Evaluation = new BuildEnvironmentEvaluation(
+                            EvaluateAsync(
+                                generation,
+                                precedingEvaluation,
+                                executionContext,
+                                logger,
+                                evaluationCancellationSource.Token),
+                            evaluationCancellationSource);
                     }
 
                     evaluation = generation.Evaluation;
+                    evaluation.ConsumerCount++;
                 }
 
-                // The shared work belongs to the build generation. Each consumer can cancel only its own wait,
-                // without canceling the evaluation for concurrent build, rebuild, or launch consumers in that generation.
-                return evaluation.WaitAsync(cancellationToken);
+                return WaitForEvaluationAsync(evaluation, cancellationToken);
+            }
+
+            private async Task<IReadOnlyDictionary<string, string>> WaitForEvaluationAsync(
+                BuildEnvironmentEvaluation evaluation,
+                CancellationToken cancellationToken)
+            {
+                try
+                {
+                    return await evaluation.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    ReleaseEvaluationConsumer(evaluation);
+                }
+            }
+
+            private void ReleaseEvaluationConsumer(BuildEnvironmentEvaluation evaluation)
+            {
+                var cancelAndDispose = false;
+                var dispose = false;
+                lock (_lock)
+                {
+                    evaluation.ConsumerCount--;
+                    if (evaluation.ConsumerCount == 0 && !evaluation.CleanupScheduled)
+                    {
+                        evaluation.CleanupScheduled = true;
+                        if (evaluation.Task.IsCompleted)
+                        {
+                            dispose = true;
+                        }
+                        else
+                        {
+                            // The evaluation remains shared while any build, rebuild, or launch consumer needs it.
+                            // Once abandoned, cancel its callback token so a later generation is not permanently
+                            // serialized behind work whose initiating operation no longer exists.
+                            evaluation.IsAbandoned = true;
+                            cancelAndDispose = true;
+                        }
+                    }
+                }
+
+                if (cancelAndDispose)
+                {
+                    _ = CancelAndDisposeWhenSettledAsync(evaluation);
+                }
+                else if (dispose)
+                {
+                    evaluation.CancellationSource.Dispose();
+                }
+            }
+
+            private static async Task CancelAndDisposeWhenSettledAsync(BuildEnvironmentEvaluation evaluation)
+            {
+                try
+                {
+                    await evaluation.CancellationSource.CancelAsync()
+                        .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                    await ((Task)evaluation.Task)
+                        .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+                finally
+                {
+                    evaluation.CancellationSource.Dispose();
+                }
+            }
+
+            private async Task<IReadOnlyDictionary<string, string>> EvaluateAsync(
+                BuildEnvironmentGeneration generation,
+                Task<IReadOnlyDictionary<string, string>>? precedingEvaluation,
+                DistributedApplicationExecutionContext executionContext,
+                ILogger logger,
+                CancellationToken cancellationToken)
+            {
+                if (precedingEvaluation is not null)
+                {
+                    // Build attempts normally cannot overlap, but the rebuilder and coordinated-build resources are
+                    // distinct DCP resources. Serialize their callbacks defensively because user callbacks need not be
+                    // thread-safe, while allowing a failed prior generation to be retried with new inputs.
+                    await ((Task)precedingEvaluation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+                var environment = new Dictionary<string, object>(comparer);
+                foreach (var callback in Callbacks)
+                {
+                    var callbackContext = new EnvironmentCallbackContext(
+                        executionContext,
+                        Resource,
+                        environment,
+                        cancellationToken)
+                    {
+                        Logger = logger,
+                    };
+                    await callback.Callback(callbackContext).ConfigureAwait(false);
+                }
+
+                var resolvedEnvironment = new Dictionary<string, string>(environment.Count, comparer);
+                foreach (var (name, value) in environment)
+                {
+                    if (value is not string stringValue)
+                    {
+                        throw new DistributedApplicationException(
+                            $"The build environment variable '{name}' for .NET project resource '{Resource.Name}' " +
+                            $"has unsupported value type '{value?.GetType().Name ?? "null"}'. Build environment values must be strings.");
+                    }
+
+                    resolvedEnvironment[name] = stringValue;
+                }
+
+                lock (_lock)
+                {
+                    // An older evaluation can finish after a new build attempt has started. Do not let its snapshot
+                    // replace the metadata used by run-property resolution and IDE launch configuration.
+                    if (ReferenceEquals(_generation, generation))
+                    {
+                        _entry.Metadata.SetBuildEnvironment(resolvedEnvironment);
+                    }
+                }
+
+                return resolvedEnvironment;
             }
 
             private async Task ReleaseResponseFileWhenSettledAsync(
@@ -1089,60 +1220,6 @@ internal static class DotnetProjectBuildCoordinator
                 previousResponseFile?.Dispose();
             }
 
-            private async Task<IReadOnlyDictionary<string, string>> EvaluateAsync(
-                BuildEnvironmentGeneration generation,
-                DistributedApplicationExecutionContext executionContext,
-                ILogger logger,
-                CancellationToken cancellationToken)
-            {
-                if (generation.PrecedingEvaluation is { } precedingEvaluation)
-                {
-                    // Build attempts normally cannot overlap, but the rebuilder and coordinated-build resources are
-                    // distinct DCP resources. Serialize their callbacks defensively because user callbacks need not be
-                    // thread-safe, while allowing a failed prior generation to be retried with new inputs.
-                    await ((Task)precedingEvaluation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                }
-
-                var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-                var environment = new Dictionary<string, object>(comparer);
-                foreach (var callback in Callbacks)
-                {
-                    var callbackContext = new EnvironmentCallbackContext(
-                        executionContext,
-                        Resource,
-                        environment,
-                        cancellationToken)
-                    {
-                        Logger = logger,
-                    };
-                    await callback.Callback(callbackContext).ConfigureAwait(false);
-                }
-
-                var resolvedEnvironment = new Dictionary<string, string>(environment.Count, comparer);
-                foreach (var (name, value) in environment)
-                {
-                    if (value is not string stringValue)
-                    {
-                        throw new DistributedApplicationException(
-                            $"The build environment variable '{name}' for .NET project resource '{Resource.Name}' " +
-                            $"has unsupported value type '{value?.GetType().Name ?? "null"}'. Build environment values must be strings.");
-                    }
-
-                    resolvedEnvironment[name] = stringValue;
-                }
-
-                lock (_lock)
-                {
-                    // An older evaluation can finish after a new build attempt has started. Do not let its snapshot
-                    // replace the metadata used by run-property resolution and IDE launch configuration.
-                    if (ReferenceEquals(_generation, generation))
-                    {
-                        _entry.Metadata.SetBuildEnvironment(resolvedEnvironment);
-                    }
-                }
-
-                return resolvedEnvironment;
-            }
         }
 
         private sealed record ProjectEntry(
@@ -1202,9 +1279,24 @@ internal static class DotnetProjectBuildCoordinator
         {
             public Task<IReadOnlyDictionary<string, string>>? PrecedingEvaluation { get; } = precedingEvaluation;
 
-            public Task<IReadOnlyDictionary<string, string>>? Evaluation { get; set; }
+            public BuildEnvironmentEvaluation? Evaluation { get; set; }
 
             public bool IsClaimedByBuildAttempt { get; set; }
+        }
+
+        private sealed class BuildEnvironmentEvaluation(
+            Task<IReadOnlyDictionary<string, string>> task,
+            CancellationTokenSource cancellationSource)
+        {
+            public Task<IReadOnlyDictionary<string, string>> Task { get; } = task;
+
+            public CancellationTokenSource CancellationSource { get; } = cancellationSource;
+
+            public int ConsumerCount { get; set; }
+
+            public bool IsAbandoned { get; set; }
+
+            public bool CleanupScheduled { get; set; }
         }
     }
 }

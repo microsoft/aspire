@@ -600,27 +600,25 @@ function parseSdkSerializedArguments(argumentsText: string): string[] {
     return parsedArguments;
 }
 
-// Combine the SDK host arguments from `dotnet run-api` (the built app DLL that is passed to the `dotnet`
-// launcher) with the user/launch-profile application arguments that were already resolved onto the debug
-// configuration. `hostArguments` is present only when the program is the `dotnet` launcher; 
-// for an apphost-executable build it is undefined and only the application arguments remain.
-// The host arguments must come first because they identify what to run. Preserve the existing string form
-// when application arguments are absent or launch-profile-authored text, but deserialize SDK host text when
-// the application arguments are already tokens so the complete result can remain losslessly tokenized.
-function combineRunApiArguments(hostArguments: string | undefined, applicationArguments: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
-    if (!hostArguments) {
+// Combine SDK-computed RunArguments with the user/launch-profile application arguments that were already
+// resolved onto the debug configuration. The computed arguments must come first because they can identify
+// what the RunCommand should execute. Preserve the existing string form when application arguments are absent
+// or launch-profile-authored text, but deserialize SDK text when the application arguments are already tokens
+// so the complete result can remain losslessly tokenized.
+function combineRunArguments(runArguments: string | undefined, applicationArguments: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
+    if (!runArguments) {
         return applicationArguments;
     }
 
     if (applicationArguments === undefined) {
-        return hostArguments;
+        return runArguments;
     }
 
     if (Array.isArray(applicationArguments)) {
-        return [...parseSdkSerializedArguments(hostArguments), ...applicationArguments];
+        return [...parseSdkSerializedArguments(runArguments), ...applicationArguments];
     }
 
-    return `${hostArguments} ${applicationArguments}`;
+    return `${runArguments} ${applicationArguments}`;
 }
 
 function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
@@ -1355,7 +1353,7 @@ export function createProjectDebuggerExtension(
                     }
 
                     debugConfiguration.program = runProperties.runCommand;
-                    resolvedArguments = combineRunApiArguments(runProperties.runArguments, resolvedArguments);
+                    resolvedArguments = combineRunArguments(runProperties.runArguments, resolvedArguments);
                     debugConfiguration.args = resolvedArguments;
                     debugConfiguration.executablePath = undefined;
                     if (!workingDirectoryProfile) {
@@ -1449,11 +1447,14 @@ export function createProjectDebuggerExtension(
                     }
 
                     const executablePath = configuredRunProperties?.runCommand ?? runApiConfig.executablePath;
-                    const commandLineArguments = configuredRunProperties?.runArguments ?? runApiConfig.commandLineArguments;
                     debugConfiguration.program = executablePath;
 
-                    const hostArguments = isDotnetLauncher(executablePath) ? commandLineArguments : undefined;
-                    resolvedArguments = combineRunApiArguments(hostArguments, resolvedArguments);
+                    // ComputeRunArguments describes the selected build configuration and remains authoritative
+                    // for every RunCommand. The run-api fallback instead contains default launch-profile arguments,
+                    // so consume those only when they are the host prefix for the bare `dotnet` launcher.
+                    const runArguments = configuredRunProperties?.runArguments ??
+                        (isDotnetLauncher(runApiConfig.executablePath) ? runApiConfig.commandLineArguments : undefined);
+                    resolvedArguments = combineRunArguments(runArguments, resolvedArguments);
                     debugConfiguration.args = resolvedArguments;
 
                     // Intentionally do NOT consume run-api's WorkingDirectory: it carries the SDK default profile's

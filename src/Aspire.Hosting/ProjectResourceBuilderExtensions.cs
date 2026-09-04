@@ -1066,11 +1066,6 @@ public static class ProjectResourceBuilderExtensions
         where TProjectResource : class, IResource
     {
         var projectMetadata = projectResource.GetProjectMetadata();
-        if (projectMetadata.IsFileBasedApp)
-        {
-            return;
-        }
-
         var rebuilderName = $"{projectResource.Name}-rebuilder";
         var rebuilder = new ProjectRebuilderResource(rebuilderName, projectResource, projectMetadata.ProjectPath);
         rebuilder.Annotations.Add(NameValidationPolicyAnnotation.None);

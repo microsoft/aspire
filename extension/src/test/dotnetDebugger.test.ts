@@ -2513,6 +2513,48 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
 
+    test('file-based .cs project preserves configuration-specific apphost run arguments', async () => {
+        const configuredAppHostPath = '/workspace/obj/Debug/net10.0/app';
+        const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+        dotNetService.runApiOutput = JSON.stringify({
+            $type: 'RunCommand',
+            Version: 1,
+            ExecutablePath: '/workspace/obj/Release/net10.0/app',
+            CommandLineArguments: '--from-default-profile',
+            WorkingDirectory: '',
+            EnvironmentVariables: {}
+        });
+        dotNetService.fileAppRunProperties = {
+            runCommand: configuredAppHostPath,
+            runArguments: '--from-msbuild "value with spaces"'
+        };
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: '/workspace/app.cs',
+            build_configuration: 'Debug',
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['--from-session'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.program, configuredAppHostPath);
+        assert.deepStrictEqual(debugConfig.args, ['--from-msbuild', 'value with spaces', '--from-session']);
+    });
+
     test('file-based .cs project preserves run-api DOTNET_ROOT host variables but drops profile env', async () => {
         // `dotnet run-api` returns the SDK default launch profile's environment variables mixed with the runtime
         // host-resolution variables the SDK injects (DOTNET_ROOT / DOTNET_ROOT_<ARCH>). The profile-derived values

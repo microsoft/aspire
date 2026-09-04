@@ -13,11 +13,16 @@ public class GitIgnoreTemplateTests(ITestOutputHelper testOutput) : TemplateTest
     [InlineData("aspire-ts-cs-starter", "aspire-ts-cs-starter", "--skipRestore")]
     [InlineData("aspire-apphost", "aspire-apphost", "--no-restore")]
     [InlineData("aspire-apphost-singlefile", "aspire-apphost-singlefile", "")]
-    public async Task TemplateIgnoresAspireWorkingDirectory(string templateDirectory, string templateName, string extraArgs)
+    public async Task TemplatePreservesExistingGitIgnoreAndIgnoresAspireWorkingDirectory(
+        string templateDirectory,
+        string templateName,
+        string extraArgs)
     {
         var projectName = GetNewProjectId(prefix: $"gitignore_{templateDirectory}");
         var outputPath = Path.Combine(BuildEnvironment.TestRootPath, projectName);
         var buildEnvironment = BuildEnvironment.ForDefaultFramework;
+        Directory.CreateDirectory(outputPath);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, ".gitignore"), "existing-rule/\n");
 
         using var command = new DotNetNewCommand(
             _testOutput,
@@ -27,6 +32,9 @@ public class GitIgnoreTemplateTests(ITestOutputHelper testOutput) : TemplateTest
         var result = await command.ExecuteAsync($"{templateName} {extraArgs} -o \"{outputPath}\"");
         result.EnsureSuccessful();
 
-        Assert.Equal([".aspire/"], await File.ReadAllLinesAsync(Path.Combine(outputPath, ".gitignore")));
+        Assert.Equal(["existing-rule/"], await File.ReadAllLinesAsync(Path.Combine(outputPath, ".gitignore")));
+        Assert.Equal(
+            ["*", "!.gitignore"],
+            await File.ReadAllLinesAsync(Path.Combine(outputPath, ".aspire", ".gitignore")));
     }
 }

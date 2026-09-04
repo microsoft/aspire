@@ -467,11 +467,13 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", annotation.LaunchConfigurationType);
     }
 
-    [Fact]
-    public async Task AddDotnetProject_RebuilderUsesConfiguredBuildConfiguration()
+    [Theory]
+    [InlineData("MyService.csproj")]
+    [InlineData("service.cs")]
+    public async Task AddDotnetProject_RebuilderUsesConfiguredBuildConfiguration(string projectFileName)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
+        var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", projectFileName);
         var project = builder.AddDotnetProject("svc", projectPath, options => options.ExcludeLaunchProfile = true);
         var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
         launchDefaults.BuildConfiguration = "Release";
@@ -532,6 +534,20 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         var restartCommand = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);
 
         Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
+    }
+
+    [Fact]
+    public void AddLifeCycleCommands_FileBasedApp_AddsRebuildCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var appPath = Path.Combine(builder.AppHostDirectory, "service.cs");
+        var resource = builder.AddDotnetProject("testapp", appPath, o => o.ExcludeLaunchProfile = true).Resource;
+        resource.AddLifeCycleCommands();
+
+        Assert.Contains(
+            resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == KnownResourceCommands.RebuildCommand);
     }
 
     [Fact]
