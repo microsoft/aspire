@@ -2321,7 +2321,7 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -4312,7 +4312,7 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -5258,7 +5258,7 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -7073,7 +7073,7 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -9005,7 +9005,7 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -10320,7 +10320,7 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -13855,7 +13855,7 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -15082,7 +15082,7 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -17420,7 +17420,7 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -19009,7 +19009,7 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -20736,7 +20736,7 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
+    /// Gets a resource's effective container.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());

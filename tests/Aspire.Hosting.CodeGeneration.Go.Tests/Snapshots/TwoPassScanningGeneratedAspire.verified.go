@@ -1564,7 +1564,7 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -3794,7 +3794,7 @@ func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *cSharpAppResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -6695,7 +6695,7 @@ func newContainerRegistryResourceFromHandle(h *handle, c *client) ContainerRegis
 	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *containerRegistryResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -7802,7 +7802,7 @@ func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *containerResource) AsContainer() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11472,7 +11472,7 @@ func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *dotnetToolResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -14337,7 +14337,7 @@ func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *executableResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -16348,7 +16348,7 @@ func newExternalServiceResourceFromHandle(h *handle, c *client) ExternalServiceR
 	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *externalServiceResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -19081,7 +19081,7 @@ func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *parameterResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -20902,7 +20902,7 @@ func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *projectResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -24355,7 +24355,7 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *testDatabaseResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -26679,7 +26679,7 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AsContainer gets a resource's effective container after model construction evaluates its projection callbacks.
+// AsContainer gets a resource's effective container.
 func (s *testRedisResource) AsContainer() ContainerResource {
 	if s.err != nil { return nil }
 	ctx := context.Background()

@@ -2293,7 +2293,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -5464,7 +5464,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -6667,7 +6667,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -9305,7 +9305,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -11779,7 +11779,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -13651,7 +13651,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -18480,7 +18480,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -20066,7 +20066,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -23585,7 +23585,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -25808,7 +25808,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -28156,7 +28156,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
+    /** Gets a resource's effective container. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));

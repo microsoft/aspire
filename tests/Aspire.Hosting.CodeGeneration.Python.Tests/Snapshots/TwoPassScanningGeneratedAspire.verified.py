@@ -7357,7 +7357,7 @@ class AbstractResource(abc.ABC):
 
     @abc.abstractmethod
     def as_container(self) -> ContainerResource | None:
-        """Gets a resource's effective container after model construction evaluates its projection callbacks."""
+        """Gets a resource's effective container."""
 
     @abc.abstractmethod
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
@@ -7919,7 +7919,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def as_container(self) -> ContainerResource | None:
-        """Gets a resource's effective container after model construction evaluates its projection callbacks."""
+        """Gets a resource's effective container."""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting/asContainer',
