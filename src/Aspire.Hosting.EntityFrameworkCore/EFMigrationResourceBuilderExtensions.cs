@@ -1,11 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
-using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -318,11 +315,6 @@ public static class EFMigrationResourceBuilderExtensions
         // so seed one with the resource name as the image.
         builder.WithImage(migrationResource.Name);
         builder.WithDockerfileFactory(buildContext, _ => Task.FromResult(GenerateDockerfile(migrationResource)));
-
-        // WithDockerfileFactory replaces any existing PipelineStepAnnotation on the resource with
-        // its build/push annotation (via EnsureBuildAndPushPipelineAnnotations' Replace mode). That
-        // wipes the migration step factory registered by AddEFMigrationsCore, so re-register it.
-        builder.WithPipelineStepFactory(EFResourceBuilderExtensions.CreateMigrationPipelineStep);
 
         // Once the application model is finalized we know which IResourceWithConnectionString
         // dependencies the user declared via WithReference or WaitFor.
