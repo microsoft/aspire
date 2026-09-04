@@ -254,7 +254,7 @@
 }
 
 ::deep .resource-menu-cog-background {
-    fill: var(--neutral-fill-secondary-rest);
+    fill: var(--fill-color);
     stroke: var(--neutral-stroke-rest);
     stroke-width: 1;
 }
