@@ -122,6 +122,12 @@ suite('Aspire auto-restore E2E', function () {
         // fire just because `aspire.config.json` changed on disk. Reloading the window re-triggers
         // the activation-time pass deterministically, and doubles as the most realistic simulation
         // of the "reopen VS Code after `aspire init`" scenario this feature targets.
+        //
+        // `reloadWorkspaceForE2E()` reads the *current* state file first to capture a baseline
+        // session id before reloading, with no retry - it assumes a prior activation already wrote
+        // one. Wait for the extension's initial activation to finish so that read doesn't race a
+        // cold start (activation can still be in flight this soon after the window first opened).
+        await waitForRepositoryIdle();
         await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
 
@@ -155,6 +161,12 @@ suite('Aspire auto-restore E2E', function () {
         // Force a fresh activation pass under this test's control rather than relying on the
         // one-time pass from suite startup, which ran before this test - and possibly before other
         // tests mutated the workspace config - so it isn't a reliable, order-independent signal.
+        //
+        // `reloadWorkspaceForE2E()` reads the *current* state file first to capture a baseline
+        // session id before reloading, with no retry - it assumes a prior activation already wrote
+        // one. Wait for that baseline to exist so the read doesn't race a cold start, e.g. if this
+        // test runs first or the harness's own initial activation hasn't finished yet.
+        await waitForRepositoryIdle();
         await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
 
