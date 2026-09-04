@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { stripComments } from 'jsonc-parser';
 import { AspireConfigFile, aspireConfigFileName } from './cliTypes';
 import { findAspireSettingsFiles } from './workspace';
 import { ChildProcessWithoutNullStreams } from 'child_process';
@@ -14,6 +13,7 @@ import { runningAspireRestore, runningAspireRestoreProgress, aspireRestoreComple
 import { ConfigInfoProvider, type CliVersionInfo } from './configInfoProvider';
 import { codeGenerationVersionMarkerCapability } from '../types/configInfo';
 import { classifyAppHostPath } from './appHostLanguage';
+import { parseJsoncObject } from './appHostTargetVersion';
 
 const generatedModulesDirectory = path.join('.aspire', 'modules');
 const legacyGeneratedModulesDirectory = '.modules';
@@ -123,7 +123,16 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
 
         const pending = new Set<Promise<void>>();
         for (const uri of configs) {
-            const p = this._restoreIfNeeded(uri, force).finally(() => pending.delete(p));
+            // Isolate failures per-config: an uncaught rejection here (e.g. from an unexpected
+            // error while resolving the CLI) must not abort Promise.race/Promise.all below, which
+            // would silently abandon every remaining config still waiting in this batch.
+            const p = this._restoreIfNeeded(uri, force)
+                .catch(error => {
+                    extensionLogOutputChannel.warn(`Unexpected error restoring ${vscode.workspace.asRelativePath(uri)}: ${String(error)}`);
+                    this._failedDirs.add(path.dirname(uri.fsPath));
+                    this._showProgress();
+                })
+                .finally(() => pending.delete(p));
             pending.add(p);
             if (pending.size >= AspirePackageRestoreProvider._maxConcurrency) {
                 await Promise.race(pending);
@@ -199,15 +208,26 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     private async _getAutoRestoreCli(uri: vscode.Uri, content: string): Promise<ResolvedRestoreCli | undefined> {
         let config: AspireConfigFile;
         try {
-            config = JSON.parse(stripComments(content)) as AspireConfigFile;
+            // Tolerate the same JSONC dialect (comments, trailing commas, leading BOM) already
+            // supported for aspire.config.json elsewhere in the extension (appHostTargetVersion.ts),
+            // rather than the narrower JSON.parse(stripComments(...)) which rejects both a leading
+            // BOM and trailing commas.
+            const parsed = parseJsoncObject(content);
+            if (!parsed) {
+                throw new Error('content is not a valid JSON object');
+            }
+            config = parsed as AspireConfigFile;
         } catch (error) {
             extensionLogOutputChannel.warn(`Skipping auto-restore for invalid config ${uri.fsPath}: ${String(error)}`);
             return undefined;
         }
 
         const appHost = config.appHost;
-        const configuredPath = appHost?.path?.trim();
-        const configuredLanguage = appHost?.language?.trim().toLowerCase();
+        // appHost.path/language are untyped user-editable JSON, so a malformed config (e.g. a
+        // number or array where a string is expected) must not throw here -- treat any non-string
+        // value the same as an absent one instead of trusting the AspireConfigFile type assertion.
+        const configuredPath = typeof appHost?.path === 'string' ? appHost.path.trim() : undefined;
+        const configuredLanguage = typeof appHost?.language === 'string' ? appHost.language.trim().toLowerCase() : undefined;
         if (!appHost || (!configuredPath && !configuredLanguage)) {
             return undefined;
         }

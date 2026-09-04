@@ -512,18 +512,25 @@ interface JsoncFileResult {
 async function readJsoncFile(filePath: string): Promise<JsoncFileResult> {
     let contents: string;
     try {
-        contents = stripLeadingByteOrderMark(await fs.readFile(filePath, 'utf8'));
+        contents = await fs.readFile(filePath, 'utf8');
     }
     catch {
         return { exists: false };
     }
 
+    return { exists: true, value: parseJsoncObject(contents) };
+}
+
+/**
+ * Parses JSONC content (comments + trailing commas tolerated, per the settings.json-style
+ * conventions used across Aspire config files) into a plain object, or returns undefined if the
+ * content is not valid JSONC or does not parse to an object. Tolerates a leading UTF-8 BOM, which
+ * some editors/OS locales write by default and which jsonc-parser does not strip on its own.
+ */
+export function parseJsoncObject(contents: string): Record<string, unknown> | undefined {
     const errors: ParseError[] = [];
-    const parsed = parse(contents, errors, { allowTrailingComma: true }) as unknown;
-    return {
-        exists: true,
-        value: errors.length === 0 && isJsonObject(parsed) ? parsed : undefined,
-    };
+    const parsed = parse(stripLeadingByteOrderMark(contents), errors, { allowTrailingComma: true }) as unknown;
+    return errors.length === 0 && isJsonObject(parsed) ? parsed : undefined;
 }
 
 function stripLeadingByteOrderMark(contents: string): string {

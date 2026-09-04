@@ -361,6 +361,127 @@ suite('AspirePackageRestoreProvider', () => {
         }
     });
 
+    test('does not abort remaining restores in a batch when one config unexpectedly throws', async () => {
+        // _maxConcurrency is 4, so 4 failing configs fill the batch window and force a
+        // Promise.race/Promise.all before the 5th (healthy) config is ever reached by the loop.
+        const failingDirs = Array.from({ length: 4 }, () => fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-batch-fail-')));
+        const healthyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-batch-ok-'));
+        const allDirs = [...failingDirs, healthyDir];
+        const configUris = allDirs.map(dir => createGuestConfig(dir, '13.0.0-old'));
+        const folders = allDirs.map(dir => createWorkspaceFolder(dir));
+
+        const getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder');
+        configUris.forEach((uri, i) => getWorkspaceFolderStub.withArgs(uri).returns(folders[i]));
+        sandbox.stub(workspaceModule, 'findAspireSettingsFiles').resolves(configUris);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+
+        const healthyTarget = workspaceFolderCliPathTarget(folders[4]);
+        const getAspireCliExecutablePath = sandbox.stub().rejects(new Error('simulated CLI resolution failure'));
+        getAspireCliExecutablePath.withArgs(healthyTarget).resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const childProcess = createChildProcess();
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.exitCallback?.(0);
+                childProcess.emit('close', 0);
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
+        });
+
+        try {
+            let thrown: unknown;
+            try {
+                await (provider as any)._restoreAll(false);
+            } catch (error) {
+                thrown = error;
+            }
+
+            assert.strictEqual(thrown, undefined, `_restoreAll should isolate per-config failures instead of rejecting: ${String(thrown)}`);
+            assert.strictEqual(spawnStub.callCount, 1, 'the healthy config queued after the failing ones should still be restored');
+        } finally {
+            provider.dispose();
+            for (const dir of allDirs) {
+                fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+            }
+        }
+    });
+
+    test('gracefully skips a config with a non-string appHost.path/language instead of throwing', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-malformed-shape-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = vscode.Uri.file(path.join(directory, 'aspire.config.json'));
+        fs.writeFileSync(configUri.fsPath, JSON.stringify({ appHost: { path: 123, language: 456 } }));
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess');
+
+        try {
+            await assert.doesNotReject(
+                () => (provider as any)._restoreIfNeeded(configUri, false),
+                (error: unknown) => {
+                    throw new Error(`a malformed appHost shape should be skipped gracefully, not throw: ${String(error)}`);
+                });
+
+            assert.ok(spawnStub.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
+    test('parses a BOM-prefixed config with trailing commas instead of silently skipping it', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-bom-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = vscode.Uri.file(path.join(directory, 'aspire.config.json'));
+        // Real-world editors/tools (e.g. Windows Notepad, some Windows-locale defaults) can save
+        // UTF-8 files with a leading BOM, and JSONC tooling commonly tolerates trailing commas.
+        const rawConfig = '\uFEFF{\n'
+            + '    "appHost": {\n'
+            + '        "path": "apphost.mts",\n'
+            + '        "language": "typescript/nodejs",\n'
+            + '    },\n'
+            + '}\n';
+        fs.writeFileSync(configUri.fsPath, rawConfig);
+        const modulesDirectory = path.join(directory, '.aspire', 'modules');
+        fs.mkdirSync(modulesDirectory, { recursive: true });
+        fs.writeFileSync(path.join(modulesDirectory, '.codegen-version'), '13.0.0-old');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const childProcess = createChildProcess();
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.exitCallback?.(0);
+                childProcess.emit('close', 0);
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
+        });
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.strictEqual(spawnStub.callCount, 1, 'a BOM-prefixed config with trailing commas should still parse and restore');
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
     test('does not spawn restore when disposed during CLI resolution', async () => {
         let resolveCliPath!: (cliPath: string) => void;
         const cliPath = new Promise<string>(resolve => {
