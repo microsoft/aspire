@@ -1107,6 +1107,50 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task ConsoleLogs_TimestampVisibility_TogglesUtcTimestampOption()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var viewport = CreateViewport(isDesktop: true);
+        var cut = RenderConsoleLogsPage(viewport, testResource.Name);
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
+        var showTimestampText = loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShow)].Value;
+        var hideTimestampText = loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampHide)].Value;
+        var utcText = loc[nameof(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)].Value;
+
+        // Timestamps are off by default: UTC timestamps option should be hidden
+        Assert.DoesNotContain(instance.LogsMenuItemsForTest, item => item.Text == utcText);
+
+        // Toggle "Show timestamps"
+        var showItem = Assert.Single(instance.LogsMenuItemsForTest, item => item.Text == showTimestampText);
+        Assert.NotNull(showItem.OnClick);
+        await cut.InvokeAsync(showItem.OnClick);
+
+        // UTC timestamps option should now be visible
+        Assert.Contains(instance.LogsMenuItemsForTest, item => item.Text == utcText);
+
+        // Toggle "Hide timestamps"
+        var hideItem = Assert.Single(instance.LogsMenuItemsForTest, item => item.Text == hideTimestampText);
+        Assert.NotNull(hideItem.OnClick);
+        await cut.InvokeAsync(hideItem.OnClick);
+
+        // UTC timestamps option should be hidden again
+        Assert.DoesNotContain(instance.LogsMenuItemsForTest, item => item.Text == utcText);
+    }
+
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null, IResourceRepository? resourceRepository = null)
     {
         FluentUISetupHelpers.SetupFluentDialogProvider(this);
