@@ -1,0 +1,38 @@
+{
+  "run_id": 33911967287,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33911967287",
+  "analyzed_at": "2026-09-04T20:53:12Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18196,
+    "title": "Introduce `MongoDBReplicaSetResource`",
+    "author": "aradalvand",
+    "state": "closed",
+    "head_branch": "main",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18196"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 101157882150,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33911967287/job/101157882150",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 and no job logs available; matches prior recurring cause vscode-e2e-windows-dynamic-debug-configuration-flaky (10 prior occurrences). PR only modifies MongoDB hosting integration code, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "id": 101157882436,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33911967287/job/101157882436",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 and no job logs available; matches prior recurring cause vscode-e2e-linux-deno-debugger-flaky (2 prior occurrences). PR only modifies MongoDB hosting integration code, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky", "vscode-e2e-linux-deno-debugger-flaky"]
+}

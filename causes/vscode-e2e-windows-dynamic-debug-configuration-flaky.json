@@ -74,6 +74,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
       "pr_number": 19197,
       "observed_at": "2026-09-04T19:58:00Z"
+    },
+    {
+      "run_id": 33911967287,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33911967287",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 18196,
+      "observed_at": "2026-09-04T20:53:12Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19576"
