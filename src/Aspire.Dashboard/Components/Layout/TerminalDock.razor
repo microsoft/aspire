@@ -80,7 +80,10 @@
                     }
                     else
                     {
-                        <TerminalView EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)" Chromeless="true" ShowDimensionsPicker="false" />
+                        <TerminalView EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)"
+                                      Chromeless="true"
+                                      ShowDimensionsPicker="false"
+                                      SizeMemoryKey="@($"dock:{terminal.TerminalId}")" />
                     }
                 </div>
             }

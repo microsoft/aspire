@@ -15,6 +15,17 @@ const terminals = new Map();
 let nextId = 1;
 const textEncoder = new TextEncoder();
 
+// Remembers the font size a caller-identified surface was last using, so a
+// remount can restore it. The dock uses this: detaching a pane unmounts its
+// TerminalView and returning remounts a brand new one, which would otherwise
+// come back at the dashboard's base font and lose whatever zoom the user had
+// applied. Keyed by the caller's own key (see the sizeMemoryKey option) so a
+// dock pane and a detached window of the same terminal stay independent — the
+// pane restores the size it had when it was detached, not the size the user
+// happened to leave the window at. Module scope means the memory lives as long
+// as the page, which is the same lifetime as the dock itself.
+const sizeMemory = new Map();
+
 // Diagnostics gate. Set window.__aspireTerminalDebug = true in DevTools
 // before loading the page (or before the first terminal is opened) to
 // emit a structured trace of every lifecycle event. Default off so the
@@ -819,9 +830,18 @@ function getAvailableBodySpace(state) {
 // Record that grid as fixed sizing state so a later keyboard-driven promotion
 // keeps the existing resolution. Only an explicit footer action switches back
 // to Fit or selects another preset.
+//
+// Chromeless surfaces are excluded. They never render as a secondary (see the
+// isSecondary guard in applyRoleAwareLayout) — a dock pane and a detached
+// window each own their viewport and fit the grid into it. Adopting the
+// producer's grid there would make a newly attached viewer inherit whatever
+// resolution the *previous* viewer had negotiated and shrink its font to fit
+// it, so detaching a dock pane into a large window (or returning it to the
+// dock) would keep the old grid at an unreadable font instead of re-fitting
+// and pushing the new dimensions upstream.
 function adoptProducerDimensions(state, includePrimary = false) {
     const client = state.client;
-    if (!client || (!includePrimary && client.isPrimary) || client.width <= 0 || client.height <= 0) {
+    if (state.chromeless || !client || (!includePrimary && client.isPrimary) || client.width <= 0 || client.height <= 0) {
         return;
     }
 
@@ -1111,11 +1131,21 @@ function setFontSize(state, newSize) {
     state.fitFontPx = newSize;
     state.sizeMode = 'font';
     state.fixedDims = null;
+    rememberFontSize(state);
     if (state.term) {
         state.term.options.fontSize = state.currentFontPx;
         forceFontRemeasure(state.term);
     }
     applyRoleAwareLayout(state);
+}
+
+// Only explicit user sizing is remembered. An auto-calculated font (the one a
+// fixed grid is squeezed into) is a consequence of the current viewport, not a
+// preference, so restoring it into a differently sized surface would be wrong.
+function rememberFontSize(state) {
+    if (state.sizeMemoryKey) {
+        sizeMemory.set(state.sizeMemoryKey, state.fitFontPx);
+    }
 }
 
 function setSizeMode(state, mode, dims) {
@@ -1280,15 +1310,20 @@ function resolveDashboardFontPx() {
     return DEFAULT_FONT_PX;
 }
 
-// `options` is optional: { chromeless: bool, showDimensions: bool, ...control
-// labels }. Chromeless drops the frame, titlebar and padding so only the xterm
-// grid and its footer show (used by the terminal dock and detached terminal
-// windows, which supply their own chrome).
+// `options` is optional: { chromeless: bool, showDimensions: bool,
+// sizeMemoryKey: string, ...control labels }. Chromeless drops the frame,
+// titlebar and padding so only the xterm grid and its footer show (used by the
+// terminal dock and detached terminal windows, which supply their own chrome).
 export async function initTerminal(element, wsUrl, dotNetRef, options) {
     await ensureXtermLoaded();
 
     const chromeless = !!options?.chromeless;
-    const initialFontPx = chromeless ? resolveDashboardFontPx() : DEFAULT_FONT_PX;
+    const sizeMemoryKey = options?.sizeMemoryKey || null;
+    // A remembered size wins over the default so a surface that is remounted
+    // (a dock pane returning from a detached window) comes back at the size the
+    // user had left it at rather than resetting to the dashboard's base font.
+    const rememberedFontPx = sizeMemoryKey ? sizeMemory.get(sizeMemoryKey) : undefined;
+    const initialFontPx = rememberedFontPx ?? (chromeless ? resolveDashboardFontPx() : DEFAULT_FONT_PX);
 
     const id = nextId++;
     const state = {
@@ -1315,6 +1350,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
         // are sized by the dock splitter and always fit, so they get the font
         // stepper but not the picker.
         showDimensions: options?.showDimensions !== false,
+        sizeMemoryKey,
         // Chromeless terminals fill whatever space the dock pane or detached
         // window gives them at the dashboard's font size, so they start in Fit
         // mode. Everything else starts at the default fixed resolution and only

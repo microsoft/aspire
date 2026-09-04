@@ -110,6 +110,19 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public bool Chromeless { get; set; }
 
     /// <summary>
+    /// Gets or sets an opaque key identifying this terminal surface for font-size persistence.
+    /// </summary>
+    /// <remarks>
+    /// When set, the font size the user selects is remembered for the lifetime of the page and restored if a
+    /// <see cref="TerminalView"/> with the same key is mounted again. The dock uses this so a pane that is detached
+    /// into a window — which unmounts the pane — comes back at the size it had when it was detached, rather than
+    /// resetting to the dashboard's base font. Keys are per-surface, so a dock pane and a detached window of the same
+    /// terminal do not overwrite each other.
+    /// </remarks>
+    [Parameter]
+    public string? SizeMemoryKey { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the footer offers the fixed-resolution picker.
     /// </summary>
     /// <remarks>
@@ -263,6 +276,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 {
                     Chromeless = Chromeless,
                     ShowDimensions = ShowDimensionsPicker,
+                    SizeMemoryKey = SizeMemoryKey,
                     DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
                     IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
                     TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
@@ -516,6 +530,9 @@ public sealed record TerminalViewOptions
 
     /// <summary>Whether the footer offers the fixed-resolution picker.</summary>
     public bool ShowDimensions { get; init; } = true;
+
+    /// <summary>Opaque key identifying this surface for font-size persistence, or <see langword="null"/> to not persist.</summary>
+    public string? SizeMemoryKey { get; init; }
 
     /// <summary>Accessible label for the footer's decrease-font-size button.</summary>
     public required string DecreaseFontSize { get; init; }
