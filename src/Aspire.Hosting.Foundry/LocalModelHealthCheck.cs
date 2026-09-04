@@ -21,7 +21,7 @@ internal sealed class LocalModelHealthCheck(FoundryDeploymentResource deployment
             return HealthCheckResult.Unhealthy("Foundry Local has not reported an endpoint.");
         }
 
-        var httpClient = httpClientFactory.CreateClient(nameof(LocalModelHealthCheck));
+        using var httpClient = httpClientFactory.CreateClient(nameof(LocalModelHealthCheck));
         if (!await FoundryLocalService.IsModelLoadedAsync(endpoint, modelId, httpClient, cancellationToken).ConfigureAwait(false))
         {
             return HealthCheckResult.Unhealthy("Model has not been loaded.");
