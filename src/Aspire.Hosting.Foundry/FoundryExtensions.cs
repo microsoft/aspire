@@ -160,8 +160,9 @@ public static class FoundryExtensions
     /// <summary>
     /// Configures a Microsoft Foundry resource to use an Aspire-managed Foundry Local service.
     /// </summary>
-    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="builder">The Microsoft Foundry resource builder.</param>
     /// <returns>The configured Microsoft Foundry resource builder.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     [AspireExportIgnore(Reason = "Binary compatibility overload. Polyglot app hosts use the overload with the optional endpoint.")]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
         => builder.RunAsFoundryLocal(endpoint: null);
@@ -169,7 +170,7 @@ public static class FoundryExtensions
     /// <summary>
     /// Configures a Microsoft Foundry resource to use an Aspire-managed or existing Foundry Local service.
     /// </summary>
-    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="builder">The Microsoft Foundry resource builder.</param>
     /// <param name="endpoint">The endpoint of an existing Foundry Local service, or <see langword="null"/> for an Aspire-managed service.</param>
     /// <returns>The configured Microsoft Foundry resource builder.</returns>
     /// <remarks>
@@ -177,6 +178,7 @@ public static class FoundryExtensions
     /// Foundry Local service without starting, stopping, downloading, or loading anything on its host.
     /// Models configured on the resource must already be loaded by the existing service.
     /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="endpoint"/> is not an absolute HTTP or HTTPS URL.</exception>
     [AspireExport]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(

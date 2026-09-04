@@ -56,10 +56,20 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 
 To let Aspire start Foundry Local and download or load models with the Foundry CLI installed on the AppHost machine:
 
+**C#**
+
 ```csharp
 var chat = builder.AddFoundry("foundry")
                   .RunAsFoundryLocal()
                   .AddDeployment("chat", FoundryModel.Local.Phi4Mini);
+```
+
+**TypeScript**
+
+```typescript
+const chat = await builder.addFoundry('foundry')
+    .runAsFoundryLocal()
+    .addDeployment('chat', FoundryModels.Local.Phi4Mini);
 ```
 
 To connect from WSL2 or Linux to an existing Foundry Local service on another host, provide its reachable endpoint. Aspire observes this service but does not start, stop, download, or load anything on the remote host, so the model must already be loaded there:
