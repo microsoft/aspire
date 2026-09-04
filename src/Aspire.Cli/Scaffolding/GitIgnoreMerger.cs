@@ -33,9 +33,11 @@ internal static class GitIgnoreMerger
             .Where(IsAnchored)
             .Select(RemoveRoot)
             .ToHashSet(StringComparer.Ordinal);
-        var existingNegatedEntries = existingEntries
+        var existingNegatedPatterns = existingEntries
             .Where(IsNegated)
             .Select(RemoveNegation)
+            .ToArray();
+        var existingNegatedEntries = existingNegatedPatterns
             .Select(RemoveRoot)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -45,7 +47,7 @@ internal static class GitIgnoreMerger
                 && !ContainsCoveringEntry(
                     existingNegatedEntries,
                     RemoveRoot(IsNegated(entry) ? RemoveNegation(entry) : entry))
-                && !ContainsConflictingNegatedDescendant(existingNegatedEntries, entry))
+                && !ContainsConflictingNegatedDescendant(existingNegatedPatterns, entry))
             .ToArray();
 
         if (missingEntries.Length == 0)
@@ -69,8 +71,9 @@ internal static class GitIgnoreMerger
         //   node_modules/
         //   /.aspire/
         //   !.aspire/
-        // Blank lines and trailing whitespace do not participate in duplicate detection,
-        // while the original content remains unchanged in the merged result.
+        // Blank lines and unescaped trailing spaces do not participate in duplicate detection.
+        // An escaped trailing space, as in "keep\ ", remains part of the pattern. The original
+        // content remains unchanged in the merged result.
         using var reader = new StringReader(content);
         string? line;
 
@@ -78,9 +81,31 @@ internal static class GitIgnoreMerger
         {
             if (!string.IsNullOrWhiteSpace(line))
             {
-                yield return line.TrimEnd();
+                yield return TrimUnescapedTrailingSpaces(line);
             }
         }
+    }
+
+    private static string TrimUnescapedTrailingSpaces(string line)
+    {
+        var end = line.Length;
+        while (end > 0 && line[end - 1] == ' ')
+        {
+            var precedingBackslashes = 0;
+            for (var index = end - 2; index >= 0 && line[index] == '\\'; index--)
+            {
+                precedingBackslashes++;
+            }
+
+            if (precedingBackslashes % 2 != 0)
+            {
+                break;
+            }
+
+            end--;
+        }
+
+        return line[..end];
     }
 
     private static bool ContainsCoveringEntry(
@@ -117,7 +142,7 @@ internal static class GitIgnoreMerger
     }
 
     private static bool ContainsConflictingNegatedDescendant(
-        HashSet<string> existingNegatedEntries,
+        IEnumerable<string> existingNegatedPatterns,
         string scaffoldEntry)
     {
         if (IsNegated(scaffoldEntry))
@@ -125,24 +150,16 @@ internal static class GitIgnoreMerger
             return false;
         }
 
-        var normalizedScaffoldEntry = RemoveRoot(scaffoldEntry);
-        if (!normalizedScaffoldEntry.EndsWith('/'))
+        if (!scaffoldEntry.EndsWith('/'))
         {
             return false;
         }
 
-        var directoryPattern = normalizedScaffoldEntry.TrimEnd('/');
-        if (IsAnchored(scaffoldEntry))
-        {
-            return existingNegatedEntries.Any(entry =>
-                entry.Equals(directoryPattern, StringComparison.Ordinal) ||
-                entry.StartsWith(normalizedScaffoldEntry, StringComparison.Ordinal));
-        }
-
         // Git cannot re-include a file when a later rule excludes its parent directory.
+        // Preserve any existing negation whose match would be hidden by the scaffold entry.
         // See https://git-scm.com/docs/gitignore.
-        return existingNegatedEntries.Any(entry =>
-            entry.Split('/').Contains(directoryPattern, StringComparer.Ordinal));
+        return existingNegatedPatterns.Any(
+            pattern => GitIgnorePatternMatcher.CanMatchDirectoryOrDescendant(pattern, scaffoldEntry));
     }
 
     private static string RemoveRoot(string entry)

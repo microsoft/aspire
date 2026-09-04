@@ -561,14 +561,37 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(".*\n!.aspire*/\n")]
+    [InlineData(".*\n!.aspir?/\n")]
+    [InlineData(".*\n!.aspir[e]/\n")]
+    [InlineData(".*\n!**/.aspire/\n")]
+    public void GitIgnoreMerger_HonorsWildcardNegation(string existingContent)
+    {
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
+
+        Assert.Equal(existingContent, mergedContent);
+    }
+
+    [Theory]
     [InlineData(".aspire/*\n!.aspire/settings.json\n", ".aspire/\n")]
     [InlineData("/.aspire/*\n!/.aspire/settings.json\n", "/.aspire/\n")]
     [InlineData("src/.aspire/*\n!src/.aspire/settings.json\n", ".aspire/\n")]
+    [InlineData(".aspire/*\n!.aspire*/settings.json\n", ".aspire/\n")]
     public void GitIgnoreMerger_HonorsDescendantNegation(
         string existingContent,
         string scaffoldContent)
     {
         var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
+
+        Assert.Equal(existingContent, mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_HonorsNegationWithEscapedTrailingSpace()
+    {
+        const string existingContent = ".aspire/*\n!.aspire/keep\\ \n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
 
         Assert.Equal(existingContent, mergedContent);
     }
@@ -581,6 +604,16 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
         var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
 
         Assert.Equal(".config/*\n!.config/settings.json\n.aspire/\n", mergedContent);
+    }
+
+    [Fact]
+    public void GitIgnoreMerger_AppendsDirectoryWhenWildcardNegationIsUnrelated()
+    {
+        const string existingContent = ".*\n!.config*/\n";
+
+        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
+
+        Assert.Equal(".*\n!.config*/\n.aspire/\n", mergedContent);
     }
 
     [Fact]
