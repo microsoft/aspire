@@ -76,6 +76,79 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    [Fact]
+    public void ExplainWritesTheComputedSummaryToStandardOutput()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.Contains("## SelectTests", output.ToString());
+            Assert.Contains("trigger.txt", output.ToString());
+            Assert.Contains("## SelectTests", File.ReadAllText(Path.Combine(repoRoot, "summary")));
+        });
+    }
+
+    [Fact]
+    public void ExplainIncludesTransitiveDerivedJobDependencies()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "other.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            var explanation = output.ToString();
+            Assert.Contains("job:derived-only-job", explanation);
+            Assert.Contains("derived from selected test `Aspire.Cli.Tests`", explanation);
+        });
+    }
+
+    [Fact]
+    public void ExplainDoesNotDuplicateSummaryToStandardError()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            var previousError = Console.Error;
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", null);
+            using var error = new StringWriter();
+            Console.SetError(error);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetError(previousError);
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", previousSummary);
+            }
+
+            Assert.Empty(error.ToString());
+        });
+    }
+
     // The --slnx option points the selector at a solution outside the default <repo-root>/Aspire.slnx.
     // Failure mode: if SlnxPath were ignored and the tool fell back to <repo-root>/Aspire.slnx, the
     // universe would be read from the wrong (here: absent) file and LoadTestProjects would throw, so a
@@ -1186,7 +1259,8 @@ public sealed class SelectTestsCliTests
         bool forceAll = false,
         bool enforce = false,
         string? slnxPath = null,
-        string? forceAllReason = null) =>
+        string? forceAllReason = null,
+        bool explain = false) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -1198,7 +1272,8 @@ public sealed class SelectTestsCliTests
             ForceAll: forceAll,
             Enforce: enforce,
             BeforeBuildProps: propsPath,
-            ForceAllReason: forceAllReason);
+            ForceAllReason: forceAllReason,
+            Explain: explain);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {
