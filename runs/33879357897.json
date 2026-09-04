@@ -1,0 +1,38 @@
+{
+  "run_id": 33879357897,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33879357897",
+  "analyzed_at": "2026-09-04T14:14:01Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19929,
+    "title": "Update milestone changelog for 13.6",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/update-13.6-milestone-changelog",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19929"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 101047608736,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33879357897/job/101047608736",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no detailed logs or TRX failures; matches prior recurring cause 'vscode-e2e-windows-dynamic-debug-configuration-flaky' (7 prior occurrences). PR only modifies milestone-changelog workflow files, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 101047608870,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33879357897/job/101047608870",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no detailed logs or TRX failures; matches prior recurring cause 'vscode-e2e-windows-apphost-tree-flaky' (2 prior occurrences). PR only modifies milestone-changelog workflow files, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky", "vscode-e2e-windows-apphost-tree-flaky"]
+}

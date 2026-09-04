@@ -18,6 +18,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
       "pr_number": 19832,
       "observed_at": "2026-09-01T22:40:01Z"
+    },
+    {
+      "run_id": 33879357897,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33879357897",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 19929,
+      "observed_at": "2026-09-04T14:14:01Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19485"
