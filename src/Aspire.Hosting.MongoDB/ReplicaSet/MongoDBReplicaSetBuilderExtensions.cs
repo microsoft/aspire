@@ -399,6 +399,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(member);
+        MongoDBBuilderExtensions.ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithMember));
 
         if (member.Resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
         {
