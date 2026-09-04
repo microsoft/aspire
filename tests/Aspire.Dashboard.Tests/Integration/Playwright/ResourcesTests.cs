@@ -151,6 +151,9 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 cogBounds.X + cogBounds.Width / 2,
                 cogBounds.Y + cogBounds.Height / 2);
             await page.Mouse.DownAsync();
+            Assert.Equal(
+                "none",
+                await cog.EvaluateAsync<string>("element => getComputedStyle(element).outlineStyle"));
             await page.Mouse.MoveAsync(
                 cogBounds.X + cogBounds.Width / 2 + 80,
                 cogBounds.Y + cogBounds.Height / 2 + 80,

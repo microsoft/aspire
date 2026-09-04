@@ -277,6 +277,10 @@
     outline: none;
 }
 
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
 ::deep .resource-menu-cog-icon {
     fill: var(--accent-fill-rest);
     pointer-events: none;
