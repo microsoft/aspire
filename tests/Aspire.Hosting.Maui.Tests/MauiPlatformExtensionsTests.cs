@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui;
@@ -1195,6 +1196,13 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var iosSimulator = maui.AddiOSSimulator().WithOtlpDevTunnel();
         var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
         tunnelConfig.RuntimeSnapshotResolutionTimeout = TimeSpan.FromMilliseconds(50);
+        // Use a same-name stand-in to exercise the MAUI resolver without invoking the real
+        // DevTunnel resource's CLI-backed lifecycle after endpoint resolution recovers.
+        var resolutionEventResource = new DevTunnelResource(
+            tunnelConfig.DevTunnel.Resource.Name,
+            "test",
+            "devtunnel",
+            Environment.CurrentDirectory);
 
         await using var app = appBuilder.Build();
 
@@ -1212,7 +1220,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
             appBuilder.Eventing.PublishAsync(
-                new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
+                new BeforeResourceStartedEvent(resolutionEventResource, app.Services),
                 CancellationToken.None));
 
         Assert.Contains("did not publish a concrete OTLP listener", exception.Message);
@@ -1236,7 +1244,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                 ]
             });
         await appBuilder.Eventing.PublishAsync(
-            new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
+            new BeforeResourceStartedEvent(resolutionEventResource, app.Services),
             CancellationToken.None);
 
         tunnelConfig.TunnelEndpoint.EndpointAnnotation.AllocatedEndpoint =
