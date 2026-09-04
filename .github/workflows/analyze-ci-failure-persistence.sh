@@ -179,8 +179,12 @@ select_test_results_artifact()
   local artifacts_file="$1"
   local started_at="$2"
   local updated_at="$3"
+  local max_archive_bytes="${4:-104857600}"
+  local selected_artifact
+  local artifact_id
+  local artifact_size
 
-  jq -r \
+  selected_artifact=$(jq -r \
     --arg started_at "$started_at" \
     --arg updated_at "$updated_at" '
     [
@@ -190,8 +194,207 @@ select_test_results_artifact()
         (.name == "All-TestResults") and
         ((.created_at | type) == "string") and
         (.created_at > $started_at and .created_at <= $updated_at))
-    ] | sort_by([.created_at, .id]) | last | .id // empty
-  ' "$artifacts_file"
+    ] |
+    sort_by([.created_at, .id]) |
+    last |
+    if . == null then "" else [(.id // ""), (.size_in_bytes // "")] | @tsv end
+  ' "$artifacts_file")
+
+  if [ -z "$selected_artifact" ]; then
+    return 0
+  fi
+
+  IFS=$'\t' read -r artifact_id artifact_size <<< "$selected_artifact"
+  if [[ ! "$artifact_id" =~ ^[1-9][0-9]*$ ]] ||
+     [[ ! "$artifact_size" =~ ^[0-9]+$ ]] ||
+     [[ ! "$max_archive_bytes" =~ ^[1-9][0-9]*$ ]]; then
+    echo "::warning::Newest test results artifact has invalid size metadata" >&2
+    return 0
+  fi
+  if [ "$artifact_size" -gt "$max_archive_bytes" ]; then
+    echo "::warning::Newest test results artifact exceeds the ${max_archive_bytes}-byte download budget" >&2
+    return 0
+  fi
+
+  echo "$artifact_id"
+}
+
+extract_test_results_artifact()
+{
+  local archive_file="$1"
+  local output_directory="$2"
+  local max_entries="${3:-10000}"
+  local max_uncompressed_bytes="${4:-1073741824}"
+  local max_archive_bytes="${5:-104857600}"
+  local expected_archive_bytes="${6:-}"
+
+  if [[ ! "$max_entries" =~ ^[1-9][0-9]*$ ]] ||
+     [[ ! "$max_uncompressed_bytes" =~ ^[1-9][0-9]*$ ]] ||
+     [[ ! "$max_archive_bytes" =~ ^[1-9][0-9]*$ ]] ||
+     { [ -n "$expected_archive_bytes" ] && [[ ! "$expected_archive_bytes" =~ ^[0-9]+$ ]]; }; then
+    echo "::error::Invalid test results extraction budget" >&2
+    return 1
+  fi
+
+  python3 - "$archive_file" "$output_directory" \
+    "$max_entries" "$max_uncompressed_bytes" "$max_archive_bytes" "$expected_archive_bytes" <<'PY'
+import os
+from pathlib import Path, PurePosixPath
+import shutil
+import stat
+import struct
+import sys
+import tempfile
+import zipfile
+import zlib
+
+archive_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+max_entries = int(sys.argv[3])
+max_uncompressed_bytes = int(sys.argv[4])
+max_archive_bytes = int(sys.argv[5])
+expected_archive_bytes = int(sys.argv[6]) if sys.argv[6] else None
+temporary_path = None
+
+def read_entry_count(path, archive_size, maximum_entries):
+    end_record_size = 22
+    maximum_comment_size = 65535
+    with path.open("rb") as archive:
+        tail_size = min(archive_size, end_record_size + maximum_comment_size)
+        archive.seek(archive_size - tail_size)
+        tail = archive.read(tail_size)
+
+    signature = b"PK\x05\x06"
+    position = tail.rfind(signature)
+    while position >= 0:
+        if len(tail) - position >= end_record_size:
+            fields = struct.unpack_from("<4s4H2LH", tail, position)
+            comment_length = fields[7]
+            if position + end_record_size + comment_length == len(tail):
+                break
+        position = tail.rfind(signature, 0, position)
+    if position < 0:
+        raise ValueError("archive has no valid end-of-central-directory record")
+
+    _, disk_number, directory_disk, disk_entries, total_entries, directory_size, directory_offset, _ = fields
+    if disk_number != 0 or directory_disk != 0 or disk_entries != total_entries:
+        raise ValueError("multi-disk archives are unsupported")
+    if position >= 20 and tail[position - 20:position - 16] == b"PK\x06\x07":
+        raise ValueError("ZIP64 archives exceed the supported extraction limits")
+    if (
+        total_entries == 0xFFFF
+        or directory_size == 0xFFFFFFFF
+        or directory_offset == 0xFFFFFFFF
+    ):
+        raise ValueError("ZIP64 archives exceed the supported extraction limits")
+
+    end_record_offset = archive_size - tail_size + position
+    if directory_offset + directory_size != end_record_offset:
+        raise ValueError("archive central directory bounds are invalid")
+
+    central_header = struct.Struct("<4s6H3L5H2L")
+    actual_entries = 0
+    consumed_bytes = 0
+    with path.open("rb") as archive:
+        archive.seek(directory_offset)
+        while consumed_bytes < directory_size:
+            header = archive.read(central_header.size)
+            if len(header) != central_header.size:
+                raise ValueError("archive central directory is truncated")
+            fields = central_header.unpack(header)
+            if fields[0] != b"PK\x01\x02":
+                raise ValueError("archive central directory contains an invalid record")
+
+            variable_size = fields[10] + fields[11] + fields[12]
+            record_size = central_header.size + variable_size
+            consumed_bytes += record_size
+            if consumed_bytes > directory_size:
+                raise ValueError("archive central directory record exceeds its bounds")
+
+            actual_entries += 1
+            if actual_entries > maximum_entries:
+                raise ValueError(
+                    f"archive contains more than the {maximum_entries}-entry budget"
+                )
+            archive.seek(variable_size, os.SEEK_CUR)
+
+    if actual_entries != total_entries:
+        raise ValueError("archive entry count does not match its central directory")
+
+    return actual_entries
+
+try:
+    archive_size = archive_path.stat().st_size
+    if archive_size > max_archive_bytes:
+        raise ValueError(
+            f"downloaded archive exceeds the {max_archive_bytes}-byte budget"
+        )
+    if expected_archive_bytes is not None and archive_size != expected_archive_bytes:
+        raise ValueError(
+            "downloaded archive size does not match artifact metadata "
+            f"({archive_size} != {expected_archive_bytes})"
+        )
+    entry_count = read_entry_count(archive_path, archive_size, max_entries)
+    if output_path.exists():
+        raise ValueError("test results output directory already exists")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = Path(
+        tempfile.mkdtemp(prefix=f".{output_path.name}-", dir=output_path.parent)
+    )
+
+    with zipfile.ZipFile(archive_path) as archive:
+        entries = archive.infolist()
+        if len(entries) != entry_count:
+            raise ValueError("archive entry count does not match its central directory")
+
+        written_bytes = 0
+        trx_index = 0
+        for entry in entries:
+            raw_name = entry.filename
+            normalized_name = raw_name.rstrip("/")
+            path = PurePosixPath(normalized_name)
+            if (
+                not normalized_name
+                or raw_name.startswith(("/", "\\"))
+                or "\\" in raw_name
+                or any(part in ("", ".", "..") for part in path.parts)
+            ):
+                raise ValueError("archive contains an unsafe path")
+
+            file_type = stat.S_IFMT(entry.external_attr >> 16)
+            if entry.is_dir():
+                if file_type not in (0, stat.S_IFDIR):
+                    raise ValueError("archive contains an unsupported file type")
+                continue
+            if file_type not in (0, stat.S_IFREG):
+                raise ValueError("archive contains an unsupported file type")
+            if entry.flag_bits & 0x1:
+                raise ValueError("archive contains an encrypted entry")
+            if not raw_name.endswith(".trx"):
+                continue
+
+            trx_index += 1
+            destination = temporary_path / f"{trx_index:05d}.trx"
+            with archive.open(entry, "r") as source, destination.open("xb") as target:
+                while chunk := source.read(1024 * 1024):
+                    written_bytes += len(chunk)
+                    if written_bytes > max_uncompressed_bytes:
+                        raise ValueError(
+                            "uncompressed data exceeds the "
+                            f"{max_uncompressed_bytes}-byte budget"
+                        )
+                    target.write(chunk)
+
+    os.replace(temporary_path, output_path)
+    temporary_path = None
+except (EOFError, OSError, OverflowError, RuntimeError, ValueError, zipfile.BadZipFile, zlib.error) as error:
+    print(f"::error::Unable to extract test results artifact: {error}", file=sys.stderr)
+    sys.exit(1)
+finally:
+    if temporary_path is not None:
+        shutil.rmtree(temporary_path, ignore_errors=True)
+PY
 }
 
 render_issue_occurrences()
@@ -427,6 +630,13 @@ case "$COMMAND" in
     STARTED_AT="${3:?start time is required}"
     UPDATED_AT="${4:?update time is required}"
     select_test_results_artifact "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT"
+    ;;
+  extract-test-results-artifact)
+    ARTIFACT_FILE="${2:?artifact file is required}"
+    OUTPUT_DIRECTORY="${3:?output directory is required}"
+    extract_test_results_artifact \
+      "$ARTIFACT_FILE" "$OUTPUT_DIRECTORY" \
+      "${4:-10000}" "${5:-1073741824}" "${6:-104857600}" "${7:-}"
     ;;
   render-issue-occurrences)
     CURRENT_BODY_FILE="${2:?current issue body file is required}"

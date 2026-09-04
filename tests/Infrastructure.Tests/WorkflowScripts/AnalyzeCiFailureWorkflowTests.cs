@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Binary;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
@@ -615,6 +617,38 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorSkipsPrCommentBudgetWithoutTrustedSubjectPr()
+    {
+        var failedJobs = Enumerable.Range(1, 150)
+            .Select(index => new
+            {
+                id = index,
+                classification = "code-issue",
+                reason = new string('r', 500),
+            })
+            .ToArray();
+        await WriteValidationFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "code-issue",
+                pr = (object?)null,
+                failed_jobs = failedJobs,
+                failed_tests = Array.Empty<object>(),
+                causes = Array.Empty<string>(),
+            }),
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
+            JsonSerializer.Serialize(
+                failedJobs.Select(job => new { job.id, name = $"Job {job.id}" })));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorKeepsRejectedVerdictOnOneWorkflowCommandLine()
     {
         await WriteValidationFixtureAsync(
@@ -705,6 +739,38 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
             "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsFlakyCausesWithSwappedJobs()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.First","job":"First job","error":"first","stack_trace":"","classification":"flaky","reason":"Intermittent"},
+               {"name":"Tests.Second","job":"Second job","error":"second","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
+             "causes":["first-failure","second-failure"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"First job"},{"id":2,"name":"Second job"}]""",
+            new Dictionary<string, string>
+            {
+                ["first-failure.json"] =
+                    """{"id":"first-failure","type":"flaky-test","title":"First failure","test_name":"Tests.First","error_pattern":"first","job_ids":[2]}""",
+                ["second-failure.json"] =
+                    """{"id":"second-failure","type":"flaky-test","title":"Second failure","test_name":"Tests.Second","error_pattern":"second","job_ids":[1]}""",
+            });
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause first-failure.json references an unknown or incompatible failed job",
             result.Output,
             StringComparison.Ordinal);
     }
@@ -2041,6 +2107,51 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueRendererUsesStoredOccurrenceTotalWhenRecreatingIssue()
+    {
+        var causePath = Path.Combine(_workspace.Path, "flaky-failure.json");
+        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
+        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"flaky-failure",
+              "type":"flaky-test",
+              "title":"Flaky failure",
+              "test_name":"Tests.Flaky",
+              "error_pattern":"boom",
+              "job_ids":[1],
+              "occurrences":[{"run_id":1},{"run_id":2},{"run_id":3}]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
+            [
+                causePath,
+                "unused-run-context.json",
+                "unused-last-success.json",
+                "unused-triggering-merge.json",
+                "unused-history-status.json",
+                "https://github.com/microsoft/aspire/actions/runs/3",
+                "pull-request",
+                "42",
+                "Tests",
+                "| current occurrence |",
+                bodyPath,
+                metadataPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            "Showing 1 most recent of 3 occurrences.",
+            await File.ReadAllTextAsync(bodyPath),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PublisherValidatesAgentResultAgainstTrustedScope()
     {
         ForEachExecutableWorkflow(workflow =>
@@ -2410,6 +2521,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "gh run download \"${RUN_ID}\"",
                 collectionStep,
                 StringComparison.Ordinal);
+            var normalizedCollectionStep = NormalizeIndentation(collectionStep);
+            Assert.Contains(
+                "gh api --paginate \"repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations\" \\\n--jq '.[]' | jq -s '.'",
+                normalizedCollectionStep,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "extract-test-results-artifact \"${ARTIFACT_ZIP}\" ci-failure-data/test-results \\\n10000 1073741824 104857600 \"${ARTIFACT_SIZE}\"",
+                normalizedCollectionStep,
+                StringComparison.Ordinal);
         });
         Assert.Contains("name: All-TestResults", ReadWorkflow("tests.yml"), StringComparison.Ordinal);
         Assert.Contains(".name == \"All-TestResults\"", s_persistenceScript, StringComparison.Ordinal);
@@ -2428,8 +2548,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             artifactsPath,
             """
             [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z"},
-              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
+              {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z", "size_in_bytes": 1024}
             ]
             """);
 
@@ -2474,6 +2594,229 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task TestResultsArtifactSelectionRejectsOversizedNewestArtifactWithoutFallingBack()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
+              {"id": 20, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:02:00Z", "size_in_bytes": 104857601}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-results-artifact",
+                artifactsPath,
+                "2026-09-03T12:00:00Z",
+                "2026-09-03T12:03:00Z",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            "::warning::Newest test results artifact exceeds the 104857600-byte download budget",
+            result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultsArtifactSelectionRejectsMissingSizeMetadataWithoutFallingBack()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:01:00Z", "size_in_bytes": 1024},
+              {"id": 20, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-results-artifact",
+                artifactsPath,
+                "2026-09-03T12:00:00Z",
+                "2026-09-03T12:03:00Z",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            "::warning::Newest test results artifact has invalid size metadata",
+            result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionStreamsOnlyTrxFiles()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "nested/results.trx", "<TestRun />");
+            await WriteZipEntryAsync(archive, "ignored.txt", "ignored");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "10", "1024"]);
+
+        Assert.Equal(0, result.ExitCode);
+        var extractedFile = Assert.Single(Directory.GetFiles(outputDirectory));
+        Assert.Equal("00001.trx", Path.GetFileName(extractedFile));
+        Assert.Equal("<TestRun />", await File.ReadAllTextAsync(extractedFile));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsWrittenBytesAboveBudget()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "results.trx", new string('x', 11));
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "10", "10"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("uncompressed data exceeds the 10-byte budget", result.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsDownloadedBytesAboveBudget()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "results.trx", "<TestRun />");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "10", "1024", "10"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("downloaded archive exceeds the 10-byte budget", result.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsDownloadedSizeMismatch()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "results.trx", "<TestRun />");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+        var expectedSize = new FileInfo(archivePath).Length + 1;
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "extract-test-results-artifact",
+                archivePath,
+                outputDirectory,
+                "10",
+                "1024",
+                "104857600",
+                expectedSize.ToString(),
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "downloaded archive size does not match artifact metadata",
+            result.Output,
+            StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsExcessiveEntryCount()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "first.trx", "first");
+            await WriteZipEntryAsync(archive, "second.trx", "second");
+        }
+        var archiveBytes = await File.ReadAllBytesAsync(archivePath);
+        var endRecordOffset = archiveBytes.AsSpan().LastIndexOf("PK\u0005\u0006"u8);
+        Assert.True(endRecordOffset >= 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(archiveBytes.AsSpan(endRecordOffset + 8, 2), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(archiveBytes.AsSpan(endRecordOffset + 10, 2), 1);
+        await File.WriteAllBytesAsync(archivePath, archiveBytes);
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "1", "1024"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("archive contains more than the 1-entry budget", result.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsUnsafePaths()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            await WriteZipEntryAsync(archive, "../results.trx", "<TestRun />");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "10", "1024"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("archive contains an unsafe path", result.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "python3"])]
+    public async Task TestResultsArtifactExtractionRejectsUnsupportedFileTypes()
+    {
+        var archivePath = Path.Combine(_workspace.Path, "test-results.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("results.trx");
+            entry.ExternalAttributes = unchecked((int)(0xA000u << 16));
+            await using var stream = entry.Open();
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync("target.trx");
+        }
+        var outputDirectory = Path.Combine(_workspace.Path, "extracted");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["extract-test-results-artifact", archivePath, outputDirectory, "10", "1024"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("archive contains an unsupported file type", result.Output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(outputDirectory));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task TestResultsArtifactSelectionExcludesArtifactAtAttemptStartBoundary()
     {
         var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
@@ -2481,7 +2824,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             artifactsPath,
             """
             [
-              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:00:00Z"}
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:00:00Z", "size_in_bytes": 1024}
             ]
             """);
 
@@ -4924,6 +5267,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 path,
                 UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
+    }
+
+    private static async Task WriteZipEntryAsync(ZipArchive archive, string name, string contents)
+    {
+        var entry = archive.CreateEntry(name);
+        await using var stream = entry.Open();
+        await using var writer = new StreamWriter(stream);
+        await writer.WriteAsync(contents);
     }
 
     private static string ExtractWorkflowScript(string workflowFileName, string stepName)

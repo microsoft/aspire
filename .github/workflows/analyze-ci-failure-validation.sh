@@ -442,11 +442,27 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
         echo "::error::Flaky-test cause must reference a validated flaky test"
         exit 1
       fi
+      if ! jq -e \
+          --arg test_name "$CAUSE_TEST_NAME" \
+          --slurpfile analysis "$ANALYSIS_FILE" \
+          --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+          all(.job_ids[]; . as $job_id |
+            ([$trusted_jobs[0][] | select(.id == $job_id)][0].name // "") as $job_name |
+            any($analysis[0].failed_tests[];
+              .classification == "flaky" and
+              .name == $test_name and
+              .job == $job_name))
+        ' "$CAUSE_FILE" >/dev/null; then
+        printf -v CAUSE_FILE_DISPLAY '%q' "$(basename "$CAUSE_FILE")"
+        echo "::error::Cause ${CAUSE_FILE_DISPLAY} references an unknown or incompatible failed job"
+        exit 1
+      fi
     fi
   done
 fi
 
-if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
+if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ] &&
+   [[ "${TRUSTED_PR_NUMBERS:-}" =~ ^[1-9][0-9]*$ ]]; then
   COMMENT_FILE=$(mktemp)
   if ! bash "$SCRIPT_DIR/analyze-ci-failure-comment.sh" \
       "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_URL" > "$COMMENT_FILE"; then

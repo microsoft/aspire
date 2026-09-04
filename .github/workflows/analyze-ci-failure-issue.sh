@@ -52,6 +52,16 @@ CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
 CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
 TITLE=$(sanitize_single_line title 238)
 TEST_NAME=$(sanitize_single_line test_name 500)
+TOTAL_OCCURRENCE_COUNT=$(jq -er '
+  if has("occurrences") then
+    if ((.occurrences | type) == "array") and ((.occurrences | length) > 0)
+    then (.occurrences | length)
+    else error("invalid stored occurrence history")
+    end
+  else
+    1
+  end
+' "$CAUSE_FILE")
 if ! jq -ne --arg title "$TITLE" '$title | test("[^[:space:]]")'; then
   TITLE="$CAUSE_ID"
 fi
@@ -124,7 +134,7 @@ fi
   echo "<!-- ci-failure-occurrences:start -->"
   echo "## Occurrences"
   echo ""
-  echo "Showing 1 most recent of 1 occurrences."
+  echo "Showing 1 most recent of ${TOTAL_OCCURRENCE_COUNT} occurrences."
   echo ""
   echo "| Date | Build | Job | Context |"
   echo "|------|-------|-----|----|"

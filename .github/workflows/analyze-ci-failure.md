@@ -318,6 +318,7 @@ jobs:
               | grep -oP '\d+$' || echo "")
             if [ -n "${CHECK_RUN_ID}" ]; then
               gh api --paginate "repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations" \
+                --jq '.[]' | jq -s '.' \
                 > "ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null || \
                 echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
             else
@@ -380,11 +381,16 @@ jobs:
               --argjson artifact_id "${ARTIFACT_ID}" \
               '[.[] | select(.id == $artifact_id)] | first | .name // empty' \
               "${ARTIFACTS_FILE}")
+            ARTIFACT_SIZE=$(jq -r \
+              --argjson artifact_id "${ARTIFACT_ID}" \
+              '[.[] | select(.id == $artifact_id)] | first | .size_in_bytes // empty' \
+              "${ARTIFACTS_FILE}")
             ARTIFACT_ZIP="ci-failure-data/test-results.zip"
             echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
-            mkdir -p ci-failure-data/test-results
             if gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > "${ARTIFACT_ZIP}" 2>/dev/null &&
-                unzip -q "${ARTIFACT_ZIP}" -d ci-failure-data/test-results; then
+                bash .github/workflows/analyze-ci-failure-persistence.sh \
+                  extract-test-results-artifact "${ARTIFACT_ZIP}" ci-failure-data/test-results \
+                  10000 1073741824 104857600 "${ARTIFACT_SIZE}"; then
               echo "Download complete."
 
               # List TRX files found
@@ -418,10 +424,11 @@ jobs:
               rm -f ci-failure-data/test-failures.jsonl
               echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
 
-              # Clean up the extracted files to save space in artifact
+              # Clean up the bounded extraction directory to save space in the uploaded artifact.
               rm -rf ci-failure-data/test-results
             else
-              echo "Warning: Failed to download test results artifact"
+              echo "Warning: Failed to download or safely extract test results artifact"
+              rm -rf ci-failure-data/test-results
             fi
             rm -f "${ARTIFACT_ZIP}"
           else
@@ -1470,7 +1477,7 @@ Field details:
 - `failed_tests[].stack_trace`: Copy the stack trace from the matching TRX test failure, or use `null` when it is absent. The validator replaces `error` and `stack_trace` with the bounded trusted TRX values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
-- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures with the same underlying root cause so the analysis never exceeds the 10-cause publication budget.
+- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine distinct flaky tests merely to fit within it.
 
 #### 3b. Per-cause files
 
@@ -1495,7 +1502,7 @@ Field details:
 - `title`: A brief, single-line human-readable description of at most 238 characters (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: A `flaky-test` cause MUST include a `test_name` that exactly matches a `failed_tests` entry classified as `"flaky"`, limited to 500 characters. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue, up to 500 characters. Use LF for multiline text and omit ANSI styling or other control characters.
-- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause requires matching trusted TRX evidence and normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
+- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. Every job referenced by a `flaky-test` cause must have a `"flaky"` `failed_tests` entry whose `name` exactly matches the cause's `test_name` and whose `job` exactly matches that trusted job name.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
 
