@@ -52,21 +52,28 @@ fi
 jq -c '.commits[]? | {sha, message: .commit.message, html_url}' "$COMPARISON" |
   while IFS= read -r COMMIT; do
     COMMIT_SHA=$(jq -r '.sha' <<< "${COMMIT}")
-    if ! MERGE_PR=$(gh api "repos/${REPO}/commits/${COMMIT_SHA}/pulls" \
-        --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\" and .merged_at != null)] | first // null" \
-        2>/dev/null); then
+    # --slurp wraps paginated response arrays as [[page 1], [page 2]].
+    if ! MERGE_PR=$(
+      gh api --paginate --slurp \
+        "repos/${REPO}/commits/${COMMIT_SHA}/pulls?per_page=100" 2>/dev/null |
+        jq -c --arg repo "$REPO" \
+          '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] | first // null'
+    ); then
       echo "::warning::Unable to associate commit ${COMMIT_SHA} with a merged pull request."
       printf '%s\n' '{"state":"incomplete"}' > "$STATUS_FILE"
       continue
     fi
-    if [ "${MERGE_PR}" != "null" ]; then
-      jq --argjson commit "${COMMIT}" --argjson pr "${MERGE_PR}" \
-        '. + [$commit + {pull_request: {
-          number: $pr.number,
-          title: $pr.title,
-          url: $pr.html_url,
-          merged_at: $pr.merged_at
-        }}]' "$CANDIDATES_FILE" > "$CANDIDATES_TMP"
-      mv "$CANDIDATES_TMP" "$CANDIDATES_FILE"
+    if [ "${MERGE_PR}" = "null" ]; then
+      echo "::warning::Commit ${COMMIT_SHA} has no merged pull request association."
+      printf '%s\n' '{"state":"incomplete"}' > "$STATUS_FILE"
+      continue
     fi
+    jq --argjson commit "${COMMIT}" --argjson pr "${MERGE_PR}" \
+      '. + [$commit + {pull_request: {
+        number: $pr.number,
+        title: $pr.title,
+        url: $pr.html_url,
+        merged_at: $pr.merged_at
+      }}]' "$CANDIDATES_FILE" > "$CANDIDATES_TMP"
+    mv "$CANDIDATES_TMP" "$CANDIDATES_FILE"
   done

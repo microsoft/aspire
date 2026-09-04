@@ -155,12 +155,15 @@ jobs:
               ci-failure-data/run.json)
             consider_pr_candidates "${PR_CANDIDATES}"
             if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ] && [ -n "${HEAD_SHA}" ]; then
-              if ! PR_CANDIDATES=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
-                  --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and (.number | type) == \"number\") | .number]" \
-                  2>/dev/null); then
+              if ! PR_CANDIDATE_PAGES=$(gh api --paginate --slurp \
+                  "repos/${REPO}/commits/${HEAD_SHA}/pulls?per_page=100" 2>/dev/null); then
                 echo "::error::Failed to look up pull requests associated with commit ${HEAD_SHA}."
                 exit 1
               fi
+              # --slurp wraps paginated response arrays as [[page 1], [page 2]].
+              PR_CANDIDATES=$(jq -c --arg repo "$REPO" \
+                '[.[][] | select(.base.repo.full_name == $repo and (.number | type) == "number") | .number]' \
+                <<< "$PR_CANDIDATE_PAGES")
               consider_pr_candidates "${PR_CANDIDATES}"
             fi
             if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ] && [ -n "${HEAD_SHA}" ]; then
@@ -191,15 +194,17 @@ jobs:
           else
             # The PR associated with the failed head commit identifies the merge
             # that triggered this run. It is context only and is not presumed causal.
-            gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
-              --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\" and .merged_at != null)] | first // {} |
+            gh api --paginate --slurp \
+              "repos/${REPO}/commits/${HEAD_SHA}/pulls?per_page=100" 2>/dev/null |
+              jq -c --arg repo "$REPO" \
+                '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] | first // {} |
                 if .number then
                   {number, title, state, user: {login: .user.login}, head: {ref: .head.ref},
                     base: {ref: .base.ref}, html_url, merged_at}
                 else
                   {}
-                end" \
-              > ci-failure-data/triggering-merge-pr.json 2>/dev/null \
+                end' \
+              > ci-failure-data/triggering-merge-pr.json \
               || echo "{}" > ci-failure-data/triggering-merge-pr.json
 
             WORKFLOW_ID=$(jq -r '.workflow_id' ci-failure-data/run.json)
