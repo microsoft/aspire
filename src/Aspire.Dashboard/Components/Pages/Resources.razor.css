@@ -273,7 +273,7 @@
     stroke: transparent;
 }
 
-::deep .resource-menu-cog[aria-expanded="true"]:focus-visible {
+::deep .resource-menu-cog[aria-expanded="true"] {
     outline: none;
 }
 
