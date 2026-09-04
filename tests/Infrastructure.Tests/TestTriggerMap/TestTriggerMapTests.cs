@@ -627,6 +627,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
+        Assert.Contains(result.JobCauses["job:cli-starter-validation"], cause => cause.Kind == CauseKind.AffectedProject);
     }
 
     [Theory]
@@ -661,6 +662,9 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(
+            result.TestCauses["Aspire.Cli.EndToEnd.Tests"],
+            cause => cause.Kind == CauseKind.AffectedProject);
         Assert.Equal(
             ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
@@ -744,9 +748,7 @@ public sealed class TestTriggerMapTests
             "Aspire.Hosting.Sdk.Tests");
 
         Assert.False(result.SelectsAll);
-        Assert.Equal(
-            ["job:typescript-api-compat"],
-            result.Jobs.Order(StringComparer.Ordinal));
+        Assert.Empty(result.Jobs);
     }
 
     [Fact]
@@ -1103,11 +1105,17 @@ public sealed class TestTriggerMapTests
             .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
             .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
             .ToHashSet(StringComparer.Ordinal);
+        var allTestProjectNames = Directory.EnumerateFiles(
+                Path.Combine(RepoRoot.Path, "tests"), "*.csproj", SearchOption.AllDirectories)
+            .Select(Path.GetFileNameWithoutExtension)
+        .Where(name => name is not null)
+        .Select(name => name!)
+        .ToHashSet(StringComparer.Ordinal);
         var projectDirectories = projectPaths
             .Select(projectPath => Path.GetDirectoryName(projectPath)!.Replace('\\', '/'))
             .ToHashSet(StringComparer.Ordinal);
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, testProjects, projectDirectories);
+        var selector = new TestSelector(mapPath, testProjects, projectDirectories, allTestProjectNames);
 
         return selector.Select([path], layer1Affected, new SelectorOptions());
     }

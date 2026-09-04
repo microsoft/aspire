@@ -110,6 +110,7 @@ public sealed class TestSelector
     private readonly string _mapPath;
     private readonly IReadOnlyCollection<string> _allTestProjects;
     private readonly IReadOnlyCollection<string> _projectDirectories;
+    private readonly IReadOnlySet<string> _allTestProjectNames;
 
     /// <param name="mapPath">Path to <c>eng/github-ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
@@ -119,14 +120,20 @@ public sealed class TestSelector
     /// under one of these dirs is attributed by the graph, so it never triggers the run-all
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
+    /// <param name="allTestProjectNames">
+    /// All project names under <c>tests/</c>, including shared fixtures that are not part of the CI
+    /// matrix. These names are excluded from affected production-project rules.
+    /// </param>
     public TestSelector(
         string mapPath,
         IReadOnlyCollection<string> allTestProjects,
-        IReadOnlyCollection<string> projectDirectories)
+        IReadOnlyCollection<string> projectDirectories,
+        IReadOnlySet<string> allTestProjectNames)
     {
         _mapPath = mapPath;
         _allTestProjects = allTestProjects;
         _projectDirectories = projectDirectories;
+        _allTestProjectNames = allTestProjectNames;
     }
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
@@ -263,12 +270,14 @@ public sealed class TestSelector
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
         // produced none (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers.
         //
-        // Exclude matrix test project names because they are already selected via the intersection
-        // above. Without this filter, an affected matrix test name (e.g.
-        // "Aspire.Hosting.Python.Tests") would match a broad glob like "Aspire.Hosting*" and
-        // spuriously fire jobs for a test-only change.
-        var affectedNonMatrixProjects = layer1Affected
-            .Where(name => !_allTestProjects.Contains(name))
+        // Match ONLY production project names: Layer 1 reports production AND test projects, and the
+        // affected test projects are already selected via the intersection above. Without this filter
+        // an affected matrix test name (e.g. "Aspire.Hosting.Python.Tests") would match a production
+        // glob like "Aspire.Hosting*" and spuriously fire production jobs (extension-e2e /
+        // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
+        // affected_project_rules comment ("matched against the affected PRODUCTION projects").
+        var affectedProductionProjects = layer1Affected
+            .Where(name => !_allTestProjectNames.Contains(name))
             .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {
