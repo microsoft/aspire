@@ -203,7 +203,7 @@ public class BicepGenerationSimpleTests
                 Image = "legacy",
                 Tag = "latest"
             })
-            .PublishAsContainerImage("projected:v2");
+            .PublishAsDockerFile(container => container.WithImage("projected", "v2"));
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

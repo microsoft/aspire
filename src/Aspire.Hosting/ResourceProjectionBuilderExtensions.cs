@@ -167,43 +167,51 @@ public static class ResourceProjectionBuilderExtensions
 
     internal static void EvaluateContainerProjectionCallbacks(this IDistributedApplicationBuilder builder)
     {
-        foreach (var resource in builder.Resources)
+        var evaluatedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+
+        while (builder.Resources.FirstOrDefault(resource => !evaluatedResources.Contains(resource)) is { } resource)
         {
-            if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is not { } registration)
-            {
-                continue;
-            }
-
-            var projection = registration.Projection ??= new ContainerResourceProjection<IResource>(registration.Owner);
-            var callbacks = resource.Annotations
-                .OfType<ContainerResourceProjectionCallbackAnnotation>()
-                .ToArray();
-
-            foreach (var callback in callbacks)
-            {
-                var annotationsBeforeCallback = new HashSet<IResourceAnnotation>(
-                    resource.Annotations,
-                    ReferenceEqualityComparer.Instance);
-
-                callback.Callback(projection);
-
-                // The callback runs during model construction, but its annotations must retain the position where
-                // the projection API was called. Otherwise configuration added later to the owner can move ahead
-                // of callback configuration and change order-sensitive behavior such as argument clearing.
-                var addedAnnotations = resource.Annotations
-                    .Where(annotation => !annotationsBeforeCallback.Contains(annotation))
-                    .ToArray();
-                var insertionIndex = resource.Annotations.IndexOf(callback) + 1;
-
-                foreach (var annotation in addedAnnotations)
-                {
-                    resource.Annotations.Remove(annotation);
-                    resource.Annotations.Insert(insertionIndex++, annotation);
-                }
-            }
-
-            registration.CallbacksEvaluated = true;
+            evaluatedResources.Add(resource);
+            resource.EvaluateContainerProjectionCallbacks();
         }
+    }
+
+    internal static void EvaluateContainerProjectionCallbacks(this IResource resource)
+    {
+        if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is not { CallbacksEvaluated: false } registration)
+        {
+            return;
+        }
+
+        var projection = registration.Projection ??= new ContainerResourceProjection<IResource>(registration.Owner);
+        var callbacks = resource.Annotations
+            .OfType<ContainerResourceProjectionCallbackAnnotation>()
+            .ToArray();
+
+        foreach (var callback in callbacks)
+        {
+            var annotationsBeforeCallback = new HashSet<IResourceAnnotation>(
+                resource.Annotations,
+                ReferenceEqualityComparer.Instance);
+
+            callback.Callback(projection);
+
+            // The callback runs during model construction, but its annotations must retain the position where
+            // the projection API was called. Otherwise configuration added later to the owner can move ahead
+            // of callback configuration and change order-sensitive behavior such as argument clearing.
+            var addedAnnotations = resource.Annotations
+                .Where(annotation => !annotationsBeforeCallback.Contains(annotation))
+                .ToArray();
+            var insertionIndex = resource.Annotations.IndexOf(callback) + 1;
+
+            foreach (var annotation in addedAnnotations)
+            {
+                resource.Annotations.Remove(annotation);
+                resource.Annotations.Insert(insertionIndex++, annotation);
+            }
+        }
+
+        registration.CallbacksEvaluated = true;
     }
 
     /// <summary>
@@ -238,42 +246,6 @@ public static class ResourceProjectionBuilderExtensions
                 container.WithImageReference(image);
                 configure?.Invoke(container);
             });
-    }
-
-    /// <summary>
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    /// </summary>
-    /// <typeparam name="T">The type of the resource.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="image">The container image reference, for example <c>contoso/service:latest</c> or <c>mcr.microsoft.com/dotnet/aspnet:10.0</c>. The registry, image, and tag or digest are recorded separately.</param>
-    /// <param name="configure">Optional configuration applied to the container.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// The image is required so a projection can never exist without a valid container source. Configuration
-    /// written inside <paramref name="configure"/> applies only to the published container; configuration written
-    /// on <paramref name="builder"/> applies to the resource itself and is seen by every projection of it.
-    /// </remarks>
-    // Hidden from container resources in the generated SDKs. Polyglot callers have no analyzer, so without
-    // this the method would be offered on every container type and only fail at run time.
-    [AspireExport(RunSyncOnBackgroundThread = true, ExcludeTargetTypes = [typeof(ContainerResource)])]
-    public static IResourceBuilder<T> PublishAsContainerImage<T>(this IResourceBuilder<T> builder, string image, Action<IResourceBuilder<ContainerResource>>? configure = null)
-        where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(image);
-
-        var hadProjection = builder.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
-
-        builder.WithContainerProjection(
-            DistributedApplicationOperation.Publish,
-            container =>
-            {
-                container.WithImageReference(image);
-                configure?.Invoke(container);
-            });
-
-        return builder.EnsureContainerManifestPublishingCallback(hadProjection);
     }
 
     /// <summary>
@@ -321,71 +293,4 @@ public static class ResourceProjectionBuilderExtensions
             });
     }
 
-    /// <summary>
-    /// Publishes the resource as a container of type <typeparamref name="TContainer"/> built from a prebuilt image.
-    /// </summary>
-    /// <typeparam name="T">The owning resource type.</typeparam>
-    /// <typeparam name="TContainer">The container type the owner is published as.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="image">The container image reference, including its registry when it is not the default one.</param>
-    /// <param name="configure">Optional configuration applied to the container.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// This is the overload integrations use to implement their own <c>PublishAsContainer</c> convention when the
-    /// container has an integration-specific type. The owner keeps its own type so the call can be chained, and the
-    /// integration's container type is what reaches the callback.
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Integration authoring primitive — integrations export their own PublishAsContainer overloads.")]
-    public static IResourceBuilder<T> PublishAsContainerImage<T, TContainer>(
-        this IResourceBuilder<T> builder,
-        string image,
-        Action<IResourceBuilder<TContainer>>? configure = null)
-        where T : IResource
-        where TContainer : ContainerResource, IContainerProjection<T, TContainer>
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(image);
-
-        var hadProjection = builder.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
-
-        builder.WithContainerProjection(
-            DistributedApplicationOperation.Publish,
-            () => TContainer.CreateProjection(builder.Resource),
-            container =>
-            {
-                container.WithImageReference(image);
-                configure?.Invoke(container);
-            });
-
-        return builder.EnsureContainerManifestPublishingCallback(hadProjection);
-    }
-
-    /// <summary>
-    /// Points the owner's manifest writer at its publish projection, unless a projection was already registered.
-    /// </summary>
-    /// <remarks>
-    /// <c>ManifestPublishingContext</c> dispatches on the owner's CLR type, so without this a projected
-    /// project or executable keeps emitting <c>project.v*</c> or <c>executable.v0</c> and an owner type the
-    /// manifest writer does not recognize fails outright — the projection would be invisible to publishing.
-    /// <para>
-    /// Repeat calls only reconfigure the existing projection, so the callback is installed once. That preserves a
-    /// specialized callback an integration installed after the first registration, which would otherwise be
-    /// replaced by this generic one.
-    /// </para>
-    /// </remarks>
-    private static IResourceBuilder<T> EnsureContainerManifestPublishingCallback<T>(this IResourceBuilder<T> builder, bool hadProjection)
-        where T : IResource
-    {
-        // Registration is gated on the operation, so in run mode there is no publish projection to point at.
-        if (hadProjection || !builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
-        return builder.WithManifestPublishingCallback(context =>
-            context.WriteContainerAsync(
-                builder.Resource.AsContainer() ??
-                    throw new InvalidOperationException($"Resource '{builder.Resource.Name}' does not have a container projection.")));
-    }
 }

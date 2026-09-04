@@ -1665,11 +1665,6 @@ export interface GetValueAsyncOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
-export interface PublishAsContainerImageOptions {
-    /** Optional configuration applied to the container. */
-    configure?: (obj: ContainerResource) => Promise<void>;
-}
-
 export interface PublishAsDockerFileOptions {
     /** Optional action to configure the container resource */
     configure?: (obj: ContainerResource) => Promise<void>;
@@ -14537,13 +14532,14 @@ export interface ContainerRegistryResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -14728,17 +14724,6 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerRegistryResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
     /**
@@ -14886,13 +14871,14 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -15077,17 +15063,6 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerRegistryResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
     /**
@@ -15274,13 +15249,14 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -15925,37 +15901,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise {
         const configure = options?.configure;
         return new ContainerRegistryResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ContainerRegistryResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ContainerRegistryResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerRegistryResourcePromise {
-        const configure = options?.configure;
-        return new ContainerRegistryResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
     }
 
     /** @internal */
@@ -16683,10 +16628,6 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -17048,13 +16989,14 @@ export interface ContainerResource {
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -17867,13 +17809,14 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -19024,13 +18967,14 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -21731,13 +21675,14 @@ export interface CSharpAppResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -22213,17 +22158,6 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): CSharpAppResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
     /**
@@ -22396,13 +22330,14 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -22878,17 +22813,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): CSharpAppResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
     /**
@@ -23100,13 +23024,14 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -24698,37 +24623,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<CSharpAppResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): CSharpAppResourcePromise {
-        const configure = options?.configure;
-        return new CSharpAppResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -25703,10 +25597,6 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -25891,13 +25781,14 @@ export interface DotnetToolResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -26401,17 +26292,6 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): DotnetToolResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
     /**
@@ -26578,13 +26458,14 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -27088,17 +26969,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): DotnetToolResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
     /**
@@ -27304,13 +27174,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -28992,37 +28863,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<DotnetToolResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): DotnetToolResourcePromise {
-        const configure = options?.configure;
-        return new DotnetToolResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -29998,10 +29838,6 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -30189,13 +30025,14 @@ export interface ExecutableResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -30666,17 +30503,6 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExecutableResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
     /**
@@ -30843,13 +30669,14 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -31320,17 +31147,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExecutableResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
     /**
@@ -31543,13 +31359,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -33120,37 +32937,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ExecutableResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExecutableResourcePromise {
-        const configure = options?.configure;
-        return new ExecutableResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -34102,10 +33888,6 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -34286,13 +34068,14 @@ export interface ExternalServiceResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -34482,17 +34265,6 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExternalServiceResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
     /**
@@ -34640,13 +34412,14 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -34836,17 +34609,6 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExternalServiceResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
     /**
@@ -35033,13 +34795,14 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -35708,37 +35471,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise {
         const configure = options?.configure;
         return new ExternalServiceResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ExternalServiceResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ExternalServiceResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExternalServiceResourcePromise {
-        const configure = options?.configure;
-        return new ExternalServiceResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
     }
 
     /** @internal */
@@ -36470,10 +36202,6 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -36639,13 +36367,14 @@ export interface ParameterResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -36843,17 +36572,6 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -37001,13 +36719,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -37205,17 +36924,6 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -37403,13 +37111,14 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -38095,37 +37804,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise {
         const configure = options?.configure;
         return new ParameterResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ParameterResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ParameterResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ParameterResourcePromise {
-        const configure = options?.configure;
-        return new ParameterResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
     }
 
     /** @internal */
@@ -38861,10 +38539,6 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -39030,13 +38704,14 @@ export interface ProjectResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -39512,17 +39187,6 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ProjectResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
     /**
@@ -39695,13 +39359,14 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -40177,17 +39842,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ProjectResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
     /**
@@ -40400,13 +40054,14 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -41998,37 +41653,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ProjectResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ProjectResourcePromise {
-        const configure = options?.configure;
-        return new ProjectResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -43003,10 +42627,6 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
     }
 
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
-    }
-
     withTerminal(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
@@ -43387,13 +43007,14 @@ export interface TestDatabaseResource {
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -44206,13 +43827,14 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -45362,13 +44984,14 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -48265,13 +47888,14 @@ export interface TestRedisResource {
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -49168,13 +48792,14 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -50408,13 +50033,14 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -53694,13 +53320,14 @@ export interface TestVaultResource {
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -54515,13 +54142,14 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -55673,13 +55301,14 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -58719,13 +58348,14 @@ export interface Resource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -58910,17 +58540,6 @@ export interface Resource {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
     /**
@@ -59068,13 +58687,14 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     asContainer(): Promise<ContainerResource | null>;
     /**
@@ -59259,17 +58879,6 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise;
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
     /**
@@ -59457,13 +59066,14 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /**
-     * Gets the container resource represented by a resource.
+     * Gets a resource's effective container after model construction evaluates its projection callbacks.
      *
-     * This method reflects projection configuration completed so far. It returns `null` before
-     * an applicable projection is registered and for resources classified as containers solely through the
-     * legacy `ContainerImageAnnotation` fallback. Use `IsContainer` when only
-     * effective container classification is required.
-     * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
+     * Use this method only after application model construction has begun. Registering a projection selects its
+     * container but does not make that container effective. The projection becomes available only after
+     * `Build` starts constructing the model and all projection
+     * configuration callbacks complete successfully. Use `IsContainer` when only container
+     * classification is required.
+     * @returns The resource itself when it is a `ContainerResource`, its evaluated container projection, or `null` when the resource has no projection, projection callbacks have not yet completed, or the resource is classified as a container only through legacy annotations.
      */
     async asContainer(): Promise<ContainerResource | null> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle };
@@ -60108,37 +59718,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise {
         const configure = options?.configure;
         return new ResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
-    private async _publishAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<Resource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/publishAsContainerImage',
-            rpcArgs
-        );
-        return new ResourceImpl(result, this._client);
-    }
-
-    /**
-     * Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the published container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * @param image The container image reference, for example `contoso/service:latest` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ResourcePromise {
-        const configure = options?.configure;
-        return new ResourcePromiseImpl(this._publishAsContainerImageInternal(image, configure), this._client);
     }
 
     /** @internal */
@@ -60864,10 +60443,6 @@ class ResourcePromiseImpl implements ResourcePromise {
 
     runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.runAsContainerImage(image, options)), this._client);
-    }
-
-    publishAsContainerImage(image: string, options?: PublishAsContainerImageOptions): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.publishAsContainerImage(image, options)), this._client);
     }
 
     withTerminal(): ResourcePromise {

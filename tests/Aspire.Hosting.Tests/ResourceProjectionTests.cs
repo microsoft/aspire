@@ -221,6 +221,30 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void ProjectionCallbacksProcessResourcesAddedDuringEvaluation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResourceBuilder<ExecutableResource>? addedResource = null;
+
+        var executable = builder.AddExecutable("worker", "worker", ".");
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            _ =>
+            {
+                addedResource = builder.AddExecutable("added", "added", ".");
+                addedResource.WithContainerProjection(
+                    DistributedApplicationOperation.Publish,
+                    container => container.WithImage("contoso/added", "1.0"));
+            });
+
+        builder.EvaluateContainerProjectionCallbacks();
+
+        Assert.NotNull(executable.Resource.AsContainer());
+        Assert.NotNull(addedResource);
+        Assert.NotNull(addedResource.Resource.AsContainer());
+    }
+
+    [Fact]
     public void LaterRegistrationDoesNotReplayFailingProjectionCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -711,36 +735,13 @@ public class ResourceProjectionTests
     [Fact]
     public void ProjectingAContainerResourceThrowsEvenWhenTheOperationDoesNotMatch()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var container = builder.AddContainer("cache", "redis");
 
         // The guard runs ahead of the operation gate so the authoring mistake is not hidden in one mode.
         Assert.Throws<InvalidOperationException>(
-            () => container.PublishAsContainerImage("contoso/other:1.0"));
-    }
-
-    [Fact]
-    public void PublishAsContainerImageAppliesTheImageFromTheMostRecentCall()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        // Re-projecting reconfigures the existing projection, so the image has to be re-applied on every call.
-        // Applying it only when the projection is created would silently keep the first image after validating
-        // the second one.
-        var executable = builder.AddExecutable("worker", "worker", ".")
-            .PublishAsContainerImage("contoso/worker:1.0")
-            .PublishAsContainerImage("contoso/worker:2.0");
-
-        builder.EvaluateContainerProjectionCallbacks();
-        var container = executable.Resource.AsContainer();
-        Assert.NotNull(container);
-
-        // Exactly one annotation, because appending a second one leaves readers that take the first and readers
-        // that take the last disagreeing about the current image.
-        var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
-        Assert.Equal("contoso/worker", image.Image);
-        Assert.Equal("2.0", image.Tag);
+            () => container.RunAsContainerImage("contoso/other:1.0"));
     }
 
     [Fact]
@@ -764,13 +765,13 @@ public class ResourceProjectionTests
     [Fact]
     public void ReprojectingWithATagClearsADigestFromTheEarlierImage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         // Tag and SHA256 are mutually exclusive, so overwriting has to leave the annotation carrying only the
         // form the newest reference used.
         var executable = builder.AddExecutable("worker", "worker", ".")
-            .PublishAsContainerImage("contoso/worker@sha256:0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c")
-            .PublishAsContainerImage("contoso/worker:2.0");
+            .RunAsContainerImage("contoso/worker@sha256:0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c")
+            .RunAsContainerImage("contoso/worker:2.0");
 
         builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
@@ -784,13 +785,13 @@ public class ResourceProjectionTests
     [Fact]
     public void ReprojectingWithADigestClearsATagFromTheEarlierImage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         const string digest = "0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c";
 
         var executable = builder.AddExecutable("worker", "worker", ".")
-            .PublishAsContainerImage("contoso/worker:1.0")
-            .PublishAsContainerImage($"contoso/worker@sha256:{digest}");
+            .RunAsContainerImage("contoso/worker:1.0")
+            .RunAsContainerImage($"contoso/worker@sha256:{digest}");
 
         builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
@@ -804,12 +805,12 @@ public class ResourceProjectionTests
     [Fact]
     public void TheProjectionCallbackTakesPrecedenceOverTheImageArgument()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         // The image is applied ahead of the caller's callback, so an explicit WithImageTag inside the callback
         // still wins rather than being overwritten by the argument.
         var executable = builder.AddExecutable("worker", "worker", ".")
-            .PublishAsContainerImage("contoso/worker:1.0", container => container.WithImageTag("override"));
+            .RunAsContainerImage("contoso/worker:1.0", container => container.WithImageTag("override"));
 
         builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
@@ -817,54 +818,6 @@ public class ResourceProjectionTests
 
         var image = Assert.Single(container.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal("override", image.Tag);
-    }
-
-    [Fact]
-    public async Task PublishAsContainerImageWritesTheOwnerAsAContainerInTheManifest()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        // ManifestPublishingContext dispatches on the owner's CLR type, so without a manifest callback the
-        // projection is invisible and this still emits executable.v0 with host-only paths.
-        var executable = builder.AddExecutable("worker", "worker", ".")
-            .PublishAsContainerImage("contoso/worker:1.0");
-
-        builder.EvaluateContainerProjectionCallbacks();
-        var manifest = await ManifestUtils.GetManifest(executable.Resource);
-
-        Assert.Equal("container.v0", manifest["type"]?.ToString());
-        Assert.Equal("contoso/worker:1.0", manifest["image"]?.ToString());
-    }
-
-    [Fact]
-    public async Task PublishAsContainerImageWritesTheOwnerConnectionStringInTheManifest()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        // The projection facade is a plain ContainerResource, so the owner's connection string only survives if
-        // the manifest writer resolves the owner rather than reading the contract off the facade.
-        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"))
-            .PublishAsContainerImage("contoso/db:1.0");
-
-        builder.EvaluateContainerProjectionCallbacks();
-        var manifest = await ManifestUtils.GetManifest(resource.Resource);
-
-        Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
-    }
-
-    [Fact]
-    public void PublishAsContainerImageOnAProjectDoesNotRequireAnImageBuild()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        // A prebuilt image has nothing to build or push. Classifying the owner by CLR type would still demand a
-        // registry and a deploy tag even though the project's step factory emits no build step.
-        var project = builder.AddProject<Projects.ServiceA>("proj")
-            .PublishAsContainerImage("contoso/proj:1.0");
-
-        builder.EvaluateContainerProjectionCallbacks();
-        Assert.False(project.Resource.RequiresImageBuild());
-        Assert.False(project.Resource.RequiresImageBuildAndPush());
     }
 
     [Fact]
@@ -890,11 +843,14 @@ public class ResourceProjectionTests
         // sanctioned way to vary a connection string by shape is for the owner to branch on it, which is what the
         // Azure emulators do (AzureSignalRResource.ConnectionStringExpression tests IsEmulator). If the projection
         // won instead, a resource's effective connection string would change with the operation being run.
-        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"))
-            .PublishAsContainerImage<ConnectionStringOwnerResource, ConnectionStringProjection>("contoso/db:1.0");
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
 
         builder.EvaluateContainerProjectionCallbacks();
-        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+        var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
     }
@@ -906,11 +862,14 @@ public class ResourceProjectionTests
 
         // Resolving to the owner must not drop a contract only the projection declares: there is no ambiguity to
         // settle here, so this is purely additive and a typed projection can still contribute one.
-        var resource = builder.AddResource(new PlainOwnerResource("db"))
-            .PublishAsContainerImage<PlainOwnerResource, ConnectionStringOnlyProjection>("contoso/db:1.0");
+        var resource = builder.AddResource(new PlainOwnerResource("db"));
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringOnlyProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
 
         builder.EvaluateContainerProjectionCallbacks();
-        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+        var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
     }
@@ -946,9 +905,13 @@ public class ResourceProjectionTests
 
         var emulator = builder.AddResource(new EmulatorConnectionStringResource("emulator"));
 
-        var resource = builder.AddResource(new RedirectAwareOwnerResource("db"))
-            .PublishAsContainerImage("contoso/db:1.0", container =>
+        var resource = builder.AddResource(new RedirectAwareOwnerResource("db"));
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container =>
             {
+                container.WithImage("contoso/db", "1.0");
+
                 // A projection shares its owner's annotation collection, so a redirect registered from the projected
                 // builder is the very same annotation the owner reads back. This is why owner-first contract
                 // precedence does not prevent a projection from changing a connection string: the projection supplies
@@ -959,7 +922,7 @@ public class ResourceProjectionTests
             });
 
         builder.EvaluateContainerProjectionCallbacks();
-        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+        var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=container", manifest["connectionString"]?.ToString());
     }

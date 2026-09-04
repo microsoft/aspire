@@ -31,28 +31,6 @@ public class ContainerResourceProjectionAnalyzerTests
     }
 
     [Fact]
-    public async Task PublishAsContainerImageOnContainerResourceReportsDiagnostic()
-    {
-        var diagnostic = AppHostAnalyzer.Diagnostics.s_containerResourceCannotBeProjected;
-
-        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
-            using Aspire.Hosting;
-
-            var builder = DistributedApplication.CreateBuilder(args);
-
-            builder.AddContainer("cache", "redis")
-                .PublishAsContainerImage("contoso/other:1.0");
-            """,
-            [
-                CompilerError(diagnostic.Id)
-                    .WithLocation(6, 6)
-                    .WithMessage("'ContainerResource' is already a container resource, so 'PublishAsContainerImage' cannot be used on it. Configure the container directly instead.")
-            ]);
-
-        await test.RunAsync();
-    }
-
-    [Fact]
     public async Task DerivedContainerResourceReportsDiagnostic()
     {
         var diagnostic = AppHostAnalyzer.Diagnostics.s_containerResourceCannotBeProjected;
@@ -111,7 +89,7 @@ public class ContainerResourceProjectionAnalyzerTests
             var builder = DistributedApplication.CreateBuilder(args);
 
             builder.AddExecutable("worker", "worker", ".")
-                .PublishAsContainerImage("contoso/worker:1.0");
+                .RunAsContainerImage("contoso/worker:1.0");
             """,
             []);
 

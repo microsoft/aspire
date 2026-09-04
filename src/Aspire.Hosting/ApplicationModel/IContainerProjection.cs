@@ -13,8 +13,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <para>
 /// Container projections are constructed from their owner so they can adopt the owner's name and annotation
 /// collection. Every projection type already followed that convention; declaring it here turns it into a contract the
-/// compiler enforces, which is what lets <c>RunAsContainerImage</c> and <c>PublishAsContainerImage</c> create the
-/// projection themselves instead of asking each integration to pass a factory that restates the same thing.
+/// compiler enforces, which is what lets <c>RunAsContainerImage</c> create the projection itself instead of asking
+/// each integration to pass a factory that restates the same thing.
 /// </para>
 /// <para>
 /// Resolving the factory through a static abstract member keeps creation statically bound. No reflection runs while

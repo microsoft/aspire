@@ -1938,15 +1938,6 @@ public static class ContainerResourceBuilderExtensions
             digestValue = digest[prefix.Length..];
         }
 
-        // A container image annotation normally coexists with a Dockerfile build because it identifies the output
-        // image. This helper is used by APIs that explicitly select a prebuilt image as the source, so it removes an
-        // earlier Dockerfile source. A later WithDockerfile call can add the marker again, making source selection
-        // follow fluent registration order.
-        if (container.Resource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfile)
-        {
-            container.Resource.Annotations.Remove(dockerfile);
-        }
-
         // Mutate the annotation already present rather than adding a second one, matching how WithImage records an
         // image. Tag and SHA256 are mutually exclusive and each setter clears the other, so exactly one is assigned:
         // writing both would clear whichever was set second.
