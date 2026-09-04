@@ -699,7 +699,7 @@ function moveFocusFromTerminal(state, reverse) {
 
 function attachTerminalFocusNavigation(state, term) {
     term.attachCustomKeyEventHandler((event) => {
-        if (event.key !== 'F6') {
+        if (event.key !== 'F6' || event.ctrlKey || event.altKey || event.metaKey) {
             return true;
         }
 
@@ -811,9 +811,9 @@ function getAvailableBodySpace(state) {
 // Record that grid as fixed sizing state so a later keyboard-driven promotion
 // keeps the existing resolution. Only an explicit footer action switches back
 // to Fit or selects another preset.
-function adoptProducerDimensions(state) {
+function adoptProducerDimensions(state, includePrimary = false) {
     const client = state.client;
-    if (!client || client.isPrimary || client.width <= 0 || client.height <= 0) {
+    if (!client || (!includePrimary && client.isPrimary) || client.width <= 0 || client.height <= 0) {
         return;
     }
 
@@ -1586,7 +1586,10 @@ function connectClient(state, wsUrl) {
     client.onHello = (payload) => {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onHello', payload);
-        adoptProducerDimensions(state);
+        // Hello is authoritative for the producer's current grid even when
+        // this peer is already primary. Otherwise the local default can resize
+        // an existing producer before the user asks to change its dimensions.
+        adoptProducerDimensions(state, true);
         notifyToolbar(state);
         // Now that we know producer dims + role, apply layout (fits the
         // role-aware path: secondary locks-and-scales to producer dims;

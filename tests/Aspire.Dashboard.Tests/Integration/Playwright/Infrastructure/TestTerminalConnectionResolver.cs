@@ -110,12 +110,16 @@ internal sealed class TestTerminalConnection : IAsyncDisposable
         }
     }
 
-    public Task SendHelloAsync(int width, int height, CancellationToken cancellationToken)
+    public Task SendHelloAsync(
+        int width,
+        int height,
+        CancellationToken cancellationToken,
+        bool makeClientPrimary = false)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(new
         {
             peerId = "dashboard-peer",
-            primaryPeerId = "existing-primary",
+            primaryPeerId = makeClientPrimary ? "dashboard-peer" : "existing-primary",
             width,
             height,
             peers = new[]

@@ -3,13 +3,14 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
-public sealed class MockDashboardClient : IDashboardClient
+public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryWriter
 {
     public static readonly ResourceViewModel TestResource1 = ModelTestHelpers.CreateResource(
         resourceName: "TestResource",
@@ -94,4 +95,25 @@ public sealed class MockDashboardClient : IDashboardClient
     public ResourceViewModel? GetResource(string resourceName) => null;
 
     public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
+
+    public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => Task.CompletedTask;
+
+    public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
+
+    public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
+
+    public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+}
+
+internal sealed class MockRepositoryFactory(
+    IServiceProvider serviceProvider,
+    IResourceRepository resourceRepository) : IRepositoryFactory
+{
+    private readonly RepositoryFactory _inner = new(serviceProvider);
+
+    public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) =>
+        _inner.CreateTelemetryRepository(database);
+
+    public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>
+        resourceRepository;
 }
