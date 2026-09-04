@@ -919,7 +919,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapCliTestOnlyChangeDoesNotSelectExtensionE2e(string path, string testProject)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select(
             [path],
@@ -935,7 +935,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapRepresentativeExtensionRuntimeConsumerSelectsExtensionE2e()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select([], ["Aspire.Hosting.Java"], new SelectorOptions());
 
@@ -946,7 +946,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapUnrelatedHostingProjectDoesNotSelectExtensionOrCliE2e()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var fromAffectedProject = selector.Select([], ["Aspire.Hosting.Qdrant"], new SelectorOptions());
         var fromPath = selector.Select(
@@ -968,7 +968,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select([], [project], new SelectorOptions());
 
