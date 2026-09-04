@@ -52,10 +52,10 @@ public sealed class AzurePublishingContext(
     /// <remarks>
     /// <para>
     /// Callers of this class might not need main.bicep. A publisher that deploys each resource module
-    /// directly from its own deployment manifest never consumes the root template, and compiling it can
-    /// even fail for models the individual modules handle correctly. For example, the generated root always
-    /// passes <c>location</c> to each module, but a tenant-scoped module does not declare a <c>location</c>
-    /// parameter, so compiling the root fails with <c>BCP037</c>.
+    /// directly from its own deployment manifest never consumes the root template. Although Azure.Provisioning
+    /// can emit that template, a later Bicep compilation can fail for models the individual modules handle
+    /// correctly. For example, the generated root always passes <c>location</c> to each module, but a
+    /// tenant-scoped module does not declare a <c>location</c> parameter, resulting in <c>BCP037</c>.
     /// </para>
     /// <para>
     /// When set to <see langword="true"/>, <see cref="WriteModelAsync"/> still writes every per-resource
