@@ -283,7 +283,7 @@ public sealed class TestSelector
         {
             // Attribute the rule to the first affected project that matched it, so the cause names a
             // concrete project rather than the rule's whole glob set.
-            var matchedProject = affectedNonMatrixProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
+            var matchedProject = affectedProductionProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
             if (matchedProject is not null)
             {
                 ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
