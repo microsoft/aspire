@@ -1,0 +1,17 @@
+{
+  "id": "vscode-e2e-windows-winui-debug-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, winui-debug) shard fails with generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (Windows, winui-debug)",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies Aspire.Cli and Aspire.Hosting.Radius related code, unrelated to VS Code extension code.",
+  "occurrences": [
+    {
+      "run_id": 33887016795,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33887016795",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Radius.Tests, Hosting.Radius, Hosting.Radius, tests/Asp... / Hosting.Radius (windows-latest)",
+      "pr_number": 19478,
+      "observed_at": "2026-09-04T15:56:38Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19935"
+}
