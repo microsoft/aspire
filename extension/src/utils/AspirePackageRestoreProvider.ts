@@ -3,7 +3,7 @@ import path from 'path';
 import { AspireConfigFile } from './cliTypes';
 import { findAspireConfigFiles } from './workspace';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess } from './process/cliProcess';
+import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { CliPathResolutionTarget, getCliPathTargetForUri } from './cliPathVariables';
 import { reportCliResolvedForOperation } from './cliOperationResolution';
@@ -361,6 +361,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 const proc = spawnCliProcess(this._terminalProvider, cliPath, ['restore'], {
                     workingDirectory: configDir,
                     noExtensionVariables: true,
+                    createProcessGroup: true,
                     exitCallback: code => {
                         if (settled) { return; }
                         settled = true;
@@ -383,7 +384,11 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 const timeout = setTimeout(() => {
                     if (settled) { return; }
                     settled = true;
-                    try { proc.kill(); } catch { /* ignore */ }
+                    // Spawned above with createProcessGroup: true, so terminateCliProcess can tear
+                    // down the whole process tree instead of orphaning descendants (issue #16338).
+                    void terminateCliProcess(proc, `aspire restore (${relativePath})`).catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate aspire restore (${relativePath}): ${String(error)}`);
+                    });
                     reject(new Error('restore timed out'));
                 }, AspirePackageRestoreProvider._restoreTimeoutMs);
                 this._timeouts.add(timeout);
@@ -451,7 +456,12 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         this._disposed = true;
 
         for (const proc of this._childProcesses) {
-            try { proc.kill(); } catch { /* ignore */ }
+            // Spawned with createProcessGroup: true, so terminateCliProcess can tear down the
+            // whole process tree instead of orphaning descendants (issue #16338). dispose() is
+            // synchronous, so this is fire-and-forget rather than awaited.
+            void terminateCliProcess(proc, 'aspire restore').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate aspire restore: ${String(error)}`);
+            });
         }
         this._childProcesses.clear();
         this._cliVersionByPath.clear();

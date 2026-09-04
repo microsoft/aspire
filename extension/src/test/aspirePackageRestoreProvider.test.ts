@@ -652,6 +652,86 @@ suite('AspirePackageRestoreProvider', () => {
 
         assert.ok(spawnStub.notCalled);
     });
+
+    test('spawns the restore process as a managed process group', async () => {
+        const folder = createWorkspaceFolder('/repo/workspace');
+        const configUri = vscode.Uri.file(path.join(folder.uri.fsPath, 'aspire.config.json'));
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider({ getAspireCliExecutablePath } as unknown as AspireTerminalProvider);
+        const childProcess = createChildProcess();
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.exitCallback?.(0);
+                childProcess.emit('close', 0);
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
+        });
+
+        try {
+            await (provider as any)._runRestore(configUri, folder.uri.fsPath, 'aspire.config.json', false);
+
+            // A bare (non-grouped) spawn leaves descendant processes orphaned if the restore is
+            // killed on timeout or disposal, since only the immediate child receives the signal.
+            // See issue #16338.
+            assert.ok(spawnStub.calledOnceWith(
+                provider['_terminalProvider'],
+                '/repo/workspace/bin/aspire',
+                ['restore'],
+                sinon.match({ createProcessGroup: true })));
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    test('terminates the restore process via terminateCliProcess, not a raw kill, when the restore times out', async () => {
+        const folder = createWorkspaceFolder('/repo/workspace');
+        const configUri = vscode.Uri.file(path.join(folder.uri.fsPath, 'aspire.config.json'));
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider({ getAspireCliExecutablePath } as unknown as AspireTerminalProvider);
+        const childProcess = createChildProcess();
+        sandbox.stub(cliProcessModule, 'spawnCliProcess').returns(childProcess as unknown as ChildProcessWithoutNullStreams);
+        const terminateStub = sandbox.stub(cliProcessModule, 'terminateCliProcess').resolves();
+        const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+
+        try {
+            const restore = (provider as any)._runRestore(configUri, folder.uri.fsPath, 'aspire.config.json', false) as Promise<void>;
+            await clock.tickAsync(120_000);
+            await assert.rejects(restore, /restore timed out/);
+
+            assert.strictEqual(terminateStub.callCount, 1, 'a timed-out restore must be torn down via terminateCliProcess');
+            assert.strictEqual(terminateStub.firstCall.args[0], childProcess);
+            assert.strictEqual(childProcess.kill.called, false, 'timeout must not fall back to a raw, non-tree-aware kill');
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    test('terminates active restore processes via terminateCliProcess, not a raw kill, on dispose', async () => {
+        const folder = createWorkspaceFolder('/repo/workspace');
+        const configUri = vscode.Uri.file(path.join(folder.uri.fsPath, 'aspire.config.json'));
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider({ getAspireCliExecutablePath } as unknown as AspireTerminalProvider);
+        const childProcess = createChildProcess();
+        sandbox.stub(cliProcessModule, 'spawnCliProcess').returns(childProcess as unknown as ChildProcessWithoutNullStreams);
+        const terminateStub = sandbox.stub(cliProcessModule, 'terminateCliProcess').resolves();
+
+        // The restore promise settles only via the spawned process's own callbacks (or the
+        // timeout), and dispose() intentionally does not force either here, so it is expected to
+        // remain pending for the lifetime of this test.
+        void (provider as any)._runRestore(configUri, folder.uri.fsPath, 'aspire.config.json', false);
+        await waitForCondition(
+            () => (provider as any)._childProcesses.has(childProcess),
+            'expected the restore process to be tracked before dispose');
+
+        provider.dispose();
+
+        assert.strictEqual(terminateStub.callCount, 1, 'an in-flight restore process must be torn down via terminateCliProcess on dispose');
+        assert.strictEqual(terminateStub.firstCall.args[0], childProcess);
+        assert.strictEqual(childProcess.kill.called, false, 'dispose must not fall back to a raw, non-tree-aware kill');
+    });
 });
 
 function createWorkspaceFolder(folderPath: string): vscode.WorkspaceFolder {
@@ -664,6 +744,17 @@ function createWorkspaceFolder(folderPath: string): vscode.WorkspaceFolder {
 
 function createChildProcess(): EventEmitter & { kill: sinon.SinonStub } {
     return Object.assign(new EventEmitter(), { kill: sinon.stub() });
+}
+
+async function waitForCondition(condition: () => boolean, message: string, timeoutMs = 2000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition()) {
+        if (Date.now() > deadline) {
+            assert.fail(message);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
 }
 
 function createGuestConfig(directory: string, generatedVersion?: string | null): vscode.Uri {
