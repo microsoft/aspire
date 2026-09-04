@@ -70,10 +70,31 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, cancellationToken);
     }
 
-    public Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken)
+    public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         EnsureWritable();
-        return currentClient.AttachInteractionTerminalAsync(interactionId, inputName, cancellationToken);
+        return currentClient.AttachTerminalAsync(terminalId, cancellationToken);
+    }
+
+    public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) =>
+        IsReadOnly ? EmptyTerminalsAsync() : currentClient.SubscribeTerminalsAsync(cancellationToken);
+
+    public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        return currentClient.CreateDockTerminalAsync(title, cancellationToken);
+    }
+
+    public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        return currentClient.CloseTerminalAsync(terminalId, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<WatchTerminalsUpdate> EmptyTerminalsAsync()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
     }
 
     private void EnsureWritable()

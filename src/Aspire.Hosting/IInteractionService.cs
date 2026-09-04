@@ -485,6 +485,15 @@ public sealed class InteractionInput
     /// </remarks>
     [AspireExportIgnore(Reason = "Hex1bTerminalBuilder is a live builder object owning a local process; it cannot be serialized to polyglot app hosts.")]
     public Hex1bTerminalBuilder? Terminal { get; init; }
+
+    /// <summary>
+    /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the
+    /// dialog is raised and sent to the dashboard so it can open the tunnel.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately internal: this is transport addressing, not something an AppHost author sets.
+    /// </remarks>
+    internal string? TerminalId { get; set; }
 }
 
 /// <summary>

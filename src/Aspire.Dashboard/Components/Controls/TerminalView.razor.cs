@@ -64,7 +64,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// Used for terminals that are not backed by a resource replica — currently terminal-typed interaction inputs,
-    /// whose process is owned by the AppHost and reached via <c>/api/interaction-terminal</c>.
+    /// whose process is owned by the AppHost and reached via <c>/api/apphost-terminal</c>.
     /// </remarks>
     [Parameter]
     public string? EndpointPathAndQuery { get; set; }

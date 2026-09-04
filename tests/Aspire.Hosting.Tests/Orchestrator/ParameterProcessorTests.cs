@@ -1295,7 +1295,7 @@ public class ParameterProcessorTests
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager

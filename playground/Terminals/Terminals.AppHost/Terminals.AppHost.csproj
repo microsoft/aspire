@@ -8,9 +8,9 @@
     <IsAspireHost>true</IsAspireHost>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="..\..\KnownResourceNames.cs" Link="KnownResourceNames.cs" />
-  </ItemGroup>
+  <!-- The shared playground copy of KnownResourceNames.cs is deliberately NOT compiled here: the terminal spike gives
+       this project InternalsVisibleTo access to Aspire.Hosting, so the real internal type is already in scope and a
+       second copy would be an ambiguous-type error. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Terminals.Repl\Terminals.Repl.csproj" IsAspireProjectResource="true" />

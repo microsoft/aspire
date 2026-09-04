@@ -1,0 +1,59 @@
+@namespace Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Components.Controls
+@using Microsoft.FluentUI.AspNetCore.Components
+
+@* The dock is always rendered once it has been opened for the first time. Collapsing translates it off-screen
+   rather than unmounting it so xterm keeps its buffer, its measured cell metrics, and its WebSocket. *@
+@if (_hasBeenOpened)
+{
+    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")" style="height: @(_heightPx)px;" @ref="_dockElement">
+        <div class="terminal-dock-resize-handle"></div>
+        <div class="terminal-dock-tabstrip">
+            @foreach (var terminal in _terminals)
+            {
+                <div class="terminal-dock-tab @(terminal.TerminalId == _activeTerminalId ? "active" : string.Empty)"
+                     @key="terminal.TerminalId"
+                     @onclick="@(() => Activate(terminal.TerminalId))">
+                    <span class="terminal-dock-tab-title">@terminal.Title</span>
+                    <FluentButton Appearance="Appearance.Stealth"
+                                  Class="terminal-dock-tab-close"
+                                  Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
+                                  aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
+                                  OnClick="@(() => CloseTerminalAsync(terminal.TerminalId))">
+                        <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
+                    </FluentButton>
+                </div>
+            }
+            <FluentButton Appearance="Appearance.Stealth"
+                          Class="terminal-dock-new"
+                          Title="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
+                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
+                          OnClick="@CreateTerminalAsync">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
+            </FluentButton>
+            <div class="terminal-dock-filler"></div>
+            <FluentButton Appearance="Appearance.Stealth"
+                          Class="terminal-dock-collapse"
+                          Title="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
+                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
+                          OnClick="@Hide">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Neutral" />
+            </FluentButton>
+        </div>
+        <div class="terminal-dock-body">
+            @foreach (var terminal in _terminals)
+            {
+                @* Inactive panes use visibility rather than display so they keep real dimensions — xterm measures
+                   its grid from the element box, and a display:none pane would refit to zero columns. *@
+                <div class="terminal-dock-pane @(terminal.TerminalId == _activeTerminalId ? "active" : "inactive")"
+                     @key="terminal.TerminalId">
+                    <TerminalView EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)" />
+                </div>
+            }
+            @if (_terminals.Count == 0)
+            {
+                <div class="terminal-dock-empty">@Loc[nameof(Resources.Layout.TerminalDockEmpty)]</div>
+            }
+        </div>
+    </div>
+}

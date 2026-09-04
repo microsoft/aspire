@@ -88,11 +88,12 @@ internal static class TerminalWebSocketProxy
             }
         }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
 
-        // Terminal-typed interaction inputs. Unlike /api/terminal — where the process is orchestrated by Aspire and
-        // hosted out-of-process by Aspire.TerminalHost behind a Unix domain socket — the process here is owned by the
-        // AppHost itself, so the session is tunneled over the existing dashboard gRPC connection. Everything below the
-        // stream (this pump, the browser's HMP1 client, xterm.js) is identical; only the transport differs.
-        app.Map("/api/interaction-terminal", async (HttpContext context,
+        // Terminals owned by the AppHost process itself — both terminal-typed interaction inputs and the tabs in the
+        // dashboard's terminal dock. Unlike /api/terminal — where the process is orchestrated by Aspire and hosted
+        // out-of-process by Aspire.TerminalHost behind a Unix domain socket — the session here is tunneled over the
+        // existing dashboard gRPC connection. Everything below the stream (this pump, the browser's HMP1 client,
+        // xterm.js) is identical; only the transport differs.
+        app.Map("/api/apphost-terminal", async (HttpContext context,
                                                     IDashboardClient dashboardClient,
                                                     ILoggerFactory loggerFactory) =>
         {
@@ -101,11 +102,11 @@ internal static class TerminalWebSocketProxy
 
             try
             {
-                await HandleInteractionAsync(context, dashboardClient, logger, connectionId).ConfigureAwait(false);
+                await HandleAppHostTerminalAsync(context, dashboardClient, logger, connectionId).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Interaction terminal WebSocket handler {ConnectionId} crashed.", connectionId);
+                logger.LogError(ex, "AppHost terminal WebSocket handler {ConnectionId} crashed.", connectionId);
 
                 if (!context.Response.HasStarted)
                 {
@@ -122,10 +123,10 @@ internal static class TerminalWebSocketProxy
         }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
     }
 
-    internal static async Task HandleInteractionAsync(HttpContext context,
-                                                      IDashboardClient dashboardClient,
-                                                      ILogger logger,
-                                                      string connectionId)
+    internal static async Task HandleAppHostTerminalAsync(HttpContext context,
+                                                          IDashboardClient dashboardClient,
+                                                          ILogger logger,
+                                                          string connectionId)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
@@ -139,7 +140,7 @@ internal static class TerminalWebSocketProxy
         if (!WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
         {
             logger.LogWarning(
-                "Rejecting interaction terminal WebSocket upgrade {ConnectionId} with disallowed Origin '{Origin}'.",
+                "Rejecting AppHost terminal WebSocket upgrade {ConnectionId} with disallowed Origin '{Origin}'.",
                 connectionId,
                 originLogValue);
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -147,33 +148,25 @@ internal static class TerminalWebSocketProxy
             return;
         }
 
-        var interactionIdText = context.Request.Query["interactionId"].ToString();
-        var inputName = context.Request.Query["input"].ToString();
+        var terminalId = context.Request.Query["terminalId"].ToString();
 
-        if (!int.TryParse(interactionIdText, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var interactionId))
+        if (string.IsNullOrWhiteSpace(terminalId))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Missing or invalid 'interactionId' query parameter.").ConfigureAwait(false);
+            await context.Response.WriteAsync("Missing 'terminalId' query parameter.").ConfigureAwait(false);
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(inputName))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Missing 'input' query parameter.").ConfigureAwait(false);
-            return;
-        }
-
-        // Open the tunnel before accepting the WebSocket so an unknown interaction/input surfaces as a real HTTP error
+        // Open the tunnel before accepting the WebSocket so an unknown terminal surfaces as a real HTTP error
         // instead of a WebSocket that closes immediately for no visible reason.
         Stream upstream;
         try
         {
-            upstream = await dashboardClient.AttachInteractionTerminalAsync(interactionId, inputName, context.RequestAborted).ConfigureAwait(false);
+            upstream = await dashboardClient.AttachTerminalAsync(terminalId, context.RequestAborted).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Failed to attach interaction terminal for {InteractionId}/{InputName}.", interactionId, inputName);
+            logger.LogWarning(ex, "Failed to attach AppHost terminal {TerminalId}.", terminalId);
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await context.Response.WriteAsync("Terminal is unavailable.").ConfigureAwait(false);
             return;
@@ -186,13 +179,12 @@ internal static class TerminalWebSocketProxy
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to accept interaction terminal WebSocket for {InteractionId}/{InputName}.", interactionId, inputName);
+            logger.LogWarning(ex, "Failed to accept AppHost terminal WebSocket for {TerminalId}.", terminalId);
             try { upstream.Dispose(); } catch { /* swallow */ }
             return;
         }
 
-        logger.LogInformation("Interaction terminal WS opened for {InteractionId}/{InputName} ({ConnectionId}).",
-            interactionId, inputName, connectionId);
+        logger.LogInformation("AppHost terminal WS opened for {TerminalId} ({ConnectionId}).", terminalId, connectionId);
 
         try
         {
@@ -202,8 +194,7 @@ internal static class TerminalWebSocketProxy
         {
             // Disposing ends the gRPC call, which is how the AppHost learns this viewer is gone.
             try { upstream.Dispose(); } catch { /* swallow */ }
-            logger.LogInformation("Interaction terminal WS closed for {InteractionId}/{InputName} ({ConnectionId}).",
-                interactionId, inputName, connectionId);
+            logger.LogInformation("AppHost terminal WS closed for {TerminalId} ({ConnectionId}).", terminalId, connectionId);
         }
 
         if (ws.State == WebSocketState.Open)

@@ -22,8 +22,13 @@ namespace Aspire.Hosting.Dashboard;
 /// An instance of this type is created for every gRPC service call, so it may not hold onto any state
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
+/// <remarks>
+/// Types from <c>Aspire.Hosting.Terminals</c> are qualified rather than imported: several of them
+/// (<c>TerminalDescriptor</c>, <c>TerminalChangeType</c>) share a name with their generated protobuf
+/// counterparts, and importing both namespaces would make every bare use ambiguous.
+/// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, IInteractionTerminalSessionStore terminalSessionStore)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, Terminals.TerminalService terminalService)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -253,6 +258,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         if (!string.IsNullOrEmpty(input.FileFilter))
         {
             dto.FileFilter = input.FileFilter;
+        }
+        if (!string.IsNullOrEmpty(input.TerminalId))
+        {
+            dto.TerminalId = input.TerminalId;
         }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
@@ -600,22 +609,20 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         IServerStreamWriter<TerminalServerFrame> responseStream,
         ServerCallContext context)
     {
-        var cancellationToken = context.CancellationToken;
+        // Linked with ApplicationStopping so a tunnel that is otherwise idle does not keep shutdown waiting.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, hostApplicationLifetime.ApplicationStopping);
+        var cancellationToken = linked.Token;
 
-        // The first frame selects the session, mirroring how UploadFile carries its metadata on the first chunk.
+        // The first frame selects the terminal, mirroring how UploadFile carries its metadata on the first chunk.
         if (!await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Terminal stream is empty."));
         }
 
         var selector = requestStream.Current;
-        if (selector.InteractionId <= 0)
+        if (string.IsNullOrEmpty(selector.TerminalId))
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include an interaction ID."));
-        }
-        if (string.IsNullOrEmpty(selector.InputName))
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include an input name."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "First frame must include a terminal ID."));
         }
 
         var stream = new GrpcTerminalStream(requestStream, responseStream);
@@ -623,18 +630,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         try
         {
-            // Returns once the session ends or the caller disconnects. Holding the call open for that whole time is
+            // Returns once the terminal ends or the caller disconnects. Holding the call open for that whole time is
             // what keeps the tunnel alive, so this must not be fire-and-forget.
-            await terminalSessionStore.AttachAsync(
-                selector.InteractionId,
-                selector.InputName,
-                stream,
-                cancellationToken).ConfigureAwait(false);
+            await terminalService.AttachAsync(selector.TerminalId, stream, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
         {
-            // The interaction completed or never had this terminal input; the dashboard may still be holding a stale
-            // dialog open, so report it as a precondition failure rather than faulting the whole connection.
+            // The terminal was disposed, or never existed; the dashboard may still be holding a stale dialog or dock
+            // tab open, so report it as a precondition failure rather than faulting the whole connection.
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -642,4 +645,80 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             // The dashboard closed the tunnel, typically because the browser tab or dialog went away.
         }
     }
+
+    public override async Task WatchTerminals(
+        WatchTerminalsRequest request,
+        IServerStreamWriter<WatchTerminalsUpdate> responseStream,
+        ServerCallContext context)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, hostApplicationLifetime.ApplicationStopping);
+        var cancellationToken = linked.Token;
+
+        // Subscribe before writing the snapshot. SubscribeDockTerminals captures both under one lock, so a terminal
+        // created concurrently lands in exactly one of them.
+        var (initial, changes) = terminalService.SubscribeDockTerminals();
+
+        var snapshot = new TerminalDescriptorList();
+        snapshot.Terminals.AddRange(initial.Select(ToProtoDescriptor));
+        await responseStream.WriteAsync(new WatchTerminalsUpdate { Snapshot = snapshot }, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await foreach (var change in changes.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                await responseStream.WriteAsync(
+                    new WatchTerminalsUpdate
+                    {
+                        Change = new TerminalChangeNotification
+                        {
+                            ChangeType = ToProtoChangeType(change.ChangeType),
+                            Terminal = ToProtoDescriptor(change.Terminal)
+                        }
+                    },
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The dashboard disconnected or the AppHost is shutting down.
+        }
+    }
+
+    public override Task<CreateDockTerminalResponse> CreateDockTerminal(
+        CreateDockTerminalRequest request,
+        ServerCallContext context)
+    {
+        var terminal = terminalService.CreateDockTerminal(string.IsNullOrWhiteSpace(request.Title) ? null : request.Title);
+
+        return Task.FromResult(new CreateDockTerminalResponse
+        {
+            Terminal = new TerminalDescriptor { TerminalId = terminal.Id, Title = terminal.Title }
+        });
+    }
+
+    public override async Task<CloseTerminalResponse> CloseTerminal(
+        CloseTerminalRequest request,
+        ServerCallContext context)
+    {
+        if (terminalService.TryGetTerminal(request.TerminalId, out var terminal))
+        {
+            await terminal.DisposeAsync().ConfigureAwait(false);
+        }
+
+        // Closing an unknown terminal is not an error: the dashboard may be reacting to a tab the AppHost
+        // already removed.
+        return new CloseTerminalResponse();
+    }
+
+    private static TerminalDescriptor ToProtoDescriptor(Terminals.TerminalDescriptor descriptor)
+        => new() { TerminalId = descriptor.Id, Title = descriptor.Title };
+
+    private static TerminalChangeType ToProtoChangeType(Terminals.TerminalChangeType changeType) => changeType switch
+    {
+        Terminals.TerminalChangeType.Added => TerminalChangeType.Added,
+        Terminals.TerminalChangeType.Removed => TerminalChangeType.Removed,
+        Terminals.TerminalChangeType.Retitled => TerminalChangeType.Retitled,
+        Terminals.TerminalChangeType.Activated => TerminalChangeType.Activated,
+        _ => TerminalChangeType.Unspecified
+    };
 }

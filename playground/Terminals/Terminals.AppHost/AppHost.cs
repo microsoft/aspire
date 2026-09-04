@@ -31,7 +31,9 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
 builder.AddContainer("shellbox", "alpine")
     .WithContainerName("terminals-playground-shellbox")
     .WithArgs("sleep", "infinity")
-    .WithContainerShellCommand();
+    .WithContainerShellCommand()
+    // Same shell, but delivered as a tab in the dashboard's terminal dock (Ctrl+`) rather than a modal dialog.
+    .WithDockShellCommand();
 
 // Latest Node.js image, kept alive so the "Node REPL" interaction command can exec into it. The Node REPL is a
 // readline app, so it exercises cursor addressing, history, and tab completion across the tunnel in a way a plain

@@ -438,6 +438,9 @@ message InteractionInput {
     int64 max_file_size = 16;
     bool allow_multiple_files = 17;
     string file_filter = 18;
+    // Identifies the AppHost-owned terminal backing an INPUT_TYPE_TERMINAL input. The dashboard passes this to
+    // /terminal/attach to open the tunnel.
+    string terminal_id = 19;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -477,7 +480,7 @@ message UploadFileResponse {
 
 ////////////////////////////////////////////
 
-// A message sent by the dashboard to the AppHost for a terminal input session.
+// A message sent by the dashboard to the AppHost for a terminal session.
 //
 // The stream carries an opaque HMP1 (Hex1b Muxer Protocol v1) byte stream, tunneled
 // so that the terminal can be owned by the AppHost process itself rather than by a
@@ -485,19 +488,78 @@ message UploadFileResponse {
 // dashboard nor this service interprets `data`; both sides are byte-level relays
 // between the browser's HMP1 client and the AppHost's HMP1 server.
 message TerminalClientFrame {
-    // The interaction that owns the terminal session (sent in the first frame).
-    int32 interaction_id = 1;
-    // The interaction input that owns the terminal session (sent in the first frame).
-    string input_name = 2;
+    // Formerly interaction_id/input_name. Terminals are now addressed by an opaque id
+    // issued by the AppHost's TerminalService, which lets one tunnel serve both
+    // interaction-input terminals and dashboard terminal dock tabs.
+    reserved 1, 2;
+    reserved "interaction_id", "input_name";
+
     // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
     // Empty on the first frame, which only carries the session selector.
     bytes data = 3;
+
+    // The terminal to attach to (sent in the first frame).
+    string terminal_id = 4;
 }
 
-// A message sent by the AppHost to the dashboard for a terminal input session.
+// A message sent by the AppHost to the dashboard for a terminal session.
 message TerminalServerFrame {
     // A chunk of the HMP1 byte stream flowing from the AppHost to the browser.
     bytes data = 1;
+}
+
+////////////////////////////////////////////
+
+// A terminal owned by the AppHost and displayed as a tab in the dashboard's terminal dock.
+message TerminalDescriptor {
+    string terminal_id = 1;
+    string title = 2;
+}
+
+enum TerminalChangeType {
+    TERMINAL_CHANGE_TYPE_UNSPECIFIED = 0;
+    TERMINAL_CHANGE_TYPE_ADDED = 1;
+    TERMINAL_CHANGE_TYPE_REMOVED = 2;
+    TERMINAL_CHANGE_TYPE_RETITLED = 3;
+    // The AppHost called Show() on this terminal. Dashboards should reveal the dock
+    // and switch to this terminal's tab.
+    TERMINAL_CHANGE_TYPE_ACTIVATED = 4;
+}
+
+message WatchTerminalsRequest {
+}
+
+message TerminalDescriptorList {
+    repeated TerminalDescriptor terminals = 1;
+}
+
+message TerminalChangeNotification {
+    TerminalChangeType change_type = 1;
+    TerminalDescriptor terminal = 2;
+}
+
+message WatchTerminalsUpdate {
+    oneof kind {
+        // Sent once, first, carrying the terminals that already exist.
+        TerminalDescriptorList snapshot = 1;
+        TerminalChangeNotification change = 2;
+    }
+}
+
+message CreateDockTerminalRequest {
+    // Optional title for the new terminal. The AppHost picks a default when empty.
+    string title = 1;
+}
+
+message CreateDockTerminalResponse {
+    TerminalDescriptor terminal = 1;
+}
+
+message CloseTerminalRequest {
+    string terminal_id = 1;
+}
+
+message CloseTerminalResponse {
 }
 
 ////////////////////////////////////////////
@@ -510,4 +572,7 @@ service DashboardService {
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
     rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
     rpc AttachTerminal(stream TerminalClientFrame) returns (stream TerminalServerFrame);
+    rpc WatchTerminals(WatchTerminalsRequest) returns (stream WatchTerminalsUpdate);
+    rpc CreateDockTerminal(CreateDockTerminalRequest) returns (CreateDockTerminalResponse);
+    rpc CloseTerminal(CloseTerminalRequest) returns (CloseTerminalResponse);
 }

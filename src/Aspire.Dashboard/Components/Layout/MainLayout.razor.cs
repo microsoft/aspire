@@ -18,6 +18,8 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+
+    private TerminalDock? _terminalDock;
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
 
@@ -533,4 +535,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
         await JSInteropHelpers.SafeDisposeAsync(_keyboardHandlers);
     }
+
+    private Task ToggleTerminalDockAsync()
+        => _terminalDock?.ToggleAsync() ?? Task.CompletedTask;
 }

@@ -246,6 +246,12 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
         return !keyboardEvent.altKey && !keyboardEvent.ctrlKey && !keyboardEvent.metaKey;
     }
 
+    // Ctrl+` toggles the terminal dock. This is the only shortcut that survives a focused input, because the
+    // terminal itself is a focused input — without this the dock could be opened but never closed from the keyboard.
+    function isTerminalDockShortcut(e) {
+        return e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "`" || e.key === "~" || e.code === "Backquote");
+    }
+
     function calculateShortcut(e) {
         if (modifierKeysExceptShiftNotPressed(e)) {
             /* general shortcuts */
@@ -289,6 +295,13 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
     }
 
     const keydownListener = function (e) {
+        // Checked before the input guard on purpose: see isTerminalDockShortcut.
+        if (isTerminalDockShortcut(e)) {
+            e.preventDefault();
+            shortcutManager.invokeMethodAsync('OnGlobalKeyDown', 400);
+            return;
+        }
+
         if (isActiveElementInput()) {
             return;
         }

@@ -221,7 +221,7 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration,
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -250,7 +250,7 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration,
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -274,7 +274,7 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration,
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1344,7 +1344,7 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration,
             fileUploadStore ?? new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
     }
 
     [Fact]

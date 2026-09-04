@@ -73,7 +73,26 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     /// The returned stream carries opaque HMP1 frames in both directions. The dashboard relays them verbatim between
     /// the browser's WebSocket and the AppHost, exactly as it does for resource terminals.
     /// </remarks>
-    Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken);
+    Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Watches the set of AppHost-owned terminals shown as tabs in the dashboard's terminal dock.
+    /// </summary>
+    /// <remarks>
+    /// The first update is always a snapshot; subsequent updates are individual changes. Interaction terminals are
+    /// deliberately excluded — they belong to a dialog, not to the dock.
+    /// </remarks>
+    IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks the AppHost to create a new dock terminal.
+    /// </summary>
+    Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Asks the AppHost to close a terminal, terminating its workload.
+    /// </summary>
+    Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken);
 }
 
 /// <summary>

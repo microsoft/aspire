@@ -72,6 +72,11 @@
         <target state="translated">Параметры</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutToggleTerminalDock">
+        <source>Toggle terminal (Ctrl+`)</source>
+        <target state="new">Toggle terminal (Ctrl+`)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutUnhandledErrorMessage">
         <source>An unhandled error has occurred.</source>
         <target state="translated">Возникла необрабатываемая ошибка.</target>
@@ -140,6 +145,26 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">Просмотреть фильтры</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTab">
+        <source>Close terminal</source>
+        <target state="new">Close terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockEmpty">
+        <source>No terminals are open.</source>
+        <target state="new">No terminals are open.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockHide">
+        <source>Hide terminal panel (Ctrl+`)</source>
+        <target state="new">Hide terminal panel (Ctrl+`)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockNewTerminal">
+        <source>New terminal</source>
+        <target state="new">New terminal</target>
         <note />
       </trans-unit>
     </body>

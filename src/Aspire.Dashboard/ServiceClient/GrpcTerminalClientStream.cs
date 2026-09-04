@@ -19,8 +19,7 @@ namespace Aspire.Dashboard.ServiceClient;
 internal sealed class GrpcTerminalClientStream : Stream
 {
     private readonly AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame> _call;
-    private readonly int _interactionId;
-    private readonly string _inputName;
+    private readonly string _terminalId;
     // The linked CTS that scopes the call outlives the method that created it, so the stream owns its disposal.
     private readonly IDisposable? _callScope;
     // gRPC request streams do not support concurrent writes, and the WebSocket pump is not guaranteed to be the only
@@ -32,26 +31,23 @@ internal sealed class GrpcTerminalClientStream : Stream
 
     public GrpcTerminalClientStream(
         AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame> call,
-        int interactionId,
-        string inputName,
+        string terminalId,
         IDisposable? callScope = null)
     {
         _call = call;
-        _interactionId = interactionId;
-        _inputName = inputName;
+        _terminalId = terminalId;
         _callScope = callScope;
     }
 
     /// <summary>
-    /// Sends the selector frame that tells the AppHost which interaction input this call is attaching to. The AppHost
+    /// Sends the selector frame that tells the AppHost which terminal this call is attaching to. The AppHost
     /// reads exactly one such frame before handing the call to Hex1b, so this must happen before any payload.
     /// </summary>
     public Task SendSelectorAsync(CancellationToken cancellationToken)
     {
         var frame = new TerminalClientFrame
         {
-            InteractionId = _interactionId,
-            InputName = _inputName
+            TerminalId = _terminalId
         };
 
         return _call.RequestStream.WriteAsync(frame, cancellationToken);

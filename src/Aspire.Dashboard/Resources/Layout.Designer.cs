@@ -106,6 +106,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Close terminal.
+        /// </summary>
+        public static string TerminalDockCloseTab {
+            get {
+                return ResourceManager.GetString("TerminalDockCloseTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No terminals are open..
+        /// </summary>
+        public static string TerminalDockEmpty {
+            get {
+                return ResourceManager.GetString("TerminalDockEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide terminal panel (Ctrl+`).
+        /// </summary>
+        public static string TerminalDockHide {
+            get {
+                return ResourceManager.GetString("TerminalDockHide", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to New terminal.
+        /// </summary>
+        public static string TerminalDockNewTerminal {
+            get {
+                return ResourceManager.GetString("TerminalDockNewTerminal", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {
@@ -129,6 +165,15 @@ namespace Aspire.Dashboard.Resources {
         public static string MainLayoutAspireRepoLink {
             get {
                 return ResourceManager.GetString("MainLayoutAspireRepoLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle terminal (Ctrl+`).
+        /// </summary>
+        public static string MainLayoutToggleTerminalDock {
+            get {
+                return ResourceManager.GetString("MainLayoutToggleTerminalDock", resourceCulture);
             }
         }
         

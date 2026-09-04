@@ -137,6 +137,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Terminal spike: the playground demonstrates TerminalService, which is deliberately still internal.
+         Remove this once the terminal API is public. -->
+    <InternalsVisibleTo Include="Terminals.AppHost" />
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />

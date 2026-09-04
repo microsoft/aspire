@@ -199,7 +199,7 @@ public class DashboardServiceDataTerminalTests
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
         var data = new DashboardServiceData(
             notifications,
             loggerService,

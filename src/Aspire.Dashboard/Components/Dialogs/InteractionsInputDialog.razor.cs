@@ -277,9 +277,9 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     /// terminal sessions by interaction id and input name, so both travel in the query string; the dashboard resolves
     /// them into an <c>AttachTerminal</c> gRPC call server-side.
     /// </summary>
-    private string BuildInteractionTerminalEndpoint(InputViewModel inputModel)
+    private static string BuildInteractionTerminalEndpoint(InputViewModel inputModel)
     {
-        return $"/api/interaction-terminal?interactionId={Content.Interaction.InteractionId.ToString(CultureInfo.InvariantCulture)}&input={Uri.EscapeDataString(inputModel.Input.Name)}";
+        return $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(inputModel.Input.TerminalId ?? string.Empty)}";
     }
 
     private static Icon GetSecretTextIcon(InputViewModel inputModel)

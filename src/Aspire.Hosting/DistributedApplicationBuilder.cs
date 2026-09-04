@@ -467,7 +467,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
-        _innerBuilder.Services.AddSingleton<IInteractionTerminalSessionStore, Dashboard.InteractionTerminalSessionStore>();
+        _innerBuilder.Services.AddSingleton<Terminals.IDockTerminalFactory, Terminals.PlaceholderDockTerminalFactory>();
+        _innerBuilder.Services.AddSingleton<Terminals.TerminalService>();
 
         ConfigureHealthChecks();
 

@@ -28,16 +28,16 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
-    private readonly IInteractionTerminalSessionStore _terminalSessionStore;
+    private readonly Terminals.TerminalService _terminalService;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, IInteractionTerminalSessionStore terminalSessionStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, Terminals.TerminalService terminalService)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
-        _terminalSessionStore = terminalSessionStore;
+        _terminalService = terminalService;
     }
 
     public bool IsAvailable
@@ -211,11 +211,22 @@ internal class InteractionService : IInteractionService
             }
             if (hasTerminalInputs)
             {
-                var terminalInputs = inputs
-                    .Where(input => input.InputType == InputType.Terminal)
-                    .Select(input => (input.Name, Builder: input.Terminal!))
-                    .ToArray();
-                _terminalSessionStore.StartInteraction(newState.InteractionId, terminalInputs);
+                // Terminals are created eagerly so the dialog carries a terminal id, but the underlying workload
+                // does not start until a client actually attaches. A dialog dismissed without opening the terminal
+                // therefore never spawns a process.
+                foreach (var input in inputs)
+                {
+                    if (input.InputType == InputType.Terminal)
+                    {
+                        var terminal = _terminalService.CreateTerminal(new Terminals.TerminalLaunchOptions
+                        {
+                            Title = string.IsNullOrEmpty(input.Label) ? input.Name : input.Label,
+                            Builder = input.Terminal!,
+                            Surface = Terminals.TerminalSurface.Interaction
+                        });
+                        input.TerminalId = terminal.Id;
+                    }
+                }
             }
             AddInteractionUpdate(newState);
 
@@ -548,13 +559,13 @@ internal class InteractionService : IInteractionService
         if (interactionState.InteractionInfo is Interaction.InputsInteractionInfo terminalInputsInfo &&
             terminalInputsInfo.Inputs.Any(input => input.InputType == InputType.Terminal))
         {
-            if (completion.State is IReadOnlyList<InteractionInput>)
+            foreach (var input in terminalInputsInfo.Inputs)
             {
-                _terminalSessionStore.CompleteInteraction(interactionState.InteractionId);
-            }
-            else
-            {
-                _terminalSessionStore.CancelInteraction(interactionState.InteractionId);
+                if (input.InputType == InputType.Terminal && input.TerminalId is { } terminalId)
+                {
+                    _terminalService.RemoveAndDisposeInBackground(terminalId);
+                    input.TerminalId = null;
+                }
             }
         }
 

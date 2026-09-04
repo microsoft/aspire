@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Terminals;
 using Hex1b;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -141,6 +142,55 @@ internal static class TerminalInteractionCommands
         return result.Canceled
             ? CommandResults.Failure("Canceled")
             : CommandResults.Success();
+    }
+
+    /// <summary>
+    /// Adds a command that opens a dock terminal shelled into this container and drives it with the automation API.
+    /// </summary>
+    /// <remarks>
+    /// This is the counterpart to the interaction-input commands above. Instead of a modal dialog bound to a single
+    /// dialog lifetime, the terminal becomes a tab in the dashboard's terminal dock (Ctrl+`) that outlives the command
+    /// that created it. It also exercises <c>IAspireTerminal</c>'s automation surface — send input, wait for output,
+    /// read the screen — which is how AppHost code can script a terminal it owns.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses TerminalService, an internal API, and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<ContainerResource> WithDockShellCommand(this IResourceBuilder<ContainerResource> container)
+    {
+        return container.WithCommand(
+            "terminal-dock-shell",
+            "Shell into container (terminal dock)",
+            executeCommand: async commandContext =>
+            {
+                var containerName = ResolveContainerName(container.Resource);
+                var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
+
+                // Not disposed here on purpose: the tab is meant to outlive the command. The user closes it from the
+                // dock, and TerminalService tears down anything still open when the AppHost shuts down.
+                var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = container.Resource.Name,
+                    Builder = Hex1bTerminal.CreateBuilder()
+                        .WithDimensions(120, 32)
+                        .WithPtyProcess("docker", ["exec", "-it", containerName, "/bin/sh"])
+                });
+
+                // Reveals the dock in every connected browser and switches it to this tab.
+                terminal.Show();
+
+                try
+                {
+                    // Automation: type a command and wait for its output. The workload starts on the first automation
+                    // call even if nobody has attached a browser yet.
+                    await terminal.SendTextAsync("echo aspire-dock-ready\r", commandContext.CancellationToken);
+                    await terminal.WaitForTextAsync("aspire-dock-ready", TimeSpan.FromSeconds(10), commandContext.CancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    return CommandResults.Failure("Terminal did not respond to automated input.");
+                }
+
+                return CommandResults.Success();
+            });
     }
 
     /// <summary>

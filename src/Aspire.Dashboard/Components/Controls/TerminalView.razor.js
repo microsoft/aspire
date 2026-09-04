@@ -1051,6 +1051,16 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     term.loadAddon(fitAddon);
     term.open(state.terminalBody);
 
+    // Let Ctrl+` reach the document so the global keydown listener can toggle the terminal dock. Returning false
+    // tells xterm not to handle the event; without this xterm swallows it and the dock cannot be closed from a
+    // focused terminal. Everything else is still handled by xterm as usual.
+    term.attachCustomKeyEventHandler((e) => {
+        if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === '`' || e.key === '~' || e.code === 'Backquote')) {
+            return false;
+        }
+        return true;
+    });
+
     state.term = term;
     state.fitAddon = fitAddon;
 

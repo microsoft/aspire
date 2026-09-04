@@ -1159,7 +1159,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
             new TestInteractionFileUploadStore(),
-            new TestInteractionTerminalSessionStore());
+            TestTerminalService.Create());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager
