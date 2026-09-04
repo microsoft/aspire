@@ -36,6 +36,7 @@ import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
     buildDotNetProject(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<void>;
+    getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectLaunchProperties>;
     getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string>;
     getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties>;
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
@@ -47,8 +48,19 @@ interface DotNetFileAppRunProperties {
     runArguments: string;
 }
 
+interface DotNetProjectLaunchProperties {
+    targetPath: string;
+    runCommand?: string;
+    useAppHost?: boolean;
+    useWinUI?: boolean;
+    windowsPackageType?: string;
+}
+
 interface DotNetProjectRunProperties extends DotNetFileAppRunProperties {
     targetPath: string;
+    useAppHost?: boolean;
+    useWinUI?: boolean;
+    windowsPackageType?: string;
     runWorkingDirectory?: string;
 }
 
@@ -188,6 +200,61 @@ export class DotNetService implements IDotNetService {
         });
     }
 
+    async getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectLaunchProperties> {
+        return withMsBuildTemporaryFiles(environment, async responseFileArgument => {
+            const args = [
+                'msbuild',
+                projectFile,
+                '-nologo',
+                '-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType',
+                '-v:q'
+            ];
+            if (buildConfiguration) {
+                args.push(`-property:Configuration=${buildConfiguration}`);
+            }
+            if (responseFileArgument) {
+                args.push(responseFileArgument);
+            }
+            args.push('-property:GenerateFullPaths=true');
+
+            try {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                const { stdout } = await this.execFileAsync('dotnet', args, {
+                    cwd: workingDirectory ?? path.dirname(projectFile),
+                    encoding: 'utf8',
+                    env: createDotNetProcessEnvironment(cliPath, environment)
+                });
+                const output = stdout.trim();
+                if (!output) {
+                    throw new Error(noOutputFromMsbuild);
+                }
+
+                // Asking MSBuild for multiple properties produces:
+                //   { "Properties": { "TargetPath": "...dll", "RunCommand": "...exe", "UseAppHost": "true", ... } }
+                // Property values are strings even when the evaluated MSBuild value is boolean.
+                const parsed = JSON.parse(output) as { Properties?: Record<string, unknown> };
+                const properties = parsed.Properties;
+                if (!properties || typeof properties.TargetPath !== 'string' || properties.TargetPath.length === 0) {
+                    throw new Error(noOutputFromMsbuild);
+                }
+
+                return {
+                    targetPath: properties.TargetPath,
+                    runCommand: typeof properties.RunCommand === 'string' && properties.RunCommand.length > 0
+                        ? properties.RunCommand
+                        : undefined,
+                    useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
+                    useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
+                    windowsPackageType: typeof properties.WindowsPackageType === 'string'
+                        ? properties.WindowsPackageType
+                        : undefined
+                };
+            } catch (err) {
+                throw new Error(failedToGetTargetPath(formatDotNetProcessError(err)));
+            }
+        });
+    }
+
     async getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties> {
         return withMsBuildTemporaryFiles(environment, async (responseFileArgument, temporaryDirectory) => {
             const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
@@ -196,7 +263,7 @@ export class DotNetService implements IDotNetService {
                 projectFile,
                 '-nologo',
                 '-target:ComputeRunArguments',
-                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory,UseAppHost,UseWinUI,WindowsPackageType',
                 `-getResultOutputFile:${resultOutputPath}`,
                 '-v:q'
             ];
@@ -218,7 +285,7 @@ export class DotNetService implements IDotNetService {
 
                 // Multiple -getProperty values produce:
                 //   { "Properties": { "TargetPath": "...", "RunCommand": "...",
-                //     "RunArguments": "...", "RunWorkingDirectory": "..." } }
+                //     "RunArguments": "...", "RunWorkingDirectory": "...", "UseAppHost": "true", ... } }
                 // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
                 const resultOutput = await fs.promises.readFile(resultOutputPath, 'utf8');
                 const properties = JSON.parse(resultOutput).Properties as Record<string, unknown> | undefined;
@@ -241,6 +308,11 @@ export class DotNetService implements IDotNetService {
                     targetPath,
                     runCommand,
                     runArguments: properties.RunArguments,
+                    useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
+                    useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
+                    windowsPackageType: typeof properties.WindowsPackageType === 'string'
+                        ? properties.WindowsPackageType
+                        : undefined,
                     // ComputeRunArguments extensions can replace the SDK-normalized value with a relative path.
                     // MSBuild interprets that path from the project directory, not the SDK-discovery directory.
                     runWorkingDirectory: runWorkingDirectory
@@ -357,6 +429,29 @@ export class DotNetService implements IDotNetService {
 
 export function isFileBasedApp(projectPath: string): boolean {
     return path.extname(projectPath).toLowerCase().endsWith('.cs');
+}
+
+function isTrueMsbuildProperty(value: unknown): boolean {
+    return typeof value === 'string' && value.trim().toLowerCase() === 'true';
+}
+
+function getProjectDebugProgram(properties: DotNetProjectLaunchProperties): string {
+    const runCommand = properties.runCommand?.trim();
+    if (process.platform === 'win32' &&
+        properties.useAppHost &&
+        properties.useWinUI &&
+        properties.windowsPackageType?.trim().toLowerCase() === 'none' &&
+        runCommand &&
+        path.win32.isAbsolute(runCommand) &&
+        path.win32.extname(runCommand).toLowerCase() === '.exe') {
+        // An unpackaged WinUI app must retain the generated apphost executable as its process image.
+        // Launching TargetPath instead makes vsdbg host the assembly in dotnet.exe, which crashes in
+        // Microsoft.UI.Xaml.Application.Start with STATUS_STOWED_EXCEPTION.
+        // See https://github.com/microsoft/aspire/issues/19091.
+        return runCommand;
+    }
+
+    return properties.targetPath;
 }
 
 interface RunApiOutput {
@@ -1215,14 +1310,27 @@ export function createProjectDebuggerExtension(
                         buildEnvironment,
                         buildWorkingDirectory)
                     : undefined;
-                const outputPath = runProperties?.targetPath ??
-                    await dotNetService.getDotNetTargetPath(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
+                const projectLaunchProperties = runProperties ??
+                    await dotNetService.getDotNetProjectLaunchProperties(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
+                const outputPath = projectLaunchProperties.targetPath;
+                const debugProgram = getProjectDebugProgram(projectLaunchProperties);
+                if (debugProgram !== outputPath) {
+                    extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
+                }
                 const outputExists = await doesFileExist(outputPath);
-                if (!outputExists && suppressBuild) {
-                    throw new Error(prebuiltProjectOutputMissing(projectPath, outputPath));
+                const debugProgramExists = debugProgram === outputPath
+                    ? outputExists
+                    : await doesFileExist(debugProgram);
+                const missingOutputPath = !outputExists
+                    ? outputPath
+                    : !debugProgramExists
+                        ? debugProgram
+                        : undefined;
+                if (missingOutputPath && suppressBuild) {
+                    throw new Error(prebuiltProjectOutputMissing(projectPath, missingOutputPath));
                 }
 
-                if (!suppressBuild && (!outputExists || launchOptions.forceBuild)) {
+                if (!suppressBuild && (missingOutputPath || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 }
 

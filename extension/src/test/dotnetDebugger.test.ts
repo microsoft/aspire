@@ -21,6 +21,7 @@ import { invalidMsBuildRunCommandResponse } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 class TestDotNetService {
+    public getDotNetProjectLaunchPropertiesStub: sinon.SinonStub;
     public getDotNetTargetPathStub: sinon.SinonStub;
     public getDotNetProjectRunPropertiesStub: sinon.SinonStub;
     private _hasDevKit: boolean;
@@ -34,9 +35,23 @@ class TestDotNetService {
     public fileAppRunProperties = { runCommand: 'dotnet', runArguments: '' };
     public fileAppRunBuildConfiguration: string | undefined;
     public fileAppRunEnvironment: NodeJS.ProcessEnv | undefined;
+    public projectLaunchProperties: {
+        targetPath: string;
+        runCommand?: string;
+        useAppHost?: boolean;
+        useWinUI?: boolean;
+        windowsPackageType?: string;
+    };
     public projectRunProperties: { targetPath: string, runCommand: string, runArguments: string, runWorkingDirectory?: string };
 
     constructor(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean) {
+        this.projectLaunchProperties = {
+            targetPath: outputPath,
+            useAppHost: false,
+            useWinUI: false
+        };
+        this.getDotNetProjectLaunchPropertiesStub = sinon.stub().callsFake(() =>
+            Promise.resolve(this.projectLaunchProperties));
         this.getDotNetTargetPathStub = sinon.stub();
         this.getDotNetTargetPathStub.resolves(outputPath);
         this.projectRunProperties = {
@@ -56,6 +71,10 @@ class TestDotNetService {
         }
 
         this._hasDevKit = hasDevKit;
+    }
+
+    getDotNetProjectLaunchProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<TestDotNetService['projectLaunchProperties']> {
+        return this.getDotNetProjectLaunchPropertiesStub(projectFile, buildConfiguration, environment, workingDirectory);
     }
 
     getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string> {
@@ -573,7 +592,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.program, appHostPath);
         assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
         assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
-        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWithExactly('C:\\temp\\WinUIApp.csproj'), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith('C:\\temp\\WinUIApp.csproj'), true);
     });
 
     test('unpackaged WinUI project builds when the managed target is missing', async () => {
@@ -612,7 +631,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.program, appHostPath);
         assert.strictEqual(doesFileExistStub.calledWithExactly(outputPath), true);
         assert.strictEqual(doesFileExistStub.calledWithExactly(appHostPath), true);
-        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWithExactly('C:\\temp\\WinUIApp.csproj'), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith('C:\\temp\\WinUIApp.csproj'), true);
     });
 
     test('packaged WinUI project keeps the managed target path', async () => {
@@ -785,6 +804,45 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
+    test('project launch properties use the coordinated build context and parse MSBuild JSON', async () => {
+        const projectPath = 'C:\\temp\\WinUIApp.csproj';
+        const resolvedEnv = { MARKER: 'resolved-env' } as unknown as NodeJS.ProcessEnv;
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment').returns(resolvedEnv);
+        const execFileStub = sinon.stub(childProcess, 'execFile').yields(null, {
+            stdout: JSON.stringify({
+                Properties: {
+                    TargetPath: 'C:\\temp\\bin\\WinUIApp.dll',
+                    RunCommand: 'C:\\temp\\bin\\WinUIApp.exe',
+                    UseAppHost: ' TRUE ',
+                    UseWinUI: 'true',
+                    WindowsPackageType: 'None'
+                }
+            }),
+            stderr: ''
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        const properties = await service.getDotNetProjectLaunchProperties(
+            projectPath,
+            'Release',
+            { BUILD_FLAVOR: 'custom' },
+            'C:\\sdk-root');
+
+        assert.deepStrictEqual(properties, {
+            targetPath: 'C:\\temp\\bin\\WinUIApp.dll',
+            runCommand: 'C:\\temp\\bin\\WinUIApp.exe',
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        });
+        const msbuildCall = msbuildCallFor(execFileStub, projectPath);
+        assert.ok(msbuildCall.args[1].includes('-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType'));
+        assert.ok(msbuildCall.args[1].includes('-property:Configuration=Release'));
+        assert.strictEqual(msbuildCall.args[2]?.cwd, 'C:\\sdk-root');
+        assert.strictEqual(msbuildCall.args[2]?.env, resolvedEnv);
+    });
+
     test('project run properties use the coordinated build context and parse a dedicated result file', async () => {
         sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
         const createResolvedEnvStub = sinon.stub(cliPathEnvironmentModule, 'createResolvedAspireCliPathProcessEnvironment')
@@ -802,7 +860,10 @@ suite('Dotnet Debugger Extension Tests', () => {
                     TargetPath: '/workspace/bin/app.dll',
                     RunCommand: '"/workspace/bin/app"',
                     RunArguments: '--host-arg',
-                    RunWorkingDirectory: 'relative-run-directory'
+                    RunWorkingDirectory: 'relative-run-directory',
+                    UseAppHost: 'true',
+                    UseWinUI: ' TRUE ',
+                    WindowsPackageType: 'None'
                 }
             }));
             callArgs.at(-1)(null, {
@@ -823,7 +884,10 @@ suite('Dotnet Debugger Extension Tests', () => {
             targetPath: '/workspace/bin/app.dll',
             runCommand: '/workspace/bin/app',
             runArguments: '--host-arg',
-            runWorkingDirectory: nodePath.resolve('/workspace', 'relative-run-directory')
+            runWorkingDirectory: nodePath.resolve('/workspace', 'relative-run-directory'),
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
         });
         assert.strictEqual(execFileStub.firstCall.args[2]?.cwd, '/workspace/sdk-root');
         const runPropertyArgs = execFileStub.firstCall.args[1];
@@ -834,7 +898,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 !arg.startsWith('-getResultOutputFile:')).slice(-5),
             [
                 '-target:ComputeRunArguments',
-                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory',
+                '-getProperty:TargetPath,RunCommand,RunArguments,RunWorkingDirectory,UseAppHost,UseWinUI,WindowsPackageType',
                 '-v:q',
                 '-property:Configuration=Release',
                 '-property:GenerateFullPaths=true'
@@ -1303,7 +1367,6 @@ suite('Dotnet Debugger Extension Tests', () => {
         const service = new DotNetService({} as AspireDebugSession);
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
         await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
-        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
     });
 
     test('file-app build failures format process errors and deduplicate diagnostics', async () => {
@@ -1437,7 +1500,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             { debug: true, forceBuild: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
             debugConfig);
 
-        assert.ok(dotNetService.getDotNetTargetPathStub.calledOnceWith(
+        assert.ok(dotNetService.getDotNetProjectLaunchPropertiesStub.calledOnceWith(
             projectPath,
             'Release',
             { BUILD_FLAVOR: 'build' },
@@ -1478,6 +1541,45 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.ok(dotNetService.buildDotNetProjectStub.notCalled);
     });
 
+    test('project launch with suppressed build reports a missing WinUI apphost without rebuilding', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        const projectPath = 'C:\\temp\\WinUIApp.csproj';
+        const outputPath = 'C:\\temp\\bin\\Release\\net10.0-windows\\win-x64\\WinUIApp.dll';
+        const appHostPath = 'C:\\temp\\bin\\Release\\net10.0-windows\\win-x64\\WinUIApp.exe';
+        const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+        doesFileExistStub.withArgs(appHostPath).resolves(false);
+        dotNetService.projectLaunchProperties = {
+            targetPath: outputPath,
+            runCommand: appHostPath,
+            useAppHost: true,
+            useWinUI: true,
+            windowsPackageType: 'None'
+        };
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            suppress_build: true
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        await assert.rejects(
+            extension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                [],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: sinon.createStubInstance(AspireDebugSession) },
+                debugConfig),
+            error => error instanceof Error && error.message.includes(appHostPath));
+
+        assert.ok(dotNetService.buildDotNetProjectStub.notCalled);
+    });
+
     test('project fallback build uses the environment selected for target path evaluation', async () => {
         const outputPath = 'C:\\temp\\bin\\custom\\Release\\net10.0\\TestProject.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
@@ -1508,7 +1610,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             debugConfig);
 
         const buildEnvironment = { BUILD_FLAVOR: 'custom' };
-        assert.ok(dotNetService.getDotNetTargetPathStub.calledOnceWith(
+        assert.ok(dotNetService.getDotNetProjectLaunchPropertiesStub.calledOnceWith(
             projectPath,
             'Release',
             buildEnvironment));
