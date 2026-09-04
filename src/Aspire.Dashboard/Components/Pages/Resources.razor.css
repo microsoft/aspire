@@ -273,6 +273,10 @@
     stroke: transparent;
 }
 
+::deep .resource-menu-cog[aria-expanded="true"]:focus-visible {
+    outline: none;
+}
+
 ::deep .resource-menu-cog-icon {
     fill: var(--accent-fill-rest);
     pointer-events: none;
