@@ -99,15 +99,26 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Gets or sets a value indicating whether the terminal renders without its surrounding chrome — no card border,
-    /// titlebar or internal padding, just the xterm grid.
+    /// titlebar or internal padding, just the xterm grid and its footer.
     /// </summary>
     /// <remarks>
-    /// Used by the terminal dock, which supplies its own tab-strip chrome and title. Chromeless terminals also size
-    /// their grid to fill the available space at the dashboard's base font size, rather than shrinking the font to fit
-    /// the producer's grid.
+    /// Used by the terminal dock and detached terminal windows, which supply their own chrome and title. Chromeless
+    /// terminals also size their grid to fill the available space at the dashboard's base font size, rather than
+    /// shrinking the font to fit the producer's grid.
     /// </remarks>
     [Parameter]
     public bool Chromeless { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the footer offers the fixed-resolution picker.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="true"/>. The dock sets this to <see langword="false"/>: its panes are sized by the
+    /// dock splitter and always fit their grid to the available space, so a fixed resolution has nothing to act on.
+    /// The font stepper stays available regardless, so dock terminals can still be zoomed.
+    /// </remarks>
+    [Parameter]
+    public bool ShowDimensionsPicker { get; set; } = true;
 
     /// <summary>
     /// Raised when the JS side pushes a fresh terminal state snapshot (role,
@@ -251,6 +262,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions
                 {
                     Chromeless = Chromeless,
+                    ShowDimensions = ShowDimensionsPicker,
                     DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
                     IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
                     TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
@@ -501,6 +513,9 @@ public sealed record TerminalViewOptions
 {
     /// <summary>Whether to render without the card border, titlebar and internal padding.</summary>
     public bool Chromeless { get; init; }
+
+    /// <summary>Whether the footer offers the fixed-resolution picker.</summary>
+    public bool ShowDimensions { get; init; } = true;
 
     /// <summary>Accessible label for the footer's decrease-font-size button.</summary>
     public required string DecreaseFontSize { get; init; }

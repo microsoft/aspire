@@ -387,13 +387,14 @@ function ensureTerminalStyles() {
   padding: 0;
 }
 /*
- * Chromeless terminals auto-fit their grid to the available space at the
- * dashboard font size, so the footer's fixed-size picker and font stepper
- * have nothing meaningful to control — and the dock/detached window asked
- * for the xterm grid alone. Hide the footer rather than special-casing the
- * control wiring, which stays identical for both modes.
+ * The dimension picker only makes sense where the user can act on a fixed
+ * grid: the resource page and a detached terminal window (which is resizable)
+ * keep it, while a dock pane is sized by the dock's splitter and always fits
+ * its grid to the available space. The font stepper stays in both cases so
+ * dock terminals can still be zoomed. Hidden with a class rather than skipped
+ * in buildFooter so the control wiring stays identical in every mode.
  */
-.aspire-terminal-host.chromeless #terminal-footer {
+.aspire-terminal-host.dimensions-hidden #terminal-dims {
   display: none;
 }
 
@@ -535,7 +536,14 @@ function buildChrome(state) {
     // it with our own host so we can apply our flex column layout
     // without disturbing whatever else the parent has set on it.
     const host = document.createElement('div');
-    host.className = state.chromeless ? 'aspire-terminal-host chromeless' : 'aspire-terminal-host';
+    const hostClasses = ['aspire-terminal-host'];
+    if (state.chromeless) {
+        hostClasses.push('chromeless');
+    }
+    if (!state.showDimensions) {
+        hostClasses.push('dimensions-hidden');
+    }
+    host.className = hostClasses.join(' ');
     blazorElement.appendChild(host);
 
     // Terminal stage.
@@ -568,8 +576,8 @@ function buildChrome(state) {
     const body = document.createElement('div');
     body.id = 'terminal-body';
 
-    // The footer is built even for chromeless hosts so every control
-    // reference on `state` stays non-null; CSS hides it in that mode.
+    // The footer is built even when hidden so every control reference on
+    // `state` stays non-null; CSS decides whether it is visible.
     const footer = buildFooter(state);
 
     if (titlebar) {
@@ -1272,10 +1280,10 @@ function resolveDashboardFontPx() {
     return DEFAULT_FONT_PX;
 }
 
-// `options` is optional: { chromeless: bool, ...control labels }. Chromeless
-// drops the frame, titlebar, footer and padding so only the xterm grid shows
-// (used by the terminal dock and detached terminal windows, which supply their
-// own chrome).
+// `options` is optional: { chromeless: bool, showDimensions: bool, ...control
+// labels }. Chromeless drops the frame, titlebar and padding so only the xterm
+// grid and its footer show (used by the terminal dock and detached terminal
+// windows, which supply their own chrome).
 export async function initTerminal(element, wsUrl, dotNetRef, options) {
     await ensureXtermLoaded();
 
@@ -1303,6 +1311,10 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
         },
         // Layout / sizing state (per-instance — we never use globals).
         chromeless,
+        // Whether the footer's fixed-resolution picker is offered. Dock panes
+        // are sized by the dock splitter and always fit, so they get the font
+        // stepper but not the picker.
+        showDimensions: options?.showDimensions !== false,
         // Chromeless terminals fill whatever space the dock pane or detached
         // window gives them at the dashboard's font size, so they start in Fit
         // mode. Everything else starts at the default fixed resolution and only
