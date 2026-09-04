@@ -189,12 +189,13 @@ Highlights:
 - **non-.NET job loose triggers** — only the paths the project graph cannot
   attribute, such as `tests/PolyglotAppHosts/**`, checked-in
   `*.tscompat.suppression.txt` baselines, `tools/TypeScriptApiCompat/**`, and
- `extension/**`. Checked-in `*.ats.txt` baselines under `src/**/api/**` are
+ `extension/**`. Checked-in `*.ats.txt` baselines under the project `api/`
+ directories are
  generated artifacts dropped by the prefilter (see below) when they are the
  only changed files, so no dedicated rule routes them here. Hosting integration
- source changes additionally route to `job:polyglot` because those exports are
- consumed by the per-language AppHost fixtures.
-- **loose-file deps** — `eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
+ projects with polyglot fixtures are listed in `affected_project_rules`.
+- **loose-file deps** — `eng/clipack/**`, `eng/dashboardpack/**`,
+  `eng/dcppack/**`, `eng/winget/**`, `eng/homebrew/**`,
   `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,
   `eng/Bundle.proj`, and `tools/CreateLayout/**`. Runtime consumers are
   additive: CLI and extension E2E execute the CLI archive and its Dashboard/DCP

@@ -36,7 +36,10 @@ eng/github-ci/ci-skip-entirely-patterns.txt
 
 # Generated API and ATS baselines
 # These files are generated release/API-surface artifacts and do not require PR CI.
-src/**/api/**
+src/*/api/*.cs
+src/*/api/*.ats.txt
+src/Components/*/api/*.cs
+src/Components/*/api/*.ats.txt
 
 # Engineering pipeline scripts (Azure DevOps, not used in the GitHub CI build)
 eng/pipelines/**
