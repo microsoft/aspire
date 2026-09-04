@@ -787,7 +787,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Flaky","error_pattern":"Trusted error","job_ids":[123]}""");
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
-            """[{"test":"Tests.Flaky","error":"Trusted\r\nerror\u001b[31m","stack_trace":"trusted\r\nframe"}]""");
+            """[{"test":"Tests.Flaky","job":"Tests","error":"Trusted\r\nerror\u001b[31m","stack_trace":"trusted\r\nframe"}]""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -797,6 +797,77 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var failedTest = analysis.RootElement.GetProperty("failed_tests")[0];
         Assert.Equal("Trusted\nerror", failedTest.GetProperty("error").GetString());
         Assert.Equal("trusted\nframe", failedTest.GetProperty("stack_trace").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsFailedTestAttributedToAnotherJob()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"code-issue"},{"id":2,"classification":"code-issue"}],
+             "failed_tests":[{"name":"Tests.Failed","job":"Second job","error":"agent copy","stack_trace":"agent frame","classification":"code-issue","reason":"Deterministic"}],
+             "causes":[]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"First job"},{"id":2,"name":"Second job"}]""");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
+            """[{"test":"Tests.Failed","job":"First job","error":"trusted","stack_trace":"trusted frame"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorBindsSameTestNameIndependentlyByJob()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.Flaky","job":"Linux tests","error":"agent copy","stack_trace":"agent frame","classification":"flaky","reason":"Intermittent"},
+               {"name":"Tests.Flaky","job":"Windows tests","error":"agent copy","stack_trace":"agent frame","classification":"flaky","reason":"Intermittent"}],
+             "causes":["flaky-failure"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Linux tests"},{"id":2,"name":"Windows tests"}]""",
+            "flaky-failure.json",
+            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Flaky","error_pattern":"failure","job_ids":[1,2]}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
+            """
+            [
+              {"test":"Tests.Flaky","job":"Linux tests","error":"linux failure","stack_trace":"linux frame"},
+              {"test":"Tests.Flaky","job":"Windows tests","error":"windows failure","stack_trace":"windows frame"}
+            ]
+            """);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+        using var analysis = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "analysis-result.json")));
+        Assert.Collection(
+            analysis.RootElement.GetProperty("failed_tests").EnumerateArray(),
+            failedTest =>
+            {
+                Assert.Equal("Linux tests", failedTest.GetProperty("job").GetString());
+                Assert.Equal("linux failure", failedTest.GetProperty("error").GetString());
+            },
+            failedTest =>
+            {
+                Assert.Equal("Windows tests", failedTest.GetProperty("job").GetString());
+                Assert.Equal("windows failure", failedTest.GetProperty("error").GetString());
+            });
     }
 
     [Fact]
@@ -869,7 +940,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[123]}""");
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
-            """[{"test":"Tests.Flaky","error":"trusted","stack_trace":"frame"},{"test":"Tests.Flaky","error":"trusted","stack_trace":"frame"}]""");
+            """[{"test":"Tests.Flaky","job":"Tests","error":"trusted","stack_trace":"frame"},{"test":"Tests.Flaky","job":"Tests","error":"trusted","stack_trace":"frame"}]""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -888,7 +959,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[123]}""");
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
-            """[{"test":"Tests.Flaky","error":"linux failure","stack_trace":"linux frame"},{"test":"Tests.Flaky","error":"windows failure","stack_trace":"windows frame"}]""");
+            """[{"test":"Tests.Flaky","job":"Tests","error":"linux failure","stack_trace":"linux frame"},{"test":"Tests.Flaky","job":"Tests","error":"windows failure","stack_trace":"windows frame"}]""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -2226,7 +2297,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Include a `failed_tests` entry only when its non-empty `name` exactly matches a TRX test failure in the summary and its non-empty `job` exactly matches a failed job name in the summary.",
+            "Include a `failed_tests` entry only when its non-empty `name` and `job` exactly match the same trusted TRX test failure in the summary.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2508,7 +2579,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${WORKFLOW_RUN_ATTEMPT}",
                 collectionStep,
                 StringComparison.Ordinal);
-            Assert.Contains("select-test-results-artifact", collectionStep, StringComparison.Ordinal);
+            Assert.Contains("select-test-result-artifacts", collectionStep, StringComparison.Ordinal);
             Assert.Contains(
                 "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip",
                 collectionStep,
@@ -2521,22 +2592,32 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "gh run download \"${RUN_ID}\"",
                 collectionStep,
                 StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "[ -f ci-failure-data/test-failures.json ] || echo \"[]\"",
+                collectionStep,
+                StringComparison.Ordinal);
             var normalizedCollectionStep = NormalizeIndentation(collectionStep);
             Assert.Contains(
                 "gh api --paginate \"repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations\" \\\n--jq '.[]' | jq -s '.'",
                 normalizedCollectionStep,
                 StringComparison.Ordinal);
             Assert.Contains(
-                "extract-test-results-artifact \"${ARTIFACT_ZIP}\" ci-failure-data/test-results \\\n10000 1073741824 104857600 \"${ARTIFACT_SIZE}\"",
+                "extract-test-results-artifact \"${ARTIFACT_ZIP}\" \"${ARTIFACT_OUTPUT}\" \\\n10000 \"${REMAINING_UNCOMPRESSED_BYTES}\" 104857600 \\\n\"${ARTIFACT_SIZE}\"",
+                normalizedCollectionStep,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "collect-test-failures \"${ARTIFACT_OUTPUT}\" \"${JOB_NAME}\" \\\nci-failure-data/failed-jobs.json \\\n\"ci-failure-data/test-failures/${ARTIFACT_ID}.json\"",
                 normalizedCollectionStep,
                 StringComparison.Ordinal);
         });
-        Assert.Contains("name: All-TestResults", ReadWorkflow("tests.yml"), StringComparison.Ordinal);
-        Assert.Contains(".name == \"All-TestResults\"", s_persistenceScript, StringComparison.Ordinal);
         Assert.Contains(
             ".created_at > $started_at and .created_at <= $updated_at",
             s_persistenceScript,
             StringComparison.Ordinal);
+        var testRunner = ReadWorkflow("run-tests.yml");
+        Assert.Contains("name: ${{ inputs.testShortName }} (${{ inputs.os }})", testRunner, StringComparison.Ordinal);
+        Assert.Contains("name: logs-${{ inputs.testShortName }}-${{ inputs.os }}", testRunner, StringComparison.Ordinal);
+        Assert.Contains("\"logs-\\(.short)-\\(.runner)\"", s_persistenceScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2841,6 +2922,182 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Empty(result.Output);
     }
 
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorBindsProducingJob()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {
+                "id": 10,
+                "name": "logs-Infrastructure-8-core-ubuntu-latest",
+                "expired": false,
+                "created_at": "2026-09-04T12:01:00Z",
+                "size_in_bytes": 1024
+              }
+            ]
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {"id":1,"name":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"},
+              {"id":2,"name":"Tests / No-package tests / Dashboard (ubuntu-latest)"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            """
+            [{"id":10,"name":"logs-Infrastructure-8-core-ubuntu-latest","size_in_bytes":1024,"job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"}]
+            """,
+            result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorRejectsAmbiguousProducingJobs()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {
+                "id": 10,
+                "name": "logs-Infrastructure-ubuntu-latest",
+                "expired": false,
+                "created_at": "2026-09-04T12:01:00Z",
+                "size_in_bytes": 1024
+              }
+            ]
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"},
+              {"id":2,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "test result artifact does not identify exactly one failed job",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "yq"])]
+    public async Task TrustedTestFailureCollectorBindsProducingJob()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.trx"),
+            """
+            <TestRun>
+              <Results>
+                <UnitTestResult testName="Tests.Failed" outcome="Failed">
+                  <Output>
+                    <ErrorInfo>
+                      <Message>boom</Message>
+                      <StackTrace>frame</StackTrace>
+                    </ErrorInfo>
+                  </Output>
+                </UnitTestResult>
+              </Results>
+            </TestRun>
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [{"id":1,"name":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"}]
+            """);
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                "Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)",
+                jobsPath,
+                outputPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            """
+            [{"test":"Tests.Failed","job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)","error":"boom","stack_trace":"frame"}]
+            """,
+            (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "yq"])]
+    public async Task TrustedTestFailureCollectorRejectsUnboundJobEvidence()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.trx"),
+            """
+            <TestRun>
+              <Results>
+                <UnitTestResult testName="Tests.Failed" outcome="Failed" />
+              </Results>
+            </TestRun>
+            """);
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                "Tests / No-package tests / Unknown (ubuntu-latest)",
+                jobsPath,
+                outputPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+        Assert.Contains(
+            "::error::Trusted test result provenance is invalid",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("open")]
     [InlineData("closed")]
@@ -3003,7 +3260,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "- name: Collect CI failure data",
                 "- name: Create analysis summary");
             Assert.Contains(
-                "select-test-results-artifact",
+                "select-test-result-artifacts",
                 collectionStep,
                 StringComparison.Ordinal);
 
@@ -5456,12 +5713,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                     if (failedTest.ValueKind == JsonValueKind.Object &&
                         failedTest.TryGetProperty("name", out var name) &&
                         name.ValueKind == JsonValueKind.String &&
+                        failedTest.TryGetProperty("job", out var job) &&
+                        job.ValueKind == JsonValueKind.String &&
                         failedTest.TryGetProperty("error", out var error) &&
                         error.ValueKind == JsonValueKind.String)
                     {
                         trustedTestFailures.Add(new Dictionary<string, string>
                         {
                             ["test"] = name.GetString()!,
+                            ["job"] = job.GetString()!,
                             ["error"] = error.GetString()!,
                             ["stack_trace"] =
                                 failedTest.TryGetProperty("stack_trace", out var stackTrace) &&

@@ -101,19 +101,72 @@ sanitize_trusted_test_failures()
         if type == "object" and
            (.test | type) == "string" and
            ((.test | sanitize_single_line | length) > 0) and
+           (.job | type) == "string" and
+           ((.job | sanitize_single_line | length) > 0) and
            (.error | type) == "string" and
            ((.stack_trace == null) or (.stack_trace | type) == "string") then
           {
             test: (.test | sanitize_single_line | .[0:500]),
+            job: (.job | sanitize_single_line | .[0:500]),
             error: (.error | sanitize_multiline | .[0:1000]),
             stack_trace: ((.stack_trace // "") | sanitize_multiline | .[0:2000])
           }
         else
           error("trusted test failure has an invalid shape")
         end) |
-      unique_by([.test, .error, .stack_trace])
+      unique_by([.test, .job, .error, .stack_trace])
     end
   ' "$input_file" > "$output_file"
+}
+
+collect_test_failures()
+{
+  local test_results_directory="$1"
+  local job_name="$2"
+  local failed_jobs_file="$3"
+  local output_file="$4"
+  local json_lines
+
+  if [ ! -d "$test_results_directory" ] ||
+     [ -z "$job_name" ] ||
+     ! jq -e '
+       type == "array" and
+       all(.[]; type == "object" and (.name | type) == "string")
+     ' "$failed_jobs_file" >/dev/null ||
+     ! jq -e --arg job "$job_name" \
+       '[.[] | select(.name == $job)] | length == 1' \
+       "$failed_jobs_file" >/dev/null; then
+    echo "::error::Trusted test result provenance is invalid" >&2
+    return 1
+  fi
+
+  json_lines=$(mktemp)
+  while IFS= read -r -d '' extracted_path; do
+    local parsed_lines
+    parsed_lines=$(mktemp)
+    if ! yq -p xml -o json '.' "$extracted_path" 2>/dev/null | jq -cr --arg job "$job_name" '
+      # TRX represents one result as an object and multiple results as an array:
+      #   <UnitTestResult testName="Tests.Failed" outcome="Failed">...</UnitTestResult>
+      (.TestRun.Results.UnitTestResult // []) |
+      (if type == "array" then . else [.] end) |
+      map(select(.["+@outcome"] == "Failed")) |
+      .[] |
+      {
+        test: (.["+@testName"] // ""),
+        job: $job,
+        error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
+        stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
+      }
+    ' > "$parsed_lines"; then
+      echo "::warning::Unable to parse extracted test result $(basename "$extracted_path")" >&2
+    else
+      cat "$parsed_lines" >> "$json_lines"
+    fi
+    rm -f "$parsed_lines"
+  done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.trx" -print0)
+
+  jq -sc '.' "$json_lines" > "$output_file"
+  rm -f "$json_lines"
 }
 
 sanitize_json_field()
@@ -217,6 +270,83 @@ select_test_results_artifact()
   fi
 
   echo "$artifact_id"
+}
+
+# run-tests.yml names test jobs and their artifacts as:
+#   Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)
+#   logs-Infrastructure-8-core-ubuntu-latest
+select_test_result_artifacts()
+{
+  local artifacts_file="$1"
+  local started_at="$2"
+  local updated_at="$3"
+  local failed_jobs_file="$4"
+  local max_artifacts="${5:-20}"
+  local max_total_bytes="${6:-1073741824}"
+  local max_artifact_bytes="${7:-104857600}"
+
+  jq -cer \
+    --arg started_at "$started_at" \
+    --arg updated_at "$updated_at" \
+    --argjson max_artifacts "$max_artifacts" \
+    --argjson max_total_bytes "$max_total_bytes" \
+    --argjson max_artifact_bytes "$max_artifact_bytes" \
+    --slurpfile artifacts "$artifacts_file" '
+      def artifact_name:
+        .name |
+        capture("(^| / )(?<short>[^/]+) \\((?<runner>[^()]*)\\)$") |
+        "logs-\(.short)-\(.runner)";
+
+      [
+        .[] |
+        select(type == "object" and (.name | type) == "string") |
+        . as $job |
+        (try ($job | artifact_name) catch null) as $artifact_name |
+        select($artifact_name != null) |
+        [
+          $artifacts[0][] |
+          select(
+            type == "object" and
+            .expired == false and
+            .name == $artifact_name and
+            (.created_at | type) == "string" and
+            (.created_at > $started_at and .created_at <= $updated_at))
+        ] as $matches |
+        if $matches | length == 0 then
+          empty
+        elif $matches | length == 1 then
+          $matches[0] |
+          {
+            id,
+            name,
+            size_in_bytes,
+            job: $job.name
+          }
+        else
+          error("test result artifact does not identify exactly one failed job")
+        end
+      ] as $selected |
+      if ($selected | length) > $max_artifacts then
+        error("test result artifact count exceeds the download budget")
+      elif any(
+        $selected[];
+        (.id | type) != "number" or
+        (.id | floor) != .id or
+        .id < 1 or
+        (.size_in_bytes | type) != "number" or
+        (.size_in_bytes | floor) != .size_in_bytes or
+        .size_in_bytes < 0 or
+        .size_in_bytes > $max_artifact_bytes
+      ) then
+        error("test result artifact has invalid or excessive size metadata")
+      elif ($selected | map(.id) | unique | length) != ($selected | length) then
+        error("test result artifact does not identify exactly one failed job")
+      elif ($selected | map(.size_in_bytes) | add // 0) > $max_total_bytes then
+        error("test result artifacts exceed the cumulative download budget")
+      else
+        $selected
+      end
+    ' "$failed_jobs_file"
 }
 
 extract_test_results_artifact()
@@ -631,6 +761,15 @@ case "$COMMAND" in
     UPDATED_AT="${4:?update time is required}"
     select_test_results_artifact "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT"
     ;;
+  select-test-result-artifacts)
+    ARTIFACTS_FILE="${2:?artifacts file is required}"
+    STARTED_AT="${3:?start time is required}"
+    UPDATED_AT="${4:?update time is required}"
+    FAILED_JOBS_FILE="${5:?failed jobs file is required}"
+    select_test_result_artifacts \
+      "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT" "$FAILED_JOBS_FILE" \
+      "${6:-20}" "${7:-1073741824}" "${8:-104857600}"
+    ;;
   extract-test-results-artifact)
     ARTIFACT_FILE="${2:?artifact file is required}"
     OUTPUT_DIRECTORY="${3:?output directory is required}"
@@ -675,6 +814,14 @@ case "$COMMAND" in
     INPUT_FILE="${2:?input file is required}"
     OUTPUT_FILE="${3:?output file is required}"
     sanitize_trusted_test_failures "$INPUT_FILE" "$OUTPUT_FILE"
+    ;;
+  collect-test-failures)
+    TEST_RESULTS_DIRECTORY="${2:?test results directory is required}"
+    JOB_NAME="${3:?job name is required}"
+    FAILED_JOBS_FILE="${4:?failed jobs file is required}"
+    OUTPUT_FILE="${5:?output file is required}"
+    collect_test_failures \
+      "$TEST_RESULTS_DIRECTORY" "$JOB_NAME" "$FAILED_JOBS_FILE" "$OUTPUT_FILE"
     ;;
   cause-job-names)
     CAUSE_FILE="${2:?cause file is required}"

@@ -366,73 +366,68 @@ jobs:
           fi
 
           # Artifact listings are run-scoped and can contain same-named artifacts from
-          # multiple attempts. The attempt metadata bounds the upload window, and downloading
-          # by artifact ID prevents gh from choosing a same-named artifact from another attempt.
+          # multiple attempts. The attempt metadata bounds the upload window. Select each
+          # failed test job's immutable logs artifact by its workflow-defined API name, then
+          # download by ID so TRX paths or contents cannot reassign evidence across artifacts.
           ARTIFACTS_FILE="ci-failure-data/artifacts.json"
           if ! gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
               --jq '.artifacts[]' | jq -s '.' > "${ARTIFACTS_FILE}"; then
             echo "Warning: Failed to list test results artifacts"
             echo "[]" > "${ARTIFACTS_FILE}"
           fi
-          ARTIFACT_ID=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-            select-test-results-artifact "${ARTIFACTS_FILE}" "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}")
-          if [ -n "${ARTIFACT_ID}" ]; then
-            ARTIFACT_NAME=$(jq -r \
-              --argjson artifact_id "${ARTIFACT_ID}" \
-              '[.[] | select(.id == $artifact_id)] | first | .name // empty' \
-              "${ARTIFACTS_FILE}")
-            ARTIFACT_SIZE=$(jq -r \
-              --argjson artifact_id "${ARTIFACT_ID}" \
-              '[.[] | select(.id == $artifact_id)] | first | .size_in_bytes // empty' \
-              "${ARTIFACTS_FILE}")
-            ARTIFACT_ZIP="ci-failure-data/test-results.zip"
-            echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
-            if gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > "${ARTIFACT_ZIP}" 2>/dev/null &&
-                bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  extract-test-results-artifact "${ARTIFACT_ZIP}" ci-failure-data/test-results \
-                  10000 1073741824 104857600 "${ARTIFACT_SIZE}"; then
-              echo "Download complete."
+          SELECTED_ARTIFACTS_FILE="ci-failure-data/selected-test-result-artifacts.json"
+          if bash .github/workflows/analyze-ci-failure-persistence.sh \
+              select-test-result-artifacts "${ARTIFACTS_FILE}" \
+              "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}" ci-failure-data/failed-jobs.json \
+              20 1073741824 104857600 \
+              > "${SELECTED_ARTIFACTS_FILE}"; then
+            mkdir -p \
+              ci-failure-data/test-result-zips \
+              ci-failure-data/test-results \
+              ci-failure-data/test-failures
+            ARTIFACT_DOWNLOAD_FAILED=false
+            REMAINING_UNCOMPRESSED_BYTES=1073741824
+            while IFS= read -r ARTIFACT; do
+              ARTIFACT_ID=$(jq -r '.id' <<< "${ARTIFACT}")
+              ARTIFACT_NAME=$(jq -r '.name' <<< "${ARTIFACT}")
+              ARTIFACT_SIZE=$(jq -r '.size_in_bytes' <<< "${ARTIFACT}")
+              JOB_NAME=$(jq -r '.job' <<< "${ARTIFACT}")
+              ARTIFACT_ZIP="ci-failure-data/test-result-zips/${ARTIFACT_ID}.zip"
+              ARTIFACT_OUTPUT="ci-failure-data/test-results/${ARTIFACT_ID}"
+              echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
+              if ! gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" \
+                    > "${ARTIFACT_ZIP}" 2>/dev/null ||
+                  ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    extract-test-results-artifact "${ARTIFACT_ZIP}" "${ARTIFACT_OUTPUT}" \
+                    10000 "${REMAINING_UNCOMPRESSED_BYTES}" 104857600 \
+                    "${ARTIFACT_SIZE}" ||
+                  ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
+                    ci-failure-data/failed-jobs.json \
+                    "ci-failure-data/test-failures/${ARTIFACT_ID}.json"; then
+                ARTIFACT_DOWNLOAD_FAILED=true
+                break
+              fi
 
-              # List TRX files found
-              TRX_COUNT=$(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | wc -l)
-              echo "Found ${TRX_COUNT} TRX file(s):"
-              find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r f; do
-                echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
-              done || true
+              EXTRACTED_BYTES=$(find "${ARTIFACT_OUTPUT}" -name "*.trx" -type f -printf '%s\n' \
+                | awk '{ total += $1 } END { print total + 0 }')
+              REMAINING_UNCOMPRESSED_BYTES=$((REMAINING_UNCOMPRESSED_BYTES - EXTRACTED_BYTES))
+            done < <(jq -c '.[]' "${SELECTED_ARTIFACTS_FILE}")
 
-              # Parse TRX files for failed tests using yq (pre-installed) + jq.
-              # yq converts XML to JSON, then jq extracts failed test info.
-              # TRX uses UnitTestResult elements with outcome="Failed" containing
-              # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
-              > ci-failure-data/test-failures.jsonl
-              find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
-                echo "Processing: $(basename "$TRX_FILE")"
-                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
-                  # Navigate to UnitTestResult — may be array or single object
-                  (.TestRun.Results.UnitTestResult // []) |
-                  (if type == "array" then . else [.] end) |
-                  map(select(.["+@outcome"] == "Failed")) |
-                  .[] |
-                  {
-                    test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
-                  }
-                ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
-              done
-              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
-              rm -f ci-failure-data/test-failures.jsonl
+            if [ "${ARTIFACT_DOWNLOAD_FAILED}" = "false" ] &&
+                [ "$(jq 'length' "${SELECTED_ARTIFACTS_FILE}")" -gt 0 ]; then
+              jq -s 'add // []' ci-failure-data/test-failures/*.json \
+                > ci-failure-data/test-failures.json
               echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
-
-              # Clean up the bounded extraction directory to save space in the uploaded artifact.
-              rm -rf ci-failure-data/test-results
-            else
-              echo "Warning: Failed to download or safely extract test results artifact"
-              rm -rf ci-failure-data/test-results
+            elif [ "${ARTIFACT_DOWNLOAD_FAILED}" = "true" ]; then
+              echo "Warning: Failed to download or safely extract per-job test results"
             fi
-            rm -f "${ARTIFACT_ZIP}"
+            rm -rf \
+              ci-failure-data/test-result-zips \
+              ci-failure-data/test-results \
+              ci-failure-data/test-failures
           else
-            echo "No test results artifact found for run ${RUN_ID} attempt ${RUN_ATTEMPT}"
+            echo "Warning: Failed to select bounded per-job test result artifacts"
           fi
 
           echo "Data collection complete."
@@ -1469,7 +1464,7 @@ Field details:
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
-- Include a `failed_tests` entry only when its non-empty `name` exactly matches a TRX test failure in the summary and its non-empty `job` exactly matches a failed job name in the summary. Do not infer failed tests from job logs.
+- Include a `failed_tests` entry only when its non-empty `name` and `job` exactly match the same trusted TRX test failure in the summary. Do not infer failed tests from job logs.
 - `failed_tests[].name`: The exact single-line TRX test name, limited to 500 characters.
 - `failed_tests[].job`: The exact failed job name from the summary, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.

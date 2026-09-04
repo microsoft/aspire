@@ -138,7 +138,10 @@ if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
     --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
       all(.failed_tests[];
         . as $reported |
-        ([$trusted_tests[0][] | select(.test == $reported.name)]) as $matches |
+        ([
+          $trusted_tests[0][] |
+          select(.test == $reported.name and .job == $reported.job)
+        ]) as $matches |
         ($matches | length) == 1 and
         any($trusted_jobs[0][]; .name == $reported.job))
     ' "$ANALYSIS_FILE" >/dev/null; then
@@ -150,7 +153,10 @@ if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
     --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" '
       .failed_tests |= map(
         . as $reported |
-        ([$trusted_tests[0][] | select(.test == $reported.name)][0]) as $trusted |
+        ([
+          $trusted_tests[0][] |
+          select(.test == $reported.name and .job == $reported.job)
+        ][0]) as $trusted |
         .error = $trusted.error |
         .stack_trace = $trusted.stack_trace)
     ' "$ANALYSIS_FILE" > "$BOUND_ANALYSIS_FILE"
