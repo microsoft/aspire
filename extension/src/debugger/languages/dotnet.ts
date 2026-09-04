@@ -36,8 +36,17 @@ import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
     buildDotNetProject(projectFile: string): Promise<void>;
+    getDotNetProjectLaunchProperties(projectFile: string): Promise<DotNetProjectLaunchProperties>;
     getDotNetTargetPath(projectFile: string): Promise<string>;
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
+}
+
+interface DotNetProjectLaunchProperties {
+    targetPath: string;
+    runCommand?: string;
+    useAppHost: boolean;
+    useWinUI: boolean;
+    windowsPackageType?: string;
 }
 
 export class DotNetService implements IDotNetService {
@@ -124,11 +133,15 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetTargetPath(projectFile: string): Promise<string> {
+        return (await this.getDotNetProjectLaunchProperties(projectFile)).targetPath;
+    }
+
+    async getDotNetProjectLaunchProperties(projectFile: string): Promise<DotNetProjectLaunchProperties> {
         const args = [
             'msbuild',
             projectFile,
             '-nologo',
-            '-getProperty:TargetPath',
+            '-getProperty:TargetPath,RunCommand,UseAppHost,UseWinUI,WindowsPackageType',
             '-v:q',
             '-property:GenerateFullPaths=true'
         ];
@@ -144,7 +157,26 @@ export class DotNetService implements IDotNetService {
                 throw new Error(noOutputFromMsbuild);
             }
 
-            return output;
+            // Asking MSBuild for multiple properties produces:
+            //   { "Properties": { "TargetPath": "...dll", "RunCommand": "...exe", "UseAppHost": "true", ... } }
+            // Property values are strings even when the evaluated MSBuild value is boolean.
+            const parsed = JSON.parse(output) as { Properties?: Record<string, unknown> };
+            const properties = parsed.Properties;
+            if (!properties || typeof properties.TargetPath !== 'string' || properties.TargetPath.length === 0) {
+                throw new Error(noOutputFromMsbuild);
+            }
+
+            return {
+                targetPath: properties.TargetPath,
+                runCommand: typeof properties.RunCommand === 'string' && properties.RunCommand.length > 0
+                    ? properties.RunCommand
+                    : undefined,
+                useAppHost: isTrueMsbuildProperty(properties.UseAppHost),
+                useWinUI: isTrueMsbuildProperty(properties.UseWinUI),
+                windowsPackageType: typeof properties.WindowsPackageType === 'string'
+                    ? properties.WindowsPackageType
+                    : undefined
+            };
         } catch (err) {
             throw new Error(failedToGetTargetPath(String(err)));
         }
@@ -198,6 +230,29 @@ export class DotNetService implements IDotNetService {
 
 export function isFileBasedApp(projectPath: string): boolean {
     return path.extname(projectPath).toLowerCase().endsWith('.cs');
+}
+
+function isTrueMsbuildProperty(value: unknown): boolean {
+    return typeof value === 'string' && value.trim().toLowerCase() === 'true';
+}
+
+function getProjectDebugProgram(properties: DotNetProjectLaunchProperties): string {
+    const runCommand = properties.runCommand?.trim();
+    if (process.platform === 'win32' &&
+        properties.useAppHost &&
+        properties.useWinUI &&
+        properties.windowsPackageType?.trim().toLowerCase() === 'none' &&
+        runCommand &&
+        path.win32.isAbsolute(runCommand) &&
+        path.win32.extname(runCommand).toLowerCase() === '.exe') {
+        // An unpackaged WinUI app must retain the generated apphost executable as its process image.
+        // Launching TargetPath instead makes vsdbg host the assembly in dotnet.exe, which crashes in
+        // Microsoft.UI.Xaml.Application.Start with STATUS_STOWED_EXCEPTION.
+        // See https://github.com/microsoft/aspire/issues/19091.
+        return runCommand;
+    }
+
+    return properties.targetPath;
 }
 
 interface RunApiOutput {
@@ -886,8 +941,17 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
             else if (!isFileBasedProject) {
                 const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-                const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
-                if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
+                const projectLaunchProperties = await dotNetService.getDotNetProjectLaunchProperties(projectPath);
+                const outputPath = projectLaunchProperties.targetPath;
+                const debugProgram = getProjectDebugProgram(projectLaunchProperties);
+                if (debugProgram !== outputPath) {
+                    extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
+                }
+                const outputExists = await doesFileExist(outputPath);
+                const debugProgramExists = debugProgram === outputPath
+                    ? outputExists
+                    : await doesFileExist(debugProgram);
+                if (!outputExists || !debugProgramExists || launchOptions.forceBuild) {
                     await dotNetService.buildDotNetProject(projectPath);
                 }
 
@@ -903,7 +967,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         createDotNetRunArguments(projectPath, profileCommandLineArgs, args),
                         createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions));
                 } else {
-                    debugConfiguration.program = outputPath;
+                    debugConfiguration.program = debugProgram;
                     debugConfiguration.env = createProjectEnvironment(
                         launchSettings,
                         baseProfile,

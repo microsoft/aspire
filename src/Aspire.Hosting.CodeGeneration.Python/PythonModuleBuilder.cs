@@ -590,10 +590,17 @@ internal sealed class PythonModuleBuilder
             _handle_wrapper_registry[type_id] = factory
 
 
-        def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwargs: typing.Mapping[str, typing.Any] | None = None) -> typing.Any:
+        def _wrap_if_handle(
+            value: typing.Any,
+            client: AspireClient | None = None,
+            kwargs: typing.Mapping[str, typing.Any] | None = None,
+            fallback_type_id: str | None = None
+        ) -> typing.Any:
             '''
             Checks if a value is a marshalled handle and wraps it appropriately.
-            Uses the wrapper registry to create typed wrapper instances when available.
+            Uses the wrapper registry to create typed wrapper instances when available. The fallback
+            type ID lets callbacks use their generated parameter type when .NET marshals a handle
+            using its declared generic builder type.
             '''
             if isinstance(value, dict) and _is_marshalled_handle(value):
                 handle = Handle(value)
@@ -602,6 +609,8 @@ internal sealed class PythonModuleBuilder
                 # Try to find a registered wrapper factory for this type
                 if type_id and client:
                     factory = _handle_wrapper_registry.get(type_id)
+                    if factory is None and fallback_type_id:
+                        factory = _handle_wrapper_registry.get(fallback_type_id)
                     if factory:
                         if kwargs:
                             return factory(handle, client, **kwargs)
@@ -1242,13 +1251,19 @@ internal sealed class PythonModuleBuilder
                     if thread.is_alive():
                         thread.join(timeout=1.0)
 
-            def register_callback(self, callback: typing.Callable[..., typing.Any] | None) -> str | None:
+            def register_callback(
+                self,
+                callback: typing.Callable[..., typing.Any] | None,
+                parameter_type_ids: typing.Sequence[str | None] | None = None
+            ) -> str | None:
                 '''
                 Register a callback function that can be invoked from the .NET side.
                 Returns a callback ID that should be passed to methods accepting callbacks.
 
                 .NET passes arguments as an object with positional keys: { p0: value0, p1: value1, ... }
-                This function automatically extracts positional parameters and wraps handles.
+                This function automatically extracts positional parameters and wraps handles. Generated
+                callback parameter type IDs provide a fallback when the marshalled handle uses a declared
+                generic type ID instead of the concrete type registered by the Python SDK.
                 '''
                 if callback is None:
                     return None
@@ -1265,7 +1280,14 @@ internal sealed class PythonModuleBuilder
                         while True:
                             key = f"p{i}"
                             if key in args:
-                                arg_array.append(_wrap_if_handle(args[key], client))
+                                fallback_type_id = (
+                                    parameter_type_ids[i]
+                                    if parameter_type_ids is not None and i < len(parameter_type_ids)
+                                    else None
+                                )
+                                arg_array.append(
+                                    _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                                )
                                 i += 1
                             else:
                                 break

@@ -139,9 +139,11 @@ const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTER
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const winUiReadyMarkerPath = path.join(workspaceRoot, 'winui-e2e-ready.txt');
 const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -336,6 +338,7 @@ function logE2eConfiguration() {
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
   console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
   console.log(`  Java: ${enableJavaE2E ? 'enabled' : 'disabled'}`);
+  console.log(`  WinUI: ${enableWinUiE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
   console.log(`  storage diagnostics: ${path.relative(extensionRoot, storageDiagnosticsDir)}`);
   console.log(`  workspace diagnostics: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
@@ -643,7 +646,7 @@ async function main() {
       throw new Error(`VSIX not found at ${vsixPath}`);
     }
     validateVsix(vsixPath);
-    const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+    const debuggerVsixPaths = resolveDebuggerVsixPaths();
     if (enableAzureFunctionsE2E) {
       validateAzureFunctionsCoreTools();
     }
@@ -672,6 +675,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ASPIRE_EXTENSION_E2E_ENABLE_WINUI: enableWinUiE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
@@ -716,9 +720,9 @@ async function main() {
 
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
-    for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
-      logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
-      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+    for (const debuggerVsix of debuggerVsixPaths) {
+      logStep(`Installing ${debuggerVsix.displayName} VSIX`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', debuggerVsix.path], extestEnv, { timeout: 300000 });
     }
     assertJavaExtensionsRegistered();
 
@@ -866,16 +870,15 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
-function resolveAzureFunctionsVsixPaths() {
-  if (!enableAzureFunctionsE2E) {
+function resolveDebuggerVsixPaths() {
+  if (!enableAzureFunctionsE2E && !enableWinUiE2E) {
     return [];
   }
 
-  // Aspire advertises its azure-functions launch capability only when both the C# and
-  // Azure Functions extensions are installed. Install C# with its required .NET runtime
-  // dependency, plus the Azure Resource Groups extension that Functions activates directly.
-  // All dependencies must be explicit because the E2E VS Code instance runs offline.
-  return [
+  // .NET resource shards need the C# extension and its .NET runtime dependency. Azure Functions
+  // additionally needs the Azure Resource Groups and Functions extensions before Aspire advertises
+  // that launch capability. All dependencies must be explicit because the E2E instance runs offline.
+  const vsixPaths = [
     {
       displayName: '.NET Install Tool',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
@@ -884,15 +887,18 @@ function resolveAzureFunctionsVsixPaths() {
       displayName: 'C#',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
     },
-    {
+  ];
+  if (enableAzureFunctionsE2E) {
+    vsixPaths.push({
       displayName: 'Azure Resource Groups',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
-    },
-    {
+    }, {
       displayName: 'Azure Functions',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
-    },
-  ];
+    });
+  }
+
+  return vsixPaths;
 }
 
 /**
@@ -1273,9 +1279,10 @@ function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName)
   }
 }
 
-function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = process.env[environmentVariable];
+function resolveRequiredVsixPath(environmentVariable) {
+  const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
-    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+    throw new Error(`${environmentVariable} is required when a debugger-backed E2E shard is enabled.`);
   }
 
   const resolvedPath = path.resolve(configuredPath);
@@ -1398,7 +1405,13 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   if (enableAzureFunctionsE2E) {
     writeAzureFunctionsProject('AspireE2E.Functions');
   }
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
+  if (enableWinUiE2E) {
+    if (!isWindows) {
+      throw new Error('The WinUI extension E2E fixture can only run on Windows.');
+    }
+    writeWinUiProject('AspireE2E.WinUI');
+  }
+  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1451,11 +1464,14 @@ function restoreWorkspaceFixture() {
   }
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
+    : '';
+  const winUiProjectReference = includeWinUi
+    ? '    <ProjectReference Include="../AspireE2E.WinUI/AspireE2E.WinUI.csproj" />\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
@@ -1468,13 +1484,16 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
 
   <ItemGroup>
     <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${azureFunctionsPackageReference}  </ItemGroup>
+${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
     ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
+    : '';
+  const winUiResource = includeWinUi
+    ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
@@ -1558,7 +1577,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${winUiResource}${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -1592,6 +1611,114 @@ builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
+}
+
+function writeWinUiProject(projectName) {
+  const runtimeIdentifier = process.arch === 'arm64'
+    ? 'win-arm64'
+    : process.arch === 'x64' ? 'win-x64' : undefined;
+  if (!runtimeIdentifier) {
+    throw new Error(`The WinUI extension E2E fixture does not support ${process.arch}.`);
+  }
+
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  const propertiesDirectory = path.join(projectDirectory, 'Properties');
+  fs.mkdirSync(propertiesDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>${projectName}</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>${runtimeIdentifier}</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
+  </ItemGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'App.xaml'), `<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="${projectName}.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'App.xaml.cs'), `${csharpFileHeader}using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+
+namespace ${projectName};
+
+public partial class App : Application
+{
+    private Window? _window;
+
+    public App()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
+            ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
+        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+
+        _window = new Window
+        {
+            Content = new TextBlock { Text = "Aspire WinUI E2E" }
+        };
+        _window.Activate();
+    }
+}
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'app.manifest'), `<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="${projectName}.app" />
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>
+`);
+
+  fs.writeFileSync(path.join(propertiesDirectory, 'launchSettings.json'), JSON.stringify({
+    profiles: {
+      E2E: {
+        commandName: 'Project',
+        environmentVariables: {
+          ASPIRE_WINUI_E2E_READY_FILE: winUiReadyMarkerPath,
+        },
+      },
+    },
+  }, undefined, 2));
 }
 
 function writeAzureFunctionsProject(projectName) {
@@ -2210,10 +2337,15 @@ function copyWorkspaceProjectSources() {
 
     const sourceDirectory = path.join(workspaceRoot, entry.name);
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
+    copyIfExists(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'));
+    copyIfExists(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'));
     copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
     copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
+    copyIfExists(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'));
+    copyIfExists(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'));
     copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
   }
+  copyIfExists(winUiReadyMarkerPath, path.join(workspaceDiagnosticsDir, path.basename(winUiReadyMarkerPath)));
 }
 
 function redactTextFilesForArtifacts(directory) {

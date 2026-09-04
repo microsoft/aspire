@@ -1,6 +1,6 @@
 # Azure Container Apps Sandboxes hosting integration
 
-Use this integration to deploy container-backed Aspire compute resources to Azure Container Apps Sandboxes.
+Use this integration to model, configure, and deploy container-backed Aspire compute resources to Azure Container Apps Sandboxes.
 
 ## Getting started
 
@@ -102,7 +102,6 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 
 The package and service are preview features. The current integration does not support:
 
-* Connector Gateway, MCP, triggers, or OAuth flows.
 * Volumes, snapshots, shell/file APIs, or interactive lifecycle commands.
 * TCP ports, private service discovery, or cross-group endpoint references.
 * Windows, ARM64, or arbitrary registry credentials.
@@ -117,7 +116,7 @@ Adding Azure resources to the Aspire application model will automatically enable
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
-* https://learn.microsoft.com/azure/container-apps/sandboxes-overview
+* https://sandboxes.azure.com/docs/sandboxes/quickstart/setup-portal
 
 ## Feedback & contributing
 

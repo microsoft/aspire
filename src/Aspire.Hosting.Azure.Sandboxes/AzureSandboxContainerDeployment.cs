@@ -925,7 +925,12 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = endpoint.Name,
                 Port = endpoint.TargetPort,
-                Auth = endpoint.IsExternal ? new AzureDevComputePortAuthConfig { Anonymous = endpoint.Anonymous ?? false } : null,
+                Auth = endpoint.IsExternal
+                    ? new AzureDevComputePortAuthConfig
+                    {
+                        Anonymous = endpoint.Anonymous ?? false
+                    }
+                    : null,
                 Protocol = endpoint.Protocol
             },
             context.CancellationToken).ConfigureAwait(false);
@@ -2332,7 +2337,13 @@ internal static class AzureSandboxContainerDeployment
 
     private static string GetDestroyStepName(AzureSandboxContainerResource resource) => $"destroy-{resource.Name}";
 
-    internal readonly record struct SandboxEndpoint(string Name, int TargetPort, bool IsExternal, bool IsHttp, string Protocol, bool? Anonymous);
+    internal readonly record struct SandboxEndpoint(
+        string Name,
+        int TargetPort,
+        bool IsExternal,
+        bool IsHttp,
+        string Protocol,
+        bool? Anonymous);
 
     internal sealed record ContainerImageMetadata(
         IReadOnlyList<string> Entrypoint,

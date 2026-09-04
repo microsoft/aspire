@@ -34,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -2061,6 +2062,132 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_InRemoteNonInteractiveHost_DisplaysEachEndpointOnce()
+    {
+        var resourceStatesProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interactionService = new TestInteractionService();
+
+        var backchannelFactory = (IServiceProvider sp) =>
+        {
+            return new TestAppHostBackchannel
+            {
+                GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync,
+                GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+                {
+                    DashboardHealthy = true,
+                    BaseUrlWithLoginToken = "http://localhost:5000/login?t=abcd",
+                    CodespacesUrlWithLoginToken = null
+                }),
+                GetResourceStatesAsyncCallback = cancellationToken => GetResourceStatesAsync(resourceStatesProcessed, cancellationToken)
+            };
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+
+                return 0;
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ConfigurationCallback += config =>
+            {
+                config["VSCODE_IPC_HOOK_CLI"] = "test-ipc-hook";
+                config["SSH_CONNECTION"] = "127.0.0.1 1 127.0.0.1 2";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        try
+        {
+            await resourceStatesProcessed.Task.DefaultTimeout();
+        }
+        finally
+        {
+            cts.Cancel();
+
+            var exitCode = await pendingRun.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+        }
+
+        var renderedOutput = interactionService.DisplayedRenderables.Select(RenderToPlainConsole).ToList();
+
+        Assert.Empty(interactionService.DisplayedLiveRenderables);
+        Assert.Single(renderedOutput, output => output.Contains("frontend has endpoint http://localhost:5000", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("backend has endpoint http://localhost:5001", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Endpoints:", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.Ordinal));
+
+        static async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(
+            TaskCompletionSource resourceStatesProcessed,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new RpcResourceState
+            {
+                Resource = "frontend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5000"],
+                Health = "Healthy"
+            };
+            yield return new RpcResourceState
+            {
+                Resource = "backend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5001"],
+                Health = "Healthy"
+            };
+
+            resourceStatesProcessed.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        static string RenderToPlainConsole(IRenderable renderable)
+        {
+            var writer = new StringWriter();
+            var console = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                Interactive = InteractionSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Out = new AnsiConsoleOutput(writer),
+                Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+            });
+
+            console.Profile.Width = int.MaxValue;
+            console.Profile.Capabilities.Links = false;
+            console.Write(renderable);
+
+            return writer.ToString().Replace("\r\n", "\n");
+        }
+    }
+
+    [Fact]
     public async Task RunCommand_InRemoteExtensionHost_DisplaysDashboardUrlsBeforeLiveEndpointDisplayCompletes()
     {
         var displayLiveStarted = new TaskCompletionSource();
@@ -2100,6 +2227,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
             {
