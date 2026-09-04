@@ -3,6 +3,7 @@
 
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -874,14 +875,15 @@ public static class AtsCapabilityScanner
     /// </remarks>
     private static void ApplyTargetTypeExclusions(AtsCapabilityInfo capability)
     {
-        if (capability.ExcludedTargetTypes.Count == 0)
+        var excludedTargetTypes = GetCapabilityExcludedTargetTypesIfSupported(capability);
+        if (excludedTargetTypes.Count == 0)
         {
             return;
         }
 
         var retained = capability.ExpandedTargetTypes
             .Where(expanded => expanded.ClrType is null ||
-                !capability.ExcludedTargetTypes.Any(excluded => excluded.IsAssignableFrom(expanded.ClrType)))
+                !excludedTargetTypes.Any(excluded => excluded.IsAssignableFrom(expanded.ClrType)))
             .ToList();
 
         // Never leave the expansion empty. Several generators treat an empty expansion as "fall back to the
@@ -2106,7 +2108,7 @@ public static class AtsCapabilityScanner
         // Only set ReturnsBuilder if the return type is actually a resource builder type
         var returnsBuilder = returnTypeId != null && IsResourceBuilderType(method.ReturnType);
 
-        return new AtsCapabilityInfo
+        var capability = new AtsCapabilityInfo
         {
             CapabilityId = capabilityId,
             MethodName = methodName,
@@ -2122,9 +2124,88 @@ public static class AtsCapabilityScanner
             ReturnsBuilder = returnsBuilder,
             SourceLocation = methodLocation,
             RunSyncOnBackgroundThread = exportAttr.RunSyncOnBackgroundThread ||
-                (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false)),
-            ExcludedTargetTypes = exportAttr.ExcludeTargetTypes
+                (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false))
         };
+
+        SetCapabilityExcludedTargetTypesIfSupported(
+            capability,
+            GetExportExcludedTargetTypesIfSupported(exportAttr));
+
+        return capability;
+    }
+
+    internal static IReadOnlyList<Type> GetExportExcludedTargetTypesIfSupported(object exportData)
+    {
+        return GetExcludedTargetTypesIfSupported(
+            exportData,
+            nameof(AspireExportData.ExcludeTargetTypes));
+    }
+
+    internal static IReadOnlyList<Type> GetCapabilityExcludedTargetTypesIfSupported(object capability)
+    {
+        return GetExcludedTargetTypesIfSupported(
+            capability,
+            nameof(AtsCapabilityInfo.ExcludedTargetTypes));
+    }
+
+    internal static void SetCapabilityExcludedTargetTypesIfSupported(
+        object capability,
+        IReadOnlyList<Type> excludedTargetTypes)
+    {
+        var property = GetOptionalExcludedTargetTypesProperty(
+            capability,
+            nameof(AtsCapabilityInfo.ExcludedTargetTypes));
+
+        if (property is null)
+        {
+            return;
+        }
+
+        if (property.SetMethod is not { IsPublic: true })
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{capability.GetType().FullName}.{property.Name}' does not have a public setter.");
+        }
+
+        property.SetValue(capability, excludedTargetTypes);
+    }
+
+    private static IReadOnlyList<Type> GetExcludedTargetTypesIfSupported(
+        object instance,
+        string propertyName)
+    {
+        var property = GetOptionalExcludedTargetTypesProperty(instance, propertyName);
+        if (property is null)
+        {
+            return [];
+        }
+
+        if (property.GetMethod is not { IsPublic: true } ||
+            property.GetValue(instance) is not IReadOnlyList<Type> excludedTargetTypes)
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{instance.GetType().FullName}.{property.Name}' does not have the expected public getter.");
+        }
+
+        return excludedTargetTypes;
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The installed CLI roots the force-shared contract when this property exists.")]
+    private static PropertyInfo? GetOptionalExcludedTargetTypesProperty(
+        object instance,
+        string propertyName)
+    {
+        // Aspire.TypeSystem is force-shared from the installed CLI. A newer RemoteHost can therefore
+        // run against an older contract with the same assembly identity but without these additive
+        // properties. Probe by name so target exclusions are skipped instead of failing the scan.
+        var property = instance.GetType().GetProperty(propertyName);
+        if (property is not null && property.PropertyType != typeof(IReadOnlyList<Type>))
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{instance.GetType().FullName}.{property.Name}' does not have the expected type.");
+        }
+
+        return property;
     }
 
     private static AtsTypeRef? WithNullableHandleReturn(MethodInfo method, AtsTypeRef? returnTypeRef)

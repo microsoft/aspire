@@ -584,6 +584,48 @@ public class AtsCapabilityScannerTests
             t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExcludedEnvironmentResource)));
     }
 
+    [Fact]
+    public void ExcludedTargetTypeCompatibility_UsesCurrentContract()
+    {
+        Type[] excludedTargetTypes = [typeof(ExcludedEnvironmentResource)];
+        var exportData = new AspireExportData
+        {
+            ExcludeTargetTypes = excludedTargetTypes
+        };
+        var capability = new AtsCapabilityInfo
+        {
+            CapabilityId = "test",
+            MethodName = "test",
+            Parameters = [],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            }
+        };
+
+        var exclusions = AtsCapabilityScanner.GetExportExcludedTargetTypesIfSupported(exportData);
+        AtsCapabilityScanner.SetCapabilityExcludedTargetTypesIfSupported(capability, exclusions);
+
+        Assert.Same(excludedTargetTypes, exclusions);
+        Assert.Same(excludedTargetTypes, AtsCapabilityScanner.GetCapabilityExcludedTargetTypesIfSupported(capability));
+    }
+
+    [Fact]
+    public void ExcludedTargetTypeCompatibility_IgnoresLegacyContract()
+    {
+        var legacyExportData = new LegacyAspireExportData();
+        var legacyCapability = new LegacyAtsCapabilityInfo();
+
+        var exclusions = AtsCapabilityScanner.GetExportExcludedTargetTypesIfSupported(legacyExportData);
+        var exception = Record.Exception(
+            () => AtsCapabilityScanner.SetCapabilityExcludedTargetTypesIfSupported(legacyCapability, [typeof(ContainerResource)]));
+
+        Assert.Empty(exclusions);
+        Assert.Empty(AtsCapabilityScanner.GetCapabilityExcludedTargetTypesIfSupported(legacyCapability));
+        Assert.Null(exception);
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -846,6 +888,10 @@ public class AtsCapabilityScannerTests
     private class ExcludedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
     private sealed class DerivedExcludedEnvironmentResource(string name) : ExcludedEnvironmentResource(name);
+
+    private sealed class LegacyAspireExportData;
+
+    private sealed class LegacyAtsCapabilityInfo;
 
     private enum TestUnionEnum
     {
