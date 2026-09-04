@@ -380,15 +380,15 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
         // Act
-        var emulator = maui.AddAndroidEmulator("my-emulator", "Pixel_5_API_33");
+        var emulator = maui.AddAndroidEmulator("my-emulator", "emulator-5554");
 
         // Assert
         Assert.NotNull(emulator);
         Assert.Equal("my-emulator", emulator.Resource.Name);
         Assert.IsType<MauiAndroidEmulatorResource>(emulator.Resource);
         var launchConfiguration = await GetSingleMauiLaunchConfigurationAsync(emulator.Resource);
-        Assert.Equal("Pixel_5_API_33", launchConfiguration.Device);
-        Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s Pixel_5_API_33" }, launchConfiguration.MsBuildProperties);
+        Assert.Equal("emulator-5554", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s emulator-5554" }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]

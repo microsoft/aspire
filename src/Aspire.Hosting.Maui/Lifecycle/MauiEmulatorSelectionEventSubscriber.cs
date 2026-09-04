@@ -99,11 +99,7 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         var targetKind = selection.TargetKind;
         if (!interactionService.IsAvailable)
         {
-            var targetName = GetTargetName(targetKind);
-            var availableTargets = string.Join(", ", options.Select(option => $"{option.DisplayName} ({option.Id})"));
-            throw new DistributedApplicationException(
-                $"Multiple {targetName} are available, but interactive selection is not available. " +
-                $"Specify the target ID explicitly in the AppHost. Available targets: {availableTargets}");
+            throw new DistributedApplicationException(GetNonInteractiveSelectionMessage(targetKind, options));
         }
 
         var (title, message, label) = GetPromptStrings(targetKind);
@@ -189,6 +185,27 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
             MauiTargetSelectionKind.AndroidEmulator => "Android emulators",
             MauiTargetSelectionKind.IOSSimulator => "iOS simulators",
             _ => "targets"
+        };
+    }
+
+    private static string GetNonInteractiveSelectionMessage(MauiTargetSelectionKind targetKind, IReadOnlyList<EmulatorOption> options)
+    {
+        var availableTargets = string.Join(", ", options.Select(option => $"{option.DisplayName} ({option.Id})"));
+        return targetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator =>
+                "Multiple Android emulators are available, but interactive selection is not available. " +
+                "Run the AppHost in an interactive terminal to choose an Android Virtual Device, or start the desired emulator manually and pass its adb serial from 'adb devices' to AddAndroidEmulator(...). " +
+                $"Available Android Virtual Devices: {availableTargets}",
+
+            MauiTargetSelectionKind.IOSSimulator =>
+                "Multiple iOS simulators are available, but interactive selection is not available. " +
+                "Specify the simulator UDID explicitly in the AppHost. " +
+                $"Available iOS simulators: {availableTargets}",
+
+            _ =>
+                "Multiple targets are available, but interactive selection is not available. " +
+                $"Available targets: {availableTargets}"
         };
     }
 
