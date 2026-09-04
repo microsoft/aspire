@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, waitForCommandOutcome, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, reloadWorkspaceForE2E, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, writeFileWithRetry, writeWorkspaceAppHostConfigForPath, writeWorkspaceSetting } from './helpers/fixtures';
 import { runProcess } from './helpers/process';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './helpers/paths';
 
@@ -83,6 +83,12 @@ suite('Aspire auto-restore E2E', function () {
 
     teardown(async () => {
         await runE2eTeardown([
+            // The shared fixture workspace pins this to `false` (see `prepareWorkspaceFixture` in
+            // run-e2e.js) so that unrelated E2E tests never see auto-restore fire. Restore that
+            // explicit baseline rather than clearing the key entirely - clearing it would fall
+            // through to the manifest default, which this feature flips to `true`, silently
+            // changing the fixture's behavior for any other test that reuses this workspace.
+            () => writeWorkspaceSetting('aspire.enableAutoRestore', false),
             () => restoreWorkspaceAppHostConfig(),
             () => removePath(guestAppHostDirectory, { recursive: true, force: true }),
         ], 'Auto-restore E2E teardown failed.');
@@ -90,6 +96,12 @@ suite('Aspire auto-restore E2E', function () {
 
     test('automatically restores a stale non-.NET AppHost on activation and force-restores it via the manual command', async function () {
         this.timeout(600000);
+
+        // Wait for the extension's initial activation to settle before running the CPU/IO-heavy
+        // `aspire init` below. This is the first test in the suite, so nothing has already driven
+        // VS Code through a settled activation - starting `init` first would race the extension's
+        // own startup and workspace-open sequence for CPU/IO on a resource-constrained CI runner.
+        await waitForRepositoryIdle();
 
         // A real `aspire init` is the only way to get a guest-language AppHost whose on-disk
         // scaffolding matches what the extension's marker-based staleness check expects (Theme F3
@@ -117,6 +129,11 @@ suite('Aspire auto-restore E2E', function () {
         writeFileWithRetry(guestMarkerPath, staleMarkerVersion);
         writeWorkspaceAppHostConfigForPath(guestAppHostPath);
 
+        // The shared fixture workspace pins `aspire.enableAutoRestore` to `false` (see
+        // `prepareWorkspaceFixture` in run-e2e.js) so unrelated E2E tests never see it fire. Flip
+        // it on for this test only; `teardown` above restores the fixture's baseline.
+        writeWorkspaceSetting('aspire.enableAutoRestore', true);
+
         // Auto-restore only re-runs on a handful of explicit triggers (configuration changes,
         // workspace folder changes, trust grants, and the one-time activation call) - none of which
         // fire just because `aspire.config.json` changed on disk. Reloading the window re-triggers
@@ -125,9 +142,7 @@ suite('Aspire auto-restore E2E', function () {
         //
         // `reloadWorkspaceForE2E()` reads the *current* state file first to capture a baseline
         // session id before reloading, with no retry - it assumes a prior activation already wrote
-        // one. Wait for the extension's initial activation to finish so that read doesn't race a
-        // cold start (activation can still be in flight this soon after the window first opened).
-        await waitForRepositoryIdle();
+        // one, which the wait above guarantees.
         await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
 
@@ -157,6 +172,12 @@ suite('Aspire auto-restore E2E', function () {
         this.timeout(300000);
 
         restoreWorkspaceAppHostConfig();
+
+        // The shared fixture workspace pins `aspire.enableAutoRestore` to `false` (see
+        // `prepareWorkspaceFixture` in run-e2e.js). Flip it on so this test actually exercises the
+        // C#-skip gate, instead of trivially passing because auto-restore never runs at all;
+        // `teardown` above restores the fixture's baseline.
+        writeWorkspaceSetting('aspire.enableAutoRestore', true);
 
         // Force a fresh activation pass under this test's control rather than relying on the
         // one-time pass from suite startup, which ran before this test - and possibly before other

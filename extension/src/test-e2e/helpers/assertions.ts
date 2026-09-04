@@ -16,8 +16,18 @@ let controlRevision = Date.now();
 let atomicWriteSequence = 0;
 let workspaceFolderOpened = false;
 
+// Opening the workspace folder is part of the wait rather than a precondition, for the same
+// reason documented on `waitForWorkspaceAppHostCandidate` below: discovery does not run at all
+// while the harness still has its own folder open, so a caller that skips this - most notably one
+// that calls this as its very first wait in a freshly-launched window, before any other helper has
+// had a chance to open the fixture workspace - can time out with no useful state ever observed.
 export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
-    return await waitForExtensionState(file => file.state.isWorkspaceAppHostDiscoveryComplete && !file.state.isRepositoryLoading, 'repository to become idle', timeoutMs);
+    const deadline = createDeadline(timeoutMs);
+    await ensureWorkspaceFolderOpen(deadline);
+    return await waitForExtensionState(
+        file => file.state.isWorkspaceAppHostDiscoveryComplete && !file.state.isRepositoryLoading,
+        'repository to become idle',
+        getRemainingTimeout(deadline, 'repository to become idle'));
 }
 
 export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
