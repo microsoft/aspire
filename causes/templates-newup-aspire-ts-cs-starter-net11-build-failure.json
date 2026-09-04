@@ -1,0 +1,17 @@
+{
+  "id": "templates-newup-aspire-ts-cs-starter-net11-build-failure",
+  "type": "flaky-test",
+  "title": "Flaky: NewUpAndBuildStandaloneTemplateTests.CanNewAndBuild(aspire-ts-cs-starter, Net11) fails building generated project on Windows with preview .NET 11 SDK",
+  "test_name": "Aspire.Templates.Tests.NewUpAndBuildStandaloneTemplateTests.CanNewAndBuild(templateName: \"aspire-ts-cs-starter\", extraArgs: \"\", sdk: Net11, tfm: Net10, error: null)",
+  "error_pattern": "Aspire.Templates.Tests.ToolCommandException : Expected 0 exit code but got 1: dotnet.exe build ... /p:TreatWarningsAsErrors=true -c Debug /p:AspireUseCliBundle=false. Uses preview .NET 11 SDK 11.0.100-preview.6; unrelated to PR Kubernetes/Helm changes.",
+  "occurrences": [
+    {
+      "run_id": 33902845984,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33902845984",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Components (windows-latest))",
+      "pr_number": 19243,
+      "observed_at": "2026-09-04T18:39:16Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19941"
+}

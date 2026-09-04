@@ -1,0 +1,55 @@
+{
+  "run_id": 33902845984,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33902845984",
+  "analyzed_at": "2026-09-04T18:39:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19243,
+    "title": "Fix Helm cleanup ordering for AKS destroy",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/fix-aks-helm-destroy",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19243"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Components (windows-latest))",
+      "id": 101121730906,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33902845984/job/101121730906",
+      "classification": "flaky-test",
+      "reason": "MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared fails with a SQLite 'expected 0 columns' error, a known recurring flaky pattern (issue #19742, 4 prior occurrences). The PR only modifies Kubernetes/Helm hosting code, not the Dashboard metrics/SQLite code.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest))",
+      "id": 101124283548,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33902845984/job/101124283548",
+      "classification": "flaky-test",
+      "reason": "NewUpAndBuildStandaloneTemplateTests.CanNewAndBuild(aspire-ts-cs-starter) fails building a generated project template with .NET 11 preview SDK on Windows; unrelated to the PR's Kubernetes/Helm changes and consistent with other known template-test infra flakiness (e.g. preview SDK / template build instability).",
+      "failed_steps": ["Run nuget dependent tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Components (windows-latest))",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()\n   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "Matches prior cause 'dashboard-components-sqlite-column-count-mismatch' (issue #19742, 4 prior occurrences). PR does not touch Dashboard or SQLite storage code."
+    },
+    {
+      "name": "Aspire.Templates.Tests.NewUpAndBuildStandaloneTemplateTests.CanNewAndBuild(templateName: \"aspire-ts-cs-starter\", extraArgs: \"\", sdk: Net11, tfm: Net10, error: null)",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest))",
+      "error": "Aspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: dotnet.exe build ... /p:TreatWarningsAsErrors=true -c Debug /p:AspireUseCliBundle=false",
+      "stack_trace": "at Aspire.Templates.Tests.CommandResult.EnsureExitCode(...) in CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(...) in CommandResult.cs:line 20\n   at Aspire.Templates.Tests.AspireProject.BuildAsync(...) in AspireProject.cs:line 347\n   at Aspire.Templates.Tests.NewUpAndBuildStandaloneTemplateTests.CanNewAndBuild(...) in NewUpAndBuildStandaloneTemplateTests.cs:line 46",
+      "classification": "flaky",
+      "reason": "Template build failure on a newly-generated aspire-ts-cs-starter project using preview .NET 11 SDK; unrelated to PR's Kubernetes/Helm hosting changes. No matching test file in PR changed files."
+    }
+  ],
+  "causes": ["dashboard-components-sqlite-column-count-mismatch", "templates-newup-aspire-ts-cs-starter-net11-build-failure"]
+}

@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared fails with SQLite 'expected 0 columns' error on Windows",
   "test_name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
-  "error_pattern": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 13'. at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+  "error_pattern": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'. at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
   "occurrences": [
     {
       "run_id": 33086828076,
@@ -32,6 +32,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Components (windows-latest)",
       "pr_number": 19761,
       "observed_at": "2026-09-02T18:49:27Z"
+    },
+    {
+      "run_id": 33902845984,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33902845984",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Components (windows-latest))",
+      "pr_number": 19243,
+      "observed_at": "2026-09-04T18:39:16Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19742"
