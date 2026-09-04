@@ -47,7 +47,7 @@ class ResourceGraph {
         this.zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (event) => {
             this.baseGroup.attr('transform', event.transform);
         });
-        this.svg.call(this.zoom);
+        this.svg.call(this.zoom).on('dblclick.zoom', null);
 
         // simulation setup with all forces
         this.linkForce = d3
@@ -638,8 +638,8 @@ class ResourceGraph {
         trigger?.setAttribute("aria-expanded", "true");
 
         try {
-            // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY, focusElementId);
+            // Wait until Blazor has opened the menu before resetting transient graph state.
+            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId);
         } finally {
             this.openContextMenu = false;
             trigger?.setAttribute("aria-expanded", "false");

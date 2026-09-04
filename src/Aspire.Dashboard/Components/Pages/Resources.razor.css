@@ -273,19 +273,19 @@
 }
 
 ::deep .resource-menu-cog-background {
-    fill: var(--fill-color);
-    stroke: var(--neutral-stroke-rest);
-    stroke-width: 1;
+    fill: var(--colorNeutralBackground1);
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: var(--strokeWidthThin);
 }
 
 ::deep .resource-menu-cog:hover .resource-menu-cog-background {
-    fill: var(--neutral-fill-secondary-hover);
-    stroke: var(--neutral-stroke-hover);
+    fill: var(--colorNeutralBackground1Hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
-    stroke: var(--focus-stroke-outer);
-    stroke-width: calc(var(--focus-stroke-width) * 1px);
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
 }
 
 ::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
@@ -301,7 +301,7 @@
 }
 
 ::deep .resource-menu-cog-icon {
-    fill: var(--accent-fill-rest);
+    fill: var(--colorBrandForeground1);
     pointer-events: none;
 }
 

@@ -39,7 +39,7 @@
             return @<div id="@item.Id" class="aspire-menu-header" role="presentation">
                 @if (item.Icon is not null)
                 {
-                    <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" />
+                    <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
                 }
                 <span class="aspire-menu-header-text" title="@item.Text">@item.Text</span>
             </div>;
