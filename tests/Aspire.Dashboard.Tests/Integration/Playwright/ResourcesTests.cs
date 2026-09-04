@@ -195,6 +195,26 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(menu).ToBeHiddenAsync();
             await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
             await Assertions.Expect(cog).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Enter");
+            await page.GetByRole(
+                AriaRole.Menuitem,
+                new PageGetByRoleOptions
+                {
+                    Name = ControlsStrings.ActionViewDetailsText,
+                    Exact = true
+                }).ClickAsync();
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveTextAsync("TestResource");
+
+            await page.GetByRole(
+                AriaRole.Button,
+                new PageGetByRoleOptions
+                {
+                    Name = ControlsStrings.SummaryDetailsViewCloseView,
+                    Exact = true
+                }).ClickAsync();
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
+            await Assertions.Expect(cog).ToBeFocusedAsync();
         });
     }
 

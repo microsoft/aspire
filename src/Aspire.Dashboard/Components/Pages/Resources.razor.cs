@@ -652,7 +652,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 _contextMenuItems,
                 resource,
                 _resourceByName,
-                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, focusElementId: null)),
+                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, focusElementId)),
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
