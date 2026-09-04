@@ -400,10 +400,11 @@ function ensureTerminalStyles() {
 /*
  * The dimension picker only makes sense where the user can act on a fixed
  * grid: the resource page and a detached terminal window (which is resizable)
- * keep it, while a dock pane is sized by the dock's splitter and always fits
- * its grid to the available space. The font stepper stays in both cases so
- * dock terminals can still be zoomed. Hidden with a class rather than skipped
- * in buildFooter so the control wiring stays identical in every mode.
+ * keep it, while a dock pane and the interaction dialog's terminal are sized by
+ * their container and always fit their grid to the available space. The font
+ * stepper stays in both cases so those terminals can still be zoomed. Hidden
+ * with a class rather than skipped in buildFooter so the control wiring stays
+ * identical in every mode.
  */
 .aspire-terminal-host.dimensions-hidden #terminal-dims {
   display: none;
@@ -1313,7 +1314,8 @@ function resolveDashboardFontPx() {
 // `options` is optional: { chromeless: bool, showDimensions: bool,
 // sizeMemoryKey: string, ...control labels }. Chromeless drops the frame,
 // titlebar and padding so only the xterm grid and its footer show (used by the
-// terminal dock and detached terminal windows, which supply their own chrome).
+// terminal dock, detached terminal windows and the interaction dialog's
+// terminal input, which supply their own chrome).
 export async function initTerminal(element, wsUrl, dotNetRef, options) {
     await ensureXtermLoaded();
 
@@ -1643,13 +1645,14 @@ function connectClient(state, wsUrl) {
         // role-aware path: secondary locks-and-scales to producer dims;
         // primary fits/computes-font into the available stage).
         applyRoleAwareLayout(state);
-        // Chromeless terminals size the grid from the pane rather than from
-        // the producer, so those dims are only correct once we are primary
+        // Chromeless terminals size the grid from their own pane rather than
+        // from the producer, so those dims are only correct once we are primary
         // and can push them upstream. Unlike a resource terminal — which may
-        // legitimately be driven by a CLI viewer elsewhere — a dock terminal
-        // is owned by the AppHost purely to be shown here, so claiming
-        // primary on attach is the expected behaviour rather than snatching
-        // control from another user.
+        // legitimately be driven by a CLI viewer elsewhere — a dock, window or
+        // interaction terminal is owned by the AppHost purely to be shown here,
+        // so claiming primary on attach is the expected behaviour rather than
+        // snatching control from another user. This is also what makes the grid
+        // fill the pane on open instead of only once the user starts typing.
         if (state.chromeless) {
             maybeAutoPromote(state);
         }

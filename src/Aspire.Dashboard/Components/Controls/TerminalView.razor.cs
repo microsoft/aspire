@@ -102,9 +102,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// titlebar or internal padding, just the xterm grid and its footer.
     /// </summary>
     /// <remarks>
-    /// Used by the terminal dock and detached terminal windows, which supply their own chrome and title. Chromeless
-    /// terminals also size their grid to fill the available space at the dashboard's base font size, rather than
-    /// shrinking the font to fit the producer's grid.
+    /// Used by the terminal dock, detached terminal windows and the interaction dialog's terminal input, all of which
+    /// supply their own surrounding chrome. Chromeless terminals also size their grid to fill the available space at
+    /// the dashboard's base font size, rather than shrinking the font to fit the producer's grid.
     /// </remarks>
     [Parameter]
     public bool Chromeless { get; set; }
@@ -126,9 +126,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// Gets or sets a value indicating whether the footer offers the fixed-resolution picker.
     /// </summary>
     /// <remarks>
-    /// Defaults to <see langword="true"/>. The dock sets this to <see langword="false"/>: its panes are sized by the
-    /// dock splitter and always fit their grid to the available space, so a fixed resolution has nothing to act on.
-    /// The font stepper stays available regardless, so dock terminals can still be zoomed.
+    /// Defaults to <see langword="true"/>. Surfaces whose size is dictated by their container set this to
+    /// <see langword="false"/> — a dock pane is sized by the dock splitter and the interaction dialog's terminal by the
+    /// dialog, so both always fit their grid to the available space and a fixed resolution has nothing to act on. The
+    /// font stepper stays available regardless, so those terminals can still be zoomed.
     /// </remarks>
     [Parameter]
     public bool ShowDimensionsPicker { get; set; } = true;
