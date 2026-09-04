@@ -34,6 +34,7 @@ class TestDotNetService {
     public runApiEnvironment: NodeJS.ProcessEnv | undefined;
     public fileAppRunProperties = { runCommand: 'dotnet', runArguments: '' };
     public fileAppRunBuildConfiguration: string | undefined;
+    public fileAppRunSuppressRestore: boolean | undefined;
     public fileAppRunEnvironment: NodeJS.ProcessEnv | undefined;
     public projectLaunchProperties: {
         targetPath: string;
@@ -98,8 +99,9 @@ class TestDotNetService {
         return Promise.resolve(this.runApiOutput);
     }
 
-    getDotNetFileAppRunProperties(_projectPath: string, buildConfiguration: string, environment?: NodeJS.ProcessEnv): Promise<{ runCommand: string; runArguments: string }> {
+    getDotNetFileAppRunProperties(_projectPath: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<{ runCommand: string; runArguments: string }> {
         this.fileAppRunBuildConfiguration = buildConfiguration;
+        this.fileAppRunSuppressRestore = suppressRestore;
         this.fileAppRunEnvironment = environment;
         return Promise.resolve(this.fileAppRunProperties);
     }
@@ -1272,6 +1274,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const result = await service.getDotNetFileAppRunProperties(
             projectPath,
             'Debug',
+            false,
             { ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'true' });
 
         assert.deepStrictEqual(result, {
@@ -1298,6 +1301,41 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(
             createResolvedEnvStub.firstCall.args[1]?.ASPIRE_SUPPRESS_CLI_RUN_HOOK,
             'true');
+    });
+
+    test('file-app run properties suppress implicit restore when requested', async () => {
+        sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/resolved/aspire', available: true, source: 'configured' });
+        let resultOutputPath: string | undefined;
+        const execFileStub = sinon.stub(childProcess, 'execFile').callsFake((...callArgs: any[]) => {
+            resultOutputPath = getMsBuildResultOutputPath(callArgs[1] as string[]);
+            nodeFs.writeFileSync(
+                resultOutputPath,
+                JSON.stringify({
+                    Properties: {
+                        RunCommand: '/workspace/bin/Debug/app',
+                        RunArguments: ''
+                    }
+                }));
+            callArgs.at(-1)(null, { stdout: '', stderr: '' });
+            return {} as childProcess.ChildProcess;
+        });
+        const service = new DotNetService({} as AspireDebugSession);
+
+        await service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', true);
+
+        assert.deepStrictEqual(execFileStub.firstCall.args[1], [
+            'build',
+            '/workspace/app.cs',
+            '--configuration',
+            'Debug',
+            '--no-restore',
+            '--nologo',
+            '--verbosity',
+            'quiet',
+            '-target:ComputeRunArguments',
+            '-getProperty:RunCommand,RunArguments',
+            `-getResultOutputFile:${resultOutputPath}`
+        ]);
     });
 
     test('file-app run properties remove differently-cased ambient variables on Windows', async () => {
@@ -1331,6 +1369,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             await service.getDotNetFileAppRunProperties(
                 '/workspace/app.cs',
                 'Debug',
+                false,
                 { [resourceName]: 'resource' });
 
             const matchingEntries = Object.entries(createResolvedEnvStub.firstCall.args[1] ?? {})
@@ -1365,8 +1404,8 @@ suite('Dotnet Debugger Extension Tests', () => {
             return {} as childProcess.ChildProcess;
         });
         const service = new DotNetService({} as AspireDebugSession);
-        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
-        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug'));
+        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', false));
+        await assert.rejects(service.getDotNetFileAppRunProperties('/workspace/app.cs', 'Debug', false));
     });
 
     test('file-app build failures format process errors and deduplicate diagnostics', async () => {
@@ -1388,7 +1427,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const service = new DotNetService({} as AspireDebugSession);
 
         await assert.rejects(
-            service.getDotNetFileAppRunProperties(projectPath, 'Debug'),
+            service.getDotNetFileAppRunProperties(projectPath, 'Debug', false),
             (error: Error) => {
                 assert.ok(!error.message.includes('Command failed:'));
                 assert.ok(error.message.includes(projectPath));
@@ -2506,6 +2545,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             debugConfig);
 
         assert.strictEqual(dotNetService.fileAppRunBuildConfiguration, 'Debug');
+        assert.strictEqual(dotNetService.fileAppRunSuppressRestore, true);
         assert.strictEqual(dotNetService.fileAppRunEnvironment, undefined);
         assert.strictEqual(debugConfig.program, 'dotnet');
         assert.deepStrictEqual(debugConfig.args, ['exec', debugDllPath, '--message', 'hello']);

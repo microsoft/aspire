@@ -138,19 +138,25 @@ suite('Aspire coordinated build E2E', function () {
         fs.mkdirSync(projectDirectory, { recursive: true });
 
         try {
-            writeFileWithRetry(projectPath, [
+            const source = [
                 '// Licensed to the .NET Foundation under one or more agreements.',
                 '// The .NET Foundation licenses this file to you under the MIT license.',
                 '',
                 '#:property Configuration=Release',
                 'System.Console.WriteLine("coordinated file app");',
                 ''
-            ].join('\n'));
+            ].join('\n');
+            writeFileWithRetry(projectPath, source);
             execFileSync('dotnet', ['build', projectPath, '--configuration', 'Debug', '--nologo'], {
                 cwd: projectDirectory,
                 stdio: 'pipe',
             });
 
+            // The launch-property query must use the output that the coordinated build already produced.
+            // Keeping the project invalid catches accidental extension-owned build work on this path.
+            writeFileWithRetry(projectPath, source.replace(
+                'System.Console.WriteLine("coordinated file app");',
+                'this does not compile'));
             const launchConfig: ProjectLaunchConfiguration = {
                 type: 'project',
                 project_path: projectPath,

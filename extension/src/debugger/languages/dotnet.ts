@@ -40,7 +40,7 @@ interface IDotNetService {
     getDotNetTargetPath(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<string>;
     getDotNetProjectRunProperties(projectFile: string, buildConfiguration?: string, environment?: NodeJS.ProcessEnv, workingDirectory?: string): Promise<DotNetProjectRunProperties>;
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
-    getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties>;
+    getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties>;
 }
 
 interface DotNetFileAppRunProperties {
@@ -325,21 +325,28 @@ export class DotNetService implements IDotNetService {
         });
     }
 
-    async getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties> {
+    async getDotNetFileAppRunProperties(projectFile: string, buildConfiguration: string, suppressRestore: boolean, environment?: NodeJS.ProcessEnv): Promise<DotNetFileAppRunProperties> {
         return withMsBuildTemporaryFiles(undefined, async (_, temporaryDirectory) => {
             const resultOutputPath = path.join(temporaryDirectory, 'run-properties.json');
             const args = [
                 'build',
                 projectFile,
                 '--configuration',
-                buildConfiguration,
+                buildConfiguration
+            ];
+            if (suppressRestore) {
+                // The coordinated build already restored this file app. Restoring again here could race
+                // another file app that writes the same referenced project's bin/obj directories.
+                args.push('--no-restore');
+            }
+            args.push(
                 '--nologo',
                 '--verbosity',
                 'quiet',
                 '-target:ComputeRunArguments',
                 '-getProperty:RunCommand,RunArguments',
                 `-getResultOutputFile:${resultOutputPath}`
-            ];
+            );
 
             try {
                 const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
@@ -1438,7 +1445,7 @@ export function createProjectDebuggerExtension(
                     const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath, runApiEnvironment);
                     const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
                     const configuredRunProperties = buildConfiguration
-                        ? await dotNetService.getDotNetFileAppRunProperties(projectPath, buildConfiguration, runApiEnvironment)
+                        ? await dotNetService.getDotNetFileAppRunProperties(projectPath, buildConfiguration, suppressBuild, runApiEnvironment)
                         : undefined;
 
                     if (shouldBuildProject) {

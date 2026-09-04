@@ -19,9 +19,9 @@ public static class DistributedApplicationPipelineExtensions
     /// <param name="action">A final action to execute.</param>
     /// <returns>The distributed application pipeline for chaining.</returns>
     /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="pipeline"/> or <paramref name="action"/> is null.
+    /// Thrown when <paramref name="pipeline"/>, <paramref name="stepName"/>, or <paramref name="action"/> is null.
     /// </exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="stepName"/> is null or empty.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="stepName"/> is empty.</exception>
     /// <exception cref="InvalidOperationException">
     /// Thrown during pipeline resolution when the named step does not exist.
     /// </exception>
