@@ -944,21 +944,8 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static string GetContainerImage(IResource resource)
     {
-        var imageAnnotation = resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault();
-
-        if (imageAnnotation is not null)
+        if (resource.TryGetContainerImageName(useBuiltImage: false, out var image))
         {
-            var image = imageAnnotation.Image;
-            if (!string.IsNullOrEmpty(imageAnnotation.Tag))
-            {
-                image = $"{image}:{imageAnnotation.Tag}";
-            }
-
-            if (!string.IsNullOrEmpty(imageAnnotation.Registry))
-            {
-                image = $"{imageAnnotation.Registry}/{image}";
-            }
-
             return image;
         }
 

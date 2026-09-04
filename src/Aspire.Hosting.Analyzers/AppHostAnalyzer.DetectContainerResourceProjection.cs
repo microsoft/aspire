@@ -61,6 +61,12 @@ public partial class AppHostAnalyzer
 
     private static bool InheritsFromOrEquals(ITypeSymbol type, INamedTypeSymbol baseType)
     {
+        if (type is ITypeParameterSymbol typeParameter &&
+            typeParameter.ConstraintTypes.Any(constraint => InheritsFromOrEquals(constraint, baseType)))
+        {
+            return true;
+        }
+
         for (var current = type; current is not null; current = current.BaseType)
         {
             if (SymbolEqualityComparer.Default.Equals(current, baseType))

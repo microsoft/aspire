@@ -515,6 +515,26 @@ public class KubernetesPersistentVolumeRunModeTests
     }
 
     [Fact]
+    public async Task ProjectedCustomComputeResourceCanResolvePersistentVolumePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+        var custom = builder.AddResource(new TestComputeResource("custom"))
+            .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH")
+            .RunAsContainerImage("custom:latest");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            custom.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal("/srv/data", environment["DATA_PATH"]);
+    }
+
+    [Fact]
     public async Task NameMatchBindingAllowsUnsupportedResourceWithoutLocalPath()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

@@ -113,7 +113,8 @@ public static class KubernetesEnvironmentExtensions
             var environmentVariableName = GetLocalPathEnvironmentVariableName(resource, annotation);
 
             if (environmentVariableName is not null &&
-                resource is not ProjectResource and not ExecutableResource and not ContainerResource)
+                resource is not ProjectResource and not ExecutableResource &&
+                !resource.IsContainer())
             {
                 throw new DistributedApplicationException(
                     $"Resource '{resource.Name}' cannot resolve the '{environmentVariableName}' persistent-volume path in run mode. " +

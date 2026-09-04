@@ -79,6 +79,30 @@ public class ContainerResourceProjectionAnalyzerTests
     }
 
     [Fact]
+    public async Task ContainerResourceTypeParameterReportsDiagnostic()
+    {
+        var diagnostic = AppHostAnalyzer.Diagnostics.s_containerResourceCannotBeProjected;
+
+        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            static void Configure<T>(IResourceBuilder<T> builder)
+                where T : ContainerResource
+            {
+                builder.RunAsContainerImage("contoso/other:1.0");
+            }
+            """,
+            [
+                CompilerError(diagnostic.Id)
+                    .WithLocation(7, 13)
+                    .WithMessage("'T' is already a container resource, so 'RunAsContainerImage' cannot be used on it. Configure the container directly instead.")
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task NonContainerResourceReportsNoDiagnostic()
     {
         var test = AnalyzerTest.Create<AppHostAnalyzer>("""

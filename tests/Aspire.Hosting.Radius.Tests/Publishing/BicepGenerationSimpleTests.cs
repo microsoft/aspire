@@ -193,6 +193,29 @@ public class BicepGenerationSimpleTests
     }
 
     [Fact]
+    public void GenerateBicep_ProjectionImageTakesPrecedenceOverLegacyImageAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("myenv");
+        builder.AddProject<TestProjectMetadata>("webapp")
+            .WithAnnotation(new ContainerImageAnnotation
+            {
+                Image = "legacy",
+                Tag = "latest"
+            })
+            .PublishAsContainerImage("projected:v2");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(env.Resource, model);
+        var context = new RadiusBicepPublishingContext(env.Resource);
+        var bicep = context.GenerateBicep(model);
+
+        Assert.Contains("image: 'projected:v2'", bicep);
+        Assert.DoesNotContain("image: 'legacy:latest'", bicep);
+    }
+
+    [Fact]
     public void EnvironmentResource_HasPipelineStepAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
