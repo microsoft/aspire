@@ -7,6 +7,6 @@ namespace Aspire.Hosting.Utils;
 
 internal static partial class ApplicationNameHelper
 {
-    [GeneratedRegex("""^(?<name>.+?)[.-]?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""^(?<name>.+?)(?:[.-]AppHost|(?<![.-])AppHost)$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     internal static partial Regex ApplicationNameRegex();
 }

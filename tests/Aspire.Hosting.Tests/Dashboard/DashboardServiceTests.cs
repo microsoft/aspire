@@ -785,6 +785,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData("MyApp.AppHost", "MyApp")]
     [InlineData("aspire-apphost", "aspire")]
+    [InlineData("TestShopAppHost", "TestShop")]
+    [InlineData(".AppHost", ".AppHost")]
+    [InlineData("-AppHost", "-AppHost")]
+    [InlineData("AppHost", "AppHost")]
     public async Task GetApplicationInformation_StripsAppHostSuffix(string applicationName, string expectedApplicationName)
     {
         var configBuilder = new ConfigurationBuilder();

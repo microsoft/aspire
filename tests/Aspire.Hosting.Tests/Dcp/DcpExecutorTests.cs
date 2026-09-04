@@ -46,6 +46,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("MyApp.AppHost", "MyApp")]
     [InlineData("aspire-apphost", "aspire")]
+    [InlineData("TestShopAppHost", "TestShop")]
+    [InlineData(".AppHost", ".AppHost")]
+    [InlineData("-AppHost", "-AppHost")]
+    [InlineData("AppHost", "AppHost")]
     public void NormalizeApplicationName_StripsAppHostSuffix(string applicationName, string expectedApplicationName)
     {
         Assert.Equal(expectedApplicationName, DcpExecutor.NormalizeApplicationName(applicationName));
