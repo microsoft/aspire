@@ -58,6 +58,48 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
+    // Failure mode: LoadTestProjectSets forgets to include non-matrix tests/ projects in AllProjects, so
+    // affected_project_rules treats a test-only support project as production code and turns on a
+    // broad matching job.
+    [Fact]
+    public void NonMatrixTestProjectDoesNotDriveAffectedProjectRules()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace, withTestSupportProject: true);
+        fixture.WriteFile(
+            "map.yml",
+            """
+            version: 1
+            affected_project_rules:
+              - projects: [Aspire*]
+                targets: [job:prodjob]
+            """);
+
+        var changed = fixture.WriteChangedFiles("tests/Aspire.TestUtilities/Aspire.TestUtilities.cs");
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+
+        fixture.WithGitHubEnvRedirected(output =>
+        {
+            var exit = Selection.Run(new RunOptions(
+                RepoRoot: fixture.Path,
+                MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                From: null,
+                To: null,
+                ChangedFilesPath: changed,
+                SkipLayer1: false,
+                ForceAll: false,
+                Enforce: true,
+                BeforeBuildProps: propsPath));
+
+            Assert.Equal(0, exit);
+            Assert.Equal("false", output()["has_dotnet_tests"]);
+
+            using var selection = System.Text.Json.JsonDocument.Parse(output()["selection"]);
+            Assert.False(selection.RootElement.GetProperty("run_prodjob").GetBoolean());
+        });
+    }
+
     // The merge-base rebind feeds BOTH layers: Layer 1's graph closure must diff from the branch point
     // too, not the base tip. The existing CLI-level merge-base test runs with --skip-layer1, so nothing
     // pins that Layer 1 also honors it. Diverge the history so the two diff bases disagree: the PR edits
@@ -244,7 +286,7 @@ public sealed class SelectTestsLayer1IntegrationTests
 
         public string Path => _workspace.Path;
 
-        public GraphRepoFixture(TemporaryWorkspace workspace, bool withIntermediateProject = false, bool withSecondProject = false)
+        public GraphRepoFixture(TemporaryWorkspace workspace, bool withIntermediateProject = false, bool withSecondProject = false, bool withTestSupportProject = false)
         {
             _workspace = workspace;
 
@@ -281,6 +323,22 @@ public sealed class SelectTestsLayer1IntegrationTests
 
             Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
             WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj"]);
+
+            if (withTestSupportProject)
+            {
+                Write("tests/Aspire.TestUtilities/Aspire.TestUtilities.cs", "namespace Aspire.TestUtilities; public class Helper { }");
+                WriteProject("tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj", compiles: ["Aspire.TestUtilities.cs"], references: []);
+
+                Write("Aspire.slnx",
+                    """
+                    <Solution>
+                      <Project Path="src/Core/Core.csproj" />
+                      <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+                      <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
+                    </Solution>
+                    """);
+                return;
+            }
 
             if (withSecondProject)
             {
