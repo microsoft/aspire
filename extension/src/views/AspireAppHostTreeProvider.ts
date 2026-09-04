@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
-import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { isPipelineStepListUnsupportedError, resolvePipelineStep, selectPipelineStepFromCli } from '../utils/pipelineStep';
 import { AppHostCliRunner } from '../data/appHostCliRunner';
@@ -1170,7 +1170,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        // Prefer the workspace folder that discovered this AppHost via `aspire ls` over
+        // re-deriving a target from the path alone: a configured AppHost can legitimately resolve
+        // outside every open folder, which would otherwise fall back to the window/default CLI in
+        // a multi-root workspace and run a different CLI than the one that discovered it.
+        const discoveredFolder = this._repository.getWorkspaceFolderForAppHostPath?.(appHostPath);
+        const target = discoveredFolder
+            ? workspaceFolderCliPathTarget(discoveredFolder)
+            : getCliPathTargetForUri(vscode.Uri.file(appHostPath));
         await this._terminalProvider.sendAspireCommandToAspireTerminal(
             ['restore', '--apphost', shellArg(appHostPath)],
             true,

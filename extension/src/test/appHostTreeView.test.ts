@@ -3162,6 +3162,95 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         getWorkspaceFolderStub.restore();
     });
 
+    test('restoreAppHost preserves the discovery workspace-folder target when the AppHost path is outside every open folder', async () => {
+        const commands: Array<{ command: AspireSubcommand; options: unknown }> = [];
+        // A relative `appHost.path` can legitimately resolve outside every open workspace folder
+        // (for example, a sibling directory). No open folder contains this path, so re-deriving the
+        // target from the path alone (`getCliPathTargetForUri`) falls back to the window CLI --
+        // the exact multi-root bug this test guards against.
+        const appHostPath = path.join('/configured', 'elsewhere', 'AppHost.csproj');
+        const discoveredFolder = createWorkspaceFolder('secondary', '/repo/secondary');
+        const discoveredTarget = workspaceFolderCliPathTarget(discoveredFolder);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+            // Simulates the per-folder `aspire ls` discovery association: the workspace-folder
+            // discovery loop found this AppHost candidate while scanning `discoveredFolder`, even
+            // though the AppHost's own resolved path lies outside that folder's root.
+            getWorkspaceFolderForAppHostPath: (candidatePath: string) => candidatePath === appHostPath ? discoveredFolder : undefined,
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: AspireSubcommand, _showTerminal?: boolean, _additionalArgs?: string[], options?: unknown) => commands.push({ command, options }),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+
+        try {
+            await provider.restoreAppHost({ appHostPath } as WorkspaceAppHostItem);
+
+            assert.deepStrictEqual(commands, [
+                {
+                    command: ['restore', '--apphost', shellArg(appHostPath)],
+                    options: { target: discoveredTarget },
+                },
+            ]);
+        } finally {
+            getWorkspaceFolderStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('restoreAppHost falls back to path-based CLI target resolution when discovery has no folder association', async () => {
+        const commands: Array<{ command: AspireSubcommand; options: unknown }> = [];
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const targetFolder = createWorkspaceFolder('repo', '/repo');
+        const target = workspaceFolderCliPathTarget(targetFolder);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+            // No repository method at all -- mirrors every other mocked repository in this file and
+            // proves restoreAppHost still works (falling back to path-based resolution) when the
+            // repository predates this lookup.
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: AspireSubcommand, _showTerminal?: boolean, _additionalArgs?: string[], options?: unknown) => commands.push({ command, options }),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+
+        try {
+            await provider.restoreAppHost({ appHostPath } as WorkspaceAppHostItem);
+
+            assert.deepStrictEqual(commands, [
+                {
+                    command: ['restore', '--apphost', shellArg(appHostPath)],
+                    options: { target },
+                },
+            ]);
+        } finally {
+            getWorkspaceFolderStub.restore();
+            provider.dispose();
+        }
+    });
+
     test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', async () => {
         const commands: AspireSubcommand[] = [];
         const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
