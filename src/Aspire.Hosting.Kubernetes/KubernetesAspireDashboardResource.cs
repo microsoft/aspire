@@ -22,4 +22,6 @@ public class KubernetesAspireDashboardResource(string name) : ContainerResource(
     /// Gets the OTLP gRPC endpoint for receiving telemetry data.
     /// </summary>
     public EndpointReference OtlpGrpcEndpoint => new(this, "otlp-grpc");
+
+    internal EndpointReference OtlpHttpEndpoint => new(this, "otlp-http");
 }

@@ -960,7 +960,12 @@ internal static class AzureSandboxContainerDeployment
             ? new AzureDevComputePortAuthConfig { Anonymous = true }
             : new AzureDevComputePortAuthConfig
             {
-                EntraId = new AzureDevComputePortEntraIdAuthConfig { Enabled = true }
+                EntraId = new AzureDevComputePortEntraIdAuthConfig
+                {
+                    Enabled = true,
+                    ObjectIds = [],
+                    TenantIds = []
+                }
             };
     }
 
@@ -2364,7 +2369,13 @@ internal static class AzureSandboxContainerDeployment
 
     private static string GetDestroyStepName(AzureSandboxContainerResource resource) => $"destroy-{resource.Name}";
 
-    internal readonly record struct SandboxEndpoint(string Name, int TargetPort, bool IsExternal, bool IsHttp, string Protocol, bool? Anonymous);
+    internal readonly record struct SandboxEndpoint(
+        string Name,
+        int TargetPort,
+        bool IsExternal,
+        bool IsHttp,
+        string Protocol,
+        bool? Anonymous);
 
     internal sealed record ContainerImageMetadata(
         IReadOnlyList<string> Entrypoint,

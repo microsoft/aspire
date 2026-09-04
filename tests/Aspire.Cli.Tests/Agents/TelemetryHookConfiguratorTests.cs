@@ -42,6 +42,22 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigureAsync_PrefersCopilotAppWhenAppAndCliAreDetected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var configurator = CreateConfigurator(workspace, home);
+
+        var result = await configurator.ConfigureAsync(
+            [AgentClientKind.CopilotCli, AgentClientKind.CopilotApp],
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal([AgentClientKind.CopilotApp], result.ConfiguredClients);
+        Assert.Empty(result.Skipped);
+        Assert.True(File.Exists(Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json")));
+    }
+
+    [Fact]
     public async Task ConfigureAsync_HonorsCopilotHomeEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

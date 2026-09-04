@@ -614,7 +614,7 @@ suite('E2E launch profile', () => {
         assert.ok(dotNetSetupIndex >= 0);
         assert.ok(dotNetSetupIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
@@ -643,6 +643,32 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
+    });
+
+    test('pins the unpackaged WinUI debugger regression environment for its Windows E2E shard', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'winUiDebug.e2e.test.ts'), 'utf8');
+
+        assert.ok(workflow.includes('shardName: winui-debug'));
+        assert.ok(workflow.includes('spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js'));
+        assert.ok(workflow.includes('installWinUI: true'));
+        assert.ok(workflow.includes('name: Install WinUI E2E debugger prerequisites'));
+        assert.ok(workflow.includes('csharp/2.140.9/vspackage?targetPlatform=win32-x64'));
+        assert.ok(workflow.includes('ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true'));
+        assert.ok(runner.includes("const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';"));
+        assert.ok(runner.includes('is required when a debugger-backed E2E shard is enabled.'));
+        assert.ok(!runner.includes('is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.'));
+        assert.ok(runner.includes('<WindowsPackageType>None</WindowsPackageType>'));
+        assert.ok(runner.includes('<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>'));
+        assert.ok(runner.includes('<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />'));
+        assert.ok(runner.includes('<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />'));
+        assert.ok(runner.includes('File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");'));
+        assert.ok(spec.includes('this.timeout(1_200_000);'));
+        assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
+        assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });
 
     test('wires structured E2E harness failures into advisory handling', () => {

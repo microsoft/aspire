@@ -7,6 +7,27 @@ namespace Aspire.Cli.Tests.Templating;
 
 public class TemplatePackageLockTests
 {
+    [Fact]
+    public void TypeScriptStarterAppHostPackageJson_UsesPackageManagerNeutralAliases()
+    {
+        var filePath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Templating",
+            "Templates",
+            "ts-starter",
+            "package.json");
+
+        using var packageJson = JsonDocument.Parse(File.ReadAllText(filePath));
+        var scripts = packageJson.RootElement.GetProperty("scripts");
+
+        Assert.Equal("eslint apphost.mts", scripts.GetProperty("lint").GetString());
+        Assert.Equal("eslint apphost.mts && aspire run", scripts.GetProperty("dev").GetString());
+        Assert.Equal("eslint apphost.mts && tsc -p tsconfig.apphost.json", scripts.GetProperty("build").GetString());
+        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts.GetProperty("watch").GetString());
+    }
+
     [Theory]
     [InlineData("ts-starter")]
     [InlineData("py-starter")]

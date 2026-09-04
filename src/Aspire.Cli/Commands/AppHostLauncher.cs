@@ -16,6 +16,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -208,23 +209,6 @@ internal sealed class AppHostLauncher(
         executionContext.AppHostCliLogFilePath = childLogFile;
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
-        // Compute the expected socket prefix for backchannel detection. The AppHost keys its
-        // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
-        // hash we wait on must also be computed from the resolved path (see ComputeDetachedMatchHashes).
-        var socketKeyPath = PathNormalizer.ResolveSymlinks(effectiveAppHostFile.FullName);
-        var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
-            socketKeyPath,
-            executionContext.HomeDirectory.FullName);
-        var (expectedHash, legacyHashes) = ComputeDetachedMatchHashes(
-            effectiveAppHostFile.FullName,
-            executionContext.HomeDirectory.FullName);
-
-        logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
-        if (legacyHashes.Length > 0)
-        {
-            logger.LogDebug("Also searching for legacy hash(es): {LegacyHashes}", string.Join(", ", legacyHashes));
-        }
-
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
         // is paused. In detached mode we don't have the AppHost PID (stdout is suppressed),
         // so we show a generic message without a PID.
@@ -241,7 +225,7 @@ internal sealed class AppHostLauncher(
         {
             launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, effectiveAppHostFile.FullName, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -318,52 +302,17 @@ internal sealed class AppHostLauncher(
         }
     }
 
-    /// <summary>
-    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match 
-    /// a detached AppHost's backchannel connection during launch.
-    /// </summary>
-    /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    /// <returns>
-    /// The primary expected hash (the compact AppHost id of the resolved path) and the de-duplicated
-    /// fallback hashes to also search: the compact AppHost id of the raw path plus the legacy hex
-    /// hashes of both the resolved and raw paths (including any Windows drive-letter casing variants).
-    /// </returns>
-    internal static (string ExpectedHash, string[] FallbackHashes) ComputeDetachedMatchHashes(string appHostPath, string homeDirectory)
-    {
-        var socketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
-
-        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
-
-        // Current socket file names embed the compact AppHost id (a different hash space than the
-        // legacy hex hashes below), so include the raw path's compact id explicitly. 
-        // This is what matches a still-running AppHost that keyed its socket on the unresolved path before the
-        // AppHost side started resolving symlinks.
-        var rawCompactHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory))!;
-
-        var fallbackHashes = new[] { rawCompactHash }
-            .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
-            .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
-            .Where(h => !string.Equals(h, expectedHash, StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        return (expectedHash, fallbackHashes);
-    }
-
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
     {
-        var existingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var existingSockets = AppHostSocketManager.FindSockets(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName,
             Environment.ProcessId,
             logger);
 
-        if (existingSockets.Length > 0)
+        if (existingSockets.Count > 0)
         {
-            logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Length);
+            logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Count);
             var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             var stopTasks = existingSockets.Select(socket =>
                 manager.StopRunningInstanceAsync(socket, cancellationToken));
@@ -477,8 +426,7 @@ internal sealed class AppHostLauncher(
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
         List<string> childArgs,
-        string expectedHash,
-        IReadOnlyList<string> legacyHashes,
+        string appHostPath,
         string? appHostSelectionOrigin,
         TimeSpan timeout,
         Action<string> updateStatus,
@@ -526,10 +474,16 @@ internal sealed class AppHostLauncher(
         }
 
         var childStartedAt = childProcess.StartTime;
+
+        // Captured in the stable PID-identity clock domain so it can be compared against the
+        // CliStableStartedAt an AppHost reports. Not interchangeable with childStartedAt above,
+        // which comes from Process.StartTime and drifts across processes on Linux.
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childProcess.ProcessId);
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId, expectedHash, legacyHashes.Count > 0);
+        var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
@@ -554,8 +508,10 @@ internal sealed class AppHostLauncher(
                 await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
                 scanCount++;
 
-                connection ??= backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
-                    ?? legacyHashes.SelectMany(backchannelMonitor.GetConnectionsByHash).FirstOrDefault();
+                connection ??= backchannelMonitor.Connections.FirstOrDefault(
+                    candidate => IsLaunchedByChildCli(candidate, childProcess.ProcessId, childStableStartedAt));
+                connection ??= backchannelMonitor.Connections.FirstOrDefault(
+                    candidate => IsUnattributedAppHostAtPath(candidate, canonicalAppHostPath, childProcess.ProcessId, childStableStartedAt));
                 if (connection is not null)
                 {
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
@@ -688,6 +644,82 @@ internal sealed class AppHostLauncher(
             childStartedAt,
             includeStartTimeForDcp: true,
             CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="candidate"/> is the AppHost launched by the child CLI we just started.
+    /// </summary>
+    /// <remarks>
+    /// A PID on its own is not an identity. An AppHost outlives the CLI that launched it and keeps
+    /// reporting that CLI's PID, so once the OS recycles the PID onto our child, a stale orphan would
+    /// match and we would adopt an unrelated AppHost. <c>CliStableStartedAt</c> is stamped from the
+    /// same stable clock domain as <see cref="ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(int)"/>,
+    /// so the two are directly comparable and a recycled PID is rejected. AppHosts launched by older
+    /// CLIs do not report it; those keep the PID-only match rather than becoming undiscoverable.
+    /// </remarks>
+    internal static bool IsLaunchedByChildCli(IAppHostAuxiliaryBackchannel candidate, int childProcessId, long? childStableStartedAt)
+    {
+        if (candidate.AppHostInfo is not { CliProcessId: int cliProcessId } appHostInfo || cliProcessId != childProcessId)
+        {
+            return false;
+        }
+
+        if (appHostInfo.CliStableStartedAt is not { } cliStableStartedAt || childStableStartedAt is not { } childStableStarted)
+        {
+            return true;
+        }
+
+        return ProcessStartTimeHelper.AreCloseMilliseconds(cliStableStartedAt.ToUnixTimeMilliseconds(), childStableStarted);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="candidate"/> is an AppHost at the path we are launching that
+    /// cannot be attributed to a different CLI, used as a fallback when the child CLI's PID does not
+    /// identify any connection.
+    /// </summary>
+    /// <remarks>
+    /// The path alone is not sufficient. A previously launched AppHost at the same path may still be
+    /// running: <see cref="StopExistingInstancesAsync"/> only finds sockets keyed on a spelling derived
+    /// from the caller's path, whereas this match canonicalizes the AppHost's self-reported path, so it
+    /// can see instances that were never stopped. It would also usually win the race, because a stale
+    /// AppHost is already listening while the one we just spawned is still starting. Adopting it would
+    /// report the wrong dashboard and leave the newly spawned AppHost running unattended.
+    ///
+    /// Two facts narrow the candidates without resorting to a heuristic. An AppHost that names a
+    /// different launching CLI was definitively not launched by our child, and an AppHost our child
+    /// launched cannot have started before our child. AppHosts reporting neither field are old enough
+    /// that the path match is all we have; they keep it rather than becoming unlaunchable.
+    /// </remarks>
+    internal static bool IsUnattributedAppHostAtPath(
+        IAppHostAuxiliaryBackchannel candidate,
+        string canonicalAppHostPath,
+        int childProcessId,
+        long? childStableStartedAt)
+    {
+        if (candidate.AppHostInfo is not { } appHostInfo)
+        {
+            return false;
+        }
+
+        if (appHostInfo.CliProcessId is { } cliProcessId && cliProcessId != childProcessId)
+        {
+            return false;
+        }
+
+        // StableStartedAt and childStableStartedAt are both in the stable PID-identity clock domain,
+        // so this ordering comparison is exact rather than a cross-domain guess. The tolerance only
+        // absorbs the tick rounding described on StableStartTimeMatchTolerance.
+        if (appHostInfo.StableStartedAt is { } stableStartedAt &&
+            childStableStartedAt is { } childStableStarted &&
+            stableStartedAt.ToUnixTimeMilliseconds() <
+                childStableStarted - (long)ProcessStartTimeHelper.StableStartTimeMatchTolerance.TotalMilliseconds)
+        {
+            return false;
+        }
+
+        return StringComparers.FileSystemPath.Equals(
+            PathNormalizer.ResolveToFilesystemPath(appHostInfo.AppHostPath),
+            canonicalAppHostPath);
     }
 
     private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)

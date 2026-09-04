@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Backchannel;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -232,7 +233,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var monitor = (TestAuxiliaryBackchannelMonitor)provider.GetRequiredService<IAuxiliaryBackchannelMonitor>();
             var capturing = new CapturingTerminalAppHostBackchannel(backchannel, name => capturedResourceName = name);
             monitor.ClearConnections();
-            monitor.AddConnection("hash1", "socket.hash1", capturing);
+            monitor.AddConnection("socket.hash1", capturing);
 
             var command = provider.GetRequiredService<RootCommand>();
             var result = command.Parse("terminal attach myresource");
@@ -629,7 +630,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             SupportsTerminalsV1 = true
         };
         configure(backchannel);
-        monitor.AddConnection("hash1", "socket.hash1", backchannel);
+        monitor.AddConnection("socket.hash1", backchannel);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -668,7 +669,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             _onGetTerminalInfo = onGetTerminalInfo;
         }
 
-        public string Hash => _inner.Hash;
+        public IAppHostSocket Socket => _inner.Socket;
         public string SocketPath => _inner.SocketPath;
         public AppHostInformation? AppHostInfo => _inner.AppHostInfo;
         public bool IsInScope => _inner.IsInScope;

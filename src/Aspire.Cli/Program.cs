@@ -10,7 +10,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
-using Aspire.Cli.Agents.CopilotCli;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
@@ -539,7 +539,6 @@ public class Program
 
         // VS Code CLI operations.
         builder.Services.AddSingleton<IVsCodeCliRunner, VsCodeCliRunner>();
-        builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
         builder.Services.AddSingleton<INpmRunner, NpmRunner>();
@@ -553,8 +552,10 @@ public class Program
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
+        builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
+        builder.Services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, VsCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotCliAgentEnvironmentScanner>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());

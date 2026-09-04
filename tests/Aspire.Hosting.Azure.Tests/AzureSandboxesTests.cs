@@ -942,6 +942,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxSecurityChangesDisablePreviousGenerationRetention()
     {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var endpoints = new[]
         {
             new AzureSandboxContainerDeployment.SandboxEndpoint(
@@ -1879,7 +1880,69 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task AzureDevComputeClientAddsEntraAuthenticatedPort()
+    public async Task AzureDevComputeClientAddsEntraAuthorizedPortWithoutSecrets()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            Assert.Equal(5, root.EnumerateObject().Count());
+            Assert.Equal("webhook", root.GetProperty("name").GetString());
+            Assert.Equal(8080, root.GetProperty("port").GetInt32());
+            Assert.Equal("OnDemand", root.GetProperty("activationMode").GetString());
+            Assert.Equal("Http", root.GetProperty("protocol").GetString());
+
+            var auth = root.GetProperty("auth");
+            Assert.Equal(2, auth.EnumerateObject().Count());
+            Assert.False(auth.GetProperty("anonymous").GetBoolean());
+            var entraId = auth.GetProperty("entraId");
+            Assert.True(entraId.GetProperty("enabled").GetBoolean());
+            Assert.Equal(
+                ["11111111-1111-1111-1111-111111111111"],
+                entraId.GetProperty("objectIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+            Assert.Equal(
+                ["22222222-2222-2222-2222-222222222222"],
+                entraId.GetProperty("tenantIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
+
+            return JsonResponse(
+                """
+                {
+                  "ports": [
+                    { "name": "webhook", "port": 8080, "url": "https://sandbox.example.test" }
+                  ]
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var ports = await client.AddPortAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "sandbox-1",
+            new AzureDevComputeAddPortRequest
+            {
+                Name = "webhook",
+                Port = 8080,
+                ActivationMode = "OnDemand",
+                Auth = new AzureDevComputePortAuthConfig
+                {
+                    Anonymous = false,
+                    EntraId = new AzureDevComputePortEntraIdAuthConfig
+                    {
+                        Enabled = true,
+                        ObjectIds = ["11111111-1111-1111-1111-111111111111"],
+                        TenantIds = ["22222222-2222-2222-2222-222222222222"]
+                    }
+                },
+                Protocol = "Http"
+            },
+            CancellationToken.None);
+
+        Assert.Equal(8080, Assert.Single(ports).Port);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientAddsDefaultEntraAuthenticatedPort()
     {
         var handler = new RecordingHandler(async request =>
         {
@@ -1889,7 +1952,10 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             using var document = JsonDocument.Parse(body);
             var auth = document.RootElement.GetProperty("auth");
             Assert.False(auth.TryGetProperty("anonymous", out _));
-            Assert.True(auth.GetProperty("entraId").GetProperty("enabled").GetBoolean());
+            var entraId = auth.GetProperty("entraId");
+            Assert.True(entraId.GetProperty("enabled").GetBoolean());
+            Assert.Empty(entraId.GetProperty("objectIds").EnumerateArray());
+            Assert.Empty(entraId.GetProperty("tenantIds").EnumerateArray());
 
             return JsonResponse(
                 """
@@ -3178,11 +3244,14 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, IResource resource)
+    private static async Task<List<PipelineStep>> CreateStepsAsync(
+        DistributedApplication app,
+        IResource resource,
+        DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            new DistributedApplicationExecutionContext(operation),
             app.Services,
             NullLogger.Instance,
             CancellationToken.None);

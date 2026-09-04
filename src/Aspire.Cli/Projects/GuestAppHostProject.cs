@@ -18,6 +18,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Shared.UserSecrets;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
@@ -1610,21 +1611,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost
-        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var matchingSockets = AppHostSocketManager.FindSockets(
             genericAppHostPath,
             homeDirectory.FullName,
             Environment.ProcessId,
             _logger);
 
         // Check if any socket files exist
-        if (matchingSockets.Length == 0)
+        if (matchingSockets.Count == 0)
         {
             return RunningInstanceResult.NoRunningInstance; // No running instance, continue
         }
 
         // Stop all running instances
-        var stopTasks = matchingSockets.Select(socketPath =>
-            _runningInstanceManager.StopRunningInstanceAsync(socketPath, cancellationToken));
+        var stopTasks = matchingSockets.Select(socket =>
+            _runningInstanceManager.StopRunningInstanceAsync(socket, cancellationToken));
         var results = await Task.WhenAll(stopTasks);
         return results.All(r => r) ? RunningInstanceResult.InstanceStopped : RunningInstanceResult.StopFailed;
     }

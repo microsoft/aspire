@@ -12,6 +12,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -339,7 +340,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // Try normal MSBuild evaluation first
             return await GetItemsAndPropertiesAsync(projectFile, items, properties, cancellationToken);
         }
-        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context))
+        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context.AppHostProjectFile))
         {
             // Only use fallback for AppHost projects
             logger.LogWarning("Falling back to parsing for '{ProjectFile}'. Reason: {Message}", projectFile.FullName, ex.Message);
@@ -354,9 +355,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    private static bool IsAppHostProject(FileInfo projectFile, UpdateContext context)
+    internal static bool IsAppHostProject(FileInfo projectFile, FileInfo appHostProjectFile)
     {
-        return string.Equals(projectFile.FullName, context.AppHostProjectFile.FullName, StringComparison.OrdinalIgnoreCase);
+        var projectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+        var appHostProjectPath = PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName);
+
+        return string.Equals(projectPath, appHostProjectPath, StringComparisons.FileSystemPath);
     }
 
     private Task AnalyzeAppHostAsync(UpdateContext context, CancellationToken cancellationToken)
@@ -937,7 +941,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
 
         // Use fallback wrapper for AppHost project, normal method for others
-        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context)
+        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context.AppHostProjectFile)
             ? await GetItemsAndPropertiesWithFallbackAsync(projectFile, context, cancellationToken)
             : await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
 

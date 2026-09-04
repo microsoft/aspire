@@ -19,8 +19,10 @@ export type Capability =
     | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
     | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
     | 'node' // Support for running Node.js projects
+    | 'deno.v1' // Support for debugging Deno AppHosts through js-debug's inspector attach path
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
+    | 'deno' // Support for running Deno projects (built-in to VS Code via js-debug)
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
@@ -149,6 +151,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isNodeInstalled()) {
         capabilities.push("node");
+        capabilities.push("deno.v1");
         capabilities.push("browser");
     }
 
@@ -156,6 +159,9 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
     }
+
+    // Deno debugging uses VS Code's built-in js-debug, so no extension probe is required.
+    capabilities.push("deno");
 
     if (isMauiInstalled()) {
         capabilities.push("maui");

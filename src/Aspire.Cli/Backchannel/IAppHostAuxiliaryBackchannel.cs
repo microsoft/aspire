@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Hosting.Backchannel;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Backchannel;
@@ -12,14 +13,14 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAppHostAuxiliaryBackchannel : IDisposable
 {
     /// <summary>
-    /// Gets the hash identifier for this AppHost instance.
+    /// Gets the socket used by this connection.
     /// </summary>
-    string Hash { get; }
+    IAppHostSocket Socket { get; }
 
     /// <summary>
     /// Gets the socket path for this connection.
     /// </summary>
-    string SocketPath { get; }
+    string SocketPath => Socket.SocketPath;
 
     /// <summary>
     /// Gets the AppHost information.

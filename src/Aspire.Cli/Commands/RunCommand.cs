@@ -481,12 +481,17 @@ internal sealed class RunCommand : BaseCommand
                 }
                 else
                 {
-                    // We want to display resource information in remote environments.
-                    // Resources update over time so we'll use a live display.
-                    // It is used to show discovered endpoints as they come in over the backchannel.
+                    // Remote environments surface endpoints discovered over the backchannel. Interactive
+                    // terminals replace a cumulative snapshot in place, while redirected output appends
+                    // each endpoint transition once without cursor manipulation.
                     var discoveredEndpoints = new List<(string Resource, string Endpoint)>();
                     var endpointsLocalizedString = RunCommandStrings.Endpoints;
                     var showCtrlC = !ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
+
+                    Markup BuildEndpointMarkup(string resource, string endpoint)
+                    {
+                        return new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}");
+                    }
 
                     IRenderable BuildLiveRenderable()
                     {
@@ -507,7 +512,7 @@ internal sealed class RunCommand : BaseCommand
                                     i == 0
                                         ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                         : Text.Empty,
-                                    new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}")
+                                    BuildEndpointMarkup(resource, endpoint)
                                 );
                             }
 
@@ -522,20 +527,60 @@ internal sealed class RunCommand : BaseCommand
                         return rows.Count > 0 ? new Rows(rows) : Text.Empty;
                     }
 
+                    IRenderable BuildStaticEndpointRenderable(string resource, string endpoint, bool isFirstEndpoint)
+                    {
+                        var endpointsGrid = new Grid();
+                        endpointsGrid.AddColumn();
+                        endpointsGrid.AddColumn();
+                        endpointsGrid.Columns[0].Width = longestLocalizedLengthWithColon;
+
+                        if (isFirstEndpoint)
+                        {
+                            endpointsGrid.AddRow(Text.Empty, Text.Empty);
+                        }
+
+                        endpointsGrid.AddRow(
+                            isFirstEndpoint
+                                ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
+                                : Text.Empty,
+                            BuildEndpointMarkup(resource, endpoint)
+                        );
+
+                        return new Padder(endpointsGrid, new Padding(3, 0));
+                    }
+
+                    async Task ProcessResourceStatesAsync(Action<string, string> endpointWriter)
+                    {
+                        var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
+                        await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
+                        {
+                            ProcessResourceState(resourceState, endpointWriter);
+                        }
+                    }
+
                     try
                     {
-                        await InteractionService.DisplayLiveAsync(BuildLiveRenderable(), async updateTarget =>
+                        if (_hostEnvironment.SupportsInteractiveOutput)
                         {
-                            var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
-                            await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
-                            {
-                                ProcessResourceState(resourceState, (resource, endpoint) =>
+                            await InteractionService.DisplayLiveAsync(
+                                BuildLiveRenderable(),
+                                updateTarget => ProcessResourceStatesAsync((resource, endpoint) =>
                                 {
                                     discoveredEndpoints.Add((resource, endpoint));
                                     updateTarget(BuildLiveRenderable());
-                                });
-                            }
-                        });
+                                }));
+                        }
+                        else
+                        {
+                            AppendCtrlCMessage(longestLocalizedLengthWithColon);
+
+                            var isFirstEndpoint = true;
+                            await ProcessResourceStatesAsync((resource, endpoint) =>
+                            {
+                                InteractionService.DisplayRenderable(BuildStaticEndpointRenderable(resource, endpoint, isFirstEndpoint));
+                                isFirstEndpoint = false;
+                            });
+                        }
                     }
                     catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
                     {

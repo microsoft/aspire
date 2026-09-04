@@ -17,11 +17,13 @@
 #   job:polyglot               tests.yml -> polyglot-validation.yml (py/go/java/rust/ts)
 #   job:typescript-sdk         tests.yml -> typescript-sdk-tests.yml
 #   job:typescript-api-compat  tests.yml -> typescript-api-compat.yml
-#   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux
+#   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux,
+#                              with unit/package steps in extension-unit-tests.yml
 #   job:extension-e2e          tests.yml -> extension-e2e-tests.yml
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
+#   job:cli-starter-validation tests.yml cli_starter_validation_* (6 platforms)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
 #   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
@@ -31,6 +33,7 @@ version: 1
 groups:
   CLI_BUNDLE:
     - test:Aspire.Cli.EndToEnd.Tests
+    - job:cli-starter-validation
     - job:extension-e2e
     # The WinGet/Homebrew installer artifacts package and ship this CLI bundle, so a change to the
     # bundle (eng/Bundle.proj) must regenerate/validate them too.
@@ -82,7 +85,6 @@ ignore:
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
-  - eng/scripts/cli-starter-validation.ps1              # exercised by unconditional cross-platform CLI starter PR jobs
   - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
   - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
   # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
@@ -212,6 +214,7 @@ path_rules:
       - .vscode/launch.json
       - .vscode/tasks.json
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
+      - .github/workflows/extension-unit-tests.yml
     targets: [job:extension-unit]
     reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
   - paths:
@@ -224,6 +227,7 @@ path_rules:
       - tests/Aspire.Hosting.Tests/Cli/**
       - eng/scripts/get-aspire-cli*
       - .github/workflows/tests.yml
+      - .github/workflows/extension-unit-tests.yml
       - .github/workflows/extension-e2e-tests.yml
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
@@ -243,6 +247,12 @@ path_rules:
       - .github/workflows/prepare-installer-artifacts.yml
     targets: [job:winget-installer, job:homebrew-installer]
     reason: the reusable workflow implements both gated installer artifact jobs
+  - paths:
+      - .github/workflows/cli-starter-validation.yml
+      - eng/scripts/cli-starter-validation.ps1
+      - eng/scripts/get-aspire-cli-pr.ps1
+    targets: [job:cli-starter-validation]
+    reason: the reusable workflow, PR installer, and scenario script implement starter validation
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -264,6 +274,16 @@ path_rules:
       - eng/clipack/**
     targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
     reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
+  - paths:
+      - eng/clipack/Common.projitems
+      - eng/clipack/Aspire.Cli.linux-x64.csproj
+      - eng/clipack/Aspire.Cli.linux-arm64.csproj
+      - eng/clipack/Aspire.Cli.win-x64.csproj
+      - eng/clipack/Aspire.Cli.win-arm64.csproj
+      - eng/clipack/Aspire.Cli.osx-x64.csproj
+      - eng/clipack/Aspire.Cli.osx-arm64.csproj
+    targets: [job:cli-starter-validation]
+    reason: shared archive inputs and the six RID-specific native CLI archives installed by the starter validation workflow
   - paths:
       - .github/workflows/build-cli-e2e-image.yml
       - eng/scripts/load-cli-e2e-images.sh
@@ -323,22 +343,27 @@ path_rules:
   - paths:
       - eng/dashboardpack/**
     targets: [test:Aspire.Hosting.Sdk.Tests]
-    reason: AppHostSdkTargetsTests asserts Aspire.Dashboard.Sdk.* package ref
+    reason: AppHostSdkTargetsTests asserts the per-RID dashboard package reference used when the CLI bundle is disabled
   - paths:
       - eng/dcppack/**
     targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests]
-    reason: AppHostSdkTargetsTests asserts Aspire.Hosting.Orchestration.*; TerminalHost exercises DCP
+    reason: AppHostSdkTargetsTests asserts the per-RID orchestration package reference; TerminalHost exercises packaged DCP
   - paths:
       - src/Aspire.ProjectTemplates/**
     targets: [test:Aspire.Templates.Tests]
     reason: Templates.Tests installs the template hive from src/Aspire.ProjectTemplates
+  - paths:
+      - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+      - src/Aspire.ProjectTemplates/templates/aspire-starter/**
+    targets: [job:cli-starter-validation]
+    reason: package construction and template content consumed by the C# starter validation scenario
   - paths:
       - playground/**
     targets: [test:Aspire.Playground.Tests]
     reason: Aspire.Playground.Tests builds/runs apps under playground/
   - paths:
       - src/Aspire.AppHost.Sdk/**
-    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Hosting.DotnetTool.Tests, job:polyglot]
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Hosting.DotnetTool.Tests, job:cli-starter-validation, job:polyglot]
     reason: AppHost SDK targets + RuntimeIdentifier tool; SDK ships to every generated apphost
   - paths:
       - tools/QuarantineTools/**
@@ -370,6 +395,19 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
+  - projects: [CreateLayout]
+    targets: [CLI_BUNDLE]
+    reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs
+  - projects:
+      - Aspire.Cli
+      - Aspire.Managed
+      - Aspire.AppHost.Sdk
+      - Aspire.Hosting.AppHost
+      - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.CodeGeneration.TypeScript
+      - Aspire.Hosting.JavaScript
+    targets: [job:cli-starter-validation]
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
   - projects:
       - Aspire.TypeSystem
       - Aspire.Hosting.RemoteHost

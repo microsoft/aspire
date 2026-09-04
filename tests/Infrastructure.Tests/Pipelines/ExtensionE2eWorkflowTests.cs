@@ -15,6 +15,8 @@ namespace Infrastructure.Tests.Pipelines;
 public sealed class ExtensionE2eWorkflowTests
 {
     private const string CallerWorkflowRelativePath = ".github/workflows/tests.yml";
+    private const string ExtensionUnitWorkflowRelativePath = ".github/workflows/extension-unit-tests.yml";
+
     [Fact]
     public void AdvisoryShardRowsRemainIssueTrackedWithoutWeakeningRunnerStep()
     {
@@ -52,6 +54,38 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
+    public void DenoIsInstalledOnlyForDenoE2eShards()
+    {
+        var job = LoadExtensionE2eJob();
+        var rows = MatrixIncludeRows(job).ToList();
+        var denoRows = rows
+            .Where(row => Scalar(row, "installDeno") == "true")
+            .ToList();
+
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Linux" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Windows" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.All(denoRows, row =>
+        {
+            var name = Scalar(row, "name");
+            var shardName = Scalar(row, "shardName");
+            Assert.True(
+                (shardName == "launch-profiles" && name is "Linux" or "Windows") ||
+                (shardName == "deno-debugger" && name == "Linux"),
+                $"Deno should not be installed for the {name}/{shardName} shard.");
+        });
+
+        var installDenoStep = Assert.Single(
+            ExtensionE2eWorkflow.Steps(job),
+            step => Scalar(step, "name") == "Install Deno");
+        Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
+        Assert.Equal("pwsh", Scalar(installDenoStep, "shell"));
+        var installScript = Scalar(installDenoStep, "run") ?? string.Empty;
+        Assert.Contains("https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip", installScript, StringComparison.Ordinal);
+        Assert.Contains("$installDirectory | Out-File -FilePath $env:GITHUB_PATH", installScript, StringComparison.Ordinal);
+        Assert.Contains("--version", installScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectedExtensionE2eWorkflowMustRun()
     {
         var yaml = new YamlStream();
@@ -84,14 +118,15 @@ public sealed class ExtensionE2eWorkflowTests
 
         // The VSIX the shards install is published even when the unit tests fail; without this the
         // decoupling above buys nothing because the artifact would never exist.
-        var extensionUnitJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_tests_win")];
+        var extensionUnitJobs = LoadWorkflowJobs(ExtensionUnitWorkflowRelativePath);
+        var extensionUnitJob = (YamlMappingNode)extensionUnitJobs.Children[new YamlScalarNode("extension_tests_win")];
         var unitSteps = ((YamlSequenceNode)extensionUnitJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
         var uploadStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Upload VSIX");
         Assert.Contains("!cancelled()", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("!inputs.extensionReleaseOnly", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("inputs.packageVsix", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
         var packageStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Package VSIX");
         Assert.Contains("!cancelled()", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("!inputs.extensionReleaseOnly", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("inputs.packageVsix", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
 
         var resultsJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("results")];
         var steps = (YamlSequenceNode)resultsJob.Children[new YamlScalarNode("steps")];
@@ -102,6 +137,16 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     private static YamlMappingNode LoadExtensionE2eJob() => ExtensionE2eWorkflow.Job();
+
+    private static YamlMappingNode LoadWorkflowJobs(string relativePath)
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, relativePath)));
+        yaml.Load(reader);
+
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        return Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
+    }
 
     private static IEnumerable<YamlMappingNode> MatrixIncludeRows(YamlMappingNode job)
     {

@@ -216,6 +216,15 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+          - name: Windows
+            shardName: winui-debug
+            spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installWinUI: true
           - name: Linux
             shardName: diagnostic-logs
             spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
@@ -378,6 +387,7 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            installDeno: true
           - name: Windows
             shardName: launch-profiles
             spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
@@ -386,6 +396,7 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+            installDeno: true
           - name: Linux
             shardName: azure-functions
             advisoryIssue: https://github.com/microsoft/aspire/issues/19639
@@ -396,6 +407,15 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          - name: Linux
+            shardName: deno-debugger
+            spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
     defaults:
       run:
         shell: pwsh
@@ -452,6 +472,10 @@ jobs:
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           global-json-file: global.json
+
+      - name: Setup Deno
+        if: ${{ matrix.installDeno }}
+        uses: ./.github/actions/setup-deno
 
       - name: Download VSIX
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -552,6 +576,37 @@ jobs:
             echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
             echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
+          } >> "$GITHUB_ENV"
+
+      - name: Install WinUI E2E debugger prerequisites
+        if: ${{ matrix.installWinUI }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The known failure reproduces with the standalone C# debugger; C# Dev Kit is not
+          # involved. Pin the exact debugger version so an upstream update cannot hide an
+          # Aspire regression, and install its runtime dependency for the offline E2E host.
+          # Raw Marketplace VSIX URLs are not Dependabot-managed. Rebaseline these pins
+          # manually only when host compatibility requires it or the fixture is deliberately
+          # moved; before changing C#, verify that the old TargetPath launch still reproduces
+          # https://github.com/microsoft/aspire/issues/19091 and the RunCommand launch passes.
+          dotnet_runtime_vsix="$RUNNER_TEMP/vscode-dotnet-runtime-3.1.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$dotnet_runtime_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage'
+          echo '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a  '"$dotnet_runtime_vsix" | sha256sum --check -
+
+          csharp_vsix="$RUNNER_TEMP/vscode-csharp-2.140.9-win32-x64.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$csharp_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.140.9/vspackage?targetPlatform=win32-x64'
+          echo 'ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a  '"$csharp_vsix" | sha256sum --check -
+
+          {
+            echo 'ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true'
+            echo "ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix"
+            echo "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix"
           } >> "$GITHUB_ENV"
 
       - name: Set up the JDK for the Java E2E specs
@@ -784,6 +839,27 @@ jobs:
           if (-not (Test-Path '${{ matrix.spec }}')) {
             throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
           }
+
+      - name: Install Deno
+        if: ${{ matrix.installDeno }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = if ('${{ runner.os }}' -eq 'Windows') {
+            'x86_64-pc-windows-msvc'
+          } else {
+            'x86_64-unknown-linux-gnu'
+          }
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'deno'
+          $archivePath = Join-Path $env:RUNNER_TEMP "deno-$target.zip"
+          New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+          Invoke-WebRequest "https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip" -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $installDirectory -Force
+          if ('${{ runner.os }}' -ne 'Windows') {
+            chmod +x (Join-Path $installDirectory 'deno')
+          }
+          $installDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $installDirectory '${{ runner.os == 'Windows' && 'deno.exe' || 'deno' }}') --version
 
       - name: Install E2E recorder
         if: ${{ matrix.useXvfb }}
