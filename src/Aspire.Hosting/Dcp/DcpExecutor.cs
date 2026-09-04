@@ -43,10 +43,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     // it probably means DCP crashed and there is no point trying further.
     private static readonly TimeSpan s_disposeTimeout = TimeSpan.FromSeconds(10);
 
-    // Regex for normalizing application names.
-    [GeneratedRegex("""^(?<name>.+?)[.-]?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex ApplicationNameRegex();
-
     private readonly ILogger<DistributedApplication> _distributedApplicationLogger;
     private readonly IKubernetesService _kubernetesService;
     private readonly IConfiguration _configuration;
@@ -346,7 +342,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return applicationName;
         }
 
-        applicationName = ApplicationNameRegex().Match(applicationName) switch
+        applicationName = ApplicationNameHelper.ApplicationNameRegex().Match(applicationName) switch
         {
             Match { Success: true } match => match.Groups["name"].Value,
             _ => applicationName

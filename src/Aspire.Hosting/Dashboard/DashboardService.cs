@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Hosting.Utils;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -40,9 +41,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     // with IHostApplicationLifetime.ApplicationStopping to ensure eager cancellation
     // of pending connections during shutdown.
 
-    [GeneratedRegex("""^(?<name>.+?)[.-]?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex ApplicationNameRegex();
-
     public override Task<ApplicationInformationResponse> GetApplicationInformation(
         ApplicationInformationRequest request,
         ServerCallContext context)
@@ -59,7 +57,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     internal static string GetDashboardApplicationName(string applicationName)
     {
-        return ApplicationNameRegex().Match(applicationName) switch
+        return ApplicationNameHelper.ApplicationNameRegex().Match(applicationName) switch
         {
             Match { Success: true } match => match.Groups["name"].Value,
             _ => applicationName
