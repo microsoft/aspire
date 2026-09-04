@@ -442,6 +442,147 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsMoreThanTenCausesBeforeProcessingCauseFiles()
+    {
+        var causeIds = Enumerable.Range(1, 11).Select(index => $"cause-{index}").ToArray();
+        var causes = causeIds.ToDictionary(
+            causeId => $"{causeId}.json",
+            causeId => CreateCause(causeId, "infra-failure", 123));
+        await WriteValidationFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "transient-infra",
+                pr = new { number = 42 },
+                failed_jobs = new[] { new { id = 123, classification = "transient-infra" } },
+                failed_tests = Array.Empty<object>(),
+                causes = causeIds,
+            }),
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            causes);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis exceeds the 10-cause publication budget",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsMoreThanTenRawCauseFilesBeforeParsingThem()
+    {
+        var causeIds = Enumerable.Range(1, 10).Select(index => $"cause-{index}").ToArray();
+        var causes = causeIds.ToDictionary(
+            causeId => $"{causeId}.json",
+            causeId => CreateCause(causeId, "infra-failure", 123));
+        causes["unreferenced.json"] = "not-json";
+        await WriteValidationFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "transient-infra",
+                pr = new { number = 42 },
+                failed_jobs = new[] { new { id = 123, classification = "transient-infra" } },
+                failed_tests = Array.Empty<object>(),
+                causes = causeIds,
+            }),
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            causes);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis exceeds the 10-cause publication budget",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsOversizedRenderedPrComment()
+    {
+        var failedJobs = Enumerable.Range(1, 150)
+            .Select(index => new
+            {
+                id = index,
+                classification = "code-issue",
+                reason = new string('r', 500),
+            })
+            .ToArray();
+        await WriteValidationFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "code-issue",
+                pr = new { number = 42 },
+                failed_jobs = failedJobs,
+                failed_tests = Array.Empty<object>(),
+                causes = Array.Empty<string>(),
+            }),
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            JsonSerializer.Serialize(
+                failedJobs.Select(job => new { job.id, name = $"Job {job.id}" })));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Rendered PR comment exceeds the 65000-byte publication budget",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRequiresTrustedRunMetadataForPrComment()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""");
+        File.Delete(Path.Combine(_workspace.Path, "ci-failure-data", "run.json"));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis result or trusted run data not found",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsUnsafeTrustedRunUrl()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "run.json"),
+            """{"id":123,"html_url":"https://github.com/microsoft\n@reviewers/aspire/actions/runs/123"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Trusted run metadata is invalid",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(
         """{"run_id":123,"run_scope":"main","verdict":"main-repository-breakage","pr":42,"failed_jobs":[],"failed_tests":[],"causes":[]}""",
@@ -1443,11 +1584,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
             **Type**: main-repository-breakage
 
+            <!-- ci-failure-occurrences:start -->
             ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
 
             | Date | Build | Job | Context |
             |------|-------|-----|----|
             | 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |
+            <!-- ci-failure-occurrences:end -->
             """.ReplaceLineEndings("\n") + "\n",
             (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
     }
@@ -1760,7 +1905,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("name: All-TestResults", ReadWorkflow("tests.yml"), StringComparison.Ordinal);
         Assert.Contains(".name == \"All-TestResults\"", s_persistenceScript, StringComparison.Ordinal);
         Assert.Contains(
-            ".created_at >= $started_at and .created_at <= $updated_at",
+            ".created_at > $started_at and .created_at <= $updated_at",
             s_persistenceScript,
             StringComparison.Ordinal);
     }
@@ -1802,6 +1947,32 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """
             [
               {"id": 20, "name": "deployment-test-results-linux", "expired": false, "created_at": "2026-09-03T12:02:00Z"}
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-results-artifact",
+                artifactsPath,
+                "2026-09-03T12:00:00Z",
+                "2026-09-03T12:03:00Z",
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Empty(result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultsArtifactSelectionExcludesArtifactAtAttemptStartBoundary()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(
+            artifactsPath,
+            """
+            [
+              {"id": 10, "name": "All-TestResults", "expired": false, "created_at": "2026-09-03T12:00:00Z"}
             ]
             """);
 
@@ -2301,6 +2472,37 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Empty(result.Failed);
         Assert.Equal([123], result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsMoreThanTenCauses()
+    {
+        var causeIds = new[] { "nuget-timeout" }
+            .Concat(Enumerable.Range(1, 10).Select(index => $"cause-{index}"))
+            .ToArray();
+        await WriteRerunFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "transient-infra",
+                failed_jobs = new[] { new { id = 456, classification = "transient-infra" } },
+                failed_tests = Array.Empty<object>(),
+                causes = causeIds,
+            }),
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""");
+        await WriteCauseFilesAsync(
+            causeIds
+                .Skip(1)
+                .ToDictionary(
+                    causeId => $"{causeId}.json",
+                    causeId => $$"""{"id":"{{causeId}}","type":"infra-failure","job_ids":[456]}"""));
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(["Rerun analysis exceeds the 10-cause publication budget"], result.Failed);
+        Assert.Empty(result.Reruns);
     }
 
     [Fact]
@@ -3203,11 +3405,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
             **Type**: flaky-test
 
+            <!-- ci-failure-occurrences:start -->
             ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
 
             | Date | Build | Job | Context |
             |------|-------|-----|----|
             | occurrence |
+            <!-- ci-failure-occurrences:end -->
             """.ReplaceLineEndings("\n") + "\n",
             (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
     }
@@ -3269,6 +3475,172 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "  - **Why likely flaky**: ` [test reason](https://evil.example) `",
             result.Output,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererPreservesHumanTextAndKeepsNewestRowsWithinBudget()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var largeJob = new string('x', 900);
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            ## Operator notes
+
+            Preserve this human-authored text.
+
+            ## Occurrences
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` {{largeJob}}-oldest ` | main |
+            | 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` {{largeJob}}-middle ` | main |
+            | 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` {{largeJob}}-newest ` | main |
+            """.ReplaceLineEndings("\r\n"));
+        var newRow = $"| 2026-08-04 | [4](https://github.com/microsoft/aspire/actions/runs/4) | ` {largeJob}-new ` | main |";
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "4", outputPath, "2500"]);
+
+        Assert.Equal(0, result.ExitCode);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.True(new FileInfo(outputPath).Length <= 2500);
+        Assert.Contains("Preserve this human-authored text.", outputBody, StringComparison.Ordinal);
+        Assert.Contains("Showing 2 most recent of 4 occurrences.", outputBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("-oldest", outputBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("-middle", outputBody, StringComparison.Ordinal);
+        Assert.Contains("-newest", outputBody, StringComparison.Ordinal);
+        Assert.Contains("-new", outputBody, StringComparison.Ordinal);
+        Assert.Contains("<!-- ci-failure-occurrences:start -->", outputBody, StringComparison.Ordinal);
+        Assert.Contains("<!-- ci-failure-occurrences:end -->", outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererDoesNotGrowWhitespaceAcrossUpdates()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var firstOutputPath = Path.Combine(_workspace.Path, "first-output.md");
+        var secondOutputPath = Path.Combine(_workspace.Path, "second-output.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | main |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\r\n"));
+
+        var firstResult = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | main |",
+                "2",
+                firstOutputPath,
+            ]);
+        var secondResult = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                firstOutputPath,
+                "| 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` Tests ` | main |",
+                "3",
+                secondOutputPath,
+            ]);
+
+        Assert.Equal(0, firstResult.ExitCode);
+        Assert.Equal(0, secondResult.ExitCode);
+        var outputBody = await File.ReadAllTextAsync(secondOutputPath);
+        Assert.Contains(
+            "**Type**: flaky-test\n\n<!-- ci-failure-occurrences:start -->",
+            outputBody.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "**Type**: flaky-test\n\n\n<!-- ci-failure-occurrences:start -->",
+            outputBody.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+        Assert.EndsWith(
+            "<!-- ci-failure-occurrences:end -->\n",
+            outputBody.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+        Assert.False(
+            outputBody.ReplaceLineEndings("\n").EndsWith(
+                "<!-- ci-failure-occurrences:end -->\n\n",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueRendererRejectsBodyAbovePublicationBudget()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
+        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"test-failure","type":"flaky-test","title":"Failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[1]}""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
+            [
+                causePath,
+                "unused-run-context.json",
+                "unused-last-success.json",
+                "unused-triggering-merge.json",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "pull-request",
+                "42",
+                "Tests",
+                $"| 2026-08-04 | [123](https://github.com/microsoft/aspire/actions/runs/123) | {new string('x', 65000)} | #42 |",
+                bodyPath,
+                metadataPath,
+            ]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains(
+            "::warning::Rendered cause issue exceeds the 65000-byte publication budget",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PublicationUsesBoundedOccurrenceRendererWithoutBlockingOtherEffects()
+    {
+        ForEachExecutableWorkflow(workflow =>
+        {
+            var publisher = GetSection(
+                workflow,
+                "- name: Publish analysis data and comment on PR",
+                "- name: Comment on PR");
+
+            Assert.Contains("render-issue-occurrences", publisher, StringComparison.Ordinal);
+            Assert.Contains(
+                "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update.",
+                publisher,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "::warning::Cause issue body exceeds the publication budget. Skipping issue creation.",
+                publisher,
+                StringComparison.Ordinal);
+        });
     }
 
     [Theory]
@@ -3872,6 +4244,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(Path.Combine(agentDirectory, "analysis-result.json"), analysis);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "run-context.json"), runContext);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "failed-jobs.json"), trustedFailedJobs);
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "run.json"),
+            """{"id":123,"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""");
         if (causeFileName is not null && cause is not null)
         {
             await WriteCauseFilesAsync(new Dictionary<string, string> { [causeFileName] = cause });

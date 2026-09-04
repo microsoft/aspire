@@ -933,19 +933,34 @@ safe-outputs:
                       && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
                   fi
 
-                  # Append new occurrence rows to the existing issue body, skipping
-                  # if this run_id is already recorded (avoids duplicates on re-runs).
-                  CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""')
+                  # Keep the newest occurrence rows within GitHub's issue-body
+                  # budget while the memory branch retains the complete history.
+                  CURRENT_BODY_FILE=$(mktemp)
+                  gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""' > "$CURRENT_BODY_FILE"
                   # Anchor the pattern with '(' from the markdown link to avoid
                   # partial matches (e.g., run 123 matching run 1234).
-                  if echo "$CURRENT_BODY" | grep -qF "[${RUN_ID}]("; then
+                  if grep -qF "[${RUN_ID}](" "$CURRENT_BODY_FILE"; then
                     echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
                   else
                     BODY_FILE=$(mktemp)
-                    printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCE_ROW" > "$BODY_FILE"
-                    gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+                    TOTAL_OCCURRENCE_COUNT=$(jq '.occurrences | length' "$CAUSE_STORED")
+                    set +e
+                    bash .github/workflows/analyze-ci-failure-persistence.sh render-issue-occurrences \
+                      "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" "$BODY_FILE"
+                    OCCURRENCE_RENDER_STATUS=$?
+                    set -e
+                    if [ "$OCCURRENCE_RENDER_STATUS" -eq 0 ]; then
+                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+                    elif [ "$OCCURRENCE_RENDER_STATUS" -eq 2 ]; then
+                      echo "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update."
+                    else
+                      echo "::error::Unable to render occurrence history for issue #${EXISTING_ISSUE}."
+                      rm -f "$CURRENT_BODY_FILE" "$BODY_FILE"
+                      exit "$OCCURRENCE_RENDER_STATUS"
+                    fi
                     rm -f "$BODY_FILE"
                   fi
+                  rm -f "$CURRENT_BODY_FILE"
 
                   if [ "$REOPEN" = "true" ]; then
                     gh issue reopen "$EXISTING_ISSUE" --repo "$REPO"
@@ -957,12 +972,23 @@ safe-outputs:
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
                   ISSUE_METADATA_FILE=$(mktemp)
+                  set +e
                   bash .github/workflows/analyze-ci-failure-issue.sh \
                     "$CAUSE_STORED" "$RUN_CONTEXT_FILE" \
                     ci-failure-data/last-successful-main-run.json \
                     ci-failure-data/triggering-merge-pr.json \
                     "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
                     "$NEW_OCCURRENCE_ROW" "$BODY_FILE" "$ISSUE_METADATA_FILE"
+                  ISSUE_RENDER_STATUS=$?
+                  set -e
+                  if [ "$ISSUE_RENDER_STATUS" -eq 2 ]; then
+                    echo "::warning::Cause issue body exceeds the publication budget. Skipping issue creation."
+                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
+                    continue
+                  elif [ "$ISSUE_RENDER_STATUS" -ne 0 ]; then
+                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
+                    exit "$ISSUE_RENDER_STATUS"
+                  fi
 
                   if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
                     gh label create "main-ci-break" --repo "$REPO" \
@@ -1215,6 +1241,11 @@ safe-outputs:
               const causeFiles = fs.existsSync(causesDir)
                 ? fs.readdirSync(causesDir).filter(fileName => fileName.endsWith('.json'))
                 : [];
+              const maxCauseCount = 10;
+              if (summaryCauseIds.length > maxCauseCount || causeFiles.length > maxCauseCount) {
+                core.setFailed(`Rerun analysis exceeds the ${maxCauseCount}-cause publication budget`);
+                return;
+              }
               if (summaryCauseIds.length === 0 ||
                   !summaryCauseIds.every(causeId => typeof causeId === 'string') ||
                   new Set(summaryCauseIds).size !== summaryCauseIds.length ||
@@ -1426,7 +1457,7 @@ Field details:
 - `failed_tests[].stack_trace`: The first 2,000 characters of the stack trace from the TRX test failure data (include the first few relevant frames).
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
-- `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt.
+- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures with the same underlying root cause so the analysis never exceeds the 10-cause publication budget.
 
 #### 3b. Per-cause files
 
@@ -1455,7 +1486,7 @@ Field details:
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
 
-Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
+Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause, with at most 10 cause files for the run. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 
 ### Step 4: Take action
 

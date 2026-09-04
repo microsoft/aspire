@@ -141,9 +141,109 @@ select_test_results_artifact()
         (.expired == false) and
         (.name == "All-TestResults") and
         ((.created_at | type) == "string") and
-        (.created_at >= $started_at and .created_at <= $updated_at))
+        (.created_at > $started_at and .created_at <= $updated_at))
     ] | sort_by([.created_at, .id]) | last | .id // empty
   ' "$artifacts_file"
+}
+
+render_issue_occurrences()
+{
+  local current_body_file="$1"
+  local new_occurrence_row="$2"
+  local total_occurrence_count="$3"
+  local output_file="$4"
+  local max_bytes="$5"
+  local output_temp
+
+  if [ ! -f "$current_body_file" ] ||
+     [[ ! "$total_occurrence_count" =~ ^[1-9][0-9]*$ ]] ||
+     [[ ! "$max_bytes" =~ ^[1-9][0-9]*$ ]]; then
+    echo "::error::Invalid occurrence renderer input" >&2
+    return 1
+  fi
+
+  output_temp=$(mktemp)
+  if ! jq -nj \
+      --rawfile body "$current_body_file" \
+      --arg new_row "$new_occurrence_row" \
+      --argjson total "$total_occurrence_count" \
+      --argjson max_bytes "$max_bytes" '
+      def normalized_body:
+        $body | gsub("\r\n"; "\n");
+      def is_occurrence_row:
+        test("^\\| [0-9]{4}-[0-9]{2}-[0-9]{2} \\| \\[[0-9]+\\]\\(https://github\\.com/[^\\n]+\\) \\| .* \\| (main|unavailable|#[0-9]+) \\|$");
+      def section($rows):
+        "<!-- ci-failure-occurrences:start -->\n" +
+        "## Occurrences\n\n" +
+        "Showing \($rows | length) most recent of \($total) occurrences.\n\n" +
+        "| Date | Build | Job | Context |\n" +
+        "|------|-------|-----|----|\n" +
+        ($rows | join("\n")) + "\n" +
+        "<!-- ci-failure-occurrences:end -->\n";
+      def render($prefix; $rows):
+        ($prefix | sub("\n+$"; "")) + "\n\n" + section($rows);
+      def fit($prefix; $rows):
+        render($prefix; $rows) as $rendered |
+        if ($rendered | utf8bytelength) <= $max_bytes then
+          $rendered
+        elif ($rows | length) > 1 then
+          fit($prefix; $rows[1:])
+        else
+          error("occurrence section cannot fit within the publication budget")
+        end;
+      def managed_parts:
+        (normalized_body | split("<!-- ci-failure-occurrences:start -->")) as $start_parts |
+        if ($start_parts | length) != 2 then
+          error("ambiguous managed occurrence section")
+        else
+          ($start_parts[1] | split("<!-- ci-failure-occurrences:end -->")) as $end_parts |
+          if ($end_parts | length) != 2 or ($end_parts[1] | test("^\\s*$") | not) then
+            error("ambiguous managed occurrence section")
+          else
+            { prefix: $start_parts[0], managed: $end_parts[0] }
+          end
+        end;
+      def legacy_parts:
+        (normalized_body | split("\n## Occurrences\n")) as $parts |
+        if ($parts | length) != 2 then
+          error("unsupported legacy occurrence section")
+        else
+          { prefix: $parts[0], managed: ("## Occurrences\n" + $parts[1]) }
+        end;
+      if ($new_row | is_occurrence_row | not) then
+        error("invalid occurrence row")
+      else
+        (if (normalized_body | contains("<!-- ci-failure-occurrences:start -->")) or
+            (normalized_body | contains("<!-- ci-failure-occurrences:end -->")) then
+          managed_parts
+        else
+          legacy_parts
+        end) as $parts |
+        ($parts.managed | split("\n")) as $lines |
+        if any($lines[];
+          length > 0 and
+          . != "## Occurrences" and
+          . != "| Date | Build | Job | Context |" and
+          . != "|------|-------|-----|----|" and
+          (test("^Showing [0-9]+ most recent of [0-9]+ occurrences\\.$") | not) and
+          (is_occurrence_row | not))
+        then
+          error("unsupported occurrence section contents")
+        else
+          ([$lines[] | select(is_occurrence_row)] + [$new_row]) as $rows |
+          if $total < ($rows | length) then
+            error("occurrence total is smaller than the rendered history")
+          else
+            fit($parts.prefix; $rows)
+          end
+        end
+      end
+    ' > "$output_temp"; then
+    rm -f "$output_temp"
+    return 2
+  fi
+
+  mv "$output_temp" "$output_file"
 }
 
 cache_cause_issues()
@@ -278,6 +378,15 @@ case "$COMMAND" in
     STARTED_AT="${3:?start time is required}"
     UPDATED_AT="${4:?update time is required}"
     select_test_results_artifact "$ARTIFACTS_FILE" "$STARTED_AT" "$UPDATED_AT"
+    ;;
+  render-issue-occurrences)
+    CURRENT_BODY_FILE="${2:?current issue body file is required}"
+    NEW_OCCURRENCE_ROW="${3:?new occurrence row is required}"
+    TOTAL_OCCURRENCE_COUNT="${4:?total occurrence count is required}"
+    OUTPUT_FILE="${5:?output file is required}"
+    MAX_BYTES="${6:-65000}"
+    render_issue_occurrences \
+      "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" "$OUTPUT_FILE" "$MAX_BYTES"
     ;;
   cache-cause-issues)
     REPO="${2:?repository is required}"

@@ -10,7 +10,9 @@ ANALYSIS_FILE="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/analysis-result.json"
 CAUSES_DIR="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
 TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
-if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] || [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ]; then
+RUN_FILE="ci-failure-data/run.json"
+if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
+   [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$RUN_FILE" ]; then
   echo "::error::Analysis result or trusted run data not found"
   exit 1
 fi
@@ -21,10 +23,17 @@ mv "${ANALYSIS_FILE}.tmp" "$ANALYSIS_FILE"
 
 TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
 TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+RUN_METADATA_ID=$(jq -r 'if (.id | type) == "number" then (.id | tostring) else "" end' "$RUN_FILE")
+RUN_URL=$(jq -r 'if (.html_url | type) == "string" then .html_url else "" end' "$RUN_FILE")
 ANALYSIS_RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
 ANALYSIS_RUN_SCOPE=$(jq -r '.run_scope' "$ANALYSIS_FILE")
 VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
 
+if [ "$RUN_METADATA_ID" != "$TRUSTED_RUN_ID" ] ||
+   [[ ! "$RUN_URL" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/${TRUSTED_RUN_ID}$ ]]; then
+  echo "::error::Trusted run metadata is invalid"
+  exit 1
+fi
 if [ "$ANALYSIS_RUN_ID" != "$TRUSTED_RUN_ID" ] || [ "$ANALYSIS_RUN_SCOPE" != "$TRUSTED_RUN_SCOPE" ]; then
   echo "::error::Analysis result does not match trusted run context"
   exit 1
@@ -105,6 +114,20 @@ case "${TRUSTED_RUN_SCOPE}:${VERDICT}" in
     ;;
 esac
 
+MAX_CAUSE_COUNT=10
+CAUSE_FILES=()
+if [ -d "$CAUSES_DIR" ]; then
+  shopt -s nullglob
+  CAUSE_FILES=("$CAUSES_DIR"/*.json)
+  shopt -u nullglob
+fi
+SUMMARY_CAUSE_COUNT=$(jq '.causes | length' "$ANALYSIS_FILE")
+if [ "$SUMMARY_CAUSE_COUNT" -gt "$MAX_CAUSE_COUNT" ] ||
+   [ "${#CAUSE_FILES[@]}" -gt "$MAX_CAUSE_COUNT" ]; then
+  echo "::error::Analysis exceeds the ${MAX_CAUSE_COUNT}-cause publication budget"
+  exit 1
+fi
+
 CAUSE_COUNT=0
 INFRA_CAUSE_COUNT=0
 FLAKY_CAUSE_COUNT=0
@@ -112,7 +135,6 @@ MAIN_BREAK_CAUSE_COUNT=0
 INFRA_CAUSE_JOB_IDS='[]'
 FLAKY_CAUSE_JOB_IDS='[]'
 MAIN_BREAK_CAUSE_JOB_IDS='[]'
-SUMMARY_CAUSE_COUNT=$(jq '.causes | length' "$ANALYSIS_FILE")
 UNIQUE_SUMMARY_CAUSE_COUNT=$(jq '.causes | unique | length' "$ANALYSIS_FILE")
 FAILED_JOB_COUNT=$(jq '[.failed_jobs[]?] | length' "$ANALYSIS_FILE")
 INFRA_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "transient-infra")] | length' "$ANALYSIS_FILE")
@@ -142,9 +164,8 @@ if { [ "$TRUSTED_RUN_SCOPE" = "main" ] && [ "$CODE_ISSUE_JOB_COUNT" -ne 0 ]; } |
   exit 1
 fi
 
-if [ -d "$CAUSES_DIR" ]; then
-  for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
-    [ -f "$CAUSE_FILE" ] || continue
+if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
+  for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
     if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
       echo "::error::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
       exit 1
@@ -352,4 +373,20 @@ if ! jq -e \
 ' "$ANALYSIS_FILE" >/dev/null; then
   echo "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause"
   exit 1
+fi
+
+if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
+  COMMENT_FILE=$(mktemp)
+  if ! bash "$SCRIPT_DIR/analyze-ci-failure-comment.sh" \
+      "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_URL" > "$COMMENT_FILE"; then
+    rm -f "$COMMENT_FILE"
+    echo "::error::Unable to render the PR comment during validation"
+    exit 1
+  fi
+  COMMENT_BYTES=$(wc -c < "$COMMENT_FILE" | tr -d '[:space:]')
+  rm -f "$COMMENT_FILE"
+  if [ "$COMMENT_BYTES" -gt 65000 ]; then
+    echo "::error::Rendered PR comment exceeds the 65000-byte publication budget"
+    exit 1
+  fi
 fi

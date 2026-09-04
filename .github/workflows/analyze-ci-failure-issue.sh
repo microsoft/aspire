@@ -110,12 +110,22 @@ fi
   echo ""
   echo "**Type**: ${CAUSE_TYPE}"
   echo ""
+  echo "<!-- ci-failure-occurrences:start -->"
   echo "## Occurrences"
+  echo ""
+  echo "Showing 1 most recent of 1 occurrences."
   echo ""
   echo "| Date | Build | Job | Context |"
   echo "|------|-------|-----|----|"
   echo "$NEW_OCCURRENCE_ROW"
+  echo "<!-- ci-failure-occurrences:end -->"
 } > "$BODY_FILE"
+
+BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d '[:space:]')
+if [ "$BODY_BYTES" -gt 65000 ]; then
+  echo "::warning::Rendered cause issue exceeds the 65000-byte publication budget" >&2
+  exit 2
+fi
 
 LABELS="ci-failure-cause"
 TITLE_PREFIX="[CI Failure] "
