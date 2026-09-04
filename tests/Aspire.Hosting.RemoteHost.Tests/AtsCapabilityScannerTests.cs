@@ -165,6 +165,39 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssemblies_NullableHandleReturnsPreserveNullabilityWithoutChangingOtherReturns()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(global::Aspire.Hosting.ContainerResourceExtensions).Assembly, typeof(AtsCapabilityScannerTests).Assembly]);
+
+        var asContainer = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/asContainer");
+        var findResourceByName = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/findResourceByName");
+        var getEndpoint = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting.ApplicationModel/getEndpoint");
+        var getConfigValue = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/getConfigValue");
+        var taskHandle = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/testNullableTaskHandleReturn", StringComparison.Ordinal));
+        var valueTaskHandle = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/testNullableValueTaskHandleReturn", StringComparison.Ordinal));
+
+        Assert.Equal(AtsTypeCategory.Handle, asContainer.ReturnType.Category);
+        Assert.True(asContainer.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, findResourceByName.ReturnType.Category);
+        Assert.True(findResourceByName.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, getEndpoint.ReturnType.Category);
+        Assert.True(getEndpoint.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Primitive, getConfigValue.ReturnType.Category);
+        Assert.Null(getConfigValue.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, taskHandle.ReturnType.Category);
+        Assert.True(taskHandle.ReturnType.IsNullable);
+        Assert.Equal(AtsTypeCategory.Handle, valueTaskHandle.ReturnType.Category);
+        Assert.True(valueTaskHandle.ReturnType.IsNullable);
+    }
+
     [Theory]
     [InlineData(typeof(double?[]), AtsConstants.Number)]
     [InlineData(typeof(bool?[]), AtsConstants.Boolean)]
@@ -872,6 +905,20 @@ public class AtsCapabilityScannerTests
         {
             _ = builder;
             return [];
+        }
+
+        [AspireExport]
+        public static Task<ContainerResource?> TestNullableTaskHandleReturn(IDistributedApplicationBuilder builder)
+        {
+            _ = builder;
+            return Task.FromResult<ContainerResource?>(null);
+        }
+
+        [AspireExport]
+        public static ValueTask<ContainerResource?> TestNullableValueTaskHandleReturn(IDistributedApplicationBuilder builder)
+        {
+            _ = builder;
+            return ValueTask.FromResult<ContainerResource?>(null);
         }
 
         [AspireExport]

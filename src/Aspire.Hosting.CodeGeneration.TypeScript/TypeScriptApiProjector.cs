@@ -395,7 +395,7 @@ internal sealed partial class TypeScriptApiProjector
         {
             return TryGetPromiseWrapperType(capability.ReturnType, out var promiseInterfaceName, out _)
                 ? promiseInterfaceName
-                : $"Promise<{MapTypeRefToTypeScript(capability.ReturnType)}>";
+                : $"Promise<{MapCapabilityReturnTypeToTypeScript(capability.ReturnType)}>";
         }
 
         if (builder is not null)
@@ -426,7 +426,7 @@ internal sealed partial class TypeScriptApiProjector
             return GetPromiseInterfaceName(DeriveClassName(builder.TypeId));
         }
 
-        return $"Promise<{MapTypeRefToTypeScript(capability.ReturnType)}>";
+        return $"Promise<{MapCapabilityReturnTypeToTypeScript(capability.ReturnType)}>";
     }
 
     /// <summary>
@@ -1313,7 +1313,7 @@ internal sealed partial class TypeScriptApiProjector
             return promiseWrapper;
         }
 
-        return $"Promise<{(string.IsNullOrEmpty(returnTypeId) ? "void" : MapTypeRefToTypeScript(capability.ReturnType))}>";
+        return $"Promise<{(string.IsNullOrEmpty(returnTypeId) ? "void" : MapCapabilityReturnTypeToTypeScript(capability.ReturnType))}>";
     }
 
     private static (TypeScriptApiItem Item, TypeScriptApiDeclaration Declaration) ProjectEnum(AtsEnumTypeInfo enumType)
@@ -2479,7 +2479,7 @@ internal sealed partial class TypeScriptApiProjector
 
     internal bool TryGetPromiseWrapperType(AtsTypeRef? typeRef, out string promiseInterfaceName, out string promiseImplementationClassName)
     {
-        if (typeRef?.TypeId is { } typeId && _typesWithPromiseWrappers.Contains(typeId))
+        if (typeRef is { IsNullable: not true, TypeId: { } typeId } && _typesWithPromiseWrappers.Contains(typeId))
         {
             var className = GetConcreteClassName(typeId);
             promiseInterfaceName = GetPromiseInterfaceName(className);
@@ -2490,6 +2490,14 @@ internal sealed partial class TypeScriptApiProjector
         promiseInterfaceName = string.Empty;
         promiseImplementationClassName = string.Empty;
         return false;
+    }
+
+    internal string MapCapabilityReturnTypeToTypeScript(AtsTypeRef? typeRef)
+    {
+        var mappedType = MapTypeRefToTypeScript(typeRef);
+        return typeRef is { Category: AtsTypeCategory.Handle, IsNullable: true }
+            ? $"{mappedType} | null"
+            : mappedType;
     }
 
     internal string GetGetterOnlyPropertyMethodReturnType(AtsTypeRef? typeRef)
@@ -3072,7 +3080,7 @@ internal sealed partial class TypeScriptApiProjector
 
     internal string? GetPromiseWrapperForReturnType(AtsTypeRef? returnType)
     {
-        if (returnType == null)
+        if (returnType is null || returnType.IsNullable == true)
         {
             return null;
         }

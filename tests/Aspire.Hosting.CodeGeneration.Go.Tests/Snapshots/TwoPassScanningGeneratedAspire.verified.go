@@ -1566,19 +1566,18 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 
 // AsContainer gets the container resource represented by a resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -3798,19 +3797,18 @@ func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 
 // AsContainer gets the container resource represented by a resource.
 func (s *cSharpAppResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -6728,19 +6726,18 @@ func newContainerRegistryResourceFromHandle(h *handle, c *client) ContainerRegis
 
 // AsContainer gets the container resource represented by a resource.
 func (s *containerRegistryResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -10853,6 +10850,7 @@ func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/findResourceByName", reqArgs)
 	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	typed, ok := result.(Resource)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/findResourceByName returned unexpected type %T", result))
@@ -11533,19 +11531,18 @@ func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 
 // AsContainer gets the container resource represented by a resource.
 func (s *dotnetToolResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -14427,19 +14424,18 @@ func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 
 // AsContainer gets the container resource represented by a resource.
 func (s *executableResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -16467,19 +16463,18 @@ func newExternalServiceResourceFromHandle(h *handle, c *client) ExternalServiceR
 
 // AsContainer gets the container resource represented by a resource.
 func (s *externalServiceResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -19229,19 +19224,18 @@ func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 
 // AsContainer gets the container resource represented by a resource.
 func (s *parameterResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -21079,19 +21073,18 @@ func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 
 // AsContainer gets the container resource represented by a resource.
 func (s *projectResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -23874,20 +23867,19 @@ func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationE
 
 // GetEndpoint gets an endpoint reference from the associated resource
 func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/getEndpoint", reqArgs)
-	if err != nil {
-		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result)
-		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result))
+		return nil
 	}
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -24561,19 +24553,18 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 
 // AsContainer gets the container resource represented by a resource.
 func (s *testDatabaseResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
@@ -26886,19 +26877,18 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 
 // AsContainer gets the container resource represented by a resource.
 func (s *testRedisResource) AsContainer() ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asContainer", reqArgs)
-	if err != nil {
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result)
-		return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/asContainer returned unexpected type %T", result))
+		return nil
 	}
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }

@@ -3844,7 +3844,7 @@ export interface DistributedApplicationModel {
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 export interface DistributedApplicationModelPromise extends PromiseLike<DistributedApplicationModel> {
@@ -3858,7 +3858,7 @@ export interface DistributedApplicationModelPromise extends PromiseLike<Distribu
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 // ============================================================================
@@ -3884,23 +3884,18 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
         );
     }
 
-    /** @internal */
-    async _findResourceByNameInternal(name: string): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/findResourceByName',
-            rpcArgs
-        );
-        return new ResourceImpl(result, this._client);
-    }
-
     /**
      * Finds a resource by name.
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._findResourceByNameInternal(name), this._client);
+    async findResourceByName(name: string): Promise<Resource | null> {
+        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
+        const handle = await this._client.invokeCapability<IResourceHandle | null>(
+            'Aspire.Hosting/findResourceByName',
+            rpcArgs
+        );
+        return handle === null ? null : new ResourceImpl(handle, this._client);
     }
 
 }
@@ -3924,8 +3919,8 @@ class DistributedApplicationModelPromiseImpl implements DistributedApplicationMo
         return this._promise.then(obj => obj.getResources());
     }
 
-    findResourceByName(name: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.findResourceByName(name)), this._client);
+    findResourceByName(name: string): Promise<Resource | null> {
+        return this._promise.then(obj => obj.findResourceByName(name));
     }
 
 }
@@ -9620,7 +9615,7 @@ export interface ResourceUrlsCallbackContext {
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 export interface ResourceUrlsCallbackContextPromise extends PromiseLike<ResourceUrlsCallbackContext> {
@@ -9636,7 +9631,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 // ============================================================================
@@ -9694,22 +9689,17 @@ class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
         return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
-    /** @internal */
-    async _getEndpointInternal(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
-        const result = await this._client.invokeCapability<EndpointReferenceHandle>(
-            'Aspire.Hosting.ApplicationModel/getEndpoint',
-            rpcArgs
-        );
-        return new EndpointReferenceImpl(result, this._client);
-    }
-
     /**
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise {
-        return new EndpointReferencePromiseImpl(this._getEndpointInternal(name), this._client);
+    async getEndpoint(name: string): Promise<EndpointReference | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        const handle = await this._client.invokeCapability<EndpointReferenceHandle | null>(
+            'Aspire.Hosting.ApplicationModel/getEndpoint',
+            rpcArgs
+        );
+        return handle === null ? null : new EndpointReferenceImpl(handle, this._client);
     }
 
 }
@@ -9745,8 +9735,8 @@ class ResourceUrlsCallbackContextPromiseImpl implements ResourceUrlsCallbackCont
         return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
-    getEndpoint(name: string): EndpointReferencePromise {
-        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
+    getEndpoint(name: string): Promise<EndpointReference | null> {
+        return this._promise.then(obj => obj.getEndpoint(name));
     }
 
 }
@@ -14555,7 +14545,7 @@ export interface ContainerRegistryResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -14904,7 +14894,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -15292,16 +15282,13 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -16596,8 +16583,8 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerRegistryResourcePromise {
@@ -17069,7 +17056,7 @@ export interface ContainerResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -17888,7 +17875,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -19045,16 +19032,13 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -21335,8 +21319,8 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerNetworkAlias(alias)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise {
@@ -21755,7 +21739,7 @@ export interface CSharpAppResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -22420,7 +22404,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -23124,16 +23108,13 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -25474,8 +25455,8 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise {
@@ -25918,7 +25899,7 @@ export interface DotnetToolResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
@@ -26605,7 +26586,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
@@ -27331,16 +27312,13 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -29752,8 +29730,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withToolPackage(packageId: string): DotnetToolResourcePromise {
@@ -30219,7 +30197,7 @@ export interface ExecutableResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Publishes an executable as a Docker file
      *
@@ -30873,7 +30851,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Publishes an executable as a Docker file
      *
@@ -31573,16 +31551,13 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -33883,8 +33858,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): ExecutableResourcePromise {
@@ -34319,7 +34294,7 @@ export interface ExternalServiceResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Adds an HTTP health check to the external service for polyglot app hosts.
      * @param options Additional options.
@@ -34673,7 +34648,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Adds an HTTP health check to the external service for polyglot app hosts.
      * @param options Additional options.
@@ -35066,16 +35041,13 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -36394,8 +36366,8 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise {
@@ -36675,7 +36647,7 @@ export interface ParameterResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -37037,7 +37009,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -37439,16 +37411,13 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -38784,8 +38753,8 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
@@ -39069,7 +39038,7 @@ export interface ProjectResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -39734,7 +39703,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -40439,16 +40408,13 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -42789,8 +42755,8 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise {
@@ -43429,7 +43395,7 @@ export interface TestDatabaseResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -44248,7 +44214,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -45404,16 +45370,13 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -47694,8 +47657,8 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerNetworkAlias(alias)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise {
@@ -48310,7 +48273,7 @@ export interface TestRedisResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -49213,7 +49176,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -50453,16 +50416,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -53054,8 +53014,8 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerNetworkAlias(alias)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise {
@@ -53742,7 +53702,7 @@ export interface TestVaultResource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -54563,7 +54523,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -55721,16 +55681,13 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -58026,8 +57983,8 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerNetworkAlias(alias)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise {
@@ -58770,7 +58727,7 @@ export interface Resource {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -59119,7 +59076,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise;
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -59508,16 +59465,13 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * effective container classification is required.
      * @returns The resource itself when it is a `ContainerResource`, the container projection applied for the current AppHost invocation, or `null` when no strongly typed container view exists.
      */
-    asContainer(): ContainerResourcePromise {
-        const promise = (async () => {
-            const rpcArgs: Record<string, unknown> = { resource: this._handle };
-            const handle = await this._client.invokeCapability<ContainerResourceHandle>(
-                'Aspire.Hosting/asContainer',
-                rpcArgs
-            );
-            return new ContainerResourceImpl(handle, this._client);
-        })();
-        return new ContainerResourcePromiseImpl(promise, this._client);
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -60812,8 +60766,8 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    asContainer(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asContainer()), this._client);
+    asContainer(): Promise<ContainerResource | null> {
+        return this._promise.then(obj => obj.asContainer());
     }
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ResourcePromise {

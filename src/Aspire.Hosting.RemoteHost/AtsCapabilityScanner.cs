@@ -1925,6 +1925,7 @@ public static class AtsCapabilityScanner
 
                 // Get return type
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+                returnTypeRef = WithNullableHandleReturn(method, returnTypeRef);
 
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
@@ -2099,6 +2100,7 @@ public static class AtsCapabilityScanner
 
         // Get return type
         var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+        returnTypeRef = WithNullableHandleReturn(method, returnTypeRef);
         var returnTypeId = MapToAtsTypeId(method.ReturnType, assemblyExportedTypeCache);
 
         // Only set ReturnsBuilder if the return type is actually a resource builder type
@@ -2123,6 +2125,28 @@ public static class AtsCapabilityScanner
                 (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false)),
             ExcludedTargetTypes = exportAttr.ExcludeTargetTypes
         };
+    }
+
+    private static AtsTypeRef? WithNullableHandleReturn(MethodInfo method, AtsTypeRef? returnTypeRef)
+    {
+        if (returnTypeRef is not { Category: AtsTypeCategory.Handle })
+        {
+            return returnTypeRef;
+        }
+
+        var declaredType = method.ReturnType;
+        var nullability = new NullabilityInfoContext().Create(method.ReturnParameter);
+
+        // Task<T?> and ValueTask<T?> carry nullability on the generic result rather than the task itself.
+        while (declaredType.IsGenericType &&
+               declaredType.GetGenericTypeDefinition() is { } genericTypeDefinition &&
+               (genericTypeDefinition == typeof(Task<>) || genericTypeDefinition == typeof(ValueTask<>)))
+        {
+            declaredType = declaredType.GetGenericArguments()[0];
+            nullability = nullability.GenericTypeArguments[0];
+        }
+
+        return WithNullability(returnTypeRef, declaredType, nullability.ReadState);
     }
 
     private static AtsParameterInfo? CreateParameterInfo(

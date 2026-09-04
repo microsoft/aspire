@@ -4497,7 +4497,7 @@ class DistributedApplicationModel:
         )
         return result
 
-    def find_resource_by_name(self, name: str) -> AbstractResource:
+    def find_resource_by_name(self, name: str) -> AbstractResource | None:
         """Finds a resource by name."""
         rpc_args: dict[str, typing.Any] = {'model': self._handle}
         rpc_args['name'] = name
@@ -4505,7 +4505,7 @@ class DistributedApplicationModel:
             'Aspire.Hosting/findResourceByName',
             rpc_args,
         )
-        return typing.cast(AbstractResource, result)
+        return typing.cast(AbstractResource | None, result)
 
 
 class DockerfileBuilder:
@@ -6961,7 +6961,7 @@ class ResourceUrlsCallbackContext:
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    def get_endpoint(self, name: str) -> EndpointReference:
+    def get_endpoint(self, name: str) -> EndpointReference | None:
         """Gets an endpoint reference from the associated resource"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['name'] = name
@@ -6969,7 +6969,7 @@ class ResourceUrlsCallbackContext:
             'Aspire.Hosting.ApplicationModel/getEndpoint',
             rpc_args,
         )
-        return typing.cast(EndpointReference, result)
+        return typing.cast(EndpointReference | None, result)
 
 
 class ResourceUrlsEditor:
@@ -7356,7 +7356,7 @@ class AbstractResource(abc.ABC):
         """Configures custom base images for generated Dockerfiles."""
 
     @abc.abstractmethod
-    def as_container(self) -> ContainerResource:
+    def as_container(self) -> ContainerResource | None:
         """Gets the container resource represented by a resource."""
 
     @abc.abstractmethod
@@ -7923,14 +7923,14 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def as_container(self) -> ContainerResource:
+    def as_container(self) -> ContainerResource | None:
         """Gets the container resource represented by a resource."""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting/asContainer',
             rpc_args,
         )
-        return typing.cast(ContainerResource, result)
+        return typing.cast(ContainerResource | None, result)
 
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""

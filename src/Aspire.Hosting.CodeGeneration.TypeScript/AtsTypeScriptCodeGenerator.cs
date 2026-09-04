@@ -837,7 +837,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+                    var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
                     WriteLine($"    {capability.MethodName}({signature.ParameterList}): Promise<{returnType}>;");
                 }
             }
@@ -891,7 +891,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+                    var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
                     WriteLine($"    {capability.MethodName}({signature.ParameterList}): Promise<{returnType}>;");
                 }
             }
@@ -911,9 +911,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
         WriteCapabilityDocComment("    ", capability, signature.RequiredParameters, signature.OptionsParameter?.Name);
-        if (capability.ReturnType != null && _projector.TypesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
+        if (_projector.TryGetPromiseWrapperType(capability.ReturnType, out var promiseInterfaceName, out _))
         {
-            WriteLine($"    {signature.MethodName}({signature.ParameterList}): {_projector.GetPublicPromiseInterfaceName(capability.ReturnType.TypeId)};");
+            WriteLine($"    {signature.MethodName}({signature.ParameterList}): {promiseInterfaceName};");
         }
         else if (isVoid)
         {
@@ -921,7 +921,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
         else
         {
-            var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+            var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
             WriteLine($"    {signature.MethodName}({signature.ParameterList}): Promise<{returnType}>;");
         }
     }
@@ -1158,7 +1158,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
 
             // Generate a simple async method that returns the actual type
-            var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+            var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
 
             WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    async {methodName}(");
@@ -1192,6 +1192,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine("            rpcArgs");
                 WriteLine("        );");
                 WriteLine("        return CancellationToken.fromValue(result);");
+            }
+            else if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true })
+            {
+                GenerateNullableHandleReturn(capability, "this._client", "        ");
             }
             else
             {
@@ -1645,7 +1649,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 }
 
                 // For non-builder returns, call the public method directly
-                var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+                var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
                 Write($"    {signature.MethodName}(");
                 Write(signature.ParameterList);
                 WriteLine($"): Promise<{returnType}> {{");
@@ -1787,7 +1791,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             // No Promise wrapper - return plain value
             var returnType = !string.IsNullOrEmpty(capReturnTypeId)
-                ? _projector.MapTypeRefToTypeScript(capability.ReturnType)
+                ? _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType)
                 : "void";
 
             Write($"export async function {methodName}(");
@@ -1821,6 +1825,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 WriteLine("        rpcArgs");
                 WriteLine("    );");
                 WriteLine("    return CancellationToken.fromValue(result);");
+                WriteLine("}");
+                WriteLine();
+                return;
+            }
+            else if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true })
+            {
+                GenerateNullableHandleReturn(capability, "client", "    ");
                 WriteLine("}");
                 WriteLine();
                 return;
@@ -2653,7 +2664,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Determine return type
         var returnType = GetReturnTypeId(method) != null
-            ? _projector.MapTypeRefToTypeScript(method.ReturnType)
+            ? _projector.MapCapabilityReturnTypeToTypeScript(method.ReturnType)
             : "void";
 
         if (_projector.TryGetPromiseWrapperType(method.ReturnType, out var returnPromiseInterfaceName, out var returnPromiseImplementationClassName))
@@ -2720,6 +2731,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine();
             return;
         }
+        else if (method.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true })
+        {
+            GenerateNullableHandleReturn(method, "this._client", "        ");
+            WriteLine("    }");
+            WriteLine();
+            return;
+        }
         else
         {
             WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
@@ -2767,7 +2785,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var paramsString = _projector.BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName, TypeScriptApiProjector.GetTrailingCancellationTokenParameter(optionalParams));
 
         // Determine return type
-        var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+        var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
 
         if (_projector.TryGetPromiseWrapperType(capability.ReturnType, out var returnPromiseInterfaceName, out var returnPromiseImplementationClassName))
         {
@@ -2818,7 +2836,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Resolve promise-like params and build args
         GenerateResolveAndBuildArgs(firstParamName, userParams, requiredParams, optionalParams, useSafeOptionalLocalNames: true);
 
-        if (returnType == "void")
+        if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true })
+        {
+            GenerateNullableHandleReturn(capability, "this._client", "        ");
+            WriteLine("    }");
+            WriteLine();
+            return;
+        }
+        else if (returnType == "void")
         {
             WriteLine($"        await this._client.invokeCapability<void>(");
         }
@@ -2896,7 +2921,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Check if return type has a Promise wrapper
         var returnPromiseWrapper = _projector.GetPromiseWrapperForReturnType(capability.ReturnType);
-        var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+        var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
         // If return type has a Promise wrapper, generate internal + fluent pattern
@@ -3049,14 +3074,36 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
             else
             {
-                WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
-                WriteLine($"            '{capability.CapabilityId}',");
-                WriteLine($"            rpcArgs");
-                WriteLine("        );");
+                if (capability.ReturnType is { Category: AtsTypeCategory.Handle, IsNullable: true })
+                {
+                    GenerateNullableHandleReturn(capability, "this._client", "        ");
+                }
+                else
+                {
+                    WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
+                    WriteLine($"            '{capability.CapabilityId}',");
+                    WriteLine($"            rpcArgs");
+                    WriteLine("        );");
+                }
             }
             WriteLine("    }");
         }
         WriteLine();
+    }
+
+    private void GenerateNullableHandleReturn(AtsCapabilityInfo capability, string clientExpression, string indent)
+    {
+        var returnTypeId = capability.ReturnType?.TypeId
+            ?? throw new InvalidOperationException($"Capability '{capability.CapabilityId}' does not have a return type.");
+        var className = _projector.GetConcreteClassName(returnTypeId);
+        var implementationClassName = TypeScriptApiProjector.GetImplementationClassName(className);
+        var handleType = _projector.GetConcreteHandleTypeName(returnTypeId);
+
+        WriteLine($"{indent}const handle = await {clientExpression}.invokeCapability<{handleType} | null>(");
+        WriteLine($"{indent}    '{capability.CapabilityId}',");
+        WriteLine($"{indent}    rpcArgs");
+        WriteLine($"{indent});");
+        WriteLine($"{indent}return handle === null ? null : new {implementationClassName}(handle, {clientExpression});");
     }
 
     /// <summary>
@@ -3148,7 +3195,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             // Check if return type has a Promise wrapper
             var returnPromiseWrapper = _projector.GetPromiseWrapperForReturnType(capability.ReturnType);
-            var returnType = _projector.MapTypeRefToTypeScript(capability.ReturnType);
+            var returnType = _projector.MapCapabilityReturnTypeToTypeScript(capability.ReturnType);
             var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
             if (returnPromiseWrapper != null)

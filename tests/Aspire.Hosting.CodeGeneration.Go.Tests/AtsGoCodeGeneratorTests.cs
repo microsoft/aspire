@@ -304,6 +304,20 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesNullableHandleReturns()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        Assert.Matches(
+            @"func \(s \*\w+\) AsContainer\(\) ContainerResource \{[\s\S]*?invokeCapability\(ctx, ""Aspire\.Hosting/asContainer"", reqArgs\)[\s\S]*?if result == nil \{ return nil \}",
+            aspireGo);
+        Assert.Matches(
+            @"func \(s \*resourceUrlsCallbackContext\) GetEndpoint\(name string\) EndpointReference \{[\s\S]*?if result == nil \{ return nil \}",
+            aspireGo);
+    }
+
+    [Fact]
     public void GeneratedCode_UsesPascalCaseMethodNames()
     {
         // Verify that the generated Go code uses PascalCase for exported method names

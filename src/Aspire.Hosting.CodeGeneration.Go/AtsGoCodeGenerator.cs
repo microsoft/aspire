@@ -1292,6 +1292,39 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             ? implTarget
             : null;
 
+        if (returnType.IsNullable == true)
+        {
+            WriteLine("\tif s.err != nil { return nil }");
+            EmitHandleParamErrorChecks("\t", capability, "s.setErr(err); return nil");
+            EmitUnionTypeChecks("\t", capability, methodName, new[] { "s.setErr(err); return nil" });
+            EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
+            WriteLine($"\tresult, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs)");
+            WriteLine("\tif err != nil { s.setErr(err); return nil }");
+            WriteLine("\tif result == nil { return nil }");
+
+            if (childImplName is null)
+            {
+                var returnGoType = MapTypeRefToGo(returnType, false);
+                WriteLine($"\ttyped, ok := result.({returnGoType})");
+                WriteLine("\tif !ok {");
+                WriteLine($"\t\ts.setErr(fmt.Errorf(\"aspire: {capability.CapabilityId} returned unexpected type %T\", result))");
+                WriteLine("\t\treturn nil");
+                WriteLine("\t}");
+                WriteLine("\treturn typed");
+            }
+            else
+            {
+                WriteLine("\thref, ok := result.(handleReference)");
+                WriteLine("\tif !ok {");
+                WriteLine($"\t\ts.setErr(fmt.Errorf(\"aspire: {capability.CapabilityId} returned unexpected type %T\", result))");
+                WriteLine("\t\treturn nil");
+                WriteLine("\t}");
+                WriteLine($"\treturn &{childImplName}{{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}}");
+            }
+
+            return;
+        }
+
         if (childImplName is null)
         {
             // No registered impl for this typeId (e.g. *ReferenceExpression,

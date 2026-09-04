@@ -1496,6 +1496,19 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesNullableHandleReturns()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireTs = _generator.GenerateDistributedApplication(atsContext)["aspire.mts"];
+
+        Assert.Contains("asContainer(): Promise<ContainerResource | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("findResourceByName(name: string): Promise<Resource | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("getEndpoint(name: string): Promise<EndpointReference | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("return handle === null ? null : new ContainerResourceImpl(handle, this._client);", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("getEndpoint(name: string): EndpointReferencePromise;", aspireTs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();
