@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI test-only guard, not user-facing",
+  "mergedAt": "2026-08-12T00:47:47Z",
+  "number": 19146,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Assert every VS Code extension E2E spec has a CI matrix row"
+}

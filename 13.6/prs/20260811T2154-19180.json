@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Internal tooling fix for job log downloads, not user-facing",
+  "mergedAt": "2026-08-11T21:54:19Z",
+  "number": 19180,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Fix CreateFailingTestIssue failing on job logs that contain terminal escape sequences"
+}

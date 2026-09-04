@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes DCP session termination when stopping VS Code-controlled resources",
+  "mergedAt": "2026-08-12T01:43:03Z",
+  "number": 19125,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Emit DCP session termination when stopping resources"
+}

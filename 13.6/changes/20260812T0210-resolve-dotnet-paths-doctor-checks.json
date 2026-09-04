@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire doctor` launched .NET SDK and deprecated-workload checks using the bare `dotnet` executable name. It now resolves `dotnet` through the CLI's shared path-lookup logic before starting the process, so checks consistently use the executable selected from `PATH`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\ude7a",
+  "firstMergedAt": "2026-08-12T02:10:08Z",
+  "lastMergedAt": "2026-08-12T02:10:08Z",
+  "name": "Resolve dotnet paths consistently in doctor checks",
+  "owner": "JamesNK",
+  "prs": [
+    19232
+  ]
+}

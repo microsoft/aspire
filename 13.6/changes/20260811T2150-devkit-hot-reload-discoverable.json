@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension now surfaces whether C# Dev Kit Hot Reload is enabled for .NET project debug sessions, showing an advisory with a direct link to the relevant setting when Hot Reload is off.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd25",
+  "firstMergedAt": "2026-08-11T21:50:37Z",
+  "lastMergedAt": "2026-08-11T21:50:37Z",
+  "name": "Make C# Dev Kit Hot Reload discoverable while debugging",
+  "owner": "adamint",
+  "prs": [
+    19067
+  ]
+}

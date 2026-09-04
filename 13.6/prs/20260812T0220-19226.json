@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Adds AKS persistent volume support",
+  "mergedAt": "2026-08-12T02:20:03Z",
+  "number": 19226,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Add AKS persistent volume support"
+}

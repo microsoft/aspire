@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stopping a VS Code-controlled resource from the Aspire dashboard now reliably emits a single terminal notification and keeps DCP run-session lifecycle consistent across requested stops, natural exits, and stale WebSocket reconnects.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0c",
+  "firstMergedAt": "2026-08-12T01:43:03Z",
+  "lastMergedAt": "2026-08-12T01:43:03Z",
+  "name": "Fix DCP session termination when stopping resources from VS Code",
+  "owner": "adamint",
+  "prs": [
+    19125
+  ]
+}

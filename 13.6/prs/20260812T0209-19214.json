@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Suppresses CLI progress spinners when console logging is enabled",
+  "mergedAt": "2026-08-12T02:09:46Z",
+  "number": 19214,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Suppress CLI progress when console logging is enabled"
+}

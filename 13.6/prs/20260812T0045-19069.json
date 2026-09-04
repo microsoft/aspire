@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Adds regression coverage and clarifies no-AppHost error message",
+  "mergedAt": "2026-08-12T00:45:54Z",
+  "number": 19069,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Cover single-file AppHost re-search fallback and make the no-AppHost error generic"
+}

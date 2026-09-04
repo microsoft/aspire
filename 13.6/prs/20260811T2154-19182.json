@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only flakiness fix, no user-facing behavior change",
+  "mergedAt": "2026-08-11T21:54:02Z",
+  "number": 19182,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Make CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout able to fail"
+}

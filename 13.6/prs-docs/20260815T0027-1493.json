@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found for this milestone batch",
+  "mergedAt": "2026-08-15T00:27:48Z",
+  "number": 1493,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "[docs] Document TypeScript AppHost dev-cert trust for outbound TLS connections"
+}

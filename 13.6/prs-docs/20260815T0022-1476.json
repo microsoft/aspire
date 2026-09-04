@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents pinning AKS credential fetch to deployment subscription (matches PR #19219)",
+  "mergedAt": "2026-08-15T00:22:17Z",
+  "number": 1476,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "[docs] Pin AKS credential command to the deployment subscription"
+}

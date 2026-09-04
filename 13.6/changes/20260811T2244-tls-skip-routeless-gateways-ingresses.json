@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Deploying an AppHost with a Gateway that had no routes (or an Ingress with no paths) could make `aspire deploy` hang for around 15 minutes waiting on Kubernetes objects that were never created, and could leave TLS certificates stuck in a pending state. Route-less Gateways and path-less Ingresses are now consistently excluded from all TLS and deployment steps, and a clear warning names what was skipped.",
+  "docsPrs": [
+    1470
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udea6",
+  "firstMergedAt": "2026-08-11T22:44:17Z",
+  "lastMergedAt": "2026-08-11T22:44:17Z",
+  "name": "Fix deployment hang from route-less Gateways and Ingresses",
+  "owner": "mitchdenny",
+  "prs": [
+    19220
+  ]
+}

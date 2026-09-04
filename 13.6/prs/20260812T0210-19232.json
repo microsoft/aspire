@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Resolves dotnet paths consistently in doctor checks",
+  "mergedAt": "2026-08-12T02:10:08Z",
+  "number": 19232,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Resolve dotnet paths in doctor checks"
+}

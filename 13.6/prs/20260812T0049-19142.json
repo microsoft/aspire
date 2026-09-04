@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI test re-enablement, not user-facing",
+  "mergedAt": "2026-08-12T00:49:07Z",
+  "number": 19142,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Re-enable VS Code extension E2E tests in CI"
+}

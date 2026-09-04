@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only flake fix, no user-facing behavior change",
+  "mergedAt": "2026-08-11T19:45:58Z",
+  "number": 19176,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Fix VS Code extension self-signed certificate serial flake"
+}

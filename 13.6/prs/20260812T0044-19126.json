@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Keeps launch-configuration AppHost targets out of workspace default",
+  "mergedAt": "2026-08-12T00:44:43Z",
+  "number": 19126,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Keep launch-configuration AppHost targets out of the workspace default"
+}

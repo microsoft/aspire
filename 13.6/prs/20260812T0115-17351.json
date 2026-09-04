@@ -1,0 +1,9 @@
+{
+  "author": "rsd-darshan",
+  "comment": "Fixes hang in WaitForResourceHealthyAsync for missing resource",
+  "mergedAt": "2026-08-12T01:15:15Z",
+  "number": 17351,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Fix WaitBehavior.StopOnResourceUnavailable hanging when resource does not exist in model"
+}

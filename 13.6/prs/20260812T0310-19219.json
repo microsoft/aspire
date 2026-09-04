@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Pins AKS credential pipeline to deployment subscription",
+  "mergedAt": "2026-08-12T03:10:51Z",
+  "number": 19219,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "included",
+  "title": "Pin AKS credential pipeline to the deployment subscription"
+}

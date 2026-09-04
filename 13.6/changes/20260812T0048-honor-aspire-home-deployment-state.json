@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Deployment state now respects the CLI's effective `ASPIRE_HOME` instead of always writing to the persistent user profile, which was breaking isolated CI runs and side-by-side CLI usage. Deployment parameters and secrets are stored under `<ASPIRE_HOME>/deployments/<AppHostSha>/<environment>.json`, with `~/.aspire` retained as the fallback.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udfe1",
+  "firstMergedAt": "2026-08-12T00:48:39Z",
+  "lastMergedAt": "2026-08-12T00:48:39Z",
+  "name": "Honor ASPIRE_HOME for deployment state",
+  "owner": "sebastienros",
+  "prs": [
+    19244
+  ]
+}

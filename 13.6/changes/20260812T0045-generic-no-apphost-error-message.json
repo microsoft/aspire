@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When no AppHost can be found, the CLI's error message now correctly names the `--apphost` option instead of referring to a nonexistent \"project argument\", and no longer implies .NET-only projects.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udcac",
+  "firstMergedAt": "2026-08-12T00:45:54Z",
+  "lastMergedAt": "2026-08-12T00:45:54Z",
+  "name": "Clearer error message when no AppHost is found",
+  "owner": "adamint",
+  "prs": [
+    19069
+  ]
+}

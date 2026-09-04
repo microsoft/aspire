@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/automation fix for docs PR recovery tooling",
+  "mergedAt": "2026-08-11T22:35:55Z",
+  "number": 19236,
+  "runDate": "2026-09-04T18:11:00Z",
+  "status": "excluded",
+  "title": "Fix PR docs recovery base handling"
+}

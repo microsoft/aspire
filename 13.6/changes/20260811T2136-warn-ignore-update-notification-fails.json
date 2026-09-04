@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When clicking Ignore on the AppHost update notification silently failed because user secrets weren't configured correctly, the notification kept returning on later runs. The AppHost now logs a warning explaining the failure and links to user-secrets documentation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a0\ufe0f",
+  "firstMergedAt": "2026-08-11T21:36:18Z",
+  "lastMergedAt": "2026-08-11T21:36:18Z",
+  "name": "Warn when the update notification can't be dismissed",
+  "owner": "JamesNK",
+  "prs": [
+    19162
+  ]
+}
