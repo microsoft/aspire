@@ -15,8 +15,10 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class LaunchProfileTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
-    [Fact]
-    public async Task RunStartsAppHostWithSelectedLaunchProfile()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunStartsAppHostWithSelectedLaunchProfile(bool useDotNetRun)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -50,7 +52,7 @@ public sealed class LaunchProfileTests(ITestOutputHelper output)
             $$"""
             File.WriteAllText(
                 {{JsonSerializer.Serialize(containerProfileOutputPath)}},
-                $"{Environment.GetEnvironmentVariable("SELECTED_PROFILE")}|{Environment.GetEnvironmentVariable("DOTNET_LAUNCH_PROFILE")}|{string.Join("|", args)}");
+                $"{Environment.GetEnvironmentVariable("SELECTED_PROFILE")}|{Environment.GetEnvironmentVariable("DOTNET_LAUNCH_PROFILE")}|{string.Join("|", args)}|{Environment.GetEnvironmentVariable("ASPNETCORE_URLS")}");
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -73,9 +75,11 @@ public sealed class LaunchProfileTests(ITestOutputHelper output)
                 },
                 "E2E": {
                   "commandName": "Project",
+                  "applicationUrl": "http://127.0.0.1:0",
                   "commandLineArgs": "--profile-argument selected-profile",
                   "environmentVariables": {
-                    "SELECTED_PROFILE": "selected-profile"
+                    "SELECTED_PROFILE": "selected-profile",
+                    "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
                   }
                 }
               }
@@ -83,7 +87,12 @@ public sealed class LaunchProfileTests(ITestOutputHelper output)
             """);
 
         await auto.RunCommandAsync("cd LaunchProfile.AppHost", counter);
-        await auto.TypeAsync(CliE2EAutomatorHelpers.GetAspireRunCommand("--launch-profile E2E"));
+        // Exercise the SDK's bundle delegation as well as an explicit Aspire CLI option.
+        // dotnet run passes the selected profile to the CLI through its environment.
+        var runCommand = useDotNetRun
+            ? $"ASPIRE_CLI_START_TIMEOUT={CliE2EAutomatorHelpers.AspireRunStartupBudgetSeconds} dotnet run --launch-profile E2E /p:AspireUseCliBundle=true"
+            : CliE2EAutomatorHelpers.GetAspireRunCommand("--launch-profile E2E");
+        await auto.TypeAsync(runCommand);
         await auto.EnterAsync();
 
         await auto.WaitUntilAsync(
@@ -95,6 +104,6 @@ public sealed class LaunchProfileTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         Assert.True(File.Exists(profileOutputPath), $"Expected AppHost to write selected profile details to: {profileOutputPath}");
-        Assert.Equal("selected-profile|E2E|--profile-argument|selected-profile", File.ReadAllText(profileOutputPath));
+        Assert.Equal("selected-profile|E2E|--profile-argument|selected-profile|http://127.0.0.1:0", File.ReadAllText(profileOutputPath));
     }
 }
