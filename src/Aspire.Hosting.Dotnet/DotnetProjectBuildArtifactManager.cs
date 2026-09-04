@@ -55,8 +55,6 @@ internal sealed class DotnetProjectBuildArtifactManager : IDisposable
         var coordinationLockPath = Path.Combine(BuildDirectory, ".coordination.lock");
         using var coordinationLock = await FileLock.AcquireAsync(coordinationLockPath, cancellationToken).ConfigureAwait(false);
 
-        TryCreateGitIgnore(logger);
-
         var buildProjectPath = GetBuildProjectPath(hash);
         if (!File.Exists(buildProjectPath))
         {
@@ -198,30 +196,6 @@ internal sealed class DotnetProjectBuildArtifactManager : IDisposable
                 temporaryPath,
                 logger,
                 "Failed to delete temporary coordinated build project '{Path}'.");
-        }
-    }
-
-    private void TryCreateGitIgnore(ILogger logger)
-    {
-        var gitIgnorePath = Path.Combine(BuildDirectory, ".gitignore");
-        try
-        {
-            using var stream = new FileStream(
-                gitIgnorePath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.Read,
-                bufferSize: 1,
-                FileOptions.None);
-            stream.Write("*\n"u8);
-        }
-        catch (IOException) when (File.Exists(gitIgnorePath))
-        {
-            // Preserve a user-authored file and tolerate another AppHost winning creation.
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            logger.LogDebug(ex, "Failed to create generated-build ignore file '{Path}'.", gitIgnorePath);
         }
     }
 

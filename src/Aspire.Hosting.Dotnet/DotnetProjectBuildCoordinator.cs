@@ -24,6 +24,7 @@ internal static class DotnetProjectBuildCoordinator
     internal const string BuildResourceName = "__dotnet-project-build";
     private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
     private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
+    private const string AspireStorePathConfigurationKey = "Aspire:Store:Path";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
@@ -73,7 +74,14 @@ internal static class DotnetProjectBuildCoordinator
         string name,
         string? configuration)
     {
-        var buildDirectory = Path.Combine(builder.AppHostDirectory, ".aspire", "build");
+        var aspireStoreRoot = builder.Configuration[AspireStorePathConfigurationKey];
+        if (string.IsNullOrEmpty(aspireStoreRoot))
+        {
+            throw new InvalidOperationException(
+                $"Could not determine the AppHost intermediate output path from '{AspireStorePathConfigurationKey}'.");
+        }
+
+        var buildDirectory = Path.Combine(aspireStoreRoot, ".aspire", "build");
         var buildResource = new DotnetProjectBuildResource(
             name,
             builder.AppHostDirectory,

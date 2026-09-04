@@ -310,15 +310,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cannot update &apos;{0}&apos; because Git does not read .gitignore files through symbolic links. Replace it with a regular file or configure core.excludesFile, then try again..
-        /// </summary>
-        public static string GitIgnoreSymbolicLinkNotSupported {
-            get {
-                return ResourceManager.GetString("GitIgnoreSymbolicLinkNotSupported", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Project created successfully in {0}..
         /// </summary>
         public static string ProjectCreatedSuccessfully {

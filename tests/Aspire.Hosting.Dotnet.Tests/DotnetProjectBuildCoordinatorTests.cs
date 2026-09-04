@@ -67,7 +67,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var buildProjectPath = Assert.IsType<string>(args[1]);
         Assert.Equal(
-            Path.Combine(workspace.Path, ".aspire", "build"),
+            Path.Combine(builder.Configuration["Aspire:Store:Path"]!, ".aspire", "build"),
             buildResource.BuildDirectory);
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
@@ -498,10 +498,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GeneratedTraversalProjectUsesAppHostLocalBuildDirectory()
+    public async Task GeneratedTraversalProjectUsesConfiguredAspireStoreBuildDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var aspireStoreRoot = Path.Combine(workspace.Path, "custom-obj");
+        builder.Configuration["Aspire:Store:Path"] = aspireStoreRoot;
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
@@ -509,7 +511,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var buildProjectPath = await buildResource.WriteBuildProjectAsync(NullLogger.Instance, TestContext.Current.CancellationToken);
 
-        Assert.Equal(Path.Combine(workspace.Path, ".aspire", "build"), buildResource.BuildDirectory);
+        Assert.Equal(Path.Combine(aspireStoreRoot, ".aspire", "build"), buildResource.BuildDirectory);
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
     }
@@ -523,6 +525,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var buildResource = new DotnetProjectBuildResource(
             DotnetProjectBuildCoordinator.BuildResourceName,
             workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
             TimeProvider.System);
         var projectPath = CreateProject(workspace.Path, "Service", "App.csproj");
         var caseVariantPath = Path.Combine(workspace.Path, "service", "app.CSPROJ");
@@ -554,6 +557,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        var aspireStoreRoot = Path.Combine(workspace.Path, "custom-obj");
+        builder.Configuration["Aspire:Store:Path"] = aspireStoreRoot;
         var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
         var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true)
@@ -566,6 +571,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.All(
+            buildResources,
+            buildResource => Assert.Equal(
+                Path.Combine(aspireStoreRoot, ".aspire", "build"),
+                buildResource.BuildDirectory));
         var buildTargets = await Task.WhenAll(buildResources.Select(buildResource =>
             buildResource.GetBuildTargetPathAsync(NullLogger.Instance, TestContext.Current.CancellationToken)));
         Assert.Collection(
@@ -2112,6 +2122,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var buildResource = new DotnetProjectBuildResource(
             DotnetProjectBuildCoordinator.BuildResourceName,
             workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
             TimeProvider.System);
         buildResource.AddProject(CreateProject(workspace.Path, "Api", "Api.csproj"));
         using var canceledCts = new CancellationTokenSource();

@@ -31,7 +31,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class InitCommand : BaseCommand
 {
-    private const string AspireDirectoryGitIgnoreEntry = ".aspire/\n";
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     protected override bool UpdateNotificationsEnabled => true;
@@ -245,16 +244,6 @@ internal sealed class InitCommand : BaseCommand
 
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        var gitIgnorePath = Path.Combine(workingDirectory.FullName, ".gitignore");
-        if (GitIgnoreFile.IsSymbolicLink(gitIgnorePath))
-        {
-            InteractionService.DisplayError(string.Format(
-                CultureInfo.CurrentCulture,
-                TemplatingStrings.GitIgnoreSymbolicLinkNotSupported,
-                gitIgnorePath));
-            return CliExitCodes.InvalidCommand;
-        }
-
         // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
         // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
         // staging, daily, pr-<N>, or local). Run this BEFORE the apphost.cs-already-exists
@@ -275,8 +264,6 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
         }
-
-        await EnsureAspireDirectoryIgnoredAsync(workingDirectory, cancellationToken);
 
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
@@ -344,21 +331,6 @@ internal sealed class InitCommand : BaseCommand
         DropAppHostRunJson(workingDirectory, effectivePorts);
 
         return CliExitCodes.Success;
-    }
-
-    private static async Task EnsureAspireDirectoryIgnoredAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
-    {
-        var gitIgnorePath = Path.Combine(workingDirectory.FullName, ".gitignore");
-        var gitIgnoreExists = File.Exists(gitIgnorePath);
-        var existingContent = gitIgnoreExists
-            ? await File.ReadAllTextAsync(gitIgnorePath, cancellationToken)
-            : string.Empty;
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, AspireDirectoryGitIgnoreEntry);
-
-        if (!gitIgnoreExists || !string.Equals(existingContent, mergedContent, StringComparison.Ordinal))
-        {
-            await GitIgnoreFile.WriteAllTextAtomicallyAsync(gitIgnorePath, mergedContent, cancellationToken);
-        }
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)

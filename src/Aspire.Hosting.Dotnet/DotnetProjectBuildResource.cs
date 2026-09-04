@@ -25,11 +25,6 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     private string? _buildConfiguration;
     private string? _directProjectPath;
 
-    public DotnetProjectBuildResource(string name, string workingDirectory, TimeProvider timeProvider)
-        : this(name, workingDirectory, Path.Combine(workingDirectory, ".aspire", "build"), timeProvider)
-    {
-    }
-
     internal DotnetProjectBuildResource(
         string name,
         string workingDirectory,
@@ -42,7 +37,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     }
 
     /// <summary>
-    /// Gets the AppHost-local directory that contains generated build projects.
+    /// Gets the AppHost intermediate-output directory that contains generated build projects.
     /// </summary>
     public string BuildDirectory { get; }
 
@@ -168,7 +163,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     }
 
     /// <summary>
-    /// Writes the generated traversal project to the AppHost-local build directory.
+    /// Writes the generated traversal project to the AppHost intermediate-output build directory.
     /// </summary>
     public Task<string> WriteBuildProjectAsync(ILogger logger, CancellationToken cancellationToken)
     {

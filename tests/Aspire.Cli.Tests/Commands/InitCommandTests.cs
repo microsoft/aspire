@@ -164,128 +164,12 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore")));
 
         var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
         var appHost = config["appHost"]!.AsObject();
         Assert.Equal("apphost.cs", appHost["path"]!.GetValue<string>());
         Assert.Null(appHost["language"]);
-    }
-
-    [Fact]
-    public async Task InitCommand_SingleFileSkeleton_CreatesGitIgnoreIdempotently()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var firstExitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-        var secondExitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, firstExitCode);
-        Assert.Equal(CliExitCodes.Success, secondExitCode);
-        Assert.Equal(".aspire/\n", await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore")));
-    }
-
-    [Theory]
-    [InlineData("\n")]
-    [InlineData("\r\n")]
-    public async Task InitCommand_SingleFileSkeleton_MergesGitIgnorePreservingContentAndNewlines(string newline)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        var existingContent = $"bin/{newline}custom/";
-        await File.WriteAllTextAsync(gitIgnorePath, existingContent);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal($"{existingContent}{newline}.aspire/{newline}", await File.ReadAllTextAsync(gitIgnorePath));
-    }
-
-    [Fact]
-    public async Task InitCommand_SingleFileSkeleton_AppendsBroaderUnrootedGitIgnoreEntry()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        const string existingContent = "# Keep this comment\r\n/.aspire/\r\n";
-        await File.WriteAllTextAsync(gitIgnorePath, existingContent);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal($"{existingContent}.aspire/\r\n", await File.ReadAllTextAsync(gitIgnorePath));
-    }
-
-    [Fact]
-    public async Task InitCommand_SingleFileSkeleton_UpdatesGitIgnoreAtomicallyAndPreservesFileMode()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        const string existingContent = "# Keep this comment\ncustom/\n";
-        await File.WriteAllTextAsync(gitIgnorePath, existingContent);
-        UnixFileMode? expectedMode = null;
-        if (!OperatingSystem.IsWindows())
-        {
-            expectedMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
-            File.SetUnixFileMode(gitIgnorePath, expectedMode.Value);
-        }
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal($"{existingContent}.aspire/\n", await File.ReadAllTextAsync(gitIgnorePath));
-        Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, ".gitignore.tmp-*"));
-        if (!OperatingSystem.IsWindows() && expectedMode is not null)
-        {
-            Assert.Equal(expectedMode, File.GetUnixFileMode(gitIgnorePath));
-        }
-    }
-
-    [Fact]
-    public async Task InitCommand_SingleFileSkeleton_RejectsGitIgnoreSymlink()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var targetDirectory = workspace.WorkspaceRoot.CreateSubdirectory("config");
-        var targetPath = Path.Combine(targetDirectory.FullName, "shared.gitignore");
-        await File.WriteAllTextAsync(targetPath, "custom/\n");
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        try
-        {
-            File.CreateSymbolicLink(gitIgnorePath, targetPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-        {
-            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
-        }
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var exitCode = await initCommand.Parse("init --suppress-agent-init").InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.NotNull(new FileInfo(gitIgnorePath).LinkTarget);
-        Assert.Equal("custom/\n", await File.ReadAllTextAsync(targetPath));
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
-        Assert.Empty(Directory.GetFiles(targetDirectory.FullName, "shared.gitignore.tmp-*"));
     }
 
     [Fact]

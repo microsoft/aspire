@@ -161,30 +161,6 @@ public class DotnetProjectBuildArtifactManagerTests(ITestOutputHelper outputHelp
     }
 
     [Fact]
-    public async Task GeneratedBuildDirectoryIgnoresArtifactsWithoutOverwritingUserFile()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var generatedDirectory = Path.Combine(workspace.Path, "generated");
-        using (var generatedManager = new DotnetProjectBuildArtifactManager(generatedDirectory, TimeProvider.System))
-        {
-            await PublishAsync(generatedManager, "aaaaaaaaaaaa");
-        }
-
-        Assert.Equal("*\n", File.ReadAllText(Path.Combine(generatedDirectory, ".gitignore")));
-
-        var customDirectory = Path.Combine(workspace.Path, "custom");
-        Directory.CreateDirectory(customDirectory);
-        var customGitIgnorePath = Path.Combine(customDirectory, ".gitignore");
-        File.WriteAllText(customGitIgnorePath, "keep-me\n");
-        using (var customManager = new DotnetProjectBuildArtifactManager(customDirectory, TimeProvider.System))
-        {
-            await PublishAsync(customManager, "bbbbbbbbbbbb");
-        }
-
-        Assert.Equal("keep-me\n", File.ReadAllText(customGitIgnorePath));
-    }
-
-    [Fact]
     public async Task OnlyOldTemporaryFilesArePruned()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -55,7 +55,7 @@ await builder.build().run();
 ```
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
-generated AppHost-local MSBuild traversal projects. Build groups run serially, while projects within
+generated MSBuild traversal projects under the AppHost's intermediate output. Build groups run serially, while projects within
 each traversal group can build in parallel. File-based apps use serialized direct builds so their
 `#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
 values are runtime configuration and do not prevent projects from sharing a traversal build. Each

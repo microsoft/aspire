@@ -2,18 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
-public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
+public class ScaffoldingServiceTests
 {
     private static readonly LanguageInfo s_typeScriptLanguage = new(
         LanguageId: new LanguageId(KnownLanguageId.TypeScript),
@@ -270,97 +265,12 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ScaffoldAsync_RejectsGitIgnoreSymlinkWithoutChangingConfig()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var targetDirectory = workspace.WorkspaceRoot.CreateSubdirectory("config");
-        var targetPath = Path.Combine(targetDirectory.FullName, "shared.gitignore");
-        await File.WriteAllTextAsync(targetPath, "custom/\n");
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        try
-        {
-            File.CreateSymbolicLink(gitIgnorePath, targetPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-        {
-            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
-        }
-
-        var originalConfig = new AspireConfigFile
-        {
-            Channel = "stable",
-            SdkVersion = "13.3.0"
-        };
-        originalConfig.Save(workspace.WorkspaceRoot.FullName);
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
-        var originalConfigContent = await File.ReadAllTextAsync(configPath);
-
-        var scaffoldingService = CreateScaffoldingService(
-            workspace,
-            new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" });
-        var context = new ScaffoldContext(
-            Language: s_typeScriptLanguage,
-            TargetDirectory: workspace.WorkspaceRoot,
-            ProjectName: "test",
-            SdkVersion: "13.4.0",
-            Channel: "daily");
-
-        var result = await scaffoldingService.ScaffoldAsync(context, TestContext.Current.CancellationToken);
-
-        Assert.False(result);
-        Assert.Equal(originalConfigContent, await File.ReadAllTextAsync(configPath));
-        Assert.NotNull(new FileInfo(gitIgnorePath).LinkTarget);
-        Assert.Equal("custom/\n", await File.ReadAllTextAsync(targetPath));
-    }
-
-    [Fact]
-    public async Task ScaffoldAsync_ReplacesExistingGitIgnoreAtomically()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Skip("Windows does not permit replacing the held-open destination used to observe file identity.");
-        }
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var gitIgnorePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore");
-        const string existingContent = "custom/\n";
-        await File.WriteAllTextAsync(gitIgnorePath, existingContent);
-        // On Unix, an atomic rename leaves an existing handle attached to the old file. An in-place
-        // write changes the content seen through this handle, so this verifies the scaffolding call site.
-        await using var originalFile = new FileStream(
-            gitIgnorePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete,
-            bufferSize: 1,
-            FileOptions.Asynchronous);
-        var scaffoldingService = CreateScaffoldingService(
-            workspace,
-            new Dictionary<string, string> { [".gitignore"] = ".aspire/\n" });
-        var context = new ScaffoldContext(
-            Language: s_typeScriptLanguage,
-            TargetDirectory: workspace.WorkspaceRoot,
-            ProjectName: "test",
-            SdkVersion: "13.4.0",
-            Channel: "daily");
-
-        var result = await scaffoldingService.ScaffoldAsync(context, TestContext.Current.CancellationToken);
-
-        Assert.True(result);
-        Assert.Equal("custom/\n.aspire/\n", await File.ReadAllTextAsync(gitIgnorePath));
-        originalFile.Position = 0;
-        using var reader = new StreamReader(originalFile, leaveOpen: true);
-        Assert.Equal(existingContent, await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
-        Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, ".gitignore.tmp-*"));
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_AppendsMissingEntriesWithoutOverwritingExistingContent()
+    public void MergeGitIgnoreContent_AppendsMissingEntriesWithoutOverwritingExistingContent()
     {
         var existingContent = "node_modules/\ncustom/\n";
         var scaffoldContent = "node_modules/\ndist/\n.aspire/\n";
 
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
+        var mergedContent = ScaffoldingService.MergeGitIgnoreContent(existingContent, scaffoldContent);
         var lines = mergedContent.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         Assert.Equal(
@@ -513,148 +423,14 @@ public class ScaffoldingServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("not json at all", merged);
     }
 
-    [Theory]
-    [InlineData("node_modules/\n", "/node_modules/\n")]
-    [InlineData(".aspire\n", "/.aspire/\n")]
-    [InlineData("/.aspire\n", "/.aspire/\n")]
-    [InlineData("src/generated/\n", "/src/generated/\n")]
-    [InlineData("/src/generated/\n", "src/generated/\n")]
-    public void GitIgnoreMerger_DoesNotAddRootedEntryWhenExistingEntryCoversIt(
-        string existingContent,
-        string scaffoldContent)
+    [Fact]
+    public void MergeGitIgnoreContent_DoesNotAddDuplicateAspireEntryWhenEquivalentEntryAlreadyExists()
     {
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
+        var existingContent = "/.aspire/\n";
+        var scaffoldContent = ".aspire/\n";
+
+        var mergedContent = ScaffoldingService.MergeGitIgnoreContent(existingContent, scaffoldContent);
 
         Assert.Equal(existingContent, mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_AddsUnrootedEntryWhenOnlyRootedEntryExists()
-    {
-        const string existingContent = "/node_modules/\n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, "node_modules/\n");
-
-        Assert.Equal("/node_modules/\nnode_modules/\n", mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_AddsSlashlessPatternWhenDirectoryOnlyPatternDoesNotCoverIt()
-    {
-        const string existingContent = ".aspire/\n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire\n");
-
-        Assert.Equal(".aspire/\n.aspire\n", mergedContent);
-    }
-
-    [Theory]
-    [InlineData("!.aspire/\n")]
-    [InlineData("!/.aspire/\n")]
-    [InlineData(".*\n!.aspire/\n")]
-    [InlineData("!.aspire\n")]
-    public void GitIgnoreMerger_HonorsExplicitNegation(string existingContent)
-    {
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal(existingContent, mergedContent);
-    }
-
-    [Theory]
-    [InlineData(".*\n!.aspire*/\n")]
-    [InlineData(".*\n!.aspir?/\n")]
-    [InlineData(".*\n!.aspir[e]/\n")]
-    [InlineData(".*\n!**/.aspire/\n")]
-    public void GitIgnoreMerger_HonorsWildcardNegation(string existingContent)
-    {
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal(existingContent, mergedContent);
-    }
-
-    [Theory]
-    [InlineData(".aspire/*\n!.aspire/settings.json\n", ".aspire/\n")]
-    [InlineData("/.aspire/*\n!/.aspire/settings.json\n", "/.aspire/\n")]
-    [InlineData("src/.aspire/*\n!src/.aspire/settings.json\n", ".aspire/\n")]
-    [InlineData(".aspire/*\n!.aspire*/settings.json\n", ".aspire/\n")]
-    public void GitIgnoreMerger_HonorsDescendantNegation(
-        string existingContent,
-        string scaffoldContent)
-    {
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
-
-        Assert.Equal(existingContent, mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_HonorsNegationWithEscapedTrailingSpace()
-    {
-        const string existingContent = ".aspire/*\n!.aspire/keep\\ \n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal(existingContent, mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_AppendsDirectoryWhenNegationIsUnrelated()
-    {
-        const string existingContent = ".config/*\n!.config/settings.json\n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal(".config/*\n!.config/settings.json\n.aspire/\n", mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_AppendsDirectoryWhenWildcardNegationIsUnrelated()
-    {
-        const string existingContent = ".*\n!.config*/\n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal(".*\n!.config*/\n.aspire/\n", mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_TreatsEscapedNegationAsLiteral()
-    {
-        const string existingContent = "\\!.aspire/\n";
-
-        var mergedContent = GitIgnoreMerger.Merge(existingContent, ".aspire/\n");
-
-        Assert.Equal("\\!.aspire/\n.aspire/\n", mergedContent);
-    }
-
-    [Fact]
-    public void GitIgnoreMerger_RepeatedMergeDoesNotDuplicateNegatedEntry()
-    {
-        const string existingContent = "node_modules/\n";
-        const string scaffoldContent = ".vscode/*\n!.vscode/extensions.json\n";
-
-        var firstMerge = GitIgnoreMerger.Merge(existingContent, scaffoldContent);
-        var secondMerge = GitIgnoreMerger.Merge(firstMerge, scaffoldContent);
-
-        Assert.Equal("node_modules/\n.vscode/*\n!.vscode/extensions.json\n", firstMerge);
-        Assert.Equal(firstMerge, secondMerge);
-    }
-
-    private static ScaffoldingService CreateScaffoldingService(
-        TemporaryWorkspace workspace,
-        IReadOnlyDictionary<string, string> scaffoldFiles)
-    {
-        return new ScaffoldingService(
-            appHostServerProjectFactory: new TestAppHostServerProjectFactory
-            {
-                CreateAsyncCallback = (path, _) =>
-                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
-            },
-            serverSessionFactory: FakeAppHostServerSessionFactory.CreateForScaffolding(scaffoldFiles),
-            languageDiscovery: new TestLanguageDiscovery(s_typeScriptLanguage),
-            interactionService: new TestInteractionService(),
-            environment: new TestEnvironment(),
-            logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext(),
-            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 }
