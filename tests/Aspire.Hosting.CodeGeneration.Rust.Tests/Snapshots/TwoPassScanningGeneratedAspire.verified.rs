@@ -2321,7 +2321,7 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -3106,18 +3106,6 @@ impl CSharpAppResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4324,7 +4312,7 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -4606,18 +4594,6 @@ impl ContainerRegistryResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -5282,7 +5258,7 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -7097,7 +7073,7 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -7929,18 +7905,6 @@ impl DotnetToolResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -9041,7 +9005,7 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -9820,18 +9784,6 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Adds an interactive terminal session to a resource using the default terminal options.
     pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10368,7 +10320,7 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -10668,18 +10620,6 @@ impl ExternalServiceResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -13915,7 +13855,7 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -14220,18 +14160,6 @@ impl ParameterResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -15154,7 +15082,7 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -15939,18 +15867,6 @@ impl ProjectResource {
         let callback_id = register_callback(configure);
         args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged.
-    pub fn publish_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
-        let callback_id = register_callback(configure);
-        args.insert("configure".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/publishAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -17504,7 +17420,7 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -19093,7 +19009,7 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -20820,7 +20736,7 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the container resource represented by a resource.
+    /// Gets a resource's effective container after model construction evaluates its projection callbacks.
     pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());

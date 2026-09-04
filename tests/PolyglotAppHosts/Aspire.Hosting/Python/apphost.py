@@ -370,8 +370,6 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     tool.publish_as_docker_file(configure_published_container)
     # runAsContainerImage
     tool.run_as_container_image("contoso/tool:latest", configure=configure_published_container)
-    # publishAsContainerImage
-    tool.publish_as_container_image("contoso/tool:latest", configure=configure_published_container)
     # ===================================================================
     def configure_resource_step(_step_context: PipelineStepContext):
         pass

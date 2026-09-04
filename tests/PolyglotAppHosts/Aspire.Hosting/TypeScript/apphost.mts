@@ -395,9 +395,6 @@ await tool.publishAsDockerFile(async (_container) => {
 // runAsContainerImage
 await tool.runAsContainerImage("contoso/tool:latest", { configure: async (_container) => {} });
 
-// publishAsContainerImage
-await tool.publishAsContainerImage("contoso/tool:latest", { configure: async (_container) => {} });
-
 // PipelineStepFactoryExtensions.cs — NEW exports
 // ===================================================================
 

@@ -2293,7 +2293,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -3438,29 +3438,6 @@ public class CSharpAppResource extends ProjectResource {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public CSharpAppResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public CSharpAppResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -5487,7 +5464,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -5852,29 +5829,6 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public ContainerRegistryResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public ContainerRegistryResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -6713,7 +6667,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -9351,7 +9305,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -10530,29 +10484,6 @@ public class DotnetToolResource extends ExecutableResource {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public DotnetToolResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public DotnetToolResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -11848,7 +11779,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -12979,29 +12910,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ExecutableResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public ExecutableResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
-        return this;
-    }
-
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     public ExecutableResource withTerminal() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13743,7 +13651,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -14137,29 +14045,6 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public ExternalServiceResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public ExternalServiceResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -18595,7 +18480,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -18985,29 +18870,6 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public ParameterResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public ParameterResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -20204,7 +20066,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -21349,29 +21211,6 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/runAsContainerImage", reqArgs);
-        return this;
-    }
-
-    public ProjectResource publishAsContainerImage(String image) {
-        return publishAsContainerImage(image, null);
-    }
-
-    /** Publishes the resource as a container built from a prebuilt image, leaving how it runs locally unchanged. */
-    public ProjectResource publishAsContainerImage(String image, AspireAction1<ContainerResource> configure) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("image", AspireClient.serializeValue(image));
-        var configureId = configure == null ? null : getClient().registerCallback(args -> {
-            var obj = (ContainerResource) args[0];
-            configure.invoke(obj);
-            var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", obj);
-            return __aspireCallbackArguments;
-        });
-        if (configureId != null) {
-            reqArgs.put("configure", configureId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/publishAsContainerImage", reqArgs);
         return this;
     }
 
@@ -23746,7 +23585,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -25969,7 +25808,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -28317,7 +28156,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Gets the container resource represented by a resource. */
+    /** Gets a resource's effective container after model construction evaluates its projection callbacks. */
     public ContainerResource asContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
