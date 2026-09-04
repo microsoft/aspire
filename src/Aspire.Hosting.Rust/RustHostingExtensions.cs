@@ -129,8 +129,7 @@ public static class RustHostingExtensions
             .WithVSCodeDebugging()
             .PublishAsDockerFile();
 
-        // The generated image copies files out of each container files source, so those sources have to be
-        // built first. Projection APIs add their pipeline annotations directly to this owner builder.
+        // Build each container file source before the Rust image copies its generated files.
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
