@@ -373,13 +373,14 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // The chained agent-init scan operates on the new project's output directory, not the
-        // workspace root, so the detectable `.vscode` folder must be seeded there once the project
-        // has been scaffolded (right before the agent-init prompt is accepted). Without it, no
-        // agent environment would be detected and the "no MCP prompt/config" assertions below
-        // would trivially pass even if MCP were still wired into the chained flow.
-        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp");
-        var vscodePath = Path.Combine(projectRoot, ".vscode");
+        // The chained agent-init scan starts from the CLI process's working directory (the
+        // workspace root the Docker terminal is launched in) and only walks upward looking for a
+        // `.vscode` folder — it never walks down into the newly scaffolded project directory. So
+        // the detectable `.vscode` folder must be seeded at the workspace root, not inside the new
+        // project, for the scan to find it. Without it, no agent environment would be detected and
+        // the "no MCP prompt/config" assertions below would trivially pass even if MCP were still
+        // wired into the chained flow.
+        var vscodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
 
         // --skill-locations skips the interactive skill-location prompt so the flow lands directly
         // on the skill selection prompt whose pre-selected state we want to inspect.
