@@ -124,7 +124,7 @@ correct affected set *and* the genuine shortest hop chain to each project.
 
 The output is the affected project base names: the `.csproj` filename without
 extension. `TestSelector.Select(...)` intersects test-project names with the
-matrix and matches production-project names against `affected_project_rules`.
+matrix and matches non-matrix project names against `affected_project_rules`.
 
 #### Decision paths (traceability)
 
@@ -237,10 +237,11 @@ load-bearing at the design level:
   This is why `prefilter`, not `ignore`, is what stops a packed `README.md` from
   being attributed by the graph and fanned out: `ignore` only suppresses the
   Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
-- **`affected_project_rules`** matches Layer 1's affected **production** project
-  names only; affected matrix *test* projects are filtered out first, so a
-  test-only change cannot fire production jobs (`typescript-api-compat`, `extension-e2e`, …)
-  through a glob like `Aspire.Hosting*`.
+- **`affected_project_rules`** matches Layer 1's affected **non-matrix** project
+  names; affected matrix *test* projects are filtered out first, so a test-only
+  matrix change cannot fire jobs (`typescript-api-compat`, `extension-e2e`, …)
+  through a glob like `Aspire.Hosting*`. Non-matrix test-support projects can
+  still match broad globs.
 
 ## The tool (`tools/SelectTests`)
 
@@ -285,9 +286,9 @@ Flow:
    treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
    file does not trip the run-all fallback even though it is under no project
    directory.
-4. Apply `affected_project_rules` to Layer 1 **production**-project names only
-   (affected matrix test projects are filtered out first, so a test-only change
-   does not fire production jobs through a production-name glob).
+4. Apply `affected_project_rules` to Layer 1 **non-matrix** project names
+   (affected matrix test projects are filtered out first, so a matrix-test-only
+   change does not fire jobs through a broad project-name glob).
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or any changed file
    that survived the prefilter but is not Layer-1-owned (neither under a project
