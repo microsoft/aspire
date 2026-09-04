@@ -119,9 +119,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 await WriteResourceObjectAsync(resource, () => manifestPublishingCallbackAnnotation.Callback(this)).ConfigureAwait(false);
             }
         }
-        else if (resource is ContainerResource container)
+        else if (resource.AsContainer() is { } container)
         {
-            await WriteResourceObjectAsync(container, () => WriteContainerAsync(container)).ConfigureAwait(false);
+            // The owner remains the manifest identity, while the selected projection supplies its effective
+            // container shape. Explicit manifest callbacks above remain authoritative for specialized publishers.
+            await WriteResourceObjectAsync(resource, () => WriteContainerAsync(container)).ConfigureAwait(false);
         }
         else if (resource is ProjectResource project)
         {

@@ -156,7 +156,6 @@ public static class ExecutableResourceBuilderExtensions
         }
 
         var resource = builder.Resource;
-        var hasProjection = resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -175,17 +174,7 @@ public static class ExecutableResourceBuilderExtensions
                 configure?.Invoke(container);
             });
 
-        // Repeated conversion only reconfigures the existing projection. Preserve any specialized
-        // manifest callback that an integration installed after the first conversion.
-        if (hasProjection)
-        {
-            return builder;
-        }
-
-        return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(
-                resource.AsContainer() ??
-                    throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.")));
+        return builder;
     }
 
     /// <summary>

@@ -251,6 +251,27 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishExecutableAsDockerFileSerializesEarlierCustomProjectionAsContainer()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var executable = builder.AddExecutable("worker", "worker", workspace.WorkspaceRoot.FullName);
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(executable.Resource),
+            _ => { });
+        executable.PublishAsDockerFile();
+
+        var manifest = await ManifestUtils.GetManifest(
+            executable.Resource,
+            manifestDirectory: workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.NotNull(manifest["build"]);
+    }
+
+    [Fact]
     public async Task ProjectedManifestCallbacksReceiveOwnerResource()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -340,6 +361,28 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
 
         var actual = manifest.ToString();
         Assert.Equal(expected, actual, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Fact]
+    public async Task PublishProjectAsDockerFileSerializesEarlierCustomProjectionAsContainer()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "project.csproj");
+        var project = builder.AddProject("project", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        project.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(project.Resource),
+            _ => { });
+        project.PublishAsDockerFile();
+
+        var manifest = await ManifestUtils.GetManifest(
+            project.Resource,
+            manifestDirectory: workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.NotNull(manifest["build"]);
     }
 
     [Fact]
@@ -656,6 +699,11 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         public string ProjectPath => "another-path";
 
         public LaunchSettings? LaunchSettings { get; set; }
+    }
+
+    private sealed class TestContainerProjection(IResource owner) : ContainerResource(owner.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
     }
 
     private sealed class TestProjectWithHttpAndHttpsProfile : IProjectMetadata

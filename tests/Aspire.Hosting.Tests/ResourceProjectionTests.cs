@@ -84,7 +84,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void ManifestCallbackAddedAfterProjectionUsesOwnerAnnotations()
+    public async Task ManifestCallbackAddedAfterProjectionTakesPrecedence()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -93,6 +93,24 @@ public class ResourceProjectionTests
             .ExcludeFromManifest();
 
         Assert.True(executable.Resource.IsExcludedFromPublish());
+        Assert.Null(await ManifestUtils.GetManifestOrNull(executable.Resource));
+    }
+
+    [Fact]
+    public async Task CustomPublishProjectionSerializesOwnerAsContainerByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new FirstTestProjection(resource.Resource),
+            container => container.WithImage("contoso/worker", "1.0"));
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource);
+
+        Assert.Equal("container.v0", manifest["type"]?.ToString());
+        Assert.Equal("contoso/worker:1.0", manifest["image"]?.ToString());
     }
 
     [Fact]
