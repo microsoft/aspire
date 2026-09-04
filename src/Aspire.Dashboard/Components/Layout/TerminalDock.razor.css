@@ -96,3 +96,27 @@
 .terminal-dock-resize-handle:hover {
     background-color: var(--accent-fill-rest);
 }
+
+/* Shown in place of the terminal while it is running in a detached window. */
+.terminal-dock-detached {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    color: #8b949e;
+    font-size: 13px;
+}
+
+.terminal-dock-detached-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.terminal-dock-popup-blocked {
+    align-self: center;
+    padding-right: 8px;
+    color: #f0883e;
+    font-size: 12px;
+}

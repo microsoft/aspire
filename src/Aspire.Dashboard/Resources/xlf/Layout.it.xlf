@@ -152,9 +152,29 @@
         <target state="new">Close terminal</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockDetach">
+        <source>Open terminal in a new window</source>
+        <target state="new">Open terminal in a new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetachBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetached">
+        <source>This terminal is running in a separate window.</source>
+        <target state="new">This terminal is running in a separate window.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalDockEmpty">
         <source>No terminals are open.</source>
         <target state="new">No terminals are open.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockFocusWindow">
+        <source>Focus window</source>
+        <target state="new">Focus window</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHide">
@@ -165,6 +185,16 @@
       <trans-unit id="TerminalDockNewTerminal">
         <source>New terminal</source>
         <target state="new">New terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockReturnToDock">
+        <source>Return to panel</source>
+        <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowEnded">
+        <source>This terminal has ended.</source>
+        <target state="new">This terminal has ended.</target>
         <note />
       </trans-unit>
     </body>

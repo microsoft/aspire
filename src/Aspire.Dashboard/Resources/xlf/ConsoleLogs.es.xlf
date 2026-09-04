@@ -157,6 +157,16 @@
         <target state="new">Increase font size</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindow">
+        <source>Open in new window</source>
+        <target state="new">Open in new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindowBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

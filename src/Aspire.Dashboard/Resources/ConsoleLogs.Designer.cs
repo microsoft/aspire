@@ -219,6 +219,18 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string TerminalToolbarOpenInWindow {
+            get {
+                return ResourceManager.GetString("TerminalToolbarOpenInWindow", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarOpenInWindowBlocked {
+            get {
+                return ResourceManager.GetString("TerminalToolbarOpenInWindowBlocked", resourceCulture);
+            }
+        }
+        
         public static string ConsoleLogsViewConsoleOption {
             get {
                 return ResourceManager.GetString("ConsoleLogsViewConsoleOption", resourceCulture);

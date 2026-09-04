@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
+using IToastService = Microsoft.FluentUI.AspNetCore.Components.IToastService;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using MenuItemRole = Microsoft.FluentUI.AspNetCore.Components.MenuItemRole;
 
@@ -128,6 +129,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
+    [Inject]
+    public required IToastService ToastService { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
@@ -160,6 +164,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private int _terminalReplicaIndex;
     private Controls.TerminalToolbarState? _terminalToolbarState;
     private IReadOnlyList<Controls.TerminalSizePreset> _terminalSizePresets = Array.Empty<Controls.TerminalSizePreset>();
+    private TerminalWindowLauncher? _terminalWindowLauncher;
 
     // View toggle for terminal resources. The page surfaces both LogViewer
     // and TerminalView in MainSection (both stay mounted so flipping does
@@ -715,6 +720,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     NestedMenuItems = nested,
                 });
             }
+
+            _logsMenuItems.Add(new()
+            {
+                OnClick = OpenTerminalWindowAsync,
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindow)],
+                Icon = new Icons.Regular.Size16.WindowNew(),
+                IsDisabled = _terminalResourceName is null,
+            });
         }
         else
         {
@@ -1311,6 +1324,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await TaskHelpers.WaitIgnoreCancelAsync(_logEntryChannelReaderTask);
 
         await CancelAllSubscriptionsAsync();
+
+        if (_terminalWindowLauncher is not null)
+        {
+            await _terminalWindowLauncher.DisposeAsync();
+        }
+
         TelemetryContext.Dispose();
     }
 
@@ -1486,6 +1505,44 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             return Task.CompletedTask;
         }
         return _terminalViewRef.SetSizeModeAsync(newKey);
+    }
+
+    // Resource terminals never reattach, so the close callback has nothing to do: the inline view was live the
+    // whole time the window was open.
+    private TerminalWindowLauncher TerminalWindowLauncher
+        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, _ => Task.CompletedTask);
+
+    /// <summary>
+    /// Opens the selected resource's terminal in its own resizable window.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the terminal dock, the inline view keeps rendering. Resource terminals are multi-headed, so the window
+    /// is an additional viewer rather than a relocation, and seeing the session on the resource page while working in
+    /// a larger window is the point of detaching it.
+    /// </remarks>
+    private async Task OpenTerminalWindowAsync()
+    {
+        if (_terminalResourceName is not { Length: > 0 } resourceName)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = $"/terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
+            var result = await TerminalWindowLauncher.OpenAsync(
+                key: $"resource:{resourceName}:{_terminalReplicaIndex}",
+                url: NavigationManager.ToAbsoluteUri(path).ToString()).ConfigureAwait(true);
+
+            if (result is TerminalWindowOpenResult.Blocked)
+            {
+                ToastService.ShowError(Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)]);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to open a terminal window for resource {ResourceName}.", resourceName);
+        }
     }
 
     // IComponentWithTelemetry impl

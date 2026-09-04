@@ -39,6 +39,17 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private DotNetObjectReference<TerminalDock>? _selfRef;
     private ElementReference _dockElement;
 
+    /// <summary>
+    /// Terminals the user has popped out into their own window. The dock keeps the tab — the terminal is still
+    /// running and still AppHost-owned — but stops rendering a viewer for it, so the window is the only place it is
+    /// on screen. That is deliberate: a dock pane and a detached window are the same small viewport twice over, and
+    /// two attached viewers would fight over the HMP1 primary role and therefore over the PTY's grid size.
+    /// </summary>
+    private readonly HashSet<string> _detachedTerminalIds = [];
+
+    private TerminalWindowLauncher? _windowLauncher;
+    private bool _popupBlocked;
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -53,6 +64,9 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
 
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
@@ -152,6 +166,92 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         StateHasChanged();
     }
 
+    private TerminalWindowLauncher WindowLauncher
+        => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
+
+    /// <summary>
+    /// Pops the active terminal out into its own window.
+    /// </summary>
+    private async Task DetachActiveAsync()
+    {
+        if (_activeTerminalId is not { } terminalId)
+        {
+            return;
+        }
+
+        _popupBlocked = false;
+
+        try
+        {
+            var url = NavigationManager.ToAbsoluteUri($"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").ToString();
+            var result = await WindowLauncher.OpenAsync(terminalId, url).ConfigureAwait(true);
+
+            if (result is TerminalWindowOpenResult.Blocked)
+            {
+                // Surfaced in the tab strip rather than swallowed: to the user, detaching just did nothing.
+                _popupBlocked = true;
+            }
+            else
+            {
+                _detachedTerminalIds.Add(terminalId);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to detach terminal {TerminalId} into a window.", terminalId);
+        }
+    }
+
+    private async Task FocusDetachedWindowAsync(string terminalId)
+    {
+        try
+        {
+            // A window the browser closed without us noticing yet would otherwise leave the pane stuck on the
+            // placeholder, so a failed focus reattaches instead.
+            if (!await WindowLauncher.FocusAsync(terminalId).ConfigureAwait(true))
+            {
+                await OnDetachedWindowClosedAsync(terminalId).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to focus the window for terminal {TerminalId}.", terminalId);
+        }
+    }
+
+    private async Task ReturnToDockAsync(string terminalId)
+    {
+        try
+        {
+            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Reattach regardless: leaving the pane on the placeholder because the close call failed would strand
+            // the terminal with no viewer at all.
+            Logger.LogWarning(ex, "Failed to close the window for terminal {TerminalId}.", terminalId);
+        }
+
+        _detachedTerminalIds.Remove(terminalId);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Reattaches a terminal whose window the user closed. Remounting <c>TerminalView</c> opens a fresh socket and
+    /// the HMP1 state sync replays the screen, so nothing is lost by having had no viewer in between.
+    /// </summary>
+    private Task OnDetachedWindowClosedAsync(string terminalId)
+    {
+        if (_detachedTerminalIds.Remove(terminalId))
+        {
+            return InvokeAsync(StateHasChanged);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private async Task CreateTerminalAsync()
     {
         try
@@ -196,7 +296,12 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 }
                 else if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Change)
                 {
-                    Apply(update.Change.ChangeType, update.Change.Terminal);
+                    if (Apply(update.Change.ChangeType, update.Change.Terminal) is { } endedTerminalId)
+                    {
+                        // The terminal is gone, so its window is showing a dead grid. Close it here rather than
+                        // leaving the user to notice and dismiss it.
+                        await InvokeAsync(() => CloseDetachedWindowAsync(endedTerminalId)).ConfigureAwait(false);
+                    }
                 }
 
                 _firstUpdateReceived.TrySetResult();
@@ -218,7 +323,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     }
 
-    private void Apply(TerminalChangeType changeType, TerminalDescriptor descriptor)
+    /// <summary>
+    /// Applies a change from the watch stream. Returns the id of a terminal whose detached window should be closed
+    /// because the terminal itself has ended, or <see langword="null"/> when there is nothing to close.
+    /// </summary>
+    private string? Apply(TerminalChangeType changeType, TerminalDescriptor descriptor)
     {
         var index = _terminals.FindIndex(t => t.TerminalId == descriptor.TerminalId);
 
@@ -247,7 +356,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     var fallback = Math.Min(index, _terminals.Count - 1);
                     _activeTerminalId = fallback >= 0 ? _terminals[fallback].TerminalId : null;
                 }
-                break;
+                return _detachedTerminalIds.Remove(descriptor.TerminalId) ? descriptor.TerminalId : null;
 
             case TerminalChangeType.Activated:
                 // Raised by IAspireTerminal.Show() in the AppHost, so AppHost code can reveal its own terminal.
@@ -259,6 +368,20 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 _hasBeenOpened = true;
                 _isVisible = true;
                 break;
+        }
+
+        return null;
+    }
+
+    private async Task CloseDetachedWindowAsync(string terminalId)
+    {
+        try
+        {
+            await WindowLauncher.CloseAsync(terminalId).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to close the window for ended terminal {TerminalId}.", terminalId);
         }
     }
 
@@ -282,6 +405,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _selfRef?.Dispose();
+
+        if (_windowLauncher is { } launcher)
+        {
+            // Leaves any detached windows open: they are viewers of AppHost-owned terminals and have no reason to
+            // die because this circuit went away.
+            await launcher.DisposeAsync().ConfigureAwait(false);
+        }
 
         await _cts.CancelAsync().ConfigureAwait(false);
 

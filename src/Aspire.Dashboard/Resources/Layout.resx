@@ -177,11 +177,29 @@
   <data name="TerminalDockEmpty" xml:space="preserve">
     <value>No terminals are open.</value>
   </data>
+  <data name="TerminalDockDetach" xml:space="preserve">
+    <value>Open terminal in a new window</value>
+  </data>
+  <data name="TerminalDockDetached" xml:space="preserve">
+    <value>This terminal is running in a separate window.</value>
+  </data>
+  <data name="TerminalDockDetachBlocked" xml:space="preserve">
+    <value>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</value>
+  </data>
+  <data name="TerminalDockFocusWindow" xml:space="preserve">
+    <value>Focus window</value>
+  </data>
   <data name="TerminalDockHide" xml:space="preserve">
     <value>Hide terminal panel (Ctrl+`)</value>
   </data>
   <data name="TerminalDockNewTerminal" xml:space="preserve">
     <value>New terminal</value>
+  </data>
+  <data name="TerminalDockReturnToDock" xml:space="preserve">
+    <value>Return to panel</value>
+  </data>
+  <data name="TerminalWindowEnded" xml:space="preserve">
+    <value>This terminal has ended.</value>
   </data>
   <data name="MessageUnsecuredEndpointTelemetryBody" xml:space="preserve">
     <value>Untrusted apps can send telemetry to the dashboard.</value>
