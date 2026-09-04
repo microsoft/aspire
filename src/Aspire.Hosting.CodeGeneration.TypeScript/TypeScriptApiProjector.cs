@@ -395,7 +395,7 @@ internal sealed partial class TypeScriptApiProjector
         {
             return TryGetPromiseWrapperType(capability.ReturnType, out var promiseInterfaceName, out _)
                 ? promiseInterfaceName
-                : $"Promise<{MapCapabilityReturnTypeToTypeScript(capability.ReturnType)}>";
+                : $"Promise<{MapTypeRefToTypeScriptPreservingHandleNullability(capability.ReturnType)}>";
         }
 
         if (builder is not null)
@@ -426,7 +426,7 @@ internal sealed partial class TypeScriptApiProjector
             return GetPromiseInterfaceName(DeriveClassName(builder.TypeId));
         }
 
-        return $"Promise<{MapCapabilityReturnTypeToTypeScript(capability.ReturnType)}>";
+        return $"Promise<{MapTypeRefToTypeScriptPreservingHandleNullability(capability.ReturnType)}>";
     }
 
     /// <summary>
@@ -1313,7 +1313,7 @@ internal sealed partial class TypeScriptApiProjector
             return promiseWrapper;
         }
 
-        return $"Promise<{(string.IsNullOrEmpty(returnTypeId) ? "void" : MapCapabilityReturnTypeToTypeScript(capability.ReturnType))}>";
+        return $"Promise<{(string.IsNullOrEmpty(returnTypeId) ? "void" : MapTypeRefToTypeScriptPreservingHandleNullability(capability.ReturnType))}>";
     }
 
     private static (TypeScriptApiItem Item, TypeScriptApiDeclaration Declaration) ProjectEnum(AtsEnumTypeInfo enumType)
@@ -2492,7 +2492,7 @@ internal sealed partial class TypeScriptApiProjector
         return false;
     }
 
-    internal string MapCapabilityReturnTypeToTypeScript(AtsTypeRef? typeRef)
+    internal string MapTypeRefToTypeScriptPreservingHandleNullability(AtsTypeRef? typeRef)
     {
         var mappedType = MapTypeRefToTypeScript(typeRef);
         return typeRef is { Category: AtsTypeCategory.Handle, IsNullable: true }
