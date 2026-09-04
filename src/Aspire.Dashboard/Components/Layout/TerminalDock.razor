@@ -47,7 +47,7 @@
                    its grid from the element box, and a display:none pane would refit to zero columns. *@
                 <div class="terminal-dock-pane @(terminal.TerminalId == _activeTerminalId ? "active" : "inactive")"
                      @key="terminal.TerminalId">
-                    <TerminalView EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)" />
+                    <TerminalView EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)" Chromeless="true" />
                 </div>
             }
             @if (_terminals.Count == 0)

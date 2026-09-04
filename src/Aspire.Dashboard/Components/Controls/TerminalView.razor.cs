@@ -70,6 +70,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public string? EndpointPathAndQuery { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the terminal renders without its surrounding chrome — no card border,
+    /// titlebar or internal padding, just the xterm grid.
+    /// </summary>
+    /// <remarks>
+    /// Used by the terminal dock, which supplies its own tab-strip chrome and title. Chromeless terminals also size
+    /// their grid to fill the available space at the dashboard's base font size, rather than shrinking the font to fit
+    /// the producer's grid.
+    /// </remarks>
+    [Parameter]
+    public bool Chromeless { get; set; }
+
+    /// <summary>
     /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
     /// dims, font size, etc.). The host page subscribes so the chrome that
     /// used to live inside the terminal frame — status badge, "Take control"
@@ -205,7 +217,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions(Chromeless));
         }
         catch (JSDisconnectedException)
         {
@@ -442,6 +454,13 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _selfRef = null;
     }
 }
+
+/// <summary>
+/// Options passed to the JS <c>initTerminal</c> entry point. Serialized with camelCase property names by the default
+/// JS interop options, so <c>Chromeless</c> arrives as <c>options.chromeless</c>.
+/// </summary>
+/// <param name="Chromeless">Whether to render without the card border, titlebar and internal padding.</param>
+public sealed record TerminalViewOptions(bool Chromeless);
 
 /// <summary>
 /// Snapshot of the JS terminal's current role, sizing, and dims, pushed up

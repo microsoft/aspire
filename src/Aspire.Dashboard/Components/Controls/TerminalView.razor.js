@@ -350,6 +350,32 @@ function ensureTerminalStyles() {
   padding: 6px;
 }
 
+/*
+ * Chromeless mode — used by the terminal dock, where the surrounding tab
+ * strip already provides the framing and a title. Everything that makes
+ * the terminal look like a standalone card is removed (stage padding,
+ * frame border/radius, titlebar, body padding) so the xterm grid is the
+ * only thing visible, and the frame stretches to fill the dock pane
+ * instead of hugging the grid. The JS layout math reads the same values
+ * from state.frameBorderPx / state.bodyPaddingPx, which are zeroed for
+ * chromeless terminals — keep the two in sync.
+ */
+.aspire-terminal-host.chromeless .terminal-pane {
+  padding: 0;
+  background: #0d1117;
+}
+.aspire-terminal-host.chromeless #terminal {
+  align-items: stretch;
+}
+.aspire-terminal-host.chromeless #terminal-frame {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+}
+.aspire-terminal-host.chromeless #terminal-body {
+  padding: 0;
+}
+
 .aspire-terminal-host .xterm:focus,
 .aspire-terminal-host .xterm:focus-visible {
   outline: none;
@@ -437,7 +463,7 @@ function buildChrome(state) {
     // it with our own host so we can apply our flex column layout
     // without disturbing whatever else the parent has set on it.
     const host = document.createElement('div');
-    host.className = 'aspire-terminal-host';
+    host.className = state.chromeless ? 'aspire-terminal-host chromeless' : 'aspire-terminal-host';
     blazorElement.appendChild(host);
 
     // Terminal stage.
@@ -451,20 +477,35 @@ function buildChrome(state) {
     const frame = document.createElement('div');
     frame.id = 'terminal-frame';
 
-    const titlebar = document.createElement('div');
-    titlebar.id = 'terminal-titlebar';
-    const titleText = document.createElement('span');
-    titleText.id = 'terminal-title';
-    titleText.textContent = 'terminal';
-    const dimsText = document.createElement('span');
-    dimsText.id = 'terminal-dims';
-    dimsText.textContent = '';
-    titlebar.append(titleText, dimsText);
+    // Chromeless hosts get no titlebar at all rather than a hidden one, so
+    // getAvailableBodySpace measures zero for it and the OSC title handler
+    // below simply has nothing to write to. The dock renders the title on
+    // its tab instead.
+    let titlebar = null;
+    let titleText = null;
+    let dimsText = null;
+    if (!state.chromeless)
+    {
+        titlebar = document.createElement('div');
+        titlebar.id = 'terminal-titlebar';
+        titleText = document.createElement('span');
+        titleText.id = 'terminal-title';
+        titleText.textContent = 'terminal';
+        dimsText = document.createElement('span');
+        dimsText.id = 'terminal-dims';
+        dimsText.textContent = '';
+        titlebar.append(titleText, dimsText);
+    }
 
     const body = document.createElement('div');
     body.id = 'terminal-body';
 
-    frame.append(titlebar, body);
+    if (titlebar) {
+        frame.append(titlebar, body);
+    }
+    else {
+        frame.append(body);
+    }
     terminalContainer.appendChild(frame);
     host.append(pane);
 
@@ -513,16 +554,28 @@ const FRAME_BORDER_PX = 2;
 // pass it straight to computeOptimalFont / fit(); fit-mode's body-pin
 // and pinBodyToNatural add the padding back when they set the outer
 // body dimensions.
+//
+// Chromeless terminals (the dock) drop both the border and the padding
+// in CSS, so they carry zeroed copies on state — always read the metrics
+// through these helpers rather than the constants directly.
 const TERMINAL_BODY_PADDING_PX = 6;
+function frameBorderPx(state) {
+    return state.chromeless ? 0 : FRAME_BORDER_PX;
+}
+function bodyPaddingPx(state) {
+    return state.chromeless ? 0 : TERMINAL_BODY_PADDING_PX;
+}
 function getAvailableBodySpace(state) {
     const titlebarH = state.terminalTitlebar ? state.terminalTitlebar.offsetHeight : 0;
+    const border = frameBorderPx(state);
+    const padding = bodyPaddingPx(state);
     const stageW = state.terminalContainer ? state.terminalContainer.clientWidth : 0;
     const stageH = state.terminalContainer ? state.terminalContainer.clientHeight : 0;
-    const outerW = Math.max(0, stageW - FRAME_BORDER_PX * 2);
-    const outerH = Math.max(0, stageH - titlebarH - FRAME_BORDER_PX * 2);
+    const outerW = Math.max(0, stageW - border * 2);
+    const outerH = Math.max(0, stageH - titlebarH - border * 2);
     return {
-        width: Math.max(0, outerW - TERMINAL_BODY_PADDING_PX * 2),
-        height: Math.max(0, outerH - TERMINAL_BODY_PADDING_PX * 2),
+        width: Math.max(0, outerW - padding * 2),
+        height: Math.max(0, outerH - padding * 2),
     };
 }
 
@@ -573,7 +626,14 @@ function applyRoleAwareLayout(state) {
     const generation = ++state.layoutGeneration;
 
     const haveProducerDims = !!state.client && state.client.width > 0 && state.client.height > 0;
-    const isSecondary = !!state.client && !state.client.isPrimary && haveProducerDims;
+    // Chromeless terminals always take the font-driven path. The secondary
+    // branch below locks the grid to the producer's dims and shrinks the
+    // font until that grid fits, which in a short, wide dock pane collapses
+    // an 80x24 producer down to ~8px text letterboxed into a fraction of
+    // the width. The dock wants the opposite: dashboard-sized text and a
+    // grid that fills the pane, so it fits locally and (once primary)
+    // pushes the resulting dims back to the producer.
+    const isSecondary = !state.chromeless && !!state.client && !state.client.isPrimary && haveProducerDims;
     const availableW = probeW;
     const availableH = probeH;
 
@@ -612,8 +672,9 @@ function applyRoleAwareLayout(state) {
             // Font-driven: pin body to fill the pane (content + padding on
             // each side, since body is border-box); fit() picks cols×rows
             // for the padded content area.
-            const bodyW = `${availableW + TERMINAL_BODY_PADDING_PX * 2}px`;
-            const bodyH = `${availableH + TERMINAL_BODY_PADDING_PX * 2}px`;
+            const pad = bodyPaddingPx(state);
+            const bodyW = `${availableW + pad * 2}px`;
+            const bodyH = `${availableH + pad * 2}px`;
             if (body.style.width !== bodyW || body.style.height !== bodyH) {
                 body.style.width = bodyW;
                 body.style.height = bodyH;
@@ -704,8 +765,9 @@ function pinBodyToNatural(state, root, body) {
         // body is border-box with padding, so pin the outer size to
         // (screen dims + padding on each side) — the content area then
         // matches the xterm-screen dims exactly.
-        const bodyW = `${w + TERMINAL_BODY_PADDING_PX * 2}px`;
-        const bodyH = `${h + TERMINAL_BODY_PADDING_PX * 2}px`;
+        const pad = bodyPaddingPx(state);
+        const bodyW = `${w + pad * 2}px`;
+        const bodyH = `${h + pad * 2}px`;
         if (body.style.width !== bodyW || body.style.height !== bodyH) {
             body.style.width = bodyW;
             body.style.height = bodyH;
@@ -953,8 +1015,30 @@ function takePrimary(state) {
     }
 }
 
-export async function initTerminal(element, wsUrl, dotNetRef) {
+// Reads the dashboard's base type-ramp size so a chromeless terminal renders
+// at the same scale as the rest of the UI instead of auto-shrinking to fit a
+// producer grid. Fluent exports --type-ramp-base-font-size on the document
+// root; the clamp keeps a nonsense token value from producing an unreadable
+// or absurd grid.
+function resolveDashboardFontPx() {
+    try {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--type-ramp-base-font-size');
+        const parsed = Number.parseFloat(raw);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return Math.min(24, Math.max(9, Math.round(parsed)));
+        }
+    } catch { /* ignore — fall through to the default */ }
+    return DEFAULT_FONT_PX;
+}
+
+// `options` is optional: { chromeless: bool }. Chromeless drops the frame,
+// titlebar and padding so only the xterm grid shows (used by the terminal
+// dock, which supplies its own tab-strip chrome).
+export async function initTerminal(element, wsUrl, dotNetRef, options) {
     await ensureXtermLoaded();
+
+    const chromeless = !!options?.chromeless;
+    const initialFontPx = chromeless ? resolveDashboardFontPx() : DEFAULT_FONT_PX;
 
     const id = nextId++;
     const state = {
@@ -978,15 +1062,16 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
             generation: 0,
         },
         // Layout / sizing state (per-instance — we never use globals).
+        chromeless,
         sizeMode: 'font',
         fixedDims: null,
-        currentFontPx: DEFAULT_FONT_PX,
+        currentFontPx: initialFontPx,
         // Font size that "Fit" mode uses, tracked separately from
         // currentFontPx because fixed-preset layout overwrites the latter
         // with the auto-calculated optimal font. Preserving the user's last
         // font-mode font here lets setSizeMode('font') restore it when the
         // user flips back to Fit.
-        fitFontPx: DEFAULT_FONT_PX,
+        fitFontPx: initialFontPx,
         cellWRatio: 0,
         cellHRatio: 0,
         layoutGeneration: 0,
@@ -1251,6 +1336,16 @@ function connectClient(state, wsUrl) {
         // role-aware path: secondary locks-and-scales to producer dims;
         // primary fits/computes-font into the available stage).
         applyRoleAwareLayout(state);
+        // Chromeless terminals size the grid from the pane rather than from
+        // the producer, so those dims are only correct once we are primary
+        // and can push them upstream. Unlike a resource terminal — which may
+        // legitimately be driven by a CLI viewer elsewhere — a dock terminal
+        // is owned by the AppHost purely to be shown here, so claiming
+        // primary on attach is the expected behaviour rather than snatching
+        // control from another user.
+        if (state.chromeless) {
+            maybeAutoPromote(state);
+        }
     };
 
     client.onRoleChange = (payload) => {
