@@ -134,6 +134,8 @@ with create_builder() as builder:
         _urls_resource = context.resource
         _urls_is_run_mode = context.execution_context.is_run_mode
         callback_endpoint = context.get_endpoint("http")
+        if callback_endpoint is None:
+            raise ValueError("Expected the resource URL callback to expose its HTTP endpoint.")
         context.log.debug("URLs callback logger")
         context.urls.add(ReferenceExpression.format_string("https://%s", callback_endpoint))
         context.urls.add_for_endpoint(callback_endpoint, "/details", display_text="Details")

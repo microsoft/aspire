@@ -289,7 +289,10 @@ await container.withUrls(async (context) => {
     const urlsLog = await context.log();
     const _urlsIsRunMode: boolean = await context.executionContext().isRunMode();
     const callbackEndpoint = await context.getEndpoint("http");
-    const callbackEndpointHost = await context.getEndpoint("http").property(EndpointProperty.Host);
+    if (callbackEndpoint === null) {
+        throw new Error("Expected the resource URL callback to expose its HTTP endpoint.");
+    }
+    const callbackEndpointHost = await callbackEndpoint.property(EndpointProperty.Host);
     const urls = await context.urls();
     await urlsLog.debug("URLs callback logger");
     await urls.add(refExpr`https://${callbackEndpoint}`);

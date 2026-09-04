@@ -198,6 +198,18 @@ public class AtsCapabilityScannerTests
         Assert.True(valueTaskHandle.ReturnType.IsNullable);
     }
 
+    [Fact]
+    public void ScanAssembly_ExplicitlyIgnoredInterfacesAreExcludedFromResourceHandles()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var resourceType = Assert.Single(result.HandleTypes,
+            type => type.ClrType == typeof(ResourceWithIgnoredInterface));
+
+        Assert.DoesNotContain(resourceType.ImplementedInterfaces,
+            type => type.ClrType == typeof(IIgnoredImplementationContract<string, int>));
+    }
+
     [Theory]
     [InlineData(typeof(double?[]), AtsConstants.Number)]
     [InlineData(typeof(bool?[]), AtsConstants.Boolean)]
@@ -883,6 +895,16 @@ public class AtsCapabilityScannerTests
 
     #region Test Types
 
+    [AspireExportIgnore(Reason = "Test-only implementation contract.")]
+    public interface IIgnoredImplementationContract<TFirst, TSecond>
+    {
+    }
+
+    public sealed class ResourceWithIgnoredInterface(string name)
+        : Resource(name), IIgnoredImplementationContract<string, int>
+    {
+    }
+
     private sealed class TestResource : Resource
     {
         public TestResource(string name) : base(name)
@@ -982,6 +1004,13 @@ public class AtsCapabilityScannerTests
             Func<ContainerResource, ProjectResource, Task> callback)
         {
             _ = callback;
+            return builder;
+        }
+
+        [AspireExport]
+        public static IResourceBuilder<ResourceWithIgnoredInterface> TestIgnoredInterface(
+            IResourceBuilder<ResourceWithIgnoredInterface> builder)
+        {
             return builder;
         }
 

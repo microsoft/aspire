@@ -38,6 +38,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </code>
 /// </example>
 /// </remarks>
+[AspireExportIgnore(Reason = "Projection construction is a .NET implementation contract with no polyglot runtime surface.")]
 public interface IContainerProjection<TOwner, TSelf>
     where TOwner : IResource
     where TSelf : ContainerResource, IContainerProjection<TOwner, TSelf>
