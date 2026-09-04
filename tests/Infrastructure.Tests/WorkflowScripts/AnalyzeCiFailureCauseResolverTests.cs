@@ -467,9 +467,9 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task SanitizesProposedCauseIds()
+    public async Task RejectsNoncanonicalProposedCauseIds()
     {
-        JsonElement result = await ResolveAsync(new
+        CommandResult result = await ExecuteHarnessAsync(new
         {
             analysis = new
             {
@@ -501,19 +501,22 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
         });
 
-        Assert.Equal(["nuget-feed-timeout"], ReadStrings(result.GetProperty("analysis"), "causes"));
-        Assert.Equal("nuget-feed-timeout", FindOnlyCause(result).GetProperty("id").GetString());
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "Cause ID 'NuGet_Feed Timeout' must already be a canonical lowercase slug.",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task RejectsCollidingSanitizedCauseIds()
+    public async Task RejectsNoncanonicalRunSummaryCauseIds()
     {
-        object payload = new
+        CommandResult result = await ExecuteHarnessAsync(new
         {
             analysis = new
             {
-                causes = new[] { "NuGet_Feed Timeout", "nuget-feed-timeout" },
+                causes = new[] { "NuGet_Feed Timeout" },
                 failed_jobs = new[]
                 {
                     new
@@ -530,29 +533,22 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             {
                 new
                 {
-                    id = "NuGet_Feed Timeout",
-                    type = "infra-failure",
-                    title = "First NuGet feed timeout",
-                    error_pattern = "The NuGet feed timed out.",
-                    job_ids = new[] { 1 }
-                },
-                new
-                {
                     id = "nuget-feed-timeout",
                     type = "infra-failure",
-                    title = "Second NuGet feed timeout",
+                    title = "NuGet feed timeout",
                     error_pattern = "The NuGet feed timed out.",
                     job_ids = new[] { 1 }
                 }
             },
             priorCauses = Array.Empty<object>(),
             retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
-        };
-
-        CommandResult result = await ExecuteHarnessAsync(payload);
+        });
 
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("normalize to the same cause ID", result.Output, StringComparison.Ordinal);
+        Assert.Contains(
+            "Cause ID 'NuGet_Feed Timeout' must already be a canonical lowercase slug.",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -977,7 +973,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task MatchesSanitizedProposalToLegacyPriorCauseId()
+    public async Task MatchesCanonicalProposalToLegacyPriorCauseId()
     {
         const string legacyCauseId = "processguest-signalerThrows-treekill-timeout";
         const string canonicalCauseId = "processguest-signalerthrows-treekill-timeout";
@@ -985,7 +981,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         {
             analysis = new
             {
-                causes = new[] { legacyCauseId },
+                causes = new[] { canonicalCauseId },
                 failed_jobs = new[]
                 {
                     new
@@ -1002,7 +998,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             {
                 new
                 {
-                    id = legacyCauseId,
+                    id = canonicalCauseId,
                     type = "infra-failure",
                     title = "Legacy infrastructure cause",
                     error_pattern = "Legacy infrastructure failure",
@@ -2185,6 +2181,177 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ResolutionAllowsFlakyCauseForDeterministicJobWithMatchingTrustedTestEvidence()
+    {
+        JsonElement result = await ResolveAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "flaky-test" },
+                failed_jobs = new[]
+                {
+                    new { id = 1, name = "Untrusted job name", classification = "code-issue" }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = "Aspire.Tests.Flaky",
+                        job = "Tests / Linux",
+                        classification = "flaky",
+                        error = "Test failed",
+                        stack_trace = "at Aspire.Tests.Flaky()",
+                        reason = "Known flaky behavior"
+                    }
+                }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "flaky-test",
+                    type = "flaky-test",
+                    title = "Flaky test",
+                    test_name = "Aspire.Tests.Flaky",
+                    error_pattern = "Test failed",
+                    job_ids = new[] { 1 }
+                }
+            },
+            trustedFailedJobs = new[]
+            {
+                new { id = 1, name = "Tests / Linux" }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        });
+
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal(["Tests / Linux"], ReadStrings(cause, "job_names"));
+        Assert.Equal(
+            ["flaky-test"],
+            ReadStrings(result.GetProperty("analysis").GetProperty("failed_jobs")[0], "cause_ids"));
+        Assert.Equal(
+            "flaky-test",
+            result.GetProperty("analysis").GetProperty("failed_tests")[0].GetProperty("cause_id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResolutionRejectsFlakyCauseForDeterministicJobWithoutMatchingTrustedTestEvidence()
+    {
+        CommandResult result = await ExecuteHarnessAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "flaky-test" },
+                failed_jobs = new[]
+                {
+                    new { id = 1, name = "Untrusted job name", classification = "code-issue" }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = "Aspire.Tests.Flaky",
+                        job = "Tests / Windows",
+                        classification = "flaky",
+                        error = "Test failed",
+                        stack_trace = "at Aspire.Tests.Flaky()",
+                        reason = "Known flaky behavior"
+                    }
+                }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "flaky-test",
+                    type = "flaky-test",
+                    title = "Flaky test",
+                    test_name = "Aspire.Tests.Flaky",
+                    error_pattern = "Test failed",
+                    job_ids = new[] { 1 }
+                }
+            },
+            trustedFailedJobs = new[]
+            {
+                new { id = 1, name = "Tests / Linux" }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "Cause 'flaky-test' references job 'Untrusted job name', which is classified as 'code-issue'.",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResolutionRejectsFlakyCauseWhenTestNameAndClassificationMatchDifferentEvidence()
+    {
+        CommandResult result = await ExecuteHarnessAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "flaky-test" },
+                failed_jobs = new[]
+                {
+                    new { id = 1, name = "Untrusted job name", classification = "code-issue" }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = "Aspire.Tests.OtherFlaky",
+                        job = "Tests / Linux",
+                        classification = "flaky",
+                        error = "Other test failed",
+                        stack_trace = "at Aspire.Tests.OtherFlaky()",
+                        reason = "Known flaky behavior"
+                    },
+                    new
+                    {
+                        name = "Aspire.Tests.Flaky",
+                        job = "Tests / Linux",
+                        classification = "code-issue",
+                        error = "Test failed",
+                        stack_trace = "at Aspire.Tests.Flaky()",
+                        reason = "Deterministic failure"
+                    }
+                }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "flaky-test",
+                    type = "flaky-test",
+                    title = "Flaky test",
+                    test_name = "Aspire.Tests.Flaky",
+                    error_pattern = "Test failed",
+                    job_ids = new[] { 1 }
+                }
+            },
+            trustedFailedJobs = new[]
+            {
+                new { id = 1, name = "Tests / Linux" }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "Cause 'flaky-test' references job 'Untrusted job name', which is classified as 'code-issue'.",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task AllowsFlakyCauseForDeterministicJobWithMatchingFailedTestEvidence()
     {
         CommandResult result = await ExecuteHarnessAsync(
@@ -2212,6 +2379,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     {
                         id = "flaky-test",
                         type = "flaky-test",
+                        test_name = "Aspire.Tests.Flaky",
                         job_ids = new[] { 1 }
                     }
                 },
@@ -2254,6 +2422,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     {
                         id = "flaky-test",
                         type = "flaky-test",
+                        test_name = "Aspire.Tests.Flaky",
                         job_ids = new[] { 1 }
                     }
                 },
@@ -2324,7 +2493,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
-            "Cause 'infra-cause' of type 'infra-failure' cannot reference job ID '2' classified as 'main-repository-breakage'.",
+            "Cause 'infra-cause' references job 'Build / Windows', which is classified as 'main-repository-breakage'.",
             result.Output,
             StringComparison.Ordinal);
     }
@@ -2941,6 +3110,8 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
     {
         string workflow = File.ReadAllText(
             Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure.md"));
+        string persistenceScript = File.ReadAllText(
+            Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure-persistence.sh"));
 
         int publishJobIndex = workflow.IndexOf("publish-data:", StringComparison.Ordinal);
         int checkoutIndex = workflow.IndexOf("- name: Checkout publication helpers", publishJobIndex, StringComparison.Ordinal);
@@ -2963,10 +3134,13 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.True(persistenceIndex > resolverIndex, "Cause identities must be normalized before the run summary is persisted.");
         Assert.Contains("group: analyze-ci-failure", workflow, StringComparison.Ordinal);
         Assert.Contains("queue: max", workflow, StringComparison.Ordinal);
-        Assert.Contains("($ex | del(.job_ids, .job_names)) *", workflow, StringComparison.Ordinal);
         Assert.Contains(
-            "($new | del(.occurrences, .issue_url, .job_ids, .job_names)) *",
-            workflow,
+            "($existing | del(.job_ids, .job_names, .aliases, .test_names)) *",
+            persistenceScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "[($existing.occurrences // [])[], ($new.occurrences // [])[]]",
+            persistenceScript,
             StringComparison.Ordinal);
         Assert.True(memoryPushIndex < issuePublicationIndex, "Canonical cause identities must be pushed before issue side effects.");
         Assert.Contains("node .github/workflows/analyze-ci-failure-cause-resolver.js \\", workflow, StringComparison.Ordinal);

@@ -19,12 +19,10 @@ function resolveCauses({
 }) {
     validateInputs(analysis, causes, priorCauses);
     validateRetryPatternCauseIds(retryPatterns);
+    validateProposedCauseIds(analysis, causes);
 
     priorCauses = priorCauses.filter(
         cause => cause && typeof cause.id === 'string' && cause.id.length > 0);
-    const proposalNormalization = normalizeProposedCauseIds(analysis, causes);
-    analysis = proposalNormalization.analysis;
-    causes = proposalNormalization.causes;
 
     const priorById = new Map(priorCauses.map(cause => [cause.id, cause]));
     // Historical memory predates the slug contract. Match sanitized proposals back to those
@@ -32,7 +30,7 @@ function resolveCauses({
     const priorByNormalizedId = buildPriorByNormalizedId(priorCauses);
     const failedJobsById = new Map(analysis.failed_jobs.map(job => [job.id, job]));
     const trustedFailedJobsById = buildTrustedFailedJobsById(analysis, trustedFailedJobs);
-    const canonicalizations = [...proposalNormalization.canonicalizations];
+    const canonicalizations = [];
     const normalizedById = new Map();
     const proposedToCanonical = new Map();
     const priorCauseMigrations = new Map();
@@ -422,37 +420,14 @@ function validateCauseType(cause) {
     }
 }
 
-function normalizeProposedCauseIds(analysis, causes) {
-    const normalizedByProposed = new Map();
-    const proposedByNormalized = new Map();
-    const canonicalizations = [];
-
-    for (const cause of causes) {
-        const normalizedId = sanitizeProposedCauseId(cause.id);
-        const existingProposedId = proposedByNormalized.get(normalizedId);
-        if (existingProposedId && existingProposedId !== cause.id) {
+function validateProposedCauseIds(analysis, causes) {
+    const proposedCauseIds = [...analysis.causes, ...causes.map(cause => cause.id)];
+    for (const causeId of proposedCauseIds) {
+        if (!safeCauseIdPattern.test(causeId)) {
             throw new Error(
-                `Cause IDs '${existingProposedId}' and '${cause.id}' normalize to the same cause ID '${normalizedId}'.`);
-        }
-
-        normalizedByProposed.set(cause.id, normalizedId);
-        proposedByNormalized.set(normalizedId, cause.id);
-        if (cause.id !== normalizedId) {
-            canonicalizations.push({ proposed_id: cause.id, canonical_id: normalizedId });
+                `Cause ID '${causeId}' must already be a canonical lowercase slug.`);
         }
     }
-
-    return {
-        analysis: {
-            ...analysis,
-            causes: analysis.causes.map(causeId => normalizedByProposed.get(causeId) ?? causeId),
-        },
-        causes: causes.map(cause => ({
-            ...cause,
-            id: normalizedByProposed.get(cause.id),
-        })),
-        canonicalizations,
-    };
 }
 
 function buildPriorByNormalizedId(priorCauses) {
@@ -472,15 +447,6 @@ function buildPriorByNormalizedId(priorCauses) {
     }
 
     return priorByNormalizedId;
-}
-
-function sanitizeProposedCauseId(causeId) {
-    const normalizedId = normalizeCauseId(causeId);
-    if (!safeCauseIdPattern.test(normalizedId)) {
-        throw new Error(`Invalid cause ID '${causeId}'.`);
-    }
-
-    return normalizedId;
 }
 
 function normalizeCauseId(causeId) {
@@ -513,10 +479,11 @@ function resolveCauseJobIds(cause, analysis, failedJobsById, trustedFailedJobsBy
     jobIds = unique(jobIds);
     for (const jobId of jobIds) {
         const failedJob = failedJobsById.get(jobId);
+        const trustedFailedJob = trustedFailedJobsById.get(jobId);
         if (!failedJob) {
             throw new Error(`Cause '${cause.id}' references unknown failed job ID '${jobId}'.`);
         }
-        if (!trackedClassifications.has(failedJob.classification)) {
+        if (!isCauseCompatibleWithFailedJob(cause, failedJob, trustedFailedJob, analysis.failed_tests)) {
             throw new Error(
                 `Cause '${cause.id}' references job '${failedJob.name}', which is classified as '${failedJob.classification}'.`);
         }
@@ -764,15 +731,8 @@ function validateCauseJobAttribution(analysis, causes, trustedFailedJobs) {
             if (!trustedJob || !failedJob) {
                 throw new Error(`Cause '${cause.id}' references untrusted failed job ID '${jobId}'.`);
             }
-            const classification = failedJob.classification;
-            const hasMatchingFlakyTest = cause.type === 'flaky-test' &&
-                typeof trustedJob.name === 'string' &&
-                trustedJob.name.length > 0 &&
-                failedTests.some(test =>
-                    test?.classification === 'flaky' &&
-                    test.job === trustedJob.name);
-            if (causeTypeJobClassifications.get(cause.type) !== classification && !hasMatchingFlakyTest) {
-                throw new Error(`Cause '${cause.id}' of type '${cause.type}' cannot reference job ID '${jobId}' classified as '${classification}'.`);
+            if (!isCauseCompatibleWithFailedJob(cause, failedJob, trustedJob, failedTests)) {
+                throw new Error(`Cause '${cause.id}' of type '${cause.type}' cannot reference job ID '${jobId}' classified as '${failedJob.classification}'.`);
             }
             coveredJobIds.add(jobId);
         }
@@ -789,6 +749,22 @@ function validateCauseJobAttribution(analysis, causes, trustedFailedJobs) {
     }
 
     return true;
+}
+
+function isCauseCompatibleWithFailedJob(cause, failedJob, trustedJob, failedTests) {
+    if (causeTypeJobClassifications.get(cause.type) === failedJob.classification) {
+        return true;
+    }
+
+    const causeTestName = normalizeTestName(cause.test_name);
+    return cause.type === 'flaky-test' &&
+        causeTestName.length > 0 &&
+        typeof trustedJob?.name === 'string' &&
+        trustedJob.name.length > 0 &&
+        failedTests.some(test =>
+            test?.classification === 'flaky' &&
+            test.job === trustedJob.name &&
+            normalizeTestName(test.name) === causeTestName);
 }
 
 function normalizeTestName(testName) {

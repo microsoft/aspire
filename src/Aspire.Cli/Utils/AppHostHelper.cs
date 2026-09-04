@@ -84,7 +84,7 @@ internal static class AppHostHelper
         return appHostInformationResult;
     }
 
-    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         var relativePath = Path.GetRelativePath(workingDirectory.FullName, projectFile.FullName);
         return await interactionService.ShowStatusAsync(
@@ -92,6 +92,7 @@ internal static class AppHostHelper
             () => runner.BuildAsync(
                 projectFile,
                 noRestore,
+                env,
                 options,
                 cancellationToken),
             emoji: KnownEmojis.HammerAndWrench);

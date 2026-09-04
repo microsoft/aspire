@@ -660,6 +660,8 @@ internal sealed class AzureDevComputeAddPortRequest
 
     public required int Port { get; init; }
 
+    public string? ActivationMode { get; init; }
+
     public AzureDevComputePortAuthConfig? Auth { get; init; }
 
     public required string Protocol { get; init; }
@@ -673,6 +675,17 @@ internal sealed class AzureDevComputeRemovePortRequest
 internal sealed class AzureDevComputePortAuthConfig
 {
     public bool Anonymous { get; init; }
+
+    public AzureDevComputePortEntraIdAuthConfig? EntraId { get; init; }
+}
+
+internal sealed class AzureDevComputePortEntraIdAuthConfig
+{
+    public required bool Enabled { get; init; }
+
+    public required IReadOnlyList<string> ObjectIds { get; init; }
+
+    public required IReadOnlyList<string> TenantIds { get; init; }
 }
 
 internal sealed class AzureDevComputePortsList

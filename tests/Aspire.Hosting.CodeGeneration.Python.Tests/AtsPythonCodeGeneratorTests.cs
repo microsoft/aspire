@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
@@ -350,6 +352,87 @@ public class AtsPythonCodeGeneratorTests
                     rpc_args['nullableUnion'] = nullable_union
             """,
             aspirePy);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnUnix()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnWindows()
+        => GeneratedCallback_WrapsGenericResourceBuilderHandle("python");
+
+    private async Task GeneratedCallback_WrapsGenericResourceBuilderHandle(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var modulePath = Path.Combine(tempDirectory.FullName, "aspire_app.py");
+            var testPath = Path.Combine(tempDirectory.FullName, "test_callback.py");
+            await File.WriteAllTextAsync(modulePath, files["aspire_app.py"]);
+            await File.WriteAllTextAsync(
+                testPath,
+                """
+                import aspire_app
+
+                client = aspire_app.AspireClient("unused")
+                invocations = []
+
+                def invoke_capability(capability_id, args, kwargs=None):
+                    invocations.append(capability_id)
+                    if capability_id.endswith("/withPythonBuilderCallback"):
+                        callback = client._callback_registry[args["configure"]]
+                        callback({
+                            "p0": {
+                                "$handle": "callback-resource",
+                                "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceBuilder`1[[Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource, Aspire.Hosting.CodeGeneration.Python.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                            }
+                        }, client)
+                    return args["builder"]
+
+                client.invoke_capability = invoke_capability
+                resource = aspire_app.TestRedisResource(
+                    aspire_app.Handle({
+                        "$handle": "resource",
+                        "$type": "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                    }),
+                    client
+                )
+                resource.with_python_builder_callback(lambda configured: configured.with_persistence())
+
+                assert invocations == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence",
+                ]
+                """);
+
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo(pythonExecutable)
+            {
+                WorkingDirectory = tempDirectory.FullName,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+            process.StartInfo.ArgumentList.Add(testPath);
+            process.Start();
+            var standardOutput = process.StandardOutput.ReadToEndAsync();
+            var standardError = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            Assert.True(
+                process.ExitCode == 0,
+                $"Python callback validation failed.{Environment.NewLine}{await standardOutput}{await standardError}");
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

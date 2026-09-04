@@ -25,3 +25,34 @@ fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-a
         visibility: visible;
     }
 }
+
+/* Match FluentUI's 32px menu-item icon track so the resource identity and actions share
+   one visual axis. Extra vertical space distinguishes the identity from a clickable item. */
+.aspire-menu-header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 40px;
+    margin: 0 4px 4px;
+    padding: 4px 8px 8px 0;
+    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    color: var(--neutral-foreground-rest);
+    font-size: var(--type-ramp-base-font-size, 0.875rem);
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
+}
+
+.aspire-menu-header ::deep .aspire-menu-header-icon {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.aspire-menu-header-text {
+    grid-column: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

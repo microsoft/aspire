@@ -13,6 +13,12 @@ const tracking = require('./tracking-issue.js');
 const CAUSE_LABEL = 'ci-failure-cause';
 const CAUSE_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const LEGACY_CAUSE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const MAX_ISSUE_BODY_BYTES = 65_000;
+const OCCURRENCES_START = '<!-- ci-failure-occurrences:start -->';
+const OCCURRENCES_END = '<!-- ci-failure-occurrences:end -->';
+const OCCURRENCE_ROW_PATTERN = /^\| \d{4}-\d{2}-\d{2} \| \[\d+\]\(https:\/\/github\.com\/[^\n]+\) \| .* \| (main|unavailable|#\d+) \|$/;
+
+class OccurrenceRenderError extends Error {}
 
 function causeMarker(cause) {
     const causeId = typeof cause === 'string' ? cause : cause.id;
@@ -48,9 +54,50 @@ function escapeTableCell(value) {
     return String(value).replaceAll('|', '\\|');
 }
 
+function renderCodeSpan(value) {
+    const text = String(value);
+    const longestDelimiter = Math.max(
+        0,
+        ...Array.from(text.matchAll(/`+/g), match => match[0].length));
+    const delimiter = '`'.repeat(longestDelimiter + 1);
+    return `${delimiter} ${text} ${delimiter}`;
+}
+
+function renderIndentedBlock(value) {
+    const text = String(value || 'No diagnostic pattern recorded.');
+    return text.split('\n').map(line => `    ${line}`);
+}
+
+function sanitizeSingleLine(value, maxLength) {
+    return String(value ?? '')
+        .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/[\p{Cf}\u2028\u2029\uFE00-\uFE0F]/gu, '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+        .slice(0, maxLength);
+}
+
+function renderJobNames(cause, separator, escapeForTable = false) {
+    return (cause.job_names ?? ['unknown'])
+        .map(name => renderCodeSpan(escapeForTable ? escapeTableCell(name) : name))
+        .join(separator);
+}
+
+function formatTriggeringMerge(mainContext) {
+    const triggeringMerge = mainContext?.triggeringMerge;
+    if (mainContext?.candidateHistoryState !== 'available' ||
+        !Number.isInteger(triggeringMerge?.number) ||
+        triggeringMerge.number <= 0 ||
+        typeof triggeringMerge.title !== 'string') {
+        return undefined;
+    }
+
+    return `#${triggeringMerge.number} ${renderCodeSpan(sanitizeSingleLine(triggeringMerge.title, 238))}`;
+}
+
 function occurrenceRow(cause, run) {
     const date = run.analyzedAt.split('T')[0];
-    const jobs = (cause.job_names ?? ['unknown']).map(escapeTableCell).join('<br>');
+    const jobs = renderJobNames(cause, '<br>', true);
     const occurrenceContext = run.runScope === 'main'
         ? 'main'
         : run.prNumber > 0 ? `#${run.prNumber}` : 'unavailable';
@@ -59,6 +106,94 @@ function occurrenceRow(cause, run) {
 
 function hasOccurrence(body, runId) {
     return (body ?? '').includes(`[${runId}](`);
+}
+
+function occurrenceSection(rows, totalOccurrenceCount) {
+    return [
+        OCCURRENCES_START,
+        '## Occurrences',
+        '',
+        `Showing ${rows.length} most recent of ${totalOccurrenceCount} occurrences.`,
+        '',
+        '| Date | Build | Job | Context |',
+        '|------|-------|-----|----|',
+        ...rows,
+        OCCURRENCES_END,
+        '',
+    ].join('\n');
+}
+
+function parseOccurrenceSection(body) {
+    const normalizedBody = (body ?? '').replaceAll('\r\n', '\n');
+    let prefix;
+    let managed;
+    let legacy = false;
+
+    if (normalizedBody.includes(OCCURRENCES_START) || normalizedBody.includes(OCCURRENCES_END)) {
+        const startParts = normalizedBody.split(OCCURRENCES_START);
+        if (startParts.length !== 2) {
+            throw new OccurrenceRenderError('ambiguous managed occurrence section');
+        }
+        const endParts = startParts[1].split(OCCURRENCES_END);
+        if (endParts.length !== 2 || !/^\s*$/.test(endParts[1])) {
+            throw new OccurrenceRenderError('ambiguous managed occurrence section');
+        }
+        [prefix] = startParts;
+        [managed] = endParts;
+    } else {
+        const legacyParts = normalizedBody.split('\n## Occurrences\n');
+        if (legacyParts.length !== 2) {
+            throw new OccurrenceRenderError('unsupported legacy occurrence section');
+        }
+        [prefix] = legacyParts;
+        managed = `## Occurrences\n${legacyParts[1]}`;
+        legacy = true;
+    }
+
+    const lines = managed.split('\n');
+    const isAllowedLine = line =>
+        line.length === 0 ||
+        line === '## Occurrences' ||
+        line === '| Date | Build | Job | Context |' ||
+        (legacy && line === '| Date | Build | Job | PR |') ||
+        line === '|------|-------|-----|----|' ||
+        /^Showing \d+ most recent of \d+ occurrences\.$/.test(line) ||
+        OCCURRENCE_ROW_PATTERN.test(line);
+    if (!lines.every(isAllowedLine)) {
+        throw new OccurrenceRenderError('unsupported occurrence section contents');
+    }
+
+    return {
+        prefix: prefix.replace(/\n+$/, ''),
+        rows: lines.filter(line => OCCURRENCE_ROW_PATTERN.test(line)),
+    };
+}
+
+function renderOccurrenceHistory(body, newRow, totalOccurrenceCount) {
+    if (!OCCURRENCE_ROW_PATTERN.test(newRow)) {
+        throw new OccurrenceRenderError('invalid occurrence row');
+    }
+
+    const parsed = parseOccurrenceSection(body);
+    const rows = [...parsed.rows, newRow];
+    const total = totalOccurrenceCount ?? rows.length;
+    if (!Number.isInteger(total) || total < rows.length) {
+        throw new OccurrenceRenderError('occurrence total is smaller than the rendered history');
+    }
+
+    while (rows.length > 1) {
+        const rendered = `${parsed.prefix}\n\n${occurrenceSection(rows, total)}`;
+        if (isWithinIssueBodyBudget(rendered)) {
+            return rendered;
+        }
+        rows.shift();
+    }
+
+    const rendered = `${parsed.prefix}\n\n${occurrenceSection(rows, total)}`;
+    if (!isWithinIssueBodyBudget(rendered)) {
+        throw new OccurrenceRenderError('occurrence section cannot fit within the publication budget');
+    }
+    return rendered;
 }
 
 function buildIssueTitle(cause) {
@@ -78,8 +213,8 @@ function labelsForCause(cause) {
     return [CAUSE_LABEL];
 }
 
-function buildIssueBody(cause, run) {
-    const jobs = (cause.job_names ?? ['unknown']).map(escapeTableCell).join('<br>');
+function buildIssueBody(cause, run, totalOccurrenceCount = 1) {
+    const jobs = renderJobNames(cause, '<br>');
     const lines = [
         causeMarker(cause),
         causeTypeMarker(cause),
@@ -93,10 +228,14 @@ function buildIssueBody(cause, run) {
         lines.push(
             'Affected branch: `main`',
             `Last successful main SHA: \`${run.mainContext?.lastSuccessfulSha ?? 'unknown'}\``,
-            `Failed main SHA: \`${run.mainContext?.failedSha ?? 'unknown'}\``,
-            `Triggering merge PR (context only, not necessarily causal): ${run.mainContext?.triggeringMerge ?? 'Not found'}`);
+            `Failed main SHA: \`${run.mainContext?.failedSha ?? 'unknown'}\``);
+        const triggeringMerge = formatTriggeringMerge(run.mainContext);
+        if (triggeringMerge) {
+            lines.push(
+                `Triggering merge PR (context only, not necessarily causal): ${triggeringMerge}`);
+        }
     } else if (cause.test_name) {
-        lines.push(`Build error leg or test failing: ${jobs} / \`${cause.test_name}\``);
+        lines.push(`Build error leg or test failing: ${jobs} / ${renderCodeSpan(cause.test_name)}`);
     } else {
         lines.push(`Build error leg: ${jobs}`);
     }
@@ -109,27 +248,41 @@ function buildIssueBody(cause, run) {
         '',
         '## Error Message',
         '',
-        '```',
-        cause.error_pattern,
-        '```',
+        ...renderIndentedBlock(cause.error_pattern),
         '',
         '## Description',
         '',
-        cause.title,
+        renderCodeSpan(cause.title),
         '',
         `**Type**: ${cause.type}`,
         '',
-        '## Occurrences',
-        '',
-        '| Date | Build | Job | Context |',
-        '|------|-------|-----|----|',
-        occurrenceRow(cause, run),
-        '');
+        occurrenceSection([occurrenceRow(cause, run)], totalOccurrenceCount));
     return lines.join('\n');
+}
+
+function isWithinIssueBodyBudget(body) {
+    return Buffer.byteLength(body, 'utf8') <= MAX_ISSUE_BODY_BYTES;
 }
 
 async function readJson(filePath) {
     return JSON.parse(await fs.readFile(filePath, 'utf8'));
+}
+
+async function readStoredCause(filePath, fallbackCause) {
+    try {
+        return await readJson(filePath);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return fallbackCause;
+        }
+        throw error;
+    }
+}
+
+function storedOccurrenceCount(storedCause) {
+    return Array.isArray(storedCause.occurrences) && storedCause.occurrences.length > 0
+        ? storedCause.occurrences.length
+        : undefined;
 }
 
 async function persistIssueUrl(filePath, fallbackCause, issueUrl) {
@@ -163,6 +316,16 @@ async function ensureCauseLabels(github, context, cause) {
 }
 
 async function publishCauseIssue(github, context, core, cause, run, memoryCausesDirectory) {
+    const storedCausePath = path.join(memoryCausesDirectory, `${cause.id}.json`);
+    const storedCause = await readStoredCause(storedCausePath, cause);
+    const totalOccurrenceCount = storedOccurrenceCount(storedCause);
+    const initialBody = buildIssueBody(cause, run, totalOccurrenceCount ?? 1);
+    if (!isWithinIssueBodyBudget(initialBody)) {
+        core.warning(
+            `Cause issue body exceeds the ${MAX_ISSUE_BODY_BYTES}-byte publication budget. Skipping issue creation.`);
+        return undefined;
+    }
+
     await ensureCauseLabels(github, context, cause);
     const marker = causeMarker(cause);
     const alternateMarkers = (cause.aliases ?? [])
@@ -175,7 +338,7 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         marker,
         alternateMarkers,
         title: buildIssueTitle(cause),
-        buildBody: () => buildIssueBody(cause, run),
+        buildBody: () => initialBody,
         closeDuplicates: true,
         reopen: 'when-changing',
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
@@ -184,16 +347,30 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
             if (created || hasOccurrence(issue.body, run.runId)) {
                 return [];
             }
+            let updatedBody;
+            try {
+                updatedBody = renderOccurrenceHistory(
+                    issue.body,
+                    occurrenceRow(cause, run),
+                    totalOccurrenceCount);
+            } catch (error) {
+                if (!(error instanceof OccurrenceRenderError)) {
+                    throw error;
+                }
+                core.warning(
+                    `Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update.`);
+                return issue.state === 'closed' ? [{ type: 'reopen' }] : [];
+            }
             return [{
                 type: 'update',
-                body: `${(issue.body ?? '').trimEnd()}\n${occurrenceRow(cause, run)}\n`,
+                body: updatedBody,
             }];
         },
     });
 
     const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${result.number}`;
     await persistIssueUrl(
-        path.join(memoryCausesDirectory, `${cause.id}.json`),
+        storedCausePath,
         cause,
         issueUrl);
     return {
@@ -255,13 +432,16 @@ async function publishCauseIssues(
             continue;
         }
 
-        results.push(await publishCauseIssue(
+        const result = await publishCauseIssue(
             github,
             context,
             core,
             cause,
             run,
-            memoryCausesDirectory));
+            memoryCausesDirectory);
+        if (result) {
+            results.push(result);
+        }
     }
     return results;
 }

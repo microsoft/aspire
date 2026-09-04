@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Hosting.Kubernetes.Tests;
+using System.Collections.Concurrent;
+using Aspire.Hosting.Kubernetes;
+
+namespace Aspire.Hosting.Tests;
 
 /// <summary>
 /// In-memory fake of <see cref="IHelmRunner"/> for tests. Records arguments,
@@ -19,7 +22,11 @@ internal sealed class FakeHelmRunner : IHelmRunner
 
     public string? LastArguments { get; private set; }
 
+    public ConcurrentQueue<string> Arguments { get; } = [];
+
     public int ExitCode { get; set; }
+
+    public Func<string, (int ExitCode, string? StandardError)>? CommandResultFactory { get; set; }
 
     /// <summary>
     /// Output emitted to <c>onOutputData</c> when arguments start with
@@ -43,6 +50,7 @@ internal sealed class FakeHelmRunner : IHelmRunner
         CancellationToken cancellationToken = default)
     {
         LastArguments = arguments;
+        Arguments.Enqueue(arguments);
 
         // Match any `helm version ...` probe (the validator passes
         // `version --short`).
@@ -68,6 +76,12 @@ internal sealed class FakeHelmRunner : IHelmRunner
             WasUninstallCalled = true;
         }
 
-        return Task.FromResult(ExitCode);
+        var result = CommandResultFactory?.Invoke(arguments) ?? (ExitCode, null);
+        if (!string.IsNullOrEmpty(result.StandardError))
+        {
+            onErrorData?.Invoke(result.StandardError);
+        }
+
+        return Task.FromResult(result.ExitCode);
     }
 }

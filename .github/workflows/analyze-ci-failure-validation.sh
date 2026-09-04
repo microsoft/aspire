@@ -5,21 +5,42 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ANALYSIS_FILE="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/analysis-result.json"
 CAUSES_DIR="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
 TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
-if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] || [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ]; then
+TEST_EVIDENCE_FILE="ci-failure-data/test-evidence.json"
+RUN_FILE="ci-failure-data/run.json"
+NORMALIZED_TRUSTED_FAILED_JOBS_FILE="${ANALYSIS_FILE}.trusted-failed-jobs.tmp"
+NORMALIZED_TRUSTED_TEST_FAILURES_FILE="${ANALYSIS_FILE}.trusted-test-failures.tmp"
+BOUND_ANALYSIS_FILE="${ANALYSIS_FILE}.bound.tmp"
+trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE"' EXIT
+if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
+   [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$TEST_EVIDENCE_FILE" ] ||
+   [ ! -f "$RUN_FILE" ]; then
   echo "::error::Analysis result or trusted run data not found"
   exit 1
 fi
 
+bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+  sanitize-analysis "$ANALYSIS_FILE" "${ANALYSIS_FILE}.tmp"
+mv "${ANALYSIS_FILE}.tmp" "$ANALYSIS_FILE"
+
 TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
 TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+RUN_METADATA_ID=$(jq -r 'if (.id | type) == "number" then (.id | tostring) else "" end' "$RUN_FILE")
+RUN_URL=$(jq -r 'if (.html_url | type) == "string" then .html_url else "" end' "$RUN_FILE")
 ANALYSIS_RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
 ANALYSIS_RUN_SCOPE=$(jq -r '.run_scope' "$ANALYSIS_FILE")
 VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+printf -v VERDICT_DISPLAY '%q' "$VERDICT"
 
+if [ "$RUN_METADATA_ID" != "$TRUSTED_RUN_ID" ] ||
+   [[ ! "$RUN_URL" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/${TRUSTED_RUN_ID}$ ]]; then
+  echo "::error::Trusted run metadata is invalid"
+  exit 1
+fi
 if [ "$ANALYSIS_RUN_ID" != "$TRUSTED_RUN_ID" ] || [ "$ANALYSIS_RUN_SCOPE" != "$TRUSTED_RUN_SCOPE" ]; then
   echo "::error::Analysis result does not match trusted run context"
   exit 1
@@ -30,6 +51,10 @@ if [ "$TRUSTED_RUN_SCOPE" = "main" ] && [ "$(jq -r '.pr // null' "$ANALYSIS_FILE
 fi
 if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
   TRUSTED_PR_NUMBERS=$(jq -r '.pr_numbers // ""' "$RUN_CONTEXT_FILE")
+  if [ -n "$TRUSTED_PR_NUMBERS" ] && [[ ! "$TRUSTED_PR_NUMBERS" =~ ^[0-9]+$ ]]; then
+    echo "::error::Trusted run context must contain one unambiguous subject PR"
+    exit 1
+  fi
   ANALYSIS_PR_NUMBER=$(jq -r '
     if ((.pr | type) == "object") and ((.pr.number | type) == "number")
     then (.pr.number | tostring)
@@ -42,14 +67,9 @@ if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then
   elif [ -z "$TRUSTED_PR_NUMBERS" ] || [ -z "$ANALYSIS_PR_NUMBER" ]; then
     echo "::error::Pull request analysis must identify a trusted subject PR"
     exit 1
-  else
-    case ",${TRUSTED_PR_NUMBERS}," in
-      *",${ANALYSIS_PR_NUMBER},"*) ;;
-      *)
-        echo "::error::Pull request analysis must identify a trusted subject PR"
-        exit 1
-        ;;
-    esac
+  elif [ "$ANALYSIS_PR_NUMBER" != "$TRUSTED_PR_NUMBERS" ]; then
+    echo "::error::Pull request analysis must identify a trusted subject PR"
+    exit 1
   fi
 fi
 if ! jq -e '
@@ -62,32 +82,132 @@ if ! jq -e '
   exit 1
 fi
 if ! jq -e '
+  def safe_single_line($max_length):
+    type == "string" and
+    length <= $max_length and
+    (test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]") | not) and
+    all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+  def safe_multiline($max_length):
+    type == "string" and
+    length <= $max_length and
+    ((gsub("[\t\n]"; "") | test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]")) | not) and
+    all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+  all(.failed_jobs[];
+    ((.reason // "") | safe_single_line(500))) and
   (.failed_tests | type == "array") and
   all(.failed_tests[];
     (type == "object") and
-    ((.name | type) == "string") and
-    ((.job | type) == "string" and (.job | length) > 0) and
-    ((.error | type) == "string") and
-    ((.stack_trace == null) or ((.stack_trace | type) == "string")) and
+    ((.name | safe_single_line(500)) and (.name | length) > 0) and
+    ((.job | safe_single_line(500)) and (.job | length) > 0) and
+    (.error | safe_multiline(1000)) and
+    ((.stack_trace == null) or (.stack_trace | safe_multiline(2000))) and
     (.classification == "flaky" or .classification == "code-issue") and
-    ((.reason | type) == "string"))
+    (.reason | safe_single_line(500)))
 ' "$ANALYSIS_FILE" >/dev/null; then
   echo "::error::Analysis failed_tests must match the safe field schema"
   exit 1
 fi
-if ! jq -e '(type == "array") and all(.[]; (.id | type) == "number")' "$TRUSTED_FAILED_JOBS_FILE" >/dev/null; then
+if ! jq -e '
+  (type == "array") and
+  all(.[]; (.id | type) == "number" and (.name | type) == "string")
+' "$TRUSTED_FAILED_JOBS_FILE" >/dev/null; then
   echo "::error::Trusted failed jobs are invalid"
   exit 1
+fi
+if ! bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+  sanitize-trusted-failed-jobs \
+  "$TRUSTED_FAILED_JOBS_FILE" \
+  "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE"; then
+  echo "::error::Trusted failed jobs are invalid"
+  exit 1
+fi
+TRUSTED_FAILED_JOBS_FILE="$NORMALIZED_TRUSTED_FAILED_JOBS_FILE"
+
+FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
+TEST_EVIDENCE_STATE=$(jq -r 'if (type == "object") then (.state // "") else "" end' "$TEST_EVIDENCE_FILE")
+case "$TEST_EVIDENCE_STATE" in
+  unavailable)
+    echo "::error::Trusted test evidence is unavailable"
+    exit 1
+    ;;
+  complete)
+    ;;
+  not-applicable)
+    if [ "$FAILED_TEST_COUNT" -ne 0 ]; then
+      echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "::error::Trusted test evidence state is invalid"
+    exit 1
+    ;;
+esac
+
+if [ "$TEST_EVIDENCE_STATE" = "complete" ]; then
+  TRUSTED_TEST_FAILURES_FILE="ci-failure-data/test-failures.json"
+  if [ ! -f "$TRUSTED_TEST_FAILURES_FILE" ] ||
+     ! bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+       sanitize-trusted-test-failures \
+       "$TRUSTED_TEST_FAILURES_FILE" \
+       "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE"; then
+    echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+    exit 1
+  fi
+
+  if ! jq -e \
+    --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" \
+    --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+      ([.failed_tests[] | [.name, .job]]) as $reported_pairs |
+      ([$trusted_tests[0][] | [.test, .job]]) as $trusted_pairs |
+      ($reported_pairs | length) == ($reported_pairs | unique | length) and
+      ($trusted_pairs | length) == ($trusted_pairs | unique | length) and
+      ($reported_pairs | sort) == ($trusted_pairs | sort) and
+      all(.failed_tests[]; . as $reported |
+        any($trusted_jobs[0][]; .name == $reported.job))
+    ' "$ANALYSIS_FILE" >/dev/null; then
+    echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+    exit 1
+  fi
+
+  if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
+    jq \
+      --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" '
+        .failed_tests |= map(
+          . as $reported |
+          ([
+            $trusted_tests[0][] |
+            select(.test == $reported.name and .job == $reported.job)
+          ][0]) as $trusted |
+          .error = $trusted.error |
+          .stack_trace = $trusted.stack_trace)
+      ' "$ANALYSIS_FILE" > "$BOUND_ANALYSIS_FILE"
+    mv "$BOUND_ANALYSIS_FILE" "$ANALYSIS_FILE"
+  fi
 fi
 
 case "${TRUSTED_RUN_SCOPE}:${VERDICT}" in
   main:transient-infra|main:flaky-test|main:main-repository-breakage|main:mixed|pull-request:transient-infra|pull-request:flaky-test|pull-request:code-issue|pull-request:mixed)
     ;;
   *)
-    echo "::error::Verdict '${VERDICT}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
+    echo "::error::Verdict ${VERDICT_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
     exit 1
     ;;
 esac
+
+MAX_CAUSE_COUNT=10
+CAUSE_FILES=()
+if [ -d "$CAUSES_DIR" ]; then
+  shopt -s nullglob
+  CAUSE_FILES=("$CAUSES_DIR"/*.json)
+  shopt -u nullglob
+fi
+SUMMARY_CAUSE_COUNT=$(jq '.causes | length' "$ANALYSIS_FILE")
+if [ "$SUMMARY_CAUSE_COUNT" -gt "$MAX_CAUSE_COUNT" ] ||
+   [ "${#CAUSE_FILES[@]}" -gt "$MAX_CAUSE_COUNT" ]; then
+  echo "::error::Analysis exceeds the ${MAX_CAUSE_COUNT}-cause publication budget"
+  exit 1
+fi
 
 CAUSE_COUNT=0
 INFRA_CAUSE_COUNT=0
@@ -96,14 +216,12 @@ MAIN_BREAK_CAUSE_COUNT=0
 INFRA_CAUSE_JOB_IDS='[]'
 FLAKY_CAUSE_JOB_IDS='[]'
 MAIN_BREAK_CAUSE_JOB_IDS='[]'
-SUMMARY_CAUSE_COUNT=$(jq '.causes | length' "$ANALYSIS_FILE")
 UNIQUE_SUMMARY_CAUSE_COUNT=$(jq '.causes | unique | length' "$ANALYSIS_FILE")
 FAILED_JOB_COUNT=$(jq '[.failed_jobs[]?] | length' "$ANALYSIS_FILE")
 INFRA_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "transient-infra")] | length' "$ANALYSIS_FILE")
 FLAKY_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "flaky-test")] | length' "$ANALYSIS_FILE")
 CODE_ISSUE_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 MAIN_BREAK_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "main-repository-breakage")] | length' "$ANALYSIS_FILE")
-FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
 FLAKY_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "flaky")] | length' "$ANALYSIS_FILE")
 CODE_ISSUE_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 KNOWN_JOB_COUNT=$((INFRA_JOB_COUNT + FLAKY_JOB_COUNT + CODE_ISSUE_JOB_COUNT + MAIN_BREAK_JOB_COUNT))
@@ -126,38 +244,55 @@ if { [ "$TRUSTED_RUN_SCOPE" = "main" ] && [ "$CODE_ISSUE_JOB_COUNT" -ne 0 ]; } |
   exit 1
 fi
 
-if [ -d "$CAUSES_DIR" ]; then
-  for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
-    [ -f "$CAUSE_FILE" ] || continue
+if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
+  for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
+    CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+    # %q keeps rejected untrusted values on one physical line so they cannot
+    # start a second GitHub Actions workflow command.
+    printf -v CAUSE_BASENAME_DISPLAY '%q' "$CAUSE_BASENAME"
     if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
-      echo "::error::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+      echo "::error::Invalid JSON in cause file: ${CAUSE_BASENAME_DISPLAY}"
       exit 1
     fi
 
-    CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+    bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+      sanitize-cause "$CAUSE_FILE" "${CAUSE_FILE}.tmp"
+    mv "${CAUSE_FILE}.tmp" "$CAUSE_FILE"
     if ! jq -e '
+      def safe_single_line($max_length):
+        type == "string" and
+        length <= $max_length and
+        (test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]") | not) and
+        all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
+      def safe_multiline($max_length):
+        type == "string" and
+        length <= $max_length and
+        ((gsub("[\t\n]"; "") | test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]")) | not) and
+        all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
       (type == "object") and
       ((keys - ["error_pattern", "id", "job_ids", "test_name", "title", "type"]) | length == 0) and
       ((.id | type) == "string") and
       ((.type | type) == "string") and
-      ((.title | type) == "string") and
-      ((.error_pattern | type) == "string") and
+      ((.title | safe_single_line(238)) and (.title | test("[^[:space:]]"))) and
+      ((.error_pattern | safe_multiline(500)) and (.error_pattern | test("[^[:space:]]"))) and
       ((.job_ids | type) == "array" and (.job_ids | length) > 0) and
       (all(.job_ids[]; type == "number" and . > 0 and . == floor)) and
       ((.job_ids | unique | length) == (.job_ids | length)) and
-      ((.test_name // "") | type == "string")
+      ((.test_name // "") | safe_single_line(500)) and
+      (.type != "infra-failure" or (.test_name // "") == "")
     ' "$CAUSE_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} contains unsupported or publisher-owned fields"
       exit 1
     fi
     CAUSE_ID=$(jq -r '.id // ""' "$CAUSE_FILE")
     CAUSE_TYPE=$(jq -r '.type // ""' "$CAUSE_FILE")
+    printf -v CAUSE_TYPE_DISPLAY '%q' "$CAUSE_TYPE"
     if [[ ! "$CAUSE_ID" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || [ "${CAUSE_ID}.json" != "$CAUSE_BASENAME" ]; then
-      echo "::error::Cause ID must be a lowercase hyphenated slug matching its filename: ${CAUSE_BASENAME}"
+      echo "::error::Cause ID must be a lowercase hyphenated slug matching its filename: ${CAUSE_BASENAME_DISPLAY}"
       exit 1
     fi
     if ! jq -e --arg cause_id "$CAUSE_ID" '.causes | index($cause_id) != null' "$ANALYSIS_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} is not referenced by the analysis summary"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} is not referenced by the analysis summary"
       exit 1
     fi
 
@@ -165,7 +300,7 @@ if [ -d "$CAUSES_DIR" ]; then
       main:flaky-test|main:infra-failure|main:main-repository-breakage|pull-request:flaky-test|pull-request:infra-failure)
         ;;
       *)
-        echo "::error::Cause ${CAUSE_BASENAME} type '${CAUSE_TYPE}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
+        echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} type ${CAUSE_TYPE_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
         exit 1
         ;;
     esac
@@ -187,21 +322,31 @@ if [ -d "$CAUSES_DIR" ]; then
               $classification == "main-repository-breakage"
             else
               $classification == "flaky-test" or
-                any($analysis[0].failed_tests[];
-                  .classification == "flaky" and .job == ($trusted_job.name // ""))
+                ((($classification == "code-issue") or ($classification == "main-repository-breakage")) and
+                  any($analysis[0].failed_tests[];
+                    .classification == "flaky" and .job == ($trusted_job.name // "")))
             end)
         )
       ' "$CAUSE_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} references an unknown or incompatible failed job"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} references an unknown or incompatible failed job"
       exit 1
     fi
 
     PRIOR_CAUSE_FILE="ci-failure-data/prior-causes/${CAUSE_BASENAME}"
     if [ -f "$PRIOR_CAUSE_FILE" ]; then
       PRIOR_CAUSE_TYPE=$(jq -r '.type // ""' "$PRIOR_CAUSE_FILE")
+      printf -v PRIOR_CAUSE_TYPE_DISPLAY '%q' "$PRIOR_CAUSE_TYPE"
       if [ "$PRIOR_CAUSE_TYPE" != "$CAUSE_TYPE" ]; then
-        echo "::error::Cause ${CAUSE_BASENAME} cannot change type from '${PRIOR_CAUSE_TYPE}' to '${CAUSE_TYPE}'"
+        echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
         exit 1
+      fi
+      if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+        PRIOR_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$PRIOR_CAUSE_FILE")
+        CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
+        if [ "$PRIOR_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
+          echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change stored test_name"
+          exit 1
+        fi
       fi
     fi
 
@@ -321,4 +466,51 @@ if ! jq -e \
 ' "$ANALYSIS_FILE" >/dev/null; then
   echo "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause"
   exit 1
+fi
+
+if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
+  for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
+    if [ "$(jq -r '.type // ""' "$CAUSE_FILE")" = "flaky-test" ]; then
+      CAUSE_TEST_NAME=$(jq -r '.test_name // ""' "$CAUSE_FILE")
+      if ! jq -e --arg test_name "$CAUSE_TEST_NAME" '
+        any(.failed_tests[];
+          .classification == "flaky" and .name == $test_name)
+      ' "$ANALYSIS_FILE" >/dev/null; then
+        echo "::error::Flaky-test cause must reference a validated flaky test"
+        exit 1
+      fi
+      if ! jq -e \
+          --arg test_name "$CAUSE_TEST_NAME" \
+          --slurpfile analysis "$ANALYSIS_FILE" \
+          --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+          all(.job_ids[]; . as $job_id |
+            ([$trusted_jobs[0][] | select(.id == $job_id)][0].name // "") as $job_name |
+            any($analysis[0].failed_tests[];
+              .classification == "flaky" and
+              .name == $test_name and
+              .job == $job_name))
+        ' "$CAUSE_FILE" >/dev/null; then
+        printf -v CAUSE_FILE_DISPLAY '%q' "$(basename "$CAUSE_FILE")"
+        echo "::error::Cause ${CAUSE_FILE_DISPLAY} references an unknown or incompatible failed job"
+        exit 1
+      fi
+    fi
+  done
+fi
+
+if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ] &&
+   [[ "${TRUSTED_PR_NUMBERS:-}" =~ ^[1-9][0-9]*$ ]]; then
+  COMMENT_FILE=$(mktemp)
+  if ! bash "$SCRIPT_DIR/analyze-ci-failure-comment.sh" \
+      "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_URL" > "$COMMENT_FILE"; then
+    rm -f "$COMMENT_FILE"
+    echo "::error::Unable to render the PR comment during validation"
+    exit 1
+  fi
+  COMMENT_BYTES=$(wc -c < "$COMMENT_FILE" | tr -d '[:space:]')
+  rm -f "$COMMENT_FILE"
+  if [ "$COMMENT_BYTES" -gt 65000 ]; then
+    echo "::error::Rendered PR comment exceeds the 65000-byte publication budget"
+    exit 1
+  fi
 fi

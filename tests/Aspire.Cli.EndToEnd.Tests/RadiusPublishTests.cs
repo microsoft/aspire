@@ -84,9 +84,11 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         var content = File.ReadAllText(appHostFilePath);
         const string buildRunPattern = "builder.Build().Run();";
         Assert.Contains(buildRunPattern, content);
+        const string initialImage = "nginx:1.27.0";
+        const string updatedImage = "nginx:1.28.0";
         const string radiusWiring = """
             builder.AddRadiusEnvironment("radius");
-            builder.AddContainer("web", "nginx");
+            builder.AddContainer("web", "nginx:1.27.0");
             """;
         content = content.Replace(buildRunPattern, radiusWiring + Environment.NewLine + Environment.NewLine + buildRunPattern);
         File.WriteAllText(appHostFilePath, content);
@@ -98,10 +100,12 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Drive aspire publish. On success the pipeline exits 0 and
+        // Start with --no-build on a fresh file AppHost. The CLI must still perform its mandatory
+        // safety build before running the publish model, including when an extension owns launch.
+        // On success the pipeline exits 0 and
         // WaitForSuccessPromptAsync matches the ` OK] $ ` prompt (it throws on an
         // ` ERR:` prompt), so this both waits for completion and asserts exit 0.
-        await auto.TypeAsync("aspire publish -o radius-output --non-interactive");
+        await auto.TypeAsync("aspire publish --no-build -o radius-output-v1 --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
@@ -109,7 +113,7 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         // single compute environment the publisher writes flat root output, so we
         // assert exact paths rather than searching recursively — a nested or
         // mislocated layout should fail the test.
-        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName, "radius-output");
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName, "radius-output-v1");
 
         var appBicepPath = Path.Combine(outputDir, "app.bicep");
         Assert.True(File.Exists(appBicepPath), $"Expected generated Bicep at '{appBicepPath}'.");
@@ -121,7 +125,7 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         // The container translation ran — without this the test would still pass if
         // AddContainer were silently omitted.
         Assert.Contains("Radius.Compute/containers", appBicep);
-        Assert.Contains("nginx", appBicep);
+        Assert.Contains(initialImage, appBicep);
 
         var bicepConfigPath = Path.Combine(outputDir, "bicepconfig.json");
         Assert.True(File.Exists(bicepConfigPath), $"Expected generated bicepconfig.json at '{bicepConfigPath}'.");
@@ -141,5 +145,26 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         // prefix with no version would otherwise satisfy StartsWith. The exact
         // version is intentionally not pinned to avoid churn when the pin bumps.
         Assert.NotEmpty(radiusExtension![radiusExtensionPrefix.Length..]);
+
+        // Change the model after the first publish and use a separate output directory so stale
+        // artifacts cannot satisfy the assertion. The second publish must rebuild before
+        // dotnet run --no-build --file and therefore emit the updated image.
+        content = File.ReadAllText(appHostFilePath);
+        Assert.Contains(initialImage, content);
+        content = content.Replace(initialImage, updatedImage, StringComparison.Ordinal);
+        File.WriteAllText(appHostFilePath, content);
+
+        await auto.TypeAsync("aspire publish -o radius-output-v2 --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+
+        var updatedAppBicepPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ProjectName,
+            "radius-output-v2",
+            "app.bicep");
+        Assert.True(File.Exists(updatedAppBicepPath), $"Expected updated Bicep at '{updatedAppBicepPath}'.");
+        var updatedAppBicep = File.ReadAllText(updatedAppBicepPath);
+        Assert.Contains(updatedImage, updatedAppBicep);
     }
 }

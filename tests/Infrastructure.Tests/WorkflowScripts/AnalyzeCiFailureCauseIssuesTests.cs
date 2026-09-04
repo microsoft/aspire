@@ -214,6 +214,122 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PublishUpdatesManagedOccurrenceSectionAndPreservesTotalCount()
+    {
+        var cause = CreateCause();
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause,
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            Preserve this issue description.
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 2 most recent of 2 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        Assert.Contains("Preserve this issue description.", body, StringComparison.Ordinal);
+        Assert.Contains("Showing 3 most recent of 3 occurrences.", body, StringComparison.Ordinal);
+        Assert.Contains("[100](", body, StringComparison.Ordinal);
+        Assert.Contains("[200](", body, StringComparison.Ordinal);
+        Assert.Contains("[991](", body, StringComparison.Ordinal);
+        Assert.EndsWith("<!-- ci-failure-occurrences:end -->\n", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishTrimsOldestOccurrencesToStayWithinBodyBudget()
+    {
+        var cause = CreateCause();
+        var largePrefix = $"""
+            <!-- ci-failure-cause:worker-crash -->
+            <!-- ci-failure-cause-type:infra-failure -->
+
+            {new string('x', 64_400)}
+
+            """;
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause,
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = largePrefix + """
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 2 most recent of 2 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(body) <= 65_000);
+        Assert.DoesNotContain("[100](", body, StringComparison.Ordinal);
+        Assert.Contains("[991](", body, StringComparison.Ordinal);
+        Assert.Contains("most recent of 3 occurrences.", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishReusesIssueWithCanonicalCauseAlias()
     {
         var result = await InvokeHarnessAsync<PublishResult>(
@@ -270,6 +386,35 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PublishTreatsCauseFieldsAsLiteralMarkdown()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "flaky-test",
+                    title = "Worker `crash`",
+                    test_name = "Tests.`Flaky`",
+                    error_pattern = "Failure\n```\n# heading",
+                    job_names = new[] { "Build `Windows`" }
+                },
+                issues = Array.Empty<object>()
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        Assert.DoesNotContain("\n```\n", body, StringComparison.Ordinal);
+        Assert.Contains("    Failure\n    ```\n    # heading", body, StringComparison.Ordinal);
+        Assert.Contains("`` Tests.`Flaky` ``", body, StringComparison.Ordinal);
+        Assert.Contains("`` Worker `crash` ``", body, StringComparison.Ordinal);
+        Assert.Contains("`` Build `Windows` ``", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishDoesNotRenderUnavailablePrAsNumber()
     {
         var result = await InvokeHarnessAsync<PublishResult>(
@@ -303,7 +448,8 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                 {
                     lastSuccessfulSha = "1111111111111111111111111111111111111111",
                     failedSha = "2222222222222222222222222222222222222222",
-                    triggeringMerge = "#42 Improve CI"
+                    candidateHistoryState = "available",
+                    triggeringMerge = new { number = 42, title = "Improve `CI`" }
                 }
             });
 
@@ -316,10 +462,71 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             StringComparison.Ordinal);
         Assert.Contains("Last successful main SHA: `1111111111111111111111111111111111111111`", issue.Body, StringComparison.Ordinal);
         Assert.Contains("Failed main SHA: `2222222222222222222222222222222222222222`", issue.Body, StringComparison.Ordinal);
-        Assert.Contains("Triggering merge PR (context only, not necessarily causal): #42 Improve CI", issue.Body, StringComparison.Ordinal);
+        Assert.Contains(
+            "Triggering merge PR (context only, not necessarily causal): #42 `` Improve `CI` ``",
+            issue.Body,
+            StringComparison.Ordinal);
         Assert.Equal(
             "https://github.com/microsoft/aspire/issues/1000",
             result.StoredCause.GetProperty("issue_url").GetString());
+    }
+
+    [Theory]
+    [InlineData("incomplete")]
+    [InlineData("unavailable")]
+    [RequiresTools(["node"])]
+    public async Task PublishDoesNotExposeMainAttributionWithoutCompleteHistory(string candidateHistoryState)
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(type: "main-repository-breakage"),
+                issues = Array.Empty<object>(),
+                runScope = "main",
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222",
+                    candidateHistoryState,
+                    triggeringMerge = new { number = 42, title = "Must not be rendered" }
+                }
+            });
+
+        Assert.DoesNotContain("Triggering merge PR", Assert.Single(result.Issues).Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishSkipsNewIssueWhenRenderedBodyExceedsPublicationBudget()
+    {
+        var cause = new
+        {
+            id = "worker-crash",
+            type = "infra-failure",
+            title = "Worker process crashed",
+            error_pattern = new string('x', 65_000),
+            job_names = new[] { "Build / Windows" }
+        };
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause,
+                storedCause = cause,
+                issues = Array.Empty<object>()
+            });
+
+        Assert.Null(result.Publish);
+        Assert.Empty(result.Issues);
+        Assert.DoesNotContain("create", result.Calls);
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains(
+                "Cause issue body exceeds the 65000-byte publication budget. Skipping issue creation.",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -365,6 +572,7 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
     private sealed record PublishResult(
         PublishSummary Publish,
         string[] Calls,
+        string[] Warnings,
         IssueState[] Issues,
         JsonElement StoredCause);
 
