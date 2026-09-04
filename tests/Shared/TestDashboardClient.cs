@@ -85,9 +85,25 @@ public class TestDashboardClient : IDashboardClient
         return Task.FromResult(Guid.NewGuid().ToString("N"));
     }
 
-    public Task<Stream> AttachInteractionTerminalAsync(int interactionId, string inputName, CancellationToken cancellationToken)
+    public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         return Task.FromResult<Stream>(new MemoryStream());
+    }
+
+    public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
+    public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
     }
 
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
