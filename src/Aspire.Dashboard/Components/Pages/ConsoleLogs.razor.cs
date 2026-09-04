@@ -761,13 +761,15 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 Icon = new Icons.Regular.Size16.CalendarClock()
             });
 
-            _logsMenuItems.Add(new()
+            if (_showTimestamp)
             {
-                OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
-                Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
-                IsDisabled = !_showTimestamp
-            });
+                _logsMenuItems.Add(new()
+                {
+                    OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
+                    Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
+                    Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked()
+                });
+            }
 
             _logsMenuItems.Add(new()
             {

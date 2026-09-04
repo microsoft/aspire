@@ -140,6 +140,47 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
+    public async Task ConsoleLogs_TimestampDisabled_HidesUtcTimestampOption()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("test-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "test-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "test-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+
+        // Switch to Console view so standard console log menu items are populated
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ConsoleLogs>>();
+        var utcText = loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)].Value;
+
+        // Timestamps are off by default: UTC timestamps option should be hidden
+        Assert.DoesNotContain(instance.LogsMenuItemsForTest, item => item.Text == utcText);
+    }
+
+    [Fact]
     public async Task TerminalResource_PausedConsoleLogs_DisplaysWarningOnTerminalView()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
