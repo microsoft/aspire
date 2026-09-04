@@ -755,11 +755,11 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
     // Layer 1 reports the full affected set, which can include tests/ projects that are NOT in the
     // runnable matrix (shared fixtures/helpers like a TestFixtures or testproject project). Those names
-    // are intersected with the matrix before selection, so they must never be selected as a test (only
-    // an affected_project_rule may reference such a name by name). Failure mode: a non-runnable project
-    // leaking into the matrix.
+    // are intersected with the matrix before selection and excluded from affected_project_rules, so they
+    // must never be selected as a test or drive a project rule. Failure mode: a non-runnable project
+    // leaking into the matrix or production-project rules.
     [Fact]
-    public void Layer1AffectedNonMatrixTestNameIsNotSelected()
+    public void Layer1AffectedNonRunnableTestNameIsNotSelected()
     {
         var r = Select([], layer1: ["TestFixtures.Shared", "testproject"]);
 
@@ -768,12 +768,13 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Empty(r.Jobs);
     }
 
-    // Layer 1 reports both matrix and non-matrix projects. affected_project_rules key off project-name
-    // globs but exclude matrix test projects, which are already handled by the Layer 1 intersection.
-    // Without that exclusion, a test-only matrix project ("Aspire.Hosting.Foo.Tests") would spuriously
-    // fire jobs attached to a broad project rule such as "Aspire.Hosting*".
+    // Layer 1 reports both matrix test projects and production/non-test projects.
+    // affected_project_rules key off project-name globs but exclude every project under tests/,
+    // which is already handled by the Layer 1 intersection or explicit test rules. Without that
+    // exclusion, a test-only project ("Aspire.Hosting.Foo.Tests") would spuriously fire jobs
+    // attached to a broad project rule such as "Aspire.Hosting*".
     [Fact]
-    public void AffectedProjectRulesMatchNonMatrixProjectsNotMatrixTests()
+    public void AffectedProjectRulesMatchProductionProjectsNotTestProjects()
     {
         const string map = """
             version: 1
@@ -792,9 +793,9 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Contains("Aspire.Hosting.Foo.Tests", testOnly.TestProjects);
         Assert.DoesNotContain("job:prodjob", testOnly.Jobs);
 
-        // A non-matrix project of the same name prefix DOES drive the rule.
-        var nonMatrix = selector.Select([], ["Aspire.Hosting.Foo"], new SelectorOptions());
-        Assert.Contains("job:prodjob", nonMatrix.Jobs);
+        // A production/non-test project of the same name prefix DOES drive the rule.
+        var productionProject = selector.Select([], ["Aspire.Hosting.Foo"], new SelectorOptions());
+        Assert.Contains("job:prodjob", productionProject.Jobs);
     }
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------

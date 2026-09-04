@@ -32,7 +32,7 @@ public enum CauseKind
     /// <summary>A changed file matched a <c>path_rules</c> glob (<see cref="Cause.Trigger"/> is the file; <see cref="Cause.Reason"/> is the rule's <c>reason</c>).</summary>
     PathRule,
 
-    /// <summary>An affected non-matrix project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
+    /// <summary>An affected production/non-test project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
     AffectedProject,
 
     /// <summary>The Layer 1 MSBuild graph marked this test project affected by a changed source file (<see cref="Cause.Trigger"/> is the project name).</summary>
@@ -138,9 +138,9 @@ public sealed class TestSelector
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
     /// <param name="layer1Affected">
-    /// The full affected project set reported by the graph tool — matrix <em>and</em> non-matrix
-    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Matrix test names
-    /// are intersected and selected; non-matrix names drive <c>affected_project_rules</c>. May be empty.
+    /// The full affected project set reported by the graph tool. The selector splits this by
+    /// current CI boundaries: matrix test projects are intersected and selected; production/non-test
+    /// project names drive <c>affected_project_rules</c>. May be empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
     /// <param name="layer1AttributedPaths">
@@ -247,7 +247,7 @@ public sealed class TestSelector
         }
 
         // Layer 1 reports the full affected set. Affected matrix test projects are always part of the
-        // answer; non-matrix project names drive affected_project_rules below.
+        // answer; production/non-test project names drive affected_project_rules below.
         foreach (var project in layer1Affected)
         {
             if (_allTestProjects.Contains(project))
@@ -264,7 +264,7 @@ public sealed class TestSelector
             }
         }
 
-        // affected_project_rules: an affected non-matrix project (matched by name glob) pulls in
+        // affected_project_rules: an affected production/non-test project (matched by name glob) pulls in
         // jobs/tests. This replaces the duplicated src/<Project>/** path globs the job rules used to
         // carry, and follows the graph's transitive closure (a dependency change marks the project
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
