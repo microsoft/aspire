@@ -494,8 +494,8 @@ internal static class Hex1bAutomatorTestHelpers
     /// Used by tests that need to drive the chained agent-init flow instead of declining it via
     /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
     /// project has been scaffolded but before the prompt is accepted, so callers can seed a
-    /// detectable agent environment (e.g. a <c>.vscode</c> folder inside the new project) before
-    /// the chained scan runs.
+    /// detectable agent environment (e.g. a <c>.vscode</c> folder in the CLI's working directory)
+    /// before the chained scan runs.
     /// </summary>
     internal static async Task AspireNewAcceptingAgentInitAsync(
         this Hex1bTerminalAutomator auto,
