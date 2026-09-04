@@ -1,0 +1,29 @@
+{
+  "run_id": 33910459971,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33910459971",
+  "analyzed_at": "2026-09-04T19:58:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19197,
+    "title": "Fix Foundry Local lifecycle and remote endpoints",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/fix-foundry-local",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19197"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 101148871388,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33910459971/job/101148871388",
+      "classification": "flaky-test",
+      "reason": "Process completed with exit code 1 with no retrievable job logs or TRX test failures. Matches known prior flaky pattern 'vscode-e2e-windows-dynamic-debug-configuration-flaky'. PR only modifies Aspire.Hosting.Foundry source/tests and polyglot apphost samples, unrelated to the VS Code extension codebase.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
