@@ -97,12 +97,6 @@ suite('Aspire auto-restore E2E', function () {
     test('automatically restores a stale non-.NET AppHost on activation and force-restores it via the manual command', async function () {
         this.timeout(600000);
 
-        // Wait for the extension's initial activation to settle before running the CPU/IO-heavy
-        // `aspire init` below. This is the first test in the suite, so nothing has already driven
-        // VS Code through a settled activation - starting `init` first would race the extension's
-        // own startup and workspace-open sequence for CPU/IO on a resource-constrained CI runner.
-        await waitForRepositoryIdle();
-
         // A real `aspire init` is the only way to get a guest-language AppHost whose on-disk
         // scaffolding matches what the extension's marker-based staleness check expects (Theme F3
         // added the `.codegen-version` write this flow depends on to the same `init` code path).
@@ -142,7 +136,9 @@ suite('Aspire auto-restore E2E', function () {
         //
         // `reloadWorkspaceForE2E()` reads the *current* state file first to capture a baseline
         // session id before reloading, with no retry - it assumes a prior activation already wrote
-        // one, which the wait above guarantees.
+        // one. Wait for the extension's initial activation to finish so that read doesn't race a
+        // cold start (activation can still be in flight this soon after the window first opened).
+        await waitForRepositoryIdle();
         await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
 
