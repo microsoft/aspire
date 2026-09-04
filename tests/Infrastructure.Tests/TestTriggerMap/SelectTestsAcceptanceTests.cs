@@ -828,6 +828,14 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded(".vscode/settings.json"));
         Assert.True(filter.IsExcluded("pyrightconfig.json"));
 
+        // Generated API/ATS baselines under src/*/api/: no PR CI is needed when these are the only
+        // changed files.
+        Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.cs"));
+        Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"));
+        Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
+        Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
+        Assert.False(filter.IsExcluded("src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.tscompat.suppression.txt"));
+
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
         // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), root
         // launch/task files are validated by extension tests, root .gitignore controls discovery of the
@@ -841,6 +849,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
         // Kept: real source the patterns file does not list.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Program.cs"));
+        Assert.False(filter.IsExcluded("src/Aspire.Hosting/HostingExtensions.cs"));
 
         // keep_routed carve-outs: listed by the patterns file but routed by the selector -> NOT dropped.
         Assert.False(filter.IsExcluded(".github/workflows/backport.yml"));
@@ -1037,29 +1046,40 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Empty(result.Jobs);
     }
 
-    // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
-    // same surface the per-language polyglot playground scripts regenerate and compile
-    // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
-    // baseline must therefore run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate +
-    // compile in every language), so a breaking surface change is caught even if the author did not also
-    // touch the tests/PolyglotAppHosts fixtures. Run with --skip-layer1 semantics (no Layer 1 affected
-    // set) to prove the curated layer independently preserves both targets.
+    // A checked-in API/ATS baseline under src/*/api/ is a generated release artifact: the top-level
+    // prefilter drops it (ci-skip-entirely-patterns.txt) before either layer runs, so a baseline-ONLY
+    // change selects nothing. When an integration's real source ALSO changes in the same PR, the
+    // baseline is still dropped by the prefilter, but the source file reaches Layer 1/the selector
+    // untouched and is selected via the normal project/path rules. This proves the mixed-change case
+    // still routes CI even though the dedicated *.ats.txt path rule was removed. Filters the changed
+    // files through ChangedFileFilter first, mirroring how Program.cs feeds Select (see RunCore).
     [Fact]
-    public void RealMapIntegrationAtsBaselineChangeRunsTypeScriptApiCompatAndPolyglot()
+    public void RealMapMixedAtsBaselineAndSourceChangeStillRoutesSourceNormally()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var matrix = EnumerateMatrixTestProjects();
         var selector = new TestSelector(mapPath, matrix, LoadProjectDirectories(), EnumerateAllTestProjects());
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
 
         var atsBaseline = FirstIntegrationAtsBaselineWithPolyglotFixture();
+        Assert.True(filter.IsExcluded(atsBaseline));
 
-        var r = selector.Select([atsBaseline], [], new SelectorOptions());
+        // Baseline-only: the prefilter drops the file before Select ever sees it -- selects nothing.
+        var baselineOnly = selector.Select([], [], new SelectorOptions());
+        Assert.False(baselineOnly.SelectsAll);
+        Assert.Empty(baselineOnly.TestProjects);
+        Assert.Empty(baselineOnly.Jobs);
 
-        Assert.False(r.SelectsAll);
-        Assert.Contains("job:typescript-api-compat", r.Jobs);
-        Assert.Contains("job:polyglot", r.Jobs);
-        Assert.Contains(r.JobCauses["job:typescript-api-compat"], cause => cause.Kind == CauseKind.PathRule);
-        Assert.Contains(r.JobCauses["job:polyglot"], cause => cause.Kind == CauseKind.PathRule);
+        // Mixed: the baseline is still dropped by the prefilter, but the integration's own source file
+        // (Layer 1-owned, not a prefilter match) still routes normally through Layer 1 / project rules.
+        var integrationName = atsBaseline.Split('/')[1];
+        var sourceFile = $"src/{integrationName}/{integrationName}.csproj";
+        Assert.False(filter.IsExcluded(sourceFile));
+        var mixed = selector.Select([sourceFile], [integrationName], new SelectorOptions());
+        Assert.False(mixed.SelectsAll);
+        Assert.NotEmpty(mixed.TestProjects.Union(mixed.Jobs));
+        Assert.Contains("job:polyglot", mixed.Jobs);
     }
 
     [Fact]
