@@ -357,6 +357,14 @@ internal sealed class TerminalReplica : IAsyncDisposable
     /// </summary>
     private Hex1bTerminal BuildTerminal()
     {
+        int currentColumns;
+        int currentRows;
+        lock (_gate)
+        {
+            currentColumns = _currentColumns;
+            currentRows = _currentRows;
+        }
+
         // Pre-delete any stale UDS files at our paths before Hex1b tries to bind. Without
         // this, a previous host that crashed (or a stuck previous cycle that didn't get
         // to clean teardown) leaves a file at the same path, and Hmp1Transports.ListenUnixSocket
@@ -388,7 +396,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
             {
                 _logger.LogInformation(
                     "Awaiting DCP producer connection on '{ProducerUdsPath}' (cols={Cols}, rows={Rows}).",
-                    ProducerUdsPath, Columns, Rows);
+                    ProducerUdsPath, currentColumns, currentRows);
                 await foreach (var stream in Hmp1Transports.ListenUnixSocket(ProducerUdsPath, cct).ConfigureAwait(false))
                 {
                     int restartCount;
@@ -423,22 +431,35 @@ internal sealed class TerminalReplica : IAsyncDisposable
         // 80x24 default, which then overrides WithDimensions during Build(). Construct
         // the adapter directly so both its Hello frames and the upstream PTY start with
         // the dimensions configured by WithTerminal.
-        var downstream = CreateDownstream(upstream);
+        var downstream = CreateDownstream(upstream, currentColumns, currentRows);
+        var listener = new Hmp1UdsServerListenerFilter(
+            ConsumerUdsPath,
+            downstream,
+            _consumerListenerLogger,
+            upstream.ReportConsumerListenerFailure);
 
-        return Hex1bTerminal.CreateBuilder()
-            .WithDimensions(Columns, Rows)
-            .WithWorkload(upstream)
-            .WithPresentation(downstream)
-            .AddPresentationFilter(new Hmp1UdsServerListenerFilter(
-                ConsumerUdsPath,
-                downstream,
-                _consumerListenerLogger))
-            .Build();
+        try
+        {
+            return Hex1bTerminal.CreateBuilder()
+                .WithDimensions(currentColumns, currentRows)
+                .WithWorkload(upstream)
+                .WithPresentation(downstream)
+                .AddPresentationFilter(listener)
+                .Build();
+        }
+        catch
+        {
+            listener.Dispose();
+            throw;
+        }
     }
 
-    private Hmp1PresentationAdapter CreateDownstream(DcpUpstreamAdapter upstream)
+    private Hmp1PresentationAdapter CreateDownstream(
+        DcpUpstreamAdapter upstream,
+        int currentColumns,
+        int currentRows)
     {
-        var downstream = new Hmp1PresentationAdapter(Columns, Rows);
+        var downstream = new Hmp1PresentationAdapter(currentColumns, currentRows);
 
         // Track every HMP1 peer that connects/disconnects so the host can answer
         // "who's currently attached to this replica?" via the control RPC. PeerId is

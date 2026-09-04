@@ -63,7 +63,10 @@ public class DashboardServerFixture : IAsyncLifetime
             preConfigureBuilder: builder =>
             {
                 builder.Configuration.AddConfiguration(config);
-                builder.Services.AddSingleton<IDashboardClient>(new MockDashboardClient(Resources));
+                var dashboardClient = new MockDashboardClient(Resources);
+                builder.Services.AddSingleton<IDashboardClient>(dashboardClient);
+                builder.Services.AddSingleton<IRepositoryFactory>(
+                    services => new MockRepositoryFactory(services, dashboardClient));
                 ConfigureServices(builder.Services);
             });
 

@@ -40,7 +40,7 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
 
             var terminalScreen = page.Locator(".xterm-screen");
             var decreaseFontButton = page.Locator("#font-minus");
-            var settingsButton = page.Locator($"fluent-button[title='{Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings}'][aria-haspopup='menu']").First;
+            var resourceSelect = page.Locator("[id^='resource-select-']");
 
             await Assertions.Expect(terminalScreen).ToBeVisibleAsync();
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
@@ -49,12 +49,12 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
             await page.Keyboard.PressAsync("F6");
             Assert.Equal("font-minus", await page.EvaluateAsync<string?>("() => document.activeElement?.id"));
 
-            var settingsButtonId = await settingsButton.GetAttributeAsync("id");
-            Assert.False(string.IsNullOrEmpty(settingsButtonId));
+            var resourceSelectId = await resourceSelect.GetAttributeAsync("id");
+            Assert.False(string.IsNullOrEmpty(resourceSelectId));
 
             await terminalScreen.ClickAsync();
             await page.Keyboard.PressAsync("Shift+F6");
-            Assert.Equal(settingsButtonId, await page.EvaluateAsync<string?>("() => document.activeElement?.id"));
+            Assert.Equal(resourceSelectId, await page.EvaluateAsync<string?>("() => document.activeElement?.id"));
 
             // Follow the intercepted F6 events with ordinary input. HMP preserves
             // frame ordering, so the first Input frame must be this character; an
@@ -92,7 +92,40 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         });
     }
 
-    private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page)
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task InitialPrimaryHello_UsesProducerDimensions()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page, makeClientPrimary: true);
+
+            var dimensions = page.Locator("#terminal-dims");
+            await Assertions.Expect(dimensions).ToHaveValueAsync($"{ProducerColumns}x{ProducerRows}");
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ModifiedF6_DoesNotMoveFocusFromTerminal()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+
+            var terminalScreen = page.Locator(".xterm-screen");
+            var terminalInput = page.Locator(".xterm-helper-textarea");
+            foreach (var key in new[] { "Control+F6", "Alt+F6", "Meta+F6" })
+            {
+                await terminalScreen.ClickAsync();
+                await page.Keyboard.PressAsync(key);
+
+                await Assertions.Expect(terminalInput).ToBeFocusedAsync();
+            }
+        });
+    }
+
+    private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page, bool makeClientPrimary = false)
     {
         await _dashboardServerFixture.TerminalResolver.DiscardPendingConnectionsAsync();
         await page.GotoAsync($"/consolelogs/resource/{ResourceName}").DefaultTimeout();
@@ -101,7 +134,11 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         var clientHello = await connection.ReadUntilFrameAsync(TestHmp1FrameType.ClientHello, CancellationToken.None).DefaultTimeout();
         Assert.NotEmpty(clientHello.Payload);
 
-        await connection.SendHelloAsync(ProducerColumns, ProducerRows, CancellationToken.None).DefaultTimeout();
+        await connection.SendHelloAsync(
+            ProducerColumns,
+            ProducerRows,
+            CancellationToken.None,
+            makeClientPrimary).DefaultTimeout();
         await connection.SendStateSyncAsync(CancellationToken.None).DefaultTimeout();
         return connection;
     }

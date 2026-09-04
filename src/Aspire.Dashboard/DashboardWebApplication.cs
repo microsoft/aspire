@@ -291,7 +291,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddHostedService<DashboardDataSourceInitializer>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
-        builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
+        builder.Services.TryAddScoped<IDashboardClient, SelectedDashboardClient>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -319,7 +319,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
-        builder.Services.AddSingleton<IRepositoryFactory, RepositoryFactory>();
+        builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
         // OTLP ingestion and telemetry mutations always target the current dashboard run, even when a browser circuit selects a historical run.
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
