@@ -7,8 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-if [ "$#" -ne 11 ]; then
-  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <run-url> <run-scope> <pr-number> <cause-jobs> <occurrence-row> <body-file> <metadata-file>" >&2
+if [ "$#" -ne 12 ]; then
+  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <candidate-history-status-file> <run-url> <run-scope> <pr-number> <cause-jobs> <occurrence-row> <body-file> <metadata-file>" >&2
   exit 1
 fi
 
@@ -16,13 +16,14 @@ CAUSE_FILE="$1"
 RUN_CONTEXT_FILE="$2"
 LAST_SUCCESSFUL_RUN_FILE="$3"
 TRIGGERING_MERGE_FILE="$4"
-RUN_URL="$5"
-RUN_SCOPE="$6"
-PR_NUMBER="$7"
-CAUSE_JOBS="$8"
-NEW_OCCURRENCE_ROW="$9"
-BODY_FILE="${10}"
-METADATA_FILE="${11}"
+CANDIDATE_HISTORY_STATUS_FILE="$5"
+RUN_URL="$6"
+RUN_SCOPE="$7"
+PR_NUMBER="$8"
+CAUSE_JOBS="$9"
+NEW_OCCURRENCE_ROW="${10}"
+BODY_FILE="${11}"
+METADATA_FILE="${12}"
 
 SANITIZED_CAUSE_FILE=$(mktemp)
 trap 'rm -f "$SANITIZED_CAUSE_FILE"' EXIT
@@ -62,14 +63,22 @@ TYPE_MARKER="<!-- ci-failure-cause-type:${CAUSE_TYPE} -->"
 if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
   LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // "unknown"' "$LAST_SUCCESSFUL_RUN_FILE")
   FAILED_SHA=$(jq -r '.head_sha // "unknown"' "$RUN_CONTEXT_FILE")
-  TRIGGERING_MERGE_NUMBER=$(jq -r 'if (.number | type) == "number" then .number else empty end' "$TRIGGERING_MERGE_FILE")
+  CANDIDATE_HISTORY_STATE=$(
+    jq -er '.state | select(. == "available" or . == "incomplete" or . == "unavailable")' \
+      "$CANDIDATE_HISTORY_STATUS_FILE" 2>/dev/null || printf 'unavailable'
+  )
+  if [ "$CANDIDATE_HISTORY_STATE" = "available" ]; then
+    TRIGGERING_MERGE_NUMBER=$(jq -r 'if (.number | type) == "number" then .number else empty end' "$TRIGGERING_MERGE_FILE")
+  else
+    TRIGGERING_MERGE_NUMBER=""
+  fi
   if [ -n "$TRIGGERING_MERGE_NUMBER" ]; then
     TRIGGERING_MERGE_TITLE=$(bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
       sanitize-json-field "$TRIGGERING_MERGE_FILE" title 238)
     TRIGGERING_MERGE_TITLE_CODE=$(render_code_span "$TRIGGERING_MERGE_TITLE")
     TRIGGERING_MERGE="#${TRIGGERING_MERGE_NUMBER} ${TRIGGERING_MERGE_TITLE_CODE}"
   else
-    TRIGGERING_MERGE="Not found"
+    TRIGGERING_MERGE=""
   fi
 fi
 
@@ -84,7 +93,9 @@ fi
     echo "Affected branch: \`main\`"
     echo "Last successful main SHA: \`${LAST_SUCCESSFUL_SHA}\`"
     echo "Failed main SHA: \`${FAILED_SHA}\`"
-    echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
+    if [ -n "$TRIGGERING_MERGE" ]; then
+      echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
+    fi
   elif [ -n "$TEST_NAME" ]; then
     echo "Build error leg or test failing: ${CAUSE_JOBS} / ${TEST_NAME_CODE}"
   else

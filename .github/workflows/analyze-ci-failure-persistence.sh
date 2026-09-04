@@ -53,6 +53,7 @@ sanitize_document()
         .failed_tests |= map(
           if type == "object" then
             if (.name | type) == "string" then .name |= (sanitize_single_line | .[0:500]) else . end |
+            if (.job | type) == "string" then .job |= (sanitize_single_line | .[0:500]) else . end |
             if (.error | type) == "string" then .error |= (sanitize_multiline | .[0:1000]) else . end |
             if (.stack_trace | type) == "string" then .stack_trace |= (sanitize_multiline | .[0:2000]) else . end |
             if (.reason | type) == "string" then .reason |= (sanitize_single_line | .[0:500]) else . end
@@ -64,6 +65,53 @@ sanitize_document()
       end
     else
       error("unsupported document type")
+    end
+  ' "$input_file" > "$output_file"
+}
+
+sanitize_trusted_failed_jobs()
+{
+  local input_file="$1"
+  local output_file="$2"
+
+  jq "$JQ_SANITIZE_DEFS"'
+    if type != "array" then
+      error("trusted failed jobs must be an array")
+    else
+      map(
+        if type == "object" and (.id | type) == "number" and (.name | type) == "string" then
+          .name |= (sanitize_single_line | .[0:500])
+        else
+          error("trusted failed job has an invalid shape")
+        end)
+    end
+  ' "$input_file" > "$output_file"
+}
+
+sanitize_trusted_test_failures()
+{
+  local input_file="$1"
+  local output_file="$2"
+
+  jq "$JQ_SANITIZE_DEFS"'
+    if type != "array" then
+      error("trusted test failures must be an array")
+    else
+      map(
+        if type == "object" and
+           (.test | type) == "string" and
+           ((.test | sanitize_single_line | length) > 0) and
+           (.error | type) == "string" and
+           ((.stack_trace == null) or (.stack_trace | type) == "string") then
+          {
+            test: (.test | sanitize_single_line | .[0:500]),
+            error: (.error | sanitize_multiline | .[0:1000]),
+            stack_trace: ((.stack_trace // "") | sanitize_multiline | .[0:2000])
+          }
+        else
+          error("trusted test failure has an invalid shape")
+        end) |
+      unique_by([.test, .error, .stack_trace])
     end
   ' "$input_file" > "$output_file"
 }
@@ -408,6 +456,16 @@ case "$COMMAND" in
   pr-number)
     trusted_pr_number
     ;;
+  sanitize-trusted-failed-jobs)
+    INPUT_FILE="${2:?input file is required}"
+    OUTPUT_FILE="${3:?output file is required}"
+    sanitize_trusted_failed_jobs "$INPUT_FILE" "$OUTPUT_FILE"
+    ;;
+  sanitize-trusted-test-failures)
+    INPUT_FILE="${2:?input file is required}"
+    OUTPUT_FILE="${3:?output file is required}"
+    sanitize_trusted_test_failures "$INPUT_FILE" "$OUTPUT_FILE"
+    ;;
   cause-job-names)
     CAUSE_FILE="${2:?cause file is required}"
     TRUSTED_FAILED_JOBS_FILE="${3:?trusted failed jobs file is required}"
@@ -497,6 +555,11 @@ case "$COMMAND" in
     LAST_SUCCESSFUL_RUN_FILE="$CI_FAILURE_DATA_DIR/last-successful-main-run.json"
     CANDIDATE_MERGES_FILE="$CI_FAILURE_DATA_DIR/candidate-merges.json"
     CANDIDATE_HISTORY_STATUS_FILE="$CI_FAILURE_DATA_DIR/candidate-merge-history-status.json"
+    SANITIZED_TRUSTED_FAILED_JOBS_FILE=$(mktemp)
+    trap 'rm -f "$SANITIZED_TRUSTED_FAILED_JOBS_FILE"' EXIT
+    sanitize_trusted_failed_jobs \
+      "$CI_FAILURE_DATA_DIR/failed-jobs.json" \
+      "$SANITIZED_TRUSTED_FAILED_JOBS_FILE"
 
     [ -f "$PR_METADATA_FILE" ] || PR_METADATA_FILE=/dev/null
     [ -f "$TRIGGERING_MERGE_FILE" ] || TRIGGERING_MERGE_FILE=/dev/null
@@ -509,7 +572,7 @@ case "$COMMAND" in
       --slurpfile analysis "$ANALYSIS_FILE" \
       --slurpfile run_context "$RUN_CONTEXT_FILE" \
       --slurpfile run "$CI_FAILURE_DATA_DIR/run.json" \
-      --slurpfile trusted_jobs "$CI_FAILURE_DATA_DIR/failed-jobs.json" \
+      --slurpfile trusted_jobs "$SANITIZED_TRUSTED_FAILED_JOBS_FILE" \
       --slurpfile pr_metadata "$PR_METADATA_FILE" \
       --slurpfile triggering_merge "$TRIGGERING_MERGE_FILE" \
       --slurpfile last_successful_run "$LAST_SUCCESSFUL_RUN_FILE" \

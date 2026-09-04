@@ -11,6 +11,10 @@ CAUSES_DIR="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
 TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
 RUN_FILE="ci-failure-data/run.json"
+NORMALIZED_TRUSTED_FAILED_JOBS_FILE="${ANALYSIS_FILE}.trusted-failed-jobs.tmp"
+NORMALIZED_TRUSTED_TEST_FAILURES_FILE="${ANALYSIS_FILE}.trusted-test-failures.tmp"
+BOUND_ANALYSIS_FILE="${ANALYSIS_FILE}.bound.tmp"
+trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE"' EXIT
 if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
    [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$RUN_FILE" ]; then
   echo "::error::Analysis result or trusted run data not found"
@@ -91,8 +95,8 @@ if ! jq -e '
   (.failed_tests | type == "array") and
   all(.failed_tests[];
     (type == "object") and
-    (.name | safe_single_line(500)) and
-    ((.job | type) == "string" and (.job | length) > 0) and
+    ((.name | safe_single_line(500)) and (.name | length) > 0) and
+    ((.job | safe_single_line(500)) and (.job | length) > 0) and
     (.error | safe_multiline(1000)) and
     ((.stack_trace == null) or (.stack_trace | safe_multiline(2000))) and
     (.classification == "flaky" or .classification == "code-issue") and
@@ -101,9 +105,56 @@ if ! jq -e '
   echo "::error::Analysis failed_tests must match the safe field schema"
   exit 1
 fi
-if ! jq -e '(type == "array") and all(.[]; (.id | type) == "number")' "$TRUSTED_FAILED_JOBS_FILE" >/dev/null; then
+if ! jq -e '
+  (type == "array") and
+  all(.[]; (.id | type) == "number" and (.name | type) == "string")
+' "$TRUSTED_FAILED_JOBS_FILE" >/dev/null; then
   echo "::error::Trusted failed jobs are invalid"
   exit 1
+fi
+if ! bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+  sanitize-trusted-failed-jobs \
+  "$TRUSTED_FAILED_JOBS_FILE" \
+  "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE"; then
+  echo "::error::Trusted failed jobs are invalid"
+  exit 1
+fi
+TRUSTED_FAILED_JOBS_FILE="$NORMALIZED_TRUSTED_FAILED_JOBS_FILE"
+
+FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
+if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
+  TRUSTED_TEST_FAILURES_FILE="ci-failure-data/test-failures.json"
+  if [ ! -f "$TRUSTED_TEST_FAILURES_FILE" ] ||
+     ! bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+       sanitize-trusted-test-failures \
+       "$TRUSTED_TEST_FAILURES_FILE" \
+       "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE"; then
+    echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+    exit 1
+  fi
+
+  if ! jq -e \
+    --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" \
+    --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+      all(.failed_tests[];
+        . as $reported |
+        ([$trusted_tests[0][] | select(.test == $reported.name)]) as $matches |
+        ($matches | length) == 1 and
+        any($trusted_jobs[0][]; .name == $reported.job))
+    ' "$ANALYSIS_FILE" >/dev/null; then
+    echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+    exit 1
+  fi
+
+  jq \
+    --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" '
+      .failed_tests |= map(
+        . as $reported |
+        ([$trusted_tests[0][] | select(.test == $reported.name)][0]) as $trusted |
+        .error = $trusted.error |
+        .stack_trace = $trusted.stack_trace)
+    ' "$ANALYSIS_FILE" > "$BOUND_ANALYSIS_FILE"
+  mv "$BOUND_ANALYSIS_FILE" "$ANALYSIS_FILE"
 fi
 
 case "${TRUSTED_RUN_SCOPE}:${VERDICT}" in
@@ -142,7 +193,6 @@ INFRA_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "transient-in
 FLAKY_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "flaky-test")] | length' "$ANALYSIS_FILE")
 CODE_ISSUE_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 MAIN_BREAK_JOB_COUNT=$(jq '[.failed_jobs[]? | select(.classification == "main-repository-breakage")] | length' "$ANALYSIS_FILE")
-FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
 FLAKY_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "flaky")] | length' "$ANALYSIS_FILE")
 CODE_ISSUE_TEST_COUNT=$(jq '[.failed_tests[]? | select(.classification == "code-issue")] | length' "$ANALYSIS_FILE")
 KNOWN_JOB_COUNT=$((INFRA_JOB_COUNT + FLAKY_JOB_COUNT + CODE_ISSUE_JOB_COUNT + MAIN_BREAK_JOB_COUNT))
@@ -379,6 +429,21 @@ if ! jq -e \
 ' "$ANALYSIS_FILE" >/dev/null; then
   echo "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause"
   exit 1
+fi
+
+if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
+  for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
+    if [ "$(jq -r '.type // ""' "$CAUSE_FILE")" = "flaky-test" ]; then
+      CAUSE_TEST_NAME=$(jq -r '.test_name // ""' "$CAUSE_FILE")
+      if ! jq -e --arg test_name "$CAUSE_TEST_NAME" '
+        any(.failed_tests[];
+          .classification == "flaky" and .name == $test_name)
+      ' "$ANALYSIS_FILE" >/dev/null; then
+        echo "::error::Flaky-test cause must reference a validated flaky test"
+        exit 1
+      fi
+    fi
+  done
 fi
 
 if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ]; then

@@ -16,10 +16,14 @@ RUN_URL="$3"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SANITIZED_ANALYSIS_FILE=$(mktemp)
-trap 'rm -f "$SANITIZED_ANALYSIS_FILE"' EXIT
+SANITIZED_TRUSTED_FAILED_JOBS_FILE=$(mktemp)
+trap 'rm -f "$SANITIZED_ANALYSIS_FILE" "$SANITIZED_TRUSTED_FAILED_JOBS_FILE"' EXIT
 bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
   sanitize-analysis "$ANALYSIS_FILE" "$SANITIZED_ANALYSIS_FILE"
 ANALYSIS_FILE="$SANITIZED_ANALYSIS_FILE"
+bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
+  sanitize-trusted-failed-jobs "$TRUSTED_FAILED_JOBS_FILE" "$SANITIZED_TRUSTED_FAILED_JOBS_FILE"
+TRUSTED_FAILED_JOBS_FILE="$SANITIZED_TRUSTED_FAILED_JOBS_FILE"
 
 jq -r --arg run_url "$RUN_URL" --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
   ($trusted_jobs[0]) as $trusted_jobs |

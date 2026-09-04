@@ -534,13 +534,6 @@ jobs:
               jq -r '"- **Last successful main run**: " + (if .id then "[\(.id)](\(.html_url)) at `\(.head_sha)`" else "Not found" end)' \
                 ci-failure-data/last-successful-main-run.json
               echo ""
-              echo "Triggering merge PR (context only, not necessarily causal):"
-              echo ""
-              bash .github/workflows/analyze-ci-failure-persistence.sh \
-                render-untrusted-json ci-failure-data/triggering-merge-pr.json
-              echo ""
-              echo "### Candidate merges since the last successful main run"
-              echo ""
               CANDIDATE_HISTORY_STATE=$(jq -r '.state // "unavailable"' ci-failure-data/candidate-merge-history-status.json)
               case "$CANDIDATE_HISTORY_STATE" in
                 unavailable)
@@ -550,16 +543,22 @@ jobs:
                   echo "Candidate merge history is incomplete."
                   ;;
                 available)
+                  echo "Triggering merge PR (context only, not necessarily causal):"
+                  echo ""
+                  bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    render-untrusted-json ci-failure-data/triggering-merge-pr.json
+                  echo ""
+                  echo "### Candidate merges since the last successful main run"
+                  echo ""
                   if [ "$(jq 'length' ci-failure-data/candidate-merges.json)" -eq 0 ]; then
                     echo "No candidate merges found."
+                  else
+                    echo ""
+                    bash .github/workflows/analyze-ci-failure-persistence.sh \
+                      render-untrusted-json ci-failure-data/candidate-merges.json
                   fi
                   ;;
               esac
-              if [ "$(jq 'length' ci-failure-data/candidate-merges.json)" -gt 0 ]; then
-                echo ""
-                bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  render-untrusted-json ci-failure-data/candidate-merges.json
-              fi
             fi
             echo ""
 
@@ -988,6 +987,7 @@ safe-outputs:
                     "$CAUSE_STORED" "$RUN_CONTEXT_FILE" \
                     ci-failure-data/last-successful-main-run.json \
                     ci-failure-data/triggering-merge-pr.json \
+                    ci-failure-data/candidate-merge-history-status.json \
                     "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
                     "$NEW_OCCURRENCE_ROW" "$BODY_FILE" "$ISSUE_METADATA_FILE"
                   ISSUE_RENDER_STATUS=$?
@@ -1462,10 +1462,12 @@ Field details:
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
-- `failed_tests[].name`: A single-line test name, limited to 500 characters.
+- Include a `failed_tests` entry only when its non-empty `name` exactly matches a TRX test failure in the summary and its non-empty `job` exactly matches a failed job name in the summary. Do not infer failed tests from job logs.
+- `failed_tests[].name`: The exact single-line TRX test name, limited to 500 characters.
+- `failed_tests[].job`: The exact failed job name from the summary, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
-- `failed_tests[].error`: The first 1,000 characters of the error message from the TRX test failure data.
-- `failed_tests[].stack_trace`: The first 2,000 characters of the stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].error`: Copy the error message from the matching TRX test failure.
+- `failed_tests[].stack_trace`: Copy the stack trace from the matching TRX test failure, or use `null` when it is absent. The validator replaces `error` and `stack_trace` with the bounded trusted TRX values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures with the same underlying root cause so the analysis never exceeds the 10-cause publication budget.
@@ -1481,7 +1483,7 @@ Each cause file must follow this schema:
   "id": "cause-id",
   "type": "flaky-test | infra-failure | main-repository-breakage",
   "title": "Human-readable short description of the cause",
-  "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
+  "test_name": "Fully.Qualified.TestName (required for flaky-test)",
   "error_pattern": "The key error message or pattern that identifies this cause",
   "job_ids": [123456789]
 }
@@ -1491,9 +1493,9 @@ Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
 - `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief, single-line human-readable description of at most 238 characters (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
-- `test_name`: The fully qualified, single-line test name for a flaky-test cause, limited to 500 characters. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
+- `test_name`: A `flaky-test` cause MUST include a `test_name` that exactly matches a `failed_tests` entry classified as `"flaky"`, limited to 500 characters. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue, up to 500 characters. Use LF for multiline text and omit ANSI styling or other control characters.
-- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
+- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause requires matching trusted TRX evidence and normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
 
@@ -1546,6 +1548,8 @@ A test failed transiently rather than because repository code changed. PR-file r
 - The failure shows intermittent/timing-related errors (race conditions, port conflicts, timeout in integration tests)
 - The test name or namespace does not correspond to any file changed in the PR
 - The error message shows environmental issues (Docker connectivity, service availability, port already in use)
+
+Classify a job as `flaky-test` only when the summary contains a specific TRX test failure. Every `flaky-test` cause must identify that validated test.
 
 ### 3. Non-Transient Failure (PR Code Issue)
 
