@@ -241,7 +241,7 @@ public static class RestoreCommand
         // Append CLI --source values (matching NuGet's behavior of merging, not replacing)
         foreach (var cliSource in cliSources)
         {
-            if (!sources.Any(s => s.Source.Equals(cliSource, StringComparison.Ordinal)))
+            if (!sources.Any(source => AreEquivalentPackageSources(source.Source, cliSource)))
             {
                 sources.Add(new PackageSource(cliSource));
             }
@@ -259,6 +259,46 @@ public static class RestoreCommand
         }
 
         return sources;
+    }
+
+    private static bool AreEquivalentPackageSources(string first, string second)
+    {
+        var firstIsAbsoluteUri = Uri.TryCreate(first, UriKind.Absolute, out var firstUri);
+        var secondIsAbsoluteUri = Uri.TryCreate(second, UriKind.Absolute, out var secondUri);
+        if (firstIsAbsoluteUri != secondIsAbsoluteUri)
+        {
+            return false;
+        }
+
+        if (firstUri is not null && secondUri is not null)
+        {
+            if (firstUri.IsFile || secondUri.IsFile)
+            {
+                return firstUri.IsFile &&
+                    secondUri.IsFile &&
+                    string.Equals(firstUri.Host, secondUri.Host, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        firstUri.LocalPath,
+                        secondUri.LocalPath,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            }
+
+            // URI schemes and hosts are case-insensitive, while paths, queries, fragments, and
+            // user information can identify different package sources.
+            // https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2.1
+            return string.Equals(firstUri.Scheme, secondUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(firstUri.IdnHost, secondUri.IdnHost, StringComparison.OrdinalIgnoreCase) &&
+                firstUri.Port == secondUri.Port &&
+                string.Equals(firstUri.UserInfo, secondUri.UserInfo, StringComparison.Ordinal) &&
+                string.Equals(firstUri.AbsolutePath, secondUri.AbsolutePath, StringComparison.Ordinal) &&
+                string.Equals(firstUri.Query, secondUri.Query, StringComparison.Ordinal) &&
+                string.Equals(firstUri.Fragment, secondUri.Fragment, StringComparison.Ordinal);
+        }
+
+        return string.Equals(
+            first,
+            second,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     internal static PackageSpec BuildPackageSpec(
