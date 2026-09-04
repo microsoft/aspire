@@ -179,6 +179,19 @@ public static class FoundryExtensions
     /// Foundry Local service without starting, stopping, downloading, or loading anything on its host.
     /// Models configured on the resource must already be loaded by the existing service.
     /// </remarks>
+    /// <example>
+    /// Connect to an existing Foundry Local service and identify the model that is already loaded:
+    /// <code lang="csharp">
+    /// var foundry = builder.AddFoundry("foundry")
+    ///     .RunAsFoundryLocal("http://windows-host:5273");
+    ///
+    /// var chat = foundry.AddDeployment("chat", FoundryModel.Local.Phi4Mini)
+    ///     .WithProperties(deployment =>
+    ///     {
+    ///         deployment.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
+    ///     });
+    /// </code>
+    /// </example>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="endpoint"/> is not an absolute HTTP or HTTPS URL.</exception>
     [AspireExport]
