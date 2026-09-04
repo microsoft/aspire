@@ -157,6 +157,7 @@ public class RelationshipEvaluatorTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var parent = builder.AddExecutable("parent", "parent", ".")
             .WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
+        builder.EvaluateContainerProjectionCallbacks();
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("parent", out var projectionBuilder));
         var child = builder.AddResource(new CustomChildResource("child", projectionBuilder.Resource));
 

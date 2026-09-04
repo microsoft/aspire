@@ -134,6 +134,7 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
             executionContext,
             Path.Combine(Environment.CurrentDirectory, "manifest.json"),
             writer);
+        builder.EvaluateContainerProjectionCallbacks();
         var container = Assert.IsAssignableFrom<ContainerResource>(executable.Resource.AsContainer());
 
         writer.WriteStartObject();

@@ -245,7 +245,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void LaterRegistrationDoesNotReplayFailingProjectionCallback()
+    public void ProjectionCallbackFailureBubblesAndStopsEvaluation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".");
