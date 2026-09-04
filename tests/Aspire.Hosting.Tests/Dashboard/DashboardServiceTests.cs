@@ -25,6 +25,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using DashboardServiceImpl = Aspire.Hosting.Dashboard.DashboardService;
 using Resource = Aspire.Hosting.ApplicationModel.Resource;
 
+#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Tests.Dashboard;
 
 [Trait("Partition", "3")]

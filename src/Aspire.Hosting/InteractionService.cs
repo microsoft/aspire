@@ -9,6 +9,8 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting;
 
 #pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
@@ -221,7 +223,7 @@ internal class InteractionService : IInteractionService
                         var terminal = _terminalService.CreateTerminal(new Terminals.TerminalLaunchOptions
                         {
                             Title = string.IsNullOrEmpty(input.Label) ? input.Name : input.Label,
-                            Builder = input.Terminal!,
+                            Command = input.Terminal!,
                             Surface = Terminals.TerminalSurface.Interaction
                         });
                         input.TerminalId = terminal.Id;

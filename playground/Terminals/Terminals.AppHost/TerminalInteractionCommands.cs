@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Terminals;
-using Hex1b;
 using Microsoft.Extensions.DependencyInjection;
 
 // InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
 #pragma warning disable ASPIREINTERACTION001
+
+// AppHost-owned terminals - TerminalService, IAspireTerminal, TerminalCommand - are experimental.
+#pragma warning disable ASPIRETERMINAL002
 
 namespace Terminals.AppHost;
 
@@ -39,12 +41,11 @@ internal static class TerminalInteractionCommands
             {
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
-                // The input takes a *builder*, not a built terminal: Aspire attaches the HMP1 server transport that
-                // carries the session over gRPC, and that has to happen before Build(). The caller only describes the
-                // workload.
-                var terminal = Hex1bTerminal.CreateBuilder()
-                    .WithDimensions(120, 32)
-                    .WithPtyProcess(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/bash", OperatingSystem.IsWindows() ? [] : ["-i", "-l"]);
+                // The input describes the workload only. Aspire owns the terminal: it attaches the HMP1 server
+                // transport that carries the session over gRPC, then runs and tears down the process.
+                var terminal = OperatingSystem.IsWindows()
+                    ? new TerminalCommand("cmd.exe")
+                    : new TerminalCommand("/bin/bash", "-i", "-l");
 
                 var result = await interactionService.PromptInputsAsync(
                     "AppHost shell",
@@ -110,7 +111,7 @@ internal static class TerminalInteractionCommands
     /// <remarks>
     /// This is the motivating scenario for AppHost-owned terminals: shelling into a container in the app model without
     /// Aspire orchestrating the exec itself. <c>-it</c> is required so docker allocates a TTY on the container side;
-    /// Hex1b supplies the PTY on this side.
+    /// Aspire supplies the PTY on this side.
     /// </remarks>
     private static async Task<ExecuteCommandResult> ExecIntoContainerAsync(
         ExecuteCommandContext commandContext,
@@ -121,9 +122,7 @@ internal static class TerminalInteractionCommands
     {
         var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
-        var terminal = Hex1bTerminal.CreateBuilder()
-            .WithDimensions(120, 32)
-            .WithPtyProcess("docker", ["exec", "-it", containerName, .. command]);
+        var terminal = new TerminalCommand("docker", ["exec", "-it", containerName, .. command]);
 
         var result = await interactionService.PromptInputsAsync(
             title,
@@ -153,7 +152,7 @@ internal static class TerminalInteractionCommands
     /// that created it. It also exercises <c>IAspireTerminal</c>'s automation surface — send input, wait for output,
     /// read the screen — which is how AppHost code can script a terminal it owns.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Uses TerminalService, an internal API, and command handlers that are not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Uses TerminalService and command handlers that are not ATS-compatible.")]
     public static IResourceBuilder<ContainerResource> WithDockShellCommand(this IResourceBuilder<ContainerResource> container)
     {
         return container.WithCommand(
@@ -169,9 +168,7 @@ internal static class TerminalInteractionCommands
                 var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = container.Resource.Name,
-                    Builder = Hex1bTerminal.CreateBuilder()
-                        .WithDimensions(120, 32)
-                        .WithPtyProcess("docker", ["exec", "-it", containerName, "/bin/sh"])
+                    Command = new TerminalCommand("docker", "exec", "-it", containerName, "/bin/sh")
                 });
 
                 // Reveals the dock in every connected browser and switches it to this tab.

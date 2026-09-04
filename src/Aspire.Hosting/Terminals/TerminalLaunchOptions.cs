@@ -1,31 +1,26 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Hex1b;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
 /// Describes a terminal to be created by <see cref="TerminalService"/>.
 /// </summary>
-/// <remarks>
-/// <see cref="Builder"/> takes a Hex1b type directly. That is a deliberate spike shortcut: it keeps the
-/// workload description expressive without designing an Aspire-shaped equivalent up front. It is also the
-/// last remaining Hex1b leak on this path — <see cref="IAspireTerminal"/> already hides Hex1b from
-/// everything downstream, so closing this one is what would make <see cref="TerminalService"/> publishable.
-/// </remarks>
-internal sealed class TerminalLaunchOptions
+[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public sealed class TerminalLaunchOptions
 {
     /// <summary>
-    /// Gets or sets the title shown on the terminal's dock tab.
+    /// Gets or sets the title shown on the terminal's dock tab, and in the title bar when the terminal is
+    /// detached into its own window.
     /// </summary>
     public required string Title { get; set; }
 
     /// <summary>
-    /// Gets or sets the configured workload. Aspire attaches the transport itself, so callers must not
-    /// call <c>WithHmp1Server</c> or <c>Build</c> on the builder.
+    /// Gets or sets the process the terminal runs.
     /// </summary>
-    public required Hex1bTerminalBuilder Builder { get; set; }
+    public required TerminalCommand Command { get; set; }
 
     /// <summary>
     /// Gets or sets the surface the terminal is displayed on. Defaults to <see cref="TerminalSurface.Dock"/>.

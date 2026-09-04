@@ -5,7 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using Hex1b;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -471,20 +471,18 @@ public sealed class InteractionInput
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Configure the builder with the workload to run — for example
-    /// <c>Hex1bTerminal.CreateBuilder().WithPtyProcess("docker", ["exec", "-it", id, "/bin/sh"])</c>. The AppHost
-    /// attaches the transport and builds and runs the terminal, so the builder must not be built by the caller.
+    /// Describes the process the terminal runs — for example
+    /// <c>new TerminalCommand("docker", "exec", "-it", id, "/bin/sh")</c>. The AppHost owns the terminal: it
+    /// attaches the transport, runs the workload, and tears it down.
     /// </para>
     /// <para>
     /// The session starts lazily when a client first attaches, so a dialog that is dismissed without opening the
     /// terminal never starts the underlying process. The session is torn down when the interaction completes.
     /// </para>
-    /// <para>
-    /// This property is experimental and exposes a Hex1b type directly. See the note in Aspire.Hosting.csproj.
-    /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Hex1bTerminalBuilder is a live builder object owning a local process; it cannot be serialized to polyglot app hosts.")]
-    public Hex1bTerminalBuilder? Terminal { get; init; }
+    [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
+    public TerminalCommand? Terminal { get; init; }
 
     /// <summary>
     /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the

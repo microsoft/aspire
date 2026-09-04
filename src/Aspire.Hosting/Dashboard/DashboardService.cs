@@ -13,6 +13,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Hosting.Interaction;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
+// Aspire.Hosting.Terminals cannot be imported wholesale: it declares TerminalDescriptor and TerminalChangeType,
+// which collide with the identically named proto types this file converts them into. Alias the individual types
+// instead, so the AppHost-side names read cleanly and the proto names stay unqualified.
+using AppHostTerminalChangeType = Aspire.Hosting.Terminals.TerminalChangeType;
+using AppHostTerminalDescriptor = Aspire.Hosting.Terminals.TerminalDescriptor;
+using TerminalService = Aspire.Hosting.Terminals.TerminalService;
+
 namespace Aspire.Hosting.Dashboard;
 
 /// <summary>
@@ -28,7 +37,7 @@ namespace Aspire.Hosting.Dashboard;
 /// counterparts, and importing both namespaces would make every bare use ambiguous.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, Terminals.TerminalService terminalService)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -710,15 +719,15 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         return new CloseTerminalResponse();
     }
 
-    private static TerminalDescriptor ToProtoDescriptor(Terminals.TerminalDescriptor descriptor)
+    private static TerminalDescriptor ToProtoDescriptor(AppHostTerminalDescriptor descriptor)
         => new() { TerminalId = descriptor.Id, Title = descriptor.Title };
 
-    private static TerminalChangeType ToProtoChangeType(Terminals.TerminalChangeType changeType) => changeType switch
+    private static TerminalChangeType ToProtoChangeType(AppHostTerminalChangeType changeType) => changeType switch
     {
-        Terminals.TerminalChangeType.Added => TerminalChangeType.Added,
-        Terminals.TerminalChangeType.Removed => TerminalChangeType.Removed,
-        Terminals.TerminalChangeType.Retitled => TerminalChangeType.Retitled,
-        Terminals.TerminalChangeType.Activated => TerminalChangeType.Activated,
+        AppHostTerminalChangeType.Added => TerminalChangeType.Added,
+        AppHostTerminalChangeType.Removed => TerminalChangeType.Removed,
+        AppHostTerminalChangeType.Retitled => TerminalChangeType.Retitled,
+        AppHostTerminalChangeType.Activated => TerminalChangeType.Activated,
         _ => TerminalChangeType.Unspecified
     };
 }

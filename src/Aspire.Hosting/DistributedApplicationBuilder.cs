@@ -48,6 +48,8 @@ using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -468,7 +470,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
         _innerBuilder.Services.AddSingleton<Terminals.IDockTerminalFactory, Terminals.PlaceholderDockTerminalFactory>();
-        _innerBuilder.Services.AddSingleton<Terminals.TerminalService>();
+        // Constructed explicitly rather than by DI activation: TerminalService is public (so AppHost code can
+        // resolve it) but its constructor is internal, and the DI container only activates public constructors.
+        _innerBuilder.Services.AddSingleton(sp => new Terminals.TerminalService(
+            sp.GetRequiredService<ILogger<Terminals.TerminalService>>(),
+            sp.GetRequiredService<Terminals.IDockTerminalFactory>()));
 
         ConfigureHealthChecks();
 

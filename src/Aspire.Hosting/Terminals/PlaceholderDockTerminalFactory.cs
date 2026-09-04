@@ -5,6 +5,8 @@ using Hex1b;
 using Hex1b.Input;
 using Hex1b.Widgets;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
@@ -23,17 +25,14 @@ namespace Aspire.Hosting.Terminals;
 /// </remarks>
 internal sealed class PlaceholderDockTerminalFactory : IDockTerminalFactory
 {
-    public TerminalLaunchOptions Create(string? title, int ordinal)
+    public DockTerminalDefinition Create(string? title, int ordinal)
     {
         var resolvedTitle = title ?? (ordinal == 1 ? "Aspire" : $"Aspire {ordinal}");
 
-        return new TerminalLaunchOptions
-        {
-            Title = resolvedTitle,
-            Surface = TerminalSurface.Dock,
-            Builder = Hex1bTerminal.CreateBuilder()
-                .WithHex1bApp(ctx => BuildPlaceholderApp(ctx, resolvedTitle))
-        };
+        return new DockTerminalDefinition(
+            resolvedTitle,
+            Hex1bTerminal.CreateBuilder()
+                .WithHex1bApp(ctx => BuildPlaceholderApp(ctx, resolvedTitle)));
     }
 
     private static Hex1bWidget BuildPlaceholderApp(RootContext ctx, string title)

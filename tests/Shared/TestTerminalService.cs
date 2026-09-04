@@ -4,6 +4,8 @@
 using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Logging.Abstractions;
 
+#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Utils;
 
 /// <summary>

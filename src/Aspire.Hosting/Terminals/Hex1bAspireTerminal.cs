@@ -7,6 +7,8 @@ using Hex1b;
 using Hex1b.Automation;
 using Microsoft.Extensions.Logging;
 
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
@@ -44,14 +46,14 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     private Task? _runTask;
     private bool _stopped;
 
-    public Hex1bAspireTerminal(TerminalService owner, string id, TerminalLaunchOptions options, ILogger logger)
+    public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalSurface surface, Hex1bTerminalBuilder builder, ILogger logger)
     {
         _owner = owner;
-        _builder = options.Builder;
+        _builder = builder;
         _logger = logger;
         Id = id;
-        Title = options.Title;
-        Surface = options.Surface;
+        Title = title;
+        Surface = surface;
     }
 
     public string Id { get; }

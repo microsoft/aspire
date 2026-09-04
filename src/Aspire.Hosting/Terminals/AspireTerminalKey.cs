@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
+#pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
@@ -12,20 +16,46 @@ namespace Aspire.Hosting.Terminals;
 /// which keeps the mapping under Aspire's control and avoids leaking a third-party enum through
 /// <see cref="IAspireTerminal"/>.
 /// </remarks>
-internal enum AspireTerminalKey
+[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public enum AspireTerminalKey
 {
+    /// <summary>The Enter key — sends a carriage return.</summary>
     Enter,
+
+    /// <summary>The Tab key.</summary>
     Tab,
+
+    /// <summary>The Escape key.</summary>
     Escape,
+
+    /// <summary>The Backspace key.</summary>
     Backspace,
+
+    /// <summary>The Delete key.</summary>
     Delete,
+
+    /// <summary>The Up arrow key.</summary>
     Up,
+
+    /// <summary>The Down arrow key.</summary>
     Down,
+
+    /// <summary>The Left arrow key.</summary>
     Left,
+
+    /// <summary>The Right arrow key.</summary>
     Right,
+
+    /// <summary>The Home key.</summary>
     Home,
+
+    /// <summary>The End key.</summary>
     End,
+
+    /// <summary>The Page Up key.</summary>
     PageUp,
+
+    /// <summary>The Page Down key.</summary>
     PageDown,
 
     /// <summary>Ctrl+C — sends the interrupt control character.</summary>

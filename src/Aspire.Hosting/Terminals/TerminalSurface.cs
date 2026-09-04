@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
 /// Identifies where a terminal is displayed in the dashboard.
 /// </summary>
-internal enum TerminalSurface
+[Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public enum TerminalSurface
 {
     /// <summary>
     /// The terminal is a tab in the dashboard's terminal dock, and is listed by the terminal watch stream.

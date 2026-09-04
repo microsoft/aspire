@@ -69,4 +69,8 @@
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
+    /* The terminal is rendered chromeless, so without this it would be an unbounded dark rectangle bleeding into
+       the dialog. Matches the stroke the dialog's text inputs use, so the terminal reads as another field. */
+    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-rest);
+    border-radius: calc(var(--control-corner-radius) * 1px);
 }
