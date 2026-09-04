@@ -428,9 +428,21 @@ internal static class FoundryLocalService
             {
                 // The modern "server start" command daemonizes, and the daemon inherits the CLI's
                 // redirected stream handles. Wait until the parent exits and reports its endpoint,
-                // then stop draining instead of waiting forever for EOF from the daemon.
+                // then stop draining instead of waiting forever for EOF from the daemon. If both
+                // streams close first, the CLI exited without producing the required endpoint.
                 await process.WaitForExitAsync(startCancellation.Token).ConfigureAwait(false);
-                await outputCompletionSource.Task.WaitAsync(startCancellation.Token).ConfigureAwait(false);
+                var readersCompletionTask = Task.WhenAll(outputTask, errorTask);
+                var completedTask = await Task
+                    .WhenAny(outputCompletionSource.Task, readersCompletionTask)
+                    .WaitAsync(startCancellation.Token)
+                    .ConfigureAwait(false);
+                if (completedTask == readersCompletionTask && !outputCompletionSource.Task.IsCompleted)
+                {
+                    var incompleteOutput = await outputTask.ConfigureAwait(false);
+                    var incompleteError = await errorTask.ConfigureAwait(false);
+                    throw new InvalidOperationException(
+                        $"Foundry CLI command '{command}' exited before producing required output with exit code {process.ExitCode}: {incompleteError}{incompleteOutput}");
+                }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

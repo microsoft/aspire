@@ -229,6 +229,48 @@ public class FoundryExtensionsTests
         }
     }
 
+    [Fact]
+    public async Task FoundryLocalService_ServerStartupFailsWhenCliExitsWithoutEndpoint()
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+        if (OperatingSystem.IsWindows())
+        {
+            process.StartInfo.ArgumentList.Add("/d");
+            process.StartInfo.ArgumentList.Add("/s");
+            process.StartInfo.ArgumentList.Add("/c");
+            process.StartInfo.ArgumentList.Add("echo startup failed 1>&2 & exit /b 42");
+        }
+        else
+        {
+            process.StartInfo.ArgumentList.Add("-c");
+            process.StartInfo.ArgumentList.Add("printf 'startup failed\\n' >&2; exit 42");
+        }
+
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            FoundryLocalService.RunProcessAsync(
+                process,
+                "test server start",
+                onOutput: null,
+                cancellation.Token,
+                stopReadingAfterProcessExit: true,
+                outputCompletionPredicate: line => FoundryLocalService.TryParseServerEndpoint(line, out _)));
+
+        Assert.Equal(
+            "Foundry CLI command 'test server start' exited before producing required output with exit code 42: startup failed",
+            exception.Message);
+    }
+
     [Theory]
     [InlineData(
         """{"model":{"id":"Phi-4-mini-instruct-generic-gpu:5","cached":true}}""",
