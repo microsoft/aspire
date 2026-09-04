@@ -150,29 +150,6 @@ public static class ResourceProjectionBuilderExtensions
         DistributedApplicationOperation operation,
         Action<IResourceBuilder<ContainerResource>> configure)
         where T : IResource
-        => WithContainerProjectionCore(builder, operation, configureImmediately: null, configure);
-
-    /// <summary>
-    /// Projects a resource onto a plain container while applying shared annotation configuration immediately.
-    /// </summary>
-    internal static IResourceBuilder<T> WithContainerProjection<T>(
-        this IResourceBuilder<T> builder,
-        DistributedApplicationOperation operation,
-        Action<IResourceBuilder<ContainerResource>> configureImmediately,
-        Action<IResourceBuilder<ContainerResource>> configure)
-        where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(configureImmediately);
-
-        return WithContainerProjectionCore(builder, operation, configureImmediately, configure);
-    }
-
-    private static IResourceBuilder<T> WithContainerProjectionCore<T>(
-        IResourceBuilder<T> builder,
-        DistributedApplicationOperation operation,
-        Action<IResourceBuilder<ContainerResource>>? configureImmediately,
-        Action<IResourceBuilder<ContainerResource>> configure)
-        where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
@@ -180,16 +157,6 @@ public static class ResourceProjectionBuilderExtensions
         if (TryGetOrCreateProjectionRegistration(builder, operation) is not { } registration)
         {
             return builder;
-        }
-
-        if (configureImmediately is not null)
-        {
-            // Built-in defaults such as image and Dockerfile annotations are shared with the owner and do not
-            // depend on the selected projection type. Use a temporary facade so those annotations retain their
-            // pre-projection registration timing without selecting the plain projection over a later custom type.
-            var annotationBuilder = builder.ApplicationBuilder.CreateResourceBuilder(
-                new ContainerResourceProjection<IResource>(registration.Owner));
-            configureImmediately(annotationBuilder);
         }
 
         registration.CallbacksEvaluated = false;

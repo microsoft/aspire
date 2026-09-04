@@ -157,22 +157,23 @@ public static class ExecutableResourceBuilderExtensions
 
         var resource = builder.Resource;
         var hasProjection = resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
+        // These defaults only add shared annotations, so they do not need to wait for the selected projection type.
+        var annotationBuilder = builder.ApplicationBuilder.CreateResourceBuilder(
+            new ContainerResourceProjection<IResource>(resource));
+
+        if (!resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
+        {
+            annotationBuilder.WithImage(resource.Name);
+            annotationBuilder.WithDockerfile(contextPath: resource.WorkingDirectory);
+        }
+
+        // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on
+        // every call, so only arguments configured by or after the most recent call reach the container.
+        // Project conversion differs and clears only on its first call. See https://github.com/microsoft/aspire/issues/19922.
+        annotationBuilder.WithArgs(context => context.Args.Clear());
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            container =>
-            {
-                if (!container.Resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
-                {
-                    container.WithImage(resource.Name);
-                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
-                }
-
-                // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on
-                // every call, so only arguments configured by or after the most recent call reach the container.
-                // Project conversion differs and clears only on its first call. See https://github.com/microsoft/aspire/issues/19922.
-                container.WithArgs(context => context.Args.Clear());
-            },
             container => configure?.Invoke(container));
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
