@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #16842 which is not part of the 13.5 milestone (targets 13.6); no matching changelog entry found in 13.5",
+  "mergedAt": "2026-09-03T20:49:07Z",
+  "number": 1492,
+  "runDate": "2026-09-04T00:07:37Z",
+  "status": "excluded",
+  "title": "[docs] Document Show tunnel URLs command for Dev Tunnels integration"
+}
