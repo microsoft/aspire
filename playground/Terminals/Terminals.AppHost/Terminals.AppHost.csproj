@@ -8,9 +8,26 @@
     <IsAspireHost>true</IsAspireHost>
   </PropertyGroup>
 
-  <!-- The shared playground copy of KnownResourceNames.cs is deliberately NOT compiled here: the terminal spike gives
-       this project InternalsVisibleTo access to Aspire.Hosting, so the real internal type is already in scope and a
-       second copy would be an ambiguous-type error. -->
+  <!--
+    Terminal spike only - this must not merge as-is.
+
+    Aspire.Hosting grants this project InternalsVisibleTo; the grant is declared in
+    src/Aspire.Hosting/Aspire.Hosting.csproj, not here. Exactly one command needs it:
+    WithDockShellCommand in TerminalInteractionCommands.cs, which resolves TerminalService and then
+    drives the returned IAspireTerminal (Show, SendTextAsync, WaitForTextAsync). TerminalService,
+    IAspireTerminal, TerminalLaunchOptions and TerminalSurface are all internal while the terminal
+    API's shape is still in flux, so there is no public seam the playground can call instead.
+
+    Nothing else here depends on the terminal internals - the InputType.Terminal interaction commands
+    are written entirely against public API. So before merge, either make the terminal API public and
+    delete the IVT, or drop WithDockShellCommand and delete the IVT with it.
+
+    Consequence of the IVT: the shared playground copy of KnownResourceNames.cs
+    (playground/KnownResourceNames.cs, which the other playground AppHosts <Compile Include>) is
+    deliberately NOT compiled here. Aspire.Hosting's own internal KnownResourceNames is already in
+    scope, so a second copy would be an ambiguous-type error. Removing the IVT means adding that
+    Compile item back.
+  -->
 
   <ItemGroup>
     <ProjectReference Include="..\Terminals.Repl\Terminals.Repl.csproj" IsAspireProjectResource="true" />

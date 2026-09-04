@@ -137,8 +137,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Terminal spike: the playground demonstrates TerminalService, which is deliberately still internal.
-         Remove this once the terminal API is public. -->
+    <!-- Terminal spike only - must not merge. Terminals.AppHost's WithDockShellCommand resolves TerminalService and
+         drives the IAspireTerminal it returns; both are internal while the terminal API's shape is still in flux, so
+         the playground has no public seam to call. Delete this together with that command, or once the terminal API
+         is public. Nothing else in that playground touches internals. -->
     <InternalsVisibleTo Include="Terminals.AppHost" />
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
