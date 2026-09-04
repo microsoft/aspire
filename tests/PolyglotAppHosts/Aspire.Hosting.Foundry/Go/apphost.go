@@ -38,7 +38,7 @@ func main() {
 		ModelVersion: aspire.StringPtr("1"),
 		Format:       aspire.StringPtr("Microsoft"),
 	})
-	localChat.SetLocalModelId("Phi-3.5-mini-instruct-generic-gpu:1")
+	localChat.SetLocalModelId(aspire.StringPtr("Phi-3.5-mini-instruct-generic-gpu:1"))
 
 	registry := builder.AddAzureContainerRegistry("registry")
 	keyVault := builder.AddAzureKeyVault("vault")
