@@ -98,7 +98,6 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
         var executable = builder.AddExecutable("worker", "worker", ".")
             .WithContainerProjection(DistributedApplicationOperation.Run, _ => { })
             .WithPersistentLifetime();
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
         var beforeStartEvent = new BeforeStartEvent(serviceProvider, model);
 

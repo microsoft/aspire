@@ -32,9 +32,6 @@ public class ResourceProjectionTests
                 })
             .WithEnvironment("OWNER_SETTING", "owner");
 
-        Assert.Null(executable.Resource.AsContainer());
-
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.Collection(builder.Resources, resource => Assert.Same(executable.Resource, resource));
@@ -75,7 +72,6 @@ public class ResourceProjectionTests
         var executable = builder.AddExecutable("worker", "worker", ".")
             .PublishAsDockerFile();
 
-        builder.EvaluateContainerProjectionCallbacks();
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
         projectionBuilder.Resource.Entrypoint = "/app/worker";
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
@@ -110,7 +106,6 @@ public class ResourceProjectionTests
                 container => container
                     .WithImage("projected-image")
                     .ExcludeFromManifest());
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.True(executable.Resource.IsExcludedFromPublish());
@@ -124,7 +119,6 @@ public class ResourceProjectionTests
 
         var executable = builder.AddExecutable("worker", "worker", ".")
             .PublishAsDockerFile();
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.Same(executable.Resource, Assert.Single(model.GetBuildResources()));
@@ -143,7 +137,6 @@ public class ResourceProjectionTests
                     .WithImage("projected-image")
                     .WithEnvironment("SECRET", parameter));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var dependencies = await executable.Resource.GetResourceDependenciesAsync(
             builder.ExecutionContext,
             ResourceDependencyDiscoveryMode.DirectOnly,
@@ -165,7 +158,6 @@ public class ResourceProjectionTests
                 .WithImage("projected-image")
                 .WithHttpEndpoint(targetPort: 8080, name: "projected"));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var endpoint = Assert.Single(executable.Resource.Annotations.OfType<EndpointAnnotation>());
 
         Assert.True(endpointReference.Exists);
@@ -188,13 +180,12 @@ public class ResourceProjectionTests
                 .WithImage("projected-image")
                 .WithEndpoint("http", endpoint => endpoint.TargetPort = 8080, createIfNotExists: false));
 
-        builder.EvaluateContainerProjectionCallbacks();
         Assert.Same(executable.Resource, endpointReference.Resource);
         Assert.Equal(8080, endpointReference.EndpointAnnotation.TargetPort);
     }
 
     [Fact]
-    public void ProjectionCallbacksRunAtBuildInRegistrationOrderFromSnapshot()
+    public void ProjectionCallbacksRunSynchronouslyInCallOrder()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".");
@@ -204,24 +195,24 @@ public class ResourceProjectionTests
             DistributedApplicationOperation.Publish,
             _ =>
             {
-                invocations.Add("first");
+                invocations.Add("first-start");
                 executable.WithContainerProjection(
                     DistributedApplicationOperation.Publish,
-                    _ => invocations.Add("registered-during-build"));
+                    _ => invocations.Add("nested"));
+                invocations.Add("first-end");
             });
+
+        Assert.Equal(["first-start", "nested", "first-end"], invocations);
+
         executable.WithContainerProjection(
             DistributedApplicationOperation.Publish,
             _ => invocations.Add("second"));
 
-        Assert.Empty(invocations);
-
-        using var app = builder.Build();
-
-        Assert.Equal(["first", "second"], invocations);
+        Assert.Equal(["first-start", "nested", "first-end", "second"], invocations);
     }
 
     [Fact]
-    public void ProjectionCallbacksProcessResourcesAddedDuringEvaluation()
+    public void ProjectionCallbacksProcessResourcesAddedSynchronously()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         IResourceBuilder<ExecutableResource>? addedResource = null;
@@ -237,37 +228,146 @@ public class ResourceProjectionTests
                     container => container.WithImage("contoso/added", "1.0"));
             });
 
-        builder.EvaluateContainerProjectionCallbacks();
-
         Assert.NotNull(executable.Resource.AsContainer());
         Assert.NotNull(addedResource);
         Assert.NotNull(addedResource.Resource.AsContainer());
     }
 
     [Fact]
-    public void ProjectionCallbackFailureBubblesAndStopsEvaluation()
+    public void ProjectionCallbackFailureBubblesSynchronously()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".");
         var invocations = new List<string>();
 
-        executable.WithContainerProjection(
-            DistributedApplicationOperation.Publish,
-            _ =>
-            {
-                invocations.Add("failed");
-                throw new InvalidOperationException("Configuration failed.");
-            });
+        Assert.Throws<InvalidOperationException>(() =>
+            executable.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                _ =>
+                {
+                    invocations.Add("failed");
+                    executable.WithContainerProjection(
+                        DistributedApplicationOperation.Publish,
+                        _ => invocations.Add("nested"));
+                    throw new InvalidOperationException("Configuration failed.");
+                }));
+
+        Assert.Equal(["failed", "nested"], invocations);
+        Assert.NotNull(executable.Resource.AsContainer());
 
         executable.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            _ => invocations.Add("later"));
+            _ => invocations.Add("after"));
 
-        Assert.Empty(invocations);
+        Assert.Equal(["failed", "nested", "after"], invocations);
+    }
 
-        Assert.Throws<InvalidOperationException>(builder.EvaluateContainerProjectionCallbacks);
-        Assert.Equal(["failed"], invocations);
-        Assert.Null(executable.Resource.AsContainer());
+    [Fact]
+    public void DefaultProjectionPreventsLaterCustomProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+        var customFactoryInvoked = false;
+        var customCallbackInvoked = false;
+
+        resource.WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
+        var selectedProjection = resource.Resource.AsContainer();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            resource.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                () =>
+                {
+                    customFactoryInvoked = true;
+                    return new FirstTestProjection(resource.Resource);
+                },
+                _ => customCallbackInvoked = true));
+
+        Assert.Contains("already uses the default container projection", exception.Message);
+        Assert.False(customFactoryInvoked);
+        Assert.False(customCallbackInvoked);
+        Assert.Same(selectedProjection, resource.Resource.AsContainer());
+    }
+
+    [Fact]
+    public void DefaultProjectionConfigurationAfterCustomProjectionUsesSelectedInstance()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+        FirstTestProjection? customProjection = null;
+        ContainerResource? defaultProjection = null;
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new FirstTestProjection(resource.Resource),
+            container => customProjection = container.Resource);
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => defaultProjection = container.Resource);
+
+        Assert.NotNull(customProjection);
+        Assert.Same(customProjection, defaultProjection);
+        Assert.Same(customProjection, resource.Resource.AsContainer());
+    }
+
+    [Fact]
+    public void RepeatedCustomProjectionConfigurationReusesSelectedInstanceWithoutCallingFactory()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+        var factoryInvocations = 0;
+        FirstTestProjection? firstProjection = null;
+        FirstTestProjection? secondProjection = null;
+
+        FirstTestProjection CreateProjection()
+        {
+            factoryInvocations++;
+            return new FirstTestProjection(resource.Resource);
+        }
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            CreateProjection,
+            container => firstProjection = container.Resource);
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            CreateProjection,
+            container => secondProjection = container.Resource);
+
+        Assert.Equal(1, factoryInvocations);
+        Assert.NotNull(firstProjection);
+        Assert.Same(firstProjection, secondProjection);
+        Assert.Same(firstProjection, resource.Resource.AsContainer());
+    }
+
+    [Fact]
+    public void CustomProjectionPreventsDifferentCustomProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+        var secondFactoryInvoked = false;
+        var secondCallbackInvoked = false;
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new FirstTestProjection(resource.Resource),
+            _ => { });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            resource.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                () =>
+                {
+                    secondFactoryInvoked = true;
+                    return new SecondTestProjection(resource.Resource);
+                },
+                _ => secondCallbackInvoked = true));
+
+        Assert.Contains(nameof(FirstTestProjection), exception.Message);
+        Assert.Contains(nameof(SecondTestProjection), exception.Message);
+        Assert.False(secondFactoryInvoked);
+        Assert.False(secondCallbackInvoked);
+        Assert.IsType<FirstTestProjection>(resource.Resource.AsContainer());
     }
 
     [Fact]
@@ -286,7 +386,6 @@ public class ResourceProjectionTests
                         return Task.CompletedTask;
                     }));
 
-        builder.EvaluateContainerProjectionCallbacks();
         await builder.Eventing.PublishAsync(
             new ResourceReadyEvent(executable.Resource, TestServiceProvider.Instance),
             TestContext.Current.CancellationToken);
@@ -310,7 +409,6 @@ public class ResourceProjectionTests
                             resource,
                             state => state with { State = KnownResourceStates.Running })));
 
-        builder.EvaluateContainerProjectionCallbacks();
         await notificationService.PublishUpdateAsync(executable.Resource, state => state);
         await builder.Eventing.PublishAsync(
             new ResourceReadyEvent(executable.Resource, TestServiceProvider.Instance),
@@ -329,7 +427,6 @@ public class ResourceProjectionTests
             .PublishAsDockerFile();
         using var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
-        builder.EvaluateContainerProjectionCallbacks();
         await notificationService.PublishUpdateAsync(executable.Resource, state => state);
 
         Assert.True(notificationService.TryGetCurrentState(executable.Resource.Name, out var resourceEvent));
@@ -390,7 +487,6 @@ public class ResourceProjectionTests
             .WithArgs("--retained")
             .PublishAsDockerFile();
 
-        builder.EvaluateContainerProjectionCallbacks();
         var arguments = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Empty(arguments);
@@ -408,7 +504,6 @@ public class ResourceProjectionTests
                     .WithImage("projected-image")
                     .WithAnnotation(new DeploymentTargetAnnotation(target.Resource)));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var annotation = Assert.IsType<DeploymentTargetAnnotation>(
             executable.Resource.GetDeploymentTargetAnnotation());
 
@@ -426,7 +521,6 @@ public class ResourceProjectionTests
                 DistributedApplicationOperation.Publish,
                 container => container.WithImage("projected-image"))
             .WithAnnotation(new Http2ServiceAnnotation());
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
 
         await BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync(
@@ -452,8 +546,6 @@ public class ResourceProjectionTests
                     container.Resource.Annotations.Add(new SecondAnnotation());
                 });
 
-        Assert.Empty(executable.Resource.Annotations.OfType<SecondAnnotation>());
-        builder.EvaluateContainerProjectionCallbacks();
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
         Assert.Same(executable.Resource.Annotations, projectionBuilder.Resource.Annotations);
         Assert.Single(executable.Resource.Annotations.OfType<FirstAnnotation>());
@@ -516,7 +608,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void ProjectionIsNotExposedUntilConfigurationCallbacksComplete()
+    public void ProjectionIsSelectedBeforeConfigurationCallbackRuns()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".");
@@ -528,16 +620,12 @@ public class ResourceProjectionTests
             container =>
             {
                 Assert.True(executable.Resource.IsContainer());
-                Assert.Null(executable.Resource.AsContainer());
+                Assert.Same(container.Resource, executable.Resource.AsContainer());
                 Assert.Same(executable.Resource.Annotations, container.Resource.Annotations);
                 Assert.Empty(executable.Resource.Annotations.OfType<ContainerImageAnnotation>());
             });
 
         Assert.True(executable.Resource.IsContainer());
-        Assert.Null(executable.Resource.AsContainer());
-
-        builder.EvaluateContainerProjectionCallbacks();
-
         Assert.NotNull(executable.Resource.AsContainer());
     }
 
@@ -584,11 +672,6 @@ public class ResourceProjectionTests
                     container.WithImage("publish-image");
                 });
 
-        Assert.False(runCallbackInvoked);
-        Assert.False(publishCallbackInvoked);
-
-        builder.EvaluateContainerProjectionCallbacks();
-
         Assert.Equal(operation == DistributedApplicationOperation.Run, runCallbackInvoked);
         Assert.Equal(operation == DistributedApplicationOperation.Publish, publishCallbackInvoked);
         Assert.Single(executable.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>());
@@ -607,7 +690,6 @@ public class ResourceProjectionTests
                 DistributedApplicationOperation.Publish,
                 container => container.WithChildRelationship(child));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var relationship = Assert.Single(child.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
         Assert.Same(executable.Resource, relationship.Resource);
     }
@@ -618,7 +700,6 @@ public class ResourceProjectionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var executable = builder.AddExecutable("worker", "worker", ".")
             .WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
-        builder.EvaluateContainerProjectionCallbacks();
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
 
         Assert.Throws<DistributedApplicationException>(() => executable.WaitFor(projectionBuilder));
@@ -638,7 +719,6 @@ public class ResourceProjectionTests
             MountPath = "/srv/data"
         };
 
-        builder.EvaluateContainerProjectionCallbacks();
         var path = binding.ResolvePath(new EnvironmentCallbackContext(
             builder.ExecutionContext,
             executable.Resource));
@@ -653,7 +733,6 @@ public class ResourceProjectionTests
         var executable = builder.AddExecutable("worker", "worker", ".")
             .WithContainerProjection(DistributedApplicationOperation.Publish, _ => { });
 
-        builder.EvaluateContainerProjectionCallbacks();
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.True(executable.Resource.IsContainer());
@@ -663,21 +742,19 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void ProjectionCanBeResolvedAfterModelBuildCallbacks()
+    public void ProjectionCanBeResolvedDuringConfigurationCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        IResourceBuilder<ContainerResource>? resolvedBuilder = null;
-
         var executable = builder.AddExecutable("worker", "worker", ".")
             .WithContainerProjection(
                 DistributedApplicationOperation.Publish,
-                _ => Assert.False(builder.TryCreateResourceBuilder("worker", out resolvedBuilder)));
+                projection =>
+                {
+                    Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var resolvedBuilder));
+                    Assert.Same(projection.Resource, resolvedBuilder.Resource);
+                });
 
-        Assert.Null(resolvedBuilder);
-
-        builder.EvaluateContainerProjectionCallbacks();
-
-        Assert.True(builder.TryCreateResourceBuilder("worker", out resolvedBuilder));
+        Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var resolvedBuilder));
         Assert.Same(executable.Resource, resolvedBuilder.Resource.GetOwnerOrSelf());
     }
 
@@ -694,7 +771,6 @@ public class ResourceProjectionTests
             DistributedApplicationOperation.Publish,
             container => container.WithImage("projected-image"));
 
-        builder.EvaluateContainerProjectionCallbacks();
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
         Assert.Throws<InvalidOperationException>(
             () => projectionBuilder.WithAnnotation(
@@ -753,7 +829,6 @@ public class ResourceProjectionTests
             .RunAsContainerImage("contoso/worker:1.0")
             .RunAsContainerImage("contoso/worker:2.0");
 
-        builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
         Assert.NotNull(container);
 
@@ -773,7 +848,6 @@ public class ResourceProjectionTests
             .RunAsContainerImage("contoso/worker@sha256:0f27a0b0f2e8a9dd2b0d1f9a1b6c8d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c")
             .RunAsContainerImage("contoso/worker:2.0");
 
-        builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
         Assert.NotNull(container);
 
@@ -793,7 +867,6 @@ public class ResourceProjectionTests
             .RunAsContainerImage("contoso/worker:1.0")
             .RunAsContainerImage($"contoso/worker@sha256:{digest}");
 
-        builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
         Assert.NotNull(container);
 
@@ -812,7 +885,6 @@ public class ResourceProjectionTests
         var executable = builder.AddExecutable("worker", "worker", ".")
             .RunAsContainerImage("contoso/worker:1.0", container => container.WithImageTag("override"));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var container = executable.Resource.AsContainer();
         Assert.NotNull(container);
 
@@ -849,7 +921,6 @@ public class ResourceProjectionTests
             () => ConnectionStringProjection.CreateProjection(resource.Resource),
             container => container.WithImage("contoso/db", "1.0"));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
@@ -868,13 +939,22 @@ public class ResourceProjectionTests
             () => ConnectionStringOnlyProjection.CreateProjection(resource.Resource),
             container => container.WithImage("contoso/db", "1.0"));
 
-        builder.EvaluateContainerProjectionCallbacks();
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
     }
 
     private sealed class PlainOwnerResource(string name) : Resource(name);
+
+    private sealed class FirstTestProjection(PlainOwnerResource owner) : ContainerResource(owner.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+    }
+
+    private sealed class SecondTestProjection(PlainOwnerResource owner) : ContainerResource(owner.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+    }
 
     private sealed class ConnectionStringProjection(ConnectionStringOwnerResource owner)
         : ContainerResource(owner.Name), IResourceWithConnectionString, IContainerProjection<ConnectionStringOwnerResource, ConnectionStringProjection>
@@ -921,7 +1001,6 @@ public class ResourceProjectionTests
                     ResourceAnnotationMutationBehavior.Replace);
             });
 
-        builder.EvaluateContainerProjectionCallbacks();
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=container", manifest["connectionString"]?.ToString());

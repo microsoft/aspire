@@ -856,8 +856,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
         LogAppBuilding(this);
 
-        this.EvaluateContainerProjectionCallbacks();
-
         // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
         // could have a different implementation that doesn't. Validate as a safety net.
         foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)

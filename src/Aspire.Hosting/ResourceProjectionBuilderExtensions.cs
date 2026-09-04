@@ -42,16 +42,20 @@ public static class ResourceProjectionBuilderExtensions
     /// pair. That keeps references, events, and notifications addressed to a single canonical identity.
     /// </para>
     /// <para>
-    /// Nothing is created and the callback does not run when the AppHost is not performing <paramref name="operation"/>,
+    /// Nothing is selected and the callback does not run when the AppHost is not performing <paramref name="operation"/>,
     /// so a run-mode projection contributes no configuration to a publish and vice versa.
     /// </para>
     /// <para>
-    /// Projecting the same resource again reconfigures the projection that already exists instead of replacing it.
-    /// The projection factory runs during registration so an incompatible projection type is rejected immediately.
-    /// Configuration callbacks run in registration order when the application model is built. An integration nests
-    /// the caller's callback inside its own, so its defaults and the caller's configuration are applied together on
-    /// every call. That matches the pre-projection <c>RunAsEmulator</c> conventions, which also re-applied their
-    /// defaults on each call, and it is what lets a repeat call override a value such as the image.
+    /// The first projection selected for an operation determines the permanent projection type. Repeating a typed
+    /// projection with the same <typeparamref name="TContainer"/> reuses that instance. A later default projection
+    /// configuration can also configure a previously selected custom projection, but a custom projection cannot
+    /// replace a default projection or a different custom projection.
+    /// </para>
+    /// <para>
+    /// The callback runs synchronously against the selected projection. An integration nests the caller's callback
+    /// inside its own, so its defaults and the caller's configuration are applied together on every call. This
+    /// matches the pre-projection <c>RunAsEmulator</c> and <c>PublishAsDockerFile</c> conventions and lets a repeat
+    /// call override a value such as the image.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
@@ -73,27 +77,32 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(createProjection);
         ArgumentNullException.ThrowIfNull(configure);
 
-        if (TryGetOrCreateProjectionRegistration(builder, operation) is not { } registration)
+        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
         {
             return builder;
         }
 
-        var candidate = createProjection();
-        ValidateProjection(registration.Owner, candidate);
-        registration.RegisterProjection(candidate);
-        registration.CallbacksEvaluated = false;
+        var projection = registration.GetOrCreateCustomProjection(
+            createProjection,
+            candidate => ValidateProjection(registration.Owner, candidate));
+        if (addRegistration)
+        {
+            registration.Owner.Annotations.Add(registration);
+        }
 
-        registration.Owner.Annotations.Add(new ContainerResourceProjectionCallbackAnnotation(
-            projection => configure(builder.ApplicationBuilder.CreateResourceBuilder((TContainer)projection))));
+        configure(builder.ApplicationBuilder.CreateResourceBuilder(projection));
 
         return builder;
     }
 
-    private static ContainerResourceProjectionAnnotation? TryGetOrCreateProjectionRegistration<T>(
+    private static ContainerResourceProjectionAnnotation? TryGetProjectionRegistration<T>(
         IResourceBuilder<T> builder,
-        DistributedApplicationOperation operation)
+        DistributedApplicationOperation operation,
+        out bool addRegistration)
         where T : IResource
     {
+        addRegistration = false;
+
         // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. Projecting a
         // container onto a container is always an authoring mistake: the projection shares the owner's annotation
         // collection, so its image and endpoints would collide with the ones the owner already has. This is checked
@@ -115,9 +124,8 @@ public static class ResourceProjectionBuilderExtensions
             return existing;
         }
 
-        var registration = new ContainerResourceProjectionAnnotation(builder.Resource);
-        builder.Resource.Annotations.Add(registration);
-        return registration;
+        addRegistration = true;
+        return new ContainerResourceProjectionAnnotation(builder.Resource);
     }
 
     private static void ValidateProjection(IResource owner, ContainerResource projection)
@@ -154,65 +162,22 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
 
-        if (TryGetOrCreateProjectionRegistration(builder, operation) is not { } registration)
+        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
         {
             return builder;
         }
 
-        registration.CallbacksEvaluated = false;
-        registration.Owner.Annotations.Add(new ContainerResourceProjectionCallbackAnnotation(
-            projection => configure(builder.ApplicationBuilder.CreateResourceBuilder(projection))));
+        var projection = registration.GetOrCreateDefaultProjection(
+            () => new ContainerResourceProjection<IResource>(registration.Owner),
+            candidate => ValidateProjection(registration.Owner, candidate));
+        if (addRegistration)
+        {
+            registration.Owner.Annotations.Add(registration);
+        }
+
+        configure(builder.ApplicationBuilder.CreateResourceBuilder(projection));
 
         return builder;
-    }
-
-    internal static void EvaluateContainerProjectionCallbacks(this IDistributedApplicationBuilder builder)
-    {
-        var evaluatedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
-
-        while (builder.Resources.FirstOrDefault(resource => !evaluatedResources.Contains(resource)) is { } resource)
-        {
-            evaluatedResources.Add(resource);
-            resource.EvaluateContainerProjectionCallbacks();
-        }
-    }
-
-    internal static void EvaluateContainerProjectionCallbacks(this IResource resource)
-    {
-        if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is not { CallbacksEvaluated: false } registration)
-        {
-            return;
-        }
-
-        var projection = registration.Projection ??= new ContainerResourceProjection<IResource>(registration.Owner);
-        var callbacks = resource.Annotations
-            .OfType<ContainerResourceProjectionCallbackAnnotation>()
-            .ToArray();
-
-        foreach (var callback in callbacks)
-        {
-            var annotationsBeforeCallback = new HashSet<IResourceAnnotation>(
-                resource.Annotations,
-                ReferenceEqualityComparer.Instance);
-
-            callback.Callback(projection);
-
-            // The callback runs during model construction, but its annotations must retain the position where
-            // the projection API was called. Otherwise configuration added later to the owner can move ahead
-            // of callback configuration and change order-sensitive behavior such as argument clearing.
-            var addedAnnotations = resource.Annotations
-                .Where(annotation => !annotationsBeforeCallback.Contains(annotation))
-                .ToArray();
-            var insertionIndex = resource.Annotations.IndexOf(callback) + 1;
-
-            foreach (var annotation in addedAnnotations)
-            {
-                resource.Annotations.Remove(annotation);
-                resource.Annotations.Insert(insertionIndex++, annotation);
-            }
-        }
-
-        registration.CallbacksEvaluated = true;
     }
 
     /// <summary>

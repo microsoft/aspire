@@ -1903,15 +1903,14 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-
-            ContainerResource GetEvaluatedContainer() =>
-                resource.AsContainer() ??
+            if (resource.AsContainer() is not { } containerResource)
+            {
                 throw new InvalidOperationException(
-                    $"The published JavaScript app '{resource.Name}' does not have an evaluated container projection.");
+                    $"The published JavaScript app '{resource.Name}' does not have a container projection.");
+            }
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
-                var containerResource = GetEvaluatedContainer();
                 ValidateExistingDockerfileRunScript(resource, containerResource);
                 return context.WriteContainerAsync(containerResource);
             }
@@ -1925,7 +1924,6 @@ public static partial class JavaScriptHostingExtensions
                 Resource = resource,
                 Action = _ =>
                 {
-                    var containerResource = GetEvaluatedContainer();
                     ValidateExistingDockerfileRunScript(resource, containerResource);
                     return Task.CompletedTask;
                 }

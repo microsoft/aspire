@@ -983,29 +983,28 @@ public static class ProjectResourceBuilderExtensions
         var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
         var resource = builder.Resource;
         var hasProjection = resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
-        // These defaults only add shared annotations, so they do not need to wait for the selected projection type.
-        var annotationBuilder = builder.ApplicationBuilder.CreateResourceBuilder(
-            new ContainerResourceProjection<IResource>(resource));
-        var addDockerfileDefaults = !resource.HasAnnotationOfType<DockerfileBuildAnnotation>();
-
-        if (addDockerfileDefaults)
-        {
-            annotationBuilder.WithImage(resource.Name);
-            annotationBuilder.WithDockerfile(contextPath: projectDirectoryPath);
-
-            // ASP.NET container images listen on port 8080 by default.
-            annotationBuilder.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
-            annotationBuilder.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
-
-            // Preserve the existing PublishAsDockerFile behavior: project conversion clears arguments only on
-            // its first call, so arguments configured after that call survive later conversions. Executable
-            // conversion differs and clears on every call. See https://github.com/microsoft/aspire/issues/19922.
-            annotationBuilder.WithArgs(context => context.Args.Clear());
-        }
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
-            container => configure?.Invoke(container));
+            container =>
+            {
+                if (!resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
+                {
+                    container.WithImage(resource.Name);
+                    container.WithDockerfile(contextPath: projectDirectoryPath);
+
+                    // ASP.NET container images listen on port 8080 by default.
+                    container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                    container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+
+                    // Preserve the existing PublishAsDockerFile behavior: project conversion clears arguments only on
+                    // its first call, so arguments configured after that call survive later conversions. Executable
+                    // conversion differs and clears on every call. See https://github.com/microsoft/aspire/issues/19922.
+                    container.WithArgs(context => context.Args.Clear());
+                }
+
+                configure?.Invoke(container);
+            });
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
         // manifest callback that an integration installed after the first conversion.

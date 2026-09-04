@@ -25,35 +25,51 @@ internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotatio
     internal IResource Owner { get; }
 
     /// <summary>
-    /// Gets the custom projection registered for the owner, or <see langword="null"/> when callbacks use the
-    /// default container projection.
+    /// Gets the selected projection, or <see langword="null"/> when no projection has been selected.
     /// </summary>
-    internal ContainerResource? Projection { get; set; }
+    internal ContainerResource? Projection { get; private set; }
 
-    internal bool CallbacksEvaluated { get; set; }
+    private Type? CustomProjectionType { get; set; }
 
-    internal void RegisterProjection(ContainerResource projection)
+    internal ContainerResource GetOrCreateDefaultProjection(
+        Func<ContainerResource> createProjection,
+        Action<ContainerResource> validateProjection)
     {
         if (Projection is null)
         {
+            var projection = createProjection();
+            validateProjection(projection);
             Projection = projection;
-            return;
         }
 
-        if (Projection.GetType() != projection.GetType())
-        {
-            throw new InvalidOperationException(
-                $"The resource '{Owner.Name}' already has a custom container projection of type " +
-                $"'{Projection.GetType().Name}' and cannot also use '{projection.GetType().Name}'.");
-        }
+        return Projection;
     }
-}
 
-/// <summary>
-/// Stores one configuration callback registered for a container projection.
-/// </summary>
-internal sealed class ContainerResourceProjectionCallbackAnnotation(
-    Action<ContainerResource> callback) : IResourceAnnotation
-{
-    internal Action<ContainerResource> Callback { get; } = callback;
+    internal TContainer GetOrCreateCustomProjection<TContainer>(
+        Func<TContainer> createProjection,
+        Action<TContainer> validateProjection)
+        where TContainer : ContainerResource
+    {
+        if (Projection is null)
+        {
+            var projection = createProjection();
+            validateProjection(projection);
+            Projection = projection;
+            CustomProjectionType = typeof(TContainer);
+            return projection;
+        }
+
+        if (CustomProjectionType != typeof(TContainer))
+        {
+            var selectedProjection = CustomProjectionType is null
+                ? "the default container projection"
+                : $"a custom container projection of type '{CustomProjectionType.Name}'";
+
+            throw new InvalidOperationException(
+                $"The resource '{Owner.Name}' already uses {selectedProjection} and cannot also use " +
+                $"a custom container projection of type '{typeof(TContainer).Name}'. The first projection selected for an operation cannot be replaced.");
+        }
+
+        return (TContainer)Projection;
+    }
 }
