@@ -80,11 +80,16 @@ var beforeBuildPropsOption = new Option<string?>("--before-build-props")
                   "otherwise nothing is written so enumerate-tests enumerates everything."
 };
 
+var explainOption = new Option<bool>("--explain")
+{
+    Description = "Print the computed selection summary to standard output for local inspection."
+};
+
 var rootCommand = new RootCommand("Select the relevant CI test subset for a PR's changed files.");
 foreach (var option in new Option[]
 {
     repoRootOption, mapOption, slnxOption, fromOption, toOption, changedFilesOption,
-    skipLayer1Option, forceAllOption, forceAllReasonOption, enforceOption, beforeBuildPropsOption
+    skipLayer1Option, forceAllOption, forceAllReasonOption, enforceOption, beforeBuildPropsOption, explainOption
 })
 {
     rootCommand.Options.Add(option);
@@ -105,10 +110,11 @@ rootCommand.SetAction(parseResult =>
     var forceAllReason = parseResult.GetValue(forceAllReasonOption);
     var enforce = parseResult.GetValue(enforceOption);
     var beforeBuildProps = parseResult.GetValue(beforeBuildPropsOption);
+    var explain = parseResult.GetValue(explainOption);
 
     return Selection.Run(new RunOptions(
         repoRoot, mapPath, slnxPath, from, to, changedFilesPath,
-        skipLayer1, forceAll, enforce, beforeBuildProps, forceAllReason));
+        skipLayer1, forceAll, enforce, beforeBuildProps, forceAllReason, explain));
 });
 
 return rootCommand.Parse(args).Invoke();
@@ -124,7 +130,8 @@ internal sealed record RunOptions(
     bool ForceAll,
     bool Enforce,
     string? BeforeBuildProps,
-    string? ForceAllReason = null);
+    string? ForceAllReason = null,
+    bool Explain = false);
 
 internal static class Selection
 {
@@ -168,7 +175,8 @@ internal static class Selection
         // selector now runs BEFORE enumerate-tests. Maps each test project name to its repo-relative
         // .csproj path so a selected name can be written as an OverrideProjectToBuild item.
         trace.EnterStage("load test projects from slnx");
-        var testProjectsByName = LoadTestProjects(options.SlnxPath);
+        var testProjectSets = LoadTestProjectSets(options.SlnxPath);
+        var testProjectsByName = testProjectSets.MatrixProjects;
         var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
         // The prefilter (the map's `prefilter` block): read the CI skip-gate patterns file at runtime
@@ -243,7 +251,7 @@ internal static class Selection
             : LoadProjectDirectories(options.SlnxPath);
 
         trace.EnterStage("select (Layer 2 trigger map + Layer 1 union)");
-        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
+        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories, testProjectSets.AllProjects);
         var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll, options.ForceAllReason), layer1.AttributedPaths, layer1.Paths);
 
         trace.EnterStage("write summary and outputs");
@@ -286,10 +294,15 @@ internal static class Selection
 
     // Repo-relative, '/'-separated paths of the test projects in Aspire.slnx, keyed by project name
     // (the .csproj base name == the matrix projectName == the map's test: target). The universe is
-    // the tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other tests/ projects
-    // (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared fixtures/helpers, not test
-    // projects, and are excluded so they are never selected or enumerated on their own.
-    private static IReadOnlyDictionary<string, string> LoadTestProjects(string slnxPath)
+    private sealed record TestProjectSets(
+        IReadOnlyDictionary<string, string> MatrixProjects,
+        IReadOnlySet<string> AllProjects);
+
+    // The matrix contains tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other
+    // tests/ projects (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared
+    // fixtures/helpers. Keep those names in AllProjects so affected-project rules cannot mistake a
+    // test-only fixture for a production project.
+    private static TestProjectSets LoadTestProjectSets(string slnxPath)
     {
         if (!File.Exists(slnxPath))
         {
@@ -297,7 +310,8 @@ internal static class Selection
         }
 
         var slnx = File.ReadAllText(slnxPath);
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var matrixProjects = new Dictionary<string, string>(StringComparer.Ordinal);
+        var allProjects = new HashSet<string>(StringComparer.Ordinal);
         // <Project Path="tests/Foo.Tests/Foo.Tests.csproj" /> -- normalize separators, keep tests/ + .Tests.
         foreach (System.Text.RegularExpressions.Match m in
                  System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\""))
@@ -309,13 +323,14 @@ internal static class Selection
             }
 
             var name = Path.GetFileNameWithoutExtension(relPath);
+            allProjects.Add(name);
             if (name.EndsWith(".Tests", StringComparison.Ordinal))
             {
-                map[name] = relPath;
+                matrixProjects[name] = relPath;
             }
         }
 
-        return map;
+        return new TestProjectSets(matrixProjects, allProjects);
     }
 
     // Writes the MSBuild props file that eng/Build.props imports via $(BeforeBuildPropsPath): an
@@ -1251,15 +1266,20 @@ internal static class Selection
             builder.AppendLine();
         }
 
-        static void WriteOut(StringBuilder builder)
+        void WriteOut(StringBuilder builder)
         {
             var markdown = builder.ToString();
+            if (options.Explain)
+            {
+                Console.Out.Write(markdown);
+            }
+
             var summaryPath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
             if (summaryPath is not null)
             {
                 File.AppendAllText(summaryPath, markdown);
             }
-            else
+            else if (!options.Explain)
             {
                 Console.Error.Write(markdown);
             }

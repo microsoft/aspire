@@ -9,6 +9,22 @@ The machine-readable form lives at
 the rollout plan are in
 [`test-trigger-selector-design.md`](./test-trigger-selector-design.md).
 
+To inspect the authoritative computed result for a local change set, run
+`SelectTests` with `--explain` and either `--changed-files` or `--from`:
+
+```bash
+dotnet run --project tools/SelectTests -- --changed-files changed-files.txt --explain
+```
+
+The output is produced by the same selector used in CI and includes the selected
+projects, jobs, causes, unattributed files, and fallback status. Do not infer a
+target set by reading the YAML; use this command (or the CI artifact) instead.
+`--skip-layer1` is useful for focused Layer 2 tests, but is not an authoritative
+PR result because it omits the MSBuild dependency graph.
+The output is the real computed selection; without `--enforce`, audit mode only
+means that CI continues to run the full matrix while reporting what would have
+been selected.
+
 ## Two layers
 
 Selective CI is split by **who can know a dependency**:

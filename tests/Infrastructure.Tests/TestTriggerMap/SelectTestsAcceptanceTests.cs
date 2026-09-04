@@ -122,7 +122,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         return new TestSelector(
             path,
             s_matrix.ToHashSet(StringComparer.Ordinal),
-            (projectDirs ?? []).ToHashSet(StringComparer.Ordinal));
+            (projectDirs ?? []).ToHashSet(StringComparer.Ordinal),
+            s_matrix.ToHashSet(StringComparer.Ordinal));
     }
 
     private SelectionResult Select(string[] files, string[]? layer1 = null, IEnumerable<string>? projectDirs = null)
@@ -783,7 +784,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         var mapPath = Path.Combine(NewMapDir(), "map.yml");
         File.WriteAllText(mapPath, map);
         var matrix = new[] { "Aspire.Hosting.Foo.Tests" }.ToHashSet(StringComparer.Ordinal);
-        var selector = new TestSelector(mapPath, matrix, []);
+        var selector = new TestSelector(mapPath, matrix, [], matrix);
 
         // A test-only change: only the test project is affected. It is still selected as a test (Layer 1
         // intersection), but must NOT drive the production rule's job.
@@ -865,13 +866,41 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Empty(withAttribution.TestProjects);
     }
 
+    // A test project outside the matrix (for example a shared fixture) must never be treated as a
+    // production project when its name matches an affected-project glob. Failure mode: the same
+    // Aspire.Hosting* glob used for production integrations fires jobs such as prodjob for a test-only
+    // change, widening CI beyond the dependency boundary declared by the map.
+    [Fact]
+    public void AffectedTestSupportProjectDoesNotMatchProductionRules()
+    {
+        var mapPath = Path.Combine(NewMapDir(), "map.yml");
+        File.WriteAllText(
+            mapPath,
+            """
+            version: 1
+            affected_project_rules:
+              - projects: [Aspire.Hosting*]
+                targets: [job:prodjob]
+            """);
+        var selector = new TestSelector(
+            mapPath,
+            s_matrix.ToHashSet(StringComparer.Ordinal),
+            [],
+            new HashSet<string>(["Aspire.Hosting.Fixture.Tests"], StringComparer.Ordinal));
+
+        var result = selector.Select([], ["Aspire.Hosting.Fixture.Tests"], new SelectorOptions());
+
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
     [Fact]
     public void RealMapLoadsAndConventionSelectsAComponentsTestWithoutSelectingAll()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var matrix = EnumerateMatrixTestProjects();
         var projectDirs = LoadProjectDirectories();
-        var selector = new TestSelector(mapPath, matrix, projectDirs);
+        var selector = new TestSelector(mapPath, matrix, projectDirs, EnumerateAllTestProjects());
 
         // Pick a real src/Components/<dir> whose same-named test exists; the convention must select
         // exactly that test name (derived from the dir, not hardcoded) and must not force ALL.
@@ -976,7 +1005,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapExtensionReleaseFilesSelectUnitAndE2eWithoutDotNetTests()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var matrix = EnumerateMatrixTestProjects();
+        var selector = new TestSelector(mapPath, matrix, LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select(
             ["extension/package.json", "extension/CHANGELOG.md"],
@@ -990,6 +1020,22 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
             r.Jobs.Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public void RealMapTestSupportProjectDoesNotTriggerProductionJobs()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var matrix = EnumerateMatrixTestProjects();
+        var selector = new TestSelector(
+            mapPath,
+            matrix,
+            LoadProjectDirectories(),
+            EnumerateAllTestProjects());
+
+        var result = selector.Select([], ["Aspire.Hosting.TestUtilities"], new SelectorOptions());
+
+        Assert.Empty(result.Jobs);
+    }
+
     // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
     // same surface the per-language polyglot playground scripts regenerate and compile
     // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
@@ -1001,7 +1047,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapIntegrationAtsBaselineChangeRunsTypeScriptApiCompatAndPolyglot()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var matrix = EnumerateMatrixTestProjects();
+        var selector = new TestSelector(mapPath, matrix, LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var atsBaseline = FirstIntegrationAtsBaselineWithPolyglotFixture();
 
@@ -1010,13 +1057,16 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.False(r.SelectsAll);
         Assert.Contains("job:typescript-api-compat", r.Jobs);
         Assert.Contains("job:polyglot", r.Jobs);
+        Assert.Contains(r.JobCauses["job:typescript-api-compat"], cause => cause.Kind == CauseKind.PathRule);
+        Assert.Contains(r.JobCauses["job:polyglot"], cause => cause.Kind == CauseKind.PathRule);
     }
 
     [Fact]
     public void RealMapBlazorRuntimeAssetChangeRunsPackageAndPolyglotRegressions()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var matrix = EnumerateMatrixTestProjects();
+        var selector = new TestSelector(mapPath, matrix, LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select(
             ["src/Aspire.Hosting.Blazor/targets/GenerateScripts.targets"],
@@ -1084,6 +1134,16 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         return Directory.EnumerateDirectories(testsDir)
             .Select(Path.GetFileName)
             .Where(name => name is not null && File.Exists(Path.Combine(testsDir, name!, $"{name}.csproj")))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static IReadOnlySet<string> EnumerateAllTestProjects()
+    {
+        var testsDir = Path.Combine(RepoRoot.Path, "tests");
+        return Directory.EnumerateFiles(testsDir, "*.csproj", SearchOption.AllDirectories)
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .Where(name => name is not null)
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
     }
