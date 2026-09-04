@@ -200,7 +200,7 @@ render_issue_occurrences()
           if ($end_parts | length) != 2 or ($end_parts[1] | test("^\\s*$") | not) then
             error("ambiguous managed occurrence section")
           else
-            { prefix: $start_parts[0], managed: $end_parts[0] }
+            { prefix: $start_parts[0], managed: $end_parts[0], legacy: false }
           end
         end;
       def legacy_parts:
@@ -208,7 +208,7 @@ render_issue_occurrences()
         if ($parts | length) != 2 then
           error("unsupported legacy occurrence section")
         else
-          { prefix: $parts[0], managed: ("## Occurrences\n" + $parts[1]) }
+          { prefix: $parts[0], managed: ("## Occurrences\n" + $parts[1]), legacy: true }
         end;
       if ($new_row | is_occurrence_row | not) then
         error("invalid occurrence row")
@@ -224,6 +224,7 @@ render_issue_occurrences()
           length > 0 and
           . != "## Occurrences" and
           . != "| Date | Build | Job | Context |" and
+          ($parts.legacy == false or . != "| Date | Build | Job | PR |") and
           . != "|------|-------|-----|----|" and
           (test("^Showing [0-9]+ most recent of [0-9]+ occurrences\\.$") | not) and
           (is_occurrence_row | not))

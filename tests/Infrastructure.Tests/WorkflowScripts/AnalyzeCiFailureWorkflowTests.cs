@@ -3523,6 +3523,98 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererMigratesLegacyPrHeader()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            ## Occurrences
+
+            | Date | Build | Job | PR |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+            """.ReplaceLineEndings("\r\n"));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |",
+                "2",
+                outputPath,
+            ]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+            | 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n") + "\n",
+            (await File.ReadAllTextAsync(outputPath)).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsPrHeaderInManagedSection()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | PR |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n"));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |",
+                "2",
+                outputPath,
+            ]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task IssueOccurrenceRendererDoesNotGrowWhitespaceAcrossUpdates()
     {
         var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
