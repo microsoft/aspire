@@ -466,8 +466,8 @@ public sealed class InteractionInput
     public InteractionFileCollection GetFiles() => _files;
 
     /// <summary>
-    /// Gets the terminal session to run for an <see cref="InputType.Terminal"/> input. Required for terminal inputs
-    /// and ignored by every other input type.
+    /// Gets the terminal session to run for an <see cref="InputType.Terminal"/> input. Ignored by every other input
+    /// type.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -479,10 +479,59 @@ public sealed class InteractionInput
     /// The session starts lazily when a client first attaches, so a dialog that is dismissed without opening the
     /// terminal never starts the underlying process. The session is torn down when the interaction completes.
     /// </para>
+    /// <para>
+    /// Exactly one of this property and <see cref="TerminalSession"/> must be set on a terminal input. Set this one
+    /// when the dialog simply needs to show a process; set <see cref="TerminalSession"/> when the AppHost also needs
+    /// to drive that process.
+    /// </para>
     /// </remarks>
     [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
     [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
     public TerminalCommand? Terminal { get; init; }
+
+    /// <summary>
+    /// Gets an already-created terminal to display for an <see cref="InputType.Terminal"/> input. Ignored by every
+    /// other input type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use this instead of <see cref="Terminal"/> when the AppHost needs a handle on the terminal — typically to
+    /// script it through <see cref="IAspireTerminal"/>'s automation members while the dialog is open. Create the
+    /// terminal with <c>TerminalService.CreateTerminal</c>, passing
+    /// <see cref="TerminalSurface.Interaction"/>, then hand it to the input:
+    /// </para>
+    /// <example>
+    /// <code language="csharp">
+    /// var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+    /// {
+    ///     Title = "Setup",
+    ///     Command = new TerminalCommand("./setup.sh"),
+    ///     Surface = TerminalSurface.Interaction
+    /// });
+    ///
+    /// var dialog = interactionService.PromptInputsAsync(
+    ///     "Setup",
+    ///     "Running setup.",
+    ///     [new InteractionInput { Name = "setup", InputType = InputType.Terminal, TerminalSession = terminal }],
+    ///     cancellationToken: cts.Token);
+    ///
+    /// await terminal.WaitForTextAsync("Continue? ");
+    /// await terminal.SendTextAsync("y\r");
+    /// </code>
+    /// </example>
+    /// <para>
+    /// The terminal's <see cref="IAspireTerminal.Surface"/> must be <see cref="TerminalSurface.Interaction"/>; a dock
+    /// terminal would also appear as a tab, and the dialog would tear it out from under the dock when it closes.
+    /// </para>
+    /// <para>
+    /// The interaction still owns teardown: the terminal is disposed when the dialog completes or is cancelled, so
+    /// the caller does not dispose it. Cancelling the token passed to the prompt is therefore how automation code
+    /// closes the dialog and ends the session once it is done.
+    /// </para>
+    /// </remarks>
+    [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
+    public IAspireTerminal? TerminalSession { get; init; }
 
     /// <summary>
     /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the

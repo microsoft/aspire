@@ -24,7 +24,10 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
     })
     // Opens a shell owned by the AppHost rather than orchestrated by Aspire. It has nothing to do with `repl`;
     // commands just need a host resource to hang off.
-    .WithAppHostShellCommand();
+    .WithAppHostShellCommand()
+    // Drives an interactive console program from AppHost code: the terminal is shown in a dialog, but the guesses
+    // are typed by the AppHost, which reads each reply back off the screen and bisects until it wins.
+    .WithNumberGuessCommand();
 
 // Long-running container that the "Shell into container" interaction command execs into. Aspire is not orchestrating
 // the exec — the AppHost shells out to `docker exec` — so the container needs a stable, predictable name.

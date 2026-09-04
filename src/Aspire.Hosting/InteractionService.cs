@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -30,9 +31,9 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
-    private readonly Terminals.TerminalService _terminalService;
+    private readonly TerminalService _terminalService;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, Terminals.TerminalService terminalService)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
@@ -170,9 +171,19 @@ internal class InteractionService : IInteractionService
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];
-            if (input.InputType == InputType.Terminal && input.Terminal is null)
+            if (input.InputType == InputType.Terminal)
             {
-                throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input but does not set {nameof(InteractionInput.Terminal)}.");
+                if (input.Terminal is null == input.TerminalSession is null)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so exactly one of {nameof(InteractionInput.Terminal)} and {nameof(InteractionInput.TerminalSession)} must be set.");
+                }
+
+                // A dock terminal is listed as a tab and is expected to outlive whatever created it, but the dialog
+                // disposes its terminal on close. Showing one here would rip it out from under the dock.
+                if (input.TerminalSession is { } session && session.Surface != TerminalSurface.Interaction)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.TerminalSession)} to a terminal whose {nameof(IAspireTerminal.Surface)} is {session.Surface}. Terminals shown by an interaction must be created with {nameof(TerminalSurface)}.{nameof(TerminalSurface.Interaction)}.");
+                }
             }
 
             if (input.DynamicLoading is { } dynamic)
@@ -220,13 +231,14 @@ internal class InteractionService : IInteractionService
                 {
                     if (input.InputType == InputType.Terminal)
                     {
-                        var terminal = _terminalService.CreateTerminal(new Terminals.TerminalLaunchOptions
+                        // A caller-supplied session is already created — the caller needed the handle so it could
+                        // drive the terminal. Either way the interaction owns teardown from here on.
+                        input.TerminalId = input.TerminalSession?.Id ?? _terminalService.CreateTerminal(new TerminalLaunchOptions
                         {
                             Title = string.IsNullOrEmpty(input.Label) ? input.Name : input.Label,
                             Command = input.Terminal!,
-                            Surface = Terminals.TerminalSurface.Interaction
-                        });
-                        input.TerminalId = terminal.Id;
+                            Surface = TerminalSurface.Interaction
+                        }).Id;
                     }
                 }
             }
