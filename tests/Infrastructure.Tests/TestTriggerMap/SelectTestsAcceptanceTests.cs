@@ -835,6 +835,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
         Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.tscompat.suppression.txt"));
+        Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/java-starter/api/Program.cs"));
 
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
         // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), root

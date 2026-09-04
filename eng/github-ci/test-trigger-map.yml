@@ -205,12 +205,6 @@ path_rules:
   # baseline changes alongside real source (e.g. the integration whose [AspireExport] surface it
   # tracks), the source change is not blind to Layer 1/the project rules above and routes normally
   # -- no dedicated rule is needed here for the mixed-change case.
-  # Integration source changes also run polyglot because those exports are consumed by the
-  # per-language AppHost fixtures, while the prefilter keeps baseline-only changes out of CI.
-  - paths:
-      - src/Aspire.Hosting*/**
-    targets: [job:polyglot]
-    reason: hosting integration source feeds generated SDKs and polyglot AppHost validation
   - paths:
       - extension/**
       - .vscode/launch.json
@@ -443,8 +437,59 @@ affected_project_rules:
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Python
       - Aspire.Hosting.Rust
+      - Aspire.Hosting
+      - Aspire.Hosting.Azure
+      - Aspire.Hosting.Azure.AppConfiguration
+      - Aspire.Hosting.Azure.AppContainers
+      - Aspire.Hosting.Azure.AppService
+      - Aspire.Hosting.Azure.ApplicationInsights
+      - Aspire.Hosting.Azure.CognitiveServices
+      - Aspire.Hosting.Azure.ContainerRegistry
+      - Aspire.Hosting.Azure.CosmosDB
+      - Aspire.Hosting.Azure.EventHubs
+      - Aspire.Hosting.Azure.Functions
+      - Aspire.Hosting.Azure.KeyVault
+      - Aspire.Hosting.Azure.Kusto
+      - Aspire.Hosting.Azure.Network
+      - Aspire.Hosting.Azure.OperationalInsights
+      - Aspire.Hosting.Azure.PostgreSQL
+      - Aspire.Hosting.Azure.Redis
+      - Aspire.Hosting.Azure.Sandboxes
+      - Aspire.Hosting.Azure.Search
+      - Aspire.Hosting.Azure.ServiceBus
+      - Aspire.Hosting.Azure.SignalR
+      - Aspire.Hosting.Azure.Sql
+      - Aspire.Hosting.Azure.Storage
+      - Aspire.Hosting.Azure.WebPubSub
+      - Aspire.Hosting.Blazor
+      - Aspire.Hosting.DevTunnels
+      - Aspire.Hosting.Docker
+      - Aspire.Hosting.Dotnet
+      - Aspire.Hosting.EntityFrameworkCore
+      - Aspire.Hosting.Foundry
+      - Aspire.Hosting.Garnet
+      - Aspire.Hosting.GitHub.Models
+      - Aspire.Hosting.Kafka
+      - Aspire.Hosting.Keycloak
+      - Aspire.Hosting.Kubernetes
+      - Aspire.Hosting.Maui
+      - Aspire.Hosting.Milvus
+      - Aspire.Hosting.MongoDB
+      - Aspire.Hosting.MySql
+      - Aspire.Hosting.Nats
+      - Aspire.Hosting.OpenAI
+      - Aspire.Hosting.Oracle
+      - Aspire.Hosting.Orleans
+      - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.Qdrant
+      - Aspire.Hosting.RabbitMQ
+      - Aspire.Hosting.Redis
+      - Aspire.Hosting.Seq
+      - Aspire.Hosting.SqlServer
+      - Aspire.Hosting.Valkey
+      - Aspire.Hosting.Yarp
     targets: [job:polyglot]
-    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+    reason: ATS typesystem and hosting integrations feed the per-language SDK generators and AppHost fixtures
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
     targets: [job:typescript-sdk]
     reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
