@@ -247,7 +247,7 @@ public class FoundryExtensionsTests
             process.StartInfo.ArgumentList.Add("/d");
             process.StartInfo.ArgumentList.Add("/s");
             process.StartInfo.ArgumentList.Add("/c");
-            process.StartInfo.ArgumentList.Add("echo startup failed 1>&2 & exit /b 42");
+            process.StartInfo.ArgumentList.Add("echo startup failed>&2&exit /b 42");
         }
         else
         {
