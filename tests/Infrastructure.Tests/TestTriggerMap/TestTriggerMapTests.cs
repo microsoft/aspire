@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.SelectTests;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.FileSystemGlobbing;
 using System.Text.Json;
 using Xunit;
@@ -53,6 +54,26 @@ public sealed class TestTriggerMapTests
 
         Assert.Contains("job:extension-unit", targets);
         Assert.Contains("job:extension-e2e", targets);
+    }
+
+    [Fact]
+    public void ExtensionE2eProjectAndPathRulesCoverTheSameConsumers()
+    {
+        var affectedProjects = Assert.Single(
+            s_map.AffectedProjectRules,
+            rule => rule.Targets.Contains("job:extension-e2e", StringComparer.Ordinal))
+            .Projects
+            .Select(project => $"src/{project}/**");
+        var directPaths = Assert.Single(
+            s_map.PathRules,
+            rule => rule.Targets.Contains("job:extension-e2e", StringComparer.Ordinal)
+                && rule.Paths.Contains("extension/**", StringComparer.Ordinal))
+            .Paths
+            .Where(path => path.StartsWith("src/", StringComparison.Ordinal));
+
+        Assert.Equal(
+            affectedProjects.Order(StringComparer.Ordinal),
+            directPaths.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -394,11 +415,11 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/dashboardpack/Sdk.targets",
-            ["test:Aspire.Hosting.Sdk.Tests"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
         },
         {
             "eng/dcppack/Aspire.Hosting.Orchestration.targets",
-            ["test:Aspire.Hosting.Sdk.Tests", "test:Aspire.TerminalHost.Tests"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "test:Aspire.TerminalHost.Tests", "job:extension-e2e"]
         },
         {
             "eng/scripts/load-cli-e2e-images.sh",
@@ -411,6 +432,7 @@ public sealed class TestTriggerMapTests
                 "test:Aspire.Cli.EndToEnd.Tests",
                 "test:Infrastructure.Tests",
                 "job:cli-starter-validation",
+                "job:extension-e2e",
                 "job:homebrew-installer",
                 "job:winget-installer"
             ]
@@ -419,9 +441,9 @@ public sealed class TestTriggerMapTests
             "eng/clipack/Aspire.Cli.win-x64.csproj",
             [
                 "test:Aspire.Cli.Tests",
-                "test:Aspire.Cli.EndToEnd.Tests",
                 "test:Infrastructure.Tests",
                 "job:cli-starter-validation",
+                "job:extension-e2e",
                 "job:homebrew-installer",
                 "job:winget-installer"
             ]
@@ -430,8 +452,17 @@ public sealed class TestTriggerMapTests
             "eng/clipack/Aspire.Cli.linux-musl-x64.csproj",
             [
                 "test:Aspire.Cli.Tests",
-                "test:Aspire.Cli.EndToEnd.Tests",
                 "test:Infrastructure.Tests",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/clipack/Aspire.Cli.linux-arm64.csproj",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Infrastructure.Tests",
+                "job:cli-starter-validation",
                 "job:homebrew-installer",
                 "job:winget-installer"
             ]
@@ -440,7 +471,6 @@ public sealed class TestTriggerMapTests
             "eng/clipack/npm/aspire.js",
             [
                 "test:Aspire.Cli.Tests",
-                "test:Aspire.Cli.EndToEnd.Tests",
                 "test:Infrastructure.Tests",
                 "job:homebrew-installer",
                 "job:winget-installer"
@@ -450,7 +480,6 @@ public sealed class TestTriggerMapTests
             "eng/clipack/Aspire.Cli.NativeSymbols.proj",
             [
                 "test:Aspire.Cli.Tests",
-                "test:Aspire.Cli.EndToEnd.Tests",
                 "test:Infrastructure.Tests",
                 "job:homebrew-installer",
                 "job:winget-installer"
@@ -466,7 +495,6 @@ public sealed class TestTriggerMapTests
                 "test:Aspire.Acquisition.Tests",
                 "test:Aspire.Cli.EndToEnd.Tests",
                 "job:cli-starter-validation",
-                "job:extension-e2e",
                 "job:homebrew-installer",
                 "job:winget-installer"
             ]
@@ -476,7 +504,6 @@ public sealed class TestTriggerMapTests
             [
                 "test:Aspire.Acquisition.Tests",
                 "test:Aspire.Cli.EndToEnd.Tests",
-                "job:extension-e2e",
                 "job:homebrew-installer",
                 "job:winget-installer"
             ]
@@ -484,6 +511,50 @@ public sealed class TestTriggerMapTests
         {
             ".github/workflows/cli-starter-validation.yml",
             ["test:Infrastructure.Tests", "job:cli-starter-validation"]
+        },
+        {
+            "eng/dashboardpack/Aspire.Dashboard.Sdk.linux-x64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
+        },
+        {
+            "eng/dashboardpack/Aspire.Dashboard.Sdk.win-x64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
+        },
+        {
+            "eng/dashboardpack/Aspire.Dashboard.Sdk.win-arm64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "job:extension-e2e"]
+        },
+        {
+            "eng/clipack/Aspire.Cli.linux-x64.csproj",
+            ["test:Aspire.Cli.Tests", "test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "eng/dcppack/Aspire.Hosting.Orchestration.linux-x64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "test:Aspire.TerminalHost.Tests", "job:extension-e2e"]
+        },
+        {
+            "eng/dcppack/Aspire.Hosting.Orchestration.win-x64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "test:Aspire.TerminalHost.Tests", "job:extension-e2e"]
+        },
+        {
+            "eng/dcppack/Aspire.Hosting.Orchestration.osx-arm64.csproj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "test:Aspire.TerminalHost.Tests", "job:extension-e2e"]
+        },
+        {
+            "tools/CreateLayout/Program.cs",
+            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "eng/Bundle.proj",
+            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "playground/JavaSpringBoot/JavaSpringBoot.AppHost.Java/aspire.config.json",
+            ["test:Aspire.Playground.Tests", "job:extension-e2e"]
+        },
+        {
+            ".gitignore",
+            ["test:Infrastructure.Tests"]
         },
     };
 
@@ -500,6 +571,38 @@ public sealed class TestTriggerMapTests
             .Concat(result.Jobs)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
+    }
+
+    [Fact]
+    [RequiresTools(["git"])]
+    public void ExtensionJavaE2eDiscoveryInputsAreNotGitIgnored()
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            WorkingDirectory = RepoRoot.Path,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("--no-pager");
+        startInfo.ArgumentList.Add("check-ignore");
+        startInfo.ArgumentList.Add("--");
+        startInfo.ArgumentList.Add("extension/java-e2e-workspace/AppHost.java");
+        startInfo.ArgumentList.Add("extension/java-e2e-workspace/aspire.config.json");
+        startInfo.ArgumentList.Add("extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java/AppHost.java");
+        startInfo.ArgumentList.Add("extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java/aspire.config.json");
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start git.");
+        var ignoredPaths = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.True(
+            process.ExitCode == 1,
+            process.ExitCode == 0
+                ? $"Git ignore rules must not exclude Java AppHost discovery inputs because aspire ls discovers them through git: {ignoredPaths}"
+                : $"git check-ignore failed ({process.ExitCode}): {stderr}");
     }
 
     [Theory]
@@ -560,6 +663,19 @@ public sealed class TestTriggerMapTests
         Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
 
+    [Theory]
+    [InlineData("src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-apphost/.template.config/template.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/.template.config/template.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-xunit/.template.config/template.json")]
+    public void CliE2eRunsForProjectTemplatePackageInputs(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+    }
+
     [Fact]
     public void CliBundleConsumersRunWhenCreateLayoutIsAffected()
     {
@@ -570,6 +686,17 @@ public sealed class TestTriggerMapTests
         Assert.Equal(
             ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void DashboardChangesRunTemplatesTestsThatStartAppHosts()
+    {
+        var result = SelectWithRealMap(
+            "src/Aspire.Dashboard/Program.cs",
+            "Aspire.Dashboard");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
     }
 
     [Fact]
@@ -601,13 +728,18 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void CliStarterValidationDoesNotRunForUnrelatedProjectTemplateChange()
+    public void UnrelatedProjectTemplateChangeRunsCliE2eAndTemplatesTestsWithoutStarterValidation()
     {
         var result = SelectWithRealMap(
             "src/Aspire.ProjectTemplates/templates/aspire-xunit/.template.config/template.json");
 
         Assert.False(result.SelectsAll);
-        Assert.Equal(["job:deployment-e2e"], result.Jobs);
+        Assert.Equal(
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests"],
+            result.TestProjects.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -635,7 +767,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Equal(
-            ["job:extension-e2e", "job:typescript-api-compat"],
+            ["job:typescript-api-compat"],
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
