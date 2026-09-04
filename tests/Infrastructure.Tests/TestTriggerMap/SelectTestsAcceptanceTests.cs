@@ -993,7 +993,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     public void RealMapCliE2eDoesNotRunForExcludedRuntimeProjects(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
-        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
 
         var r = selector.Select([], [project], new SelectorOptions());
 
