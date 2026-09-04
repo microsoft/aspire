@@ -370,65 +370,73 @@ jobs:
           # failed test job's immutable logs artifact by its workflow-defined API name, then
           # download by ID so TRX paths or contents cannot reassign evidence across artifacts.
           ARTIFACTS_FILE="ci-failure-data/artifacts.json"
-          if ! gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
+          TEST_EVIDENCE_STATE=unavailable
+          rm -f ci-failure-data/test-failures.json
+          if gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
               --jq '.artifacts[]' | jq -s '.' > "${ARTIFACTS_FILE}"; then
-            echo "Warning: Failed to list test results artifacts"
-            echo "[]" > "${ARTIFACTS_FILE}"
-          fi
-          SELECTED_ARTIFACTS_FILE="ci-failure-data/selected-test-result-artifacts.json"
-          if bash .github/workflows/analyze-ci-failure-persistence.sh \
-              select-test-result-artifacts "${ARTIFACTS_FILE}" \
-              "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}" ci-failure-data/failed-jobs.json \
-              20 1073741824 104857600 \
-              > "${SELECTED_ARTIFACTS_FILE}"; then
-            mkdir -p \
-              ci-failure-data/test-result-zips \
-              ci-failure-data/test-results \
-              ci-failure-data/test-failures
-            ARTIFACT_DOWNLOAD_FAILED=false
-            REMAINING_UNCOMPRESSED_BYTES=1073741824
-            while IFS= read -r ARTIFACT; do
-              ARTIFACT_ID=$(jq -r '.id' <<< "${ARTIFACT}")
-              ARTIFACT_NAME=$(jq -r '.name' <<< "${ARTIFACT}")
-              ARTIFACT_SIZE=$(jq -r '.size_in_bytes' <<< "${ARTIFACT}")
-              JOB_NAME=$(jq -r '.job' <<< "${ARTIFACT}")
-              ARTIFACT_ZIP="ci-failure-data/test-result-zips/${ARTIFACT_ID}.zip"
-              ARTIFACT_OUTPUT="ci-failure-data/test-results/${ARTIFACT_ID}"
-              echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
-              if ! gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" \
-                    > "${ARTIFACT_ZIP}" 2>/dev/null ||
-                  ! bash .github/workflows/analyze-ci-failure-persistence.sh \
-                    extract-test-results-artifact "${ARTIFACT_ZIP}" "${ARTIFACT_OUTPUT}" \
-                    10000 "${REMAINING_UNCOMPRESSED_BYTES}" 104857600 \
-                    "${ARTIFACT_SIZE}" ||
-                  ! bash .github/workflows/analyze-ci-failure-persistence.sh \
-                    collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
-                    ci-failure-data/failed-jobs.json \
-                    "ci-failure-data/test-failures/${ARTIFACT_ID}.json"; then
-                ARTIFACT_DOWNLOAD_FAILED=true
-                break
+            SELECTED_ARTIFACTS_FILE="ci-failure-data/selected-test-result-artifacts.json"
+            if bash .github/workflows/analyze-ci-failure-persistence.sh \
+                select-test-result-artifacts "${ARTIFACTS_FILE}" \
+                "${RUN_STARTED_AT}" "${RUN_UPDATED_AT}" ci-failure-data/failed-jobs.json \
+                20 1073741824 104857600 \
+                > "${SELECTED_ARTIFACTS_FILE}"; then
+              if [ "$(jq 'length' "${SELECTED_ARTIFACTS_FILE}")" -eq 0 ]; then
+                TEST_EVIDENCE_STATE=not-applicable
+              else
+                mkdir -p \
+                  ci-failure-data/test-result-zips \
+                  ci-failure-data/test-results \
+                  ci-failure-data/test-failures
+                ARTIFACT_DOWNLOAD_FAILED=false
+                REMAINING_UNCOMPRESSED_BYTES=1073741824
+                while IFS= read -r ARTIFACT; do
+                  ARTIFACT_ID=$(jq -r '.id' <<< "${ARTIFACT}")
+                  ARTIFACT_NAME=$(jq -r '.name' <<< "${ARTIFACT}")
+                  ARTIFACT_SIZE=$(jq -r '.size_in_bytes' <<< "${ARTIFACT}")
+                  JOB_NAME=$(jq -r '.job' <<< "${ARTIFACT}")
+                  ARTIFACT_ZIP="ci-failure-data/test-result-zips/${ARTIFACT_ID}.zip"
+                  ARTIFACT_OUTPUT="ci-failure-data/test-results/${ARTIFACT_ID}"
+                  echo "Downloading test results artifact: ${ARTIFACT_NAME} (${ARTIFACT_ID})..."
+                  if ! gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" \
+                        > "${ARTIFACT_ZIP}" 2>/dev/null ||
+                      ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                        extract-test-results-artifact "${ARTIFACT_ZIP}" "${ARTIFACT_OUTPUT}" \
+                        10000 "${REMAINING_UNCOMPRESSED_BYTES}" 104857600 \
+                        "${ARTIFACT_SIZE}" ||
+                      ! bash .github/workflows/analyze-ci-failure-persistence.sh \
+                        collect-test-failures "${ARTIFACT_OUTPUT}" "${JOB_NAME}" \
+                        ci-failure-data/failed-jobs.json \
+                        "ci-failure-data/test-failures/${ARTIFACT_ID}.json"; then
+                    ARTIFACT_DOWNLOAD_FAILED=true
+                    break
+                  fi
+
+                  EXTRACTED_BYTES=$(find "${ARTIFACT_OUTPUT}" -name "*.trx" -type f -printf '%s\n' \
+                    | awk '{ total += $1 } END { print total + 0 }')
+                  REMAINING_UNCOMPRESSED_BYTES=$((REMAINING_UNCOMPRESSED_BYTES - EXTRACTED_BYTES))
+                done < <(jq -c '.[]' "${SELECTED_ARTIFACTS_FILE}")
+
+                if [ "${ARTIFACT_DOWNLOAD_FAILED}" = "false" ]; then
+                  jq -s 'add // []' ci-failure-data/test-failures/*.json \
+                    > ci-failure-data/test-failures.json
+                  TEST_EVIDENCE_STATE=complete
+                  echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
+                else
+                  echo "Warning: Failed to download or safely extract per-job test results"
+                fi
+                rm -rf \
+                  ci-failure-data/test-result-zips \
+                  ci-failure-data/test-results \
+                  ci-failure-data/test-failures
               fi
-
-              EXTRACTED_BYTES=$(find "${ARTIFACT_OUTPUT}" -name "*.trx" -type f -printf '%s\n' \
-                | awk '{ total += $1 } END { print total + 0 }')
-              REMAINING_UNCOMPRESSED_BYTES=$((REMAINING_UNCOMPRESSED_BYTES - EXTRACTED_BYTES))
-            done < <(jq -c '.[]' "${SELECTED_ARTIFACTS_FILE}")
-
-            if [ "${ARTIFACT_DOWNLOAD_FAILED}" = "false" ] &&
-                [ "$(jq 'length' "${SELECTED_ARTIFACTS_FILE}")" -gt 0 ]; then
-              jq -s 'add // []' ci-failure-data/test-failures/*.json \
-                > ci-failure-data/test-failures.json
-              echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
-            elif [ "${ARTIFACT_DOWNLOAD_FAILED}" = "true" ]; then
-              echo "Warning: Failed to download or safely extract per-job test results"
+            else
+              echo "Warning: Failed to select bounded per-job test result artifacts"
             fi
-            rm -rf \
-              ci-failure-data/test-result-zips \
-              ci-failure-data/test-results \
-              ci-failure-data/test-failures
           else
-            echo "Warning: Failed to select bounded per-job test result artifacts"
+            echo "Warning: Failed to list test results artifacts"
           fi
+          printf '{"state":"%s"}\n' "${TEST_EVIDENCE_STATE}" \
+            > ci-failure-data/test-evidence.json
 
           echo "Data collection complete."
 
@@ -498,7 +506,9 @@ jobs:
 
             echo "## Test Failures (from TRX artifacts)"
             echo ""
-            if [ -f "ci-failure-data/test-failures.json" ]; then
+            TEST_EVIDENCE_STATE=$(jq -r '.state // ""' ci-failure-data/test-evidence.json 2>/dev/null || true)
+            if [ "${TEST_EVIDENCE_STATE}" = "complete" ] &&
+                [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
                 bash .github/workflows/analyze-ci-failure-persistence.sh \
@@ -506,8 +516,10 @@ jobs:
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
+            elif [ "${TEST_EVIDENCE_STATE}" = "not-applicable" ]; then
+              echo "No failed job uses the reusable test workflow."
             else
-              echo "No test results artifact available."
+              echo "Test failure evidence is unavailable. Analysis cannot be published or rerun."
             fi
             echo ""
 
@@ -787,6 +799,14 @@ safe-outputs:
                     if [ "$CURRENT_CAUSE_TYPE" != "$CAUSE_TYPE" ]; then
                       echo "::error::Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${CURRENT_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
                       exit 1
+                    fi
+                    if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+                      CURRENT_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$EXISTING")
+                      CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
+                      if [ "$CURRENT_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
+                        echo "::error::Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change test_name"
+                        exit 1
+                      fi
                     fi
                     # Stored cause fields are publisher-authoritative. A later
                     # agent may add an occurrence but cannot rewrite identity
@@ -1163,10 +1183,13 @@ safe-outputs:
               const causesDir = path.join(path.dirname(outputFile), 'agent', 'causes');
               const runContextFile = path.join('ci-failure-data', 'run-context.json');
               const trustedFailedJobsFile = path.join('ci-failure-data', 'failed-jobs.json');
+              const testEvidenceFile = path.join('ci-failure-data', 'test-evidence.json');
+              const trustedTestFailuresFile = path.join('ci-failure-data', 'test-failures.json');
               const priorCausesDir = path.join('ci-failure-data', 'prior-causes');
               if (!fs.existsSync(analysisFile) ||
                   !fs.existsSync(runContextFile) ||
-                  !fs.existsSync(trustedFailedJobsFile)) {
+                  !fs.existsSync(trustedFailedJobsFile) ||
+                  !fs.existsSync(testEvidenceFile)) {
                 core.setFailed('Analysis result or trusted run data not found');
                 return;
               }
@@ -1174,6 +1197,7 @@ safe-outputs:
               const analysis = JSON.parse(fs.readFileSync(analysisFile, 'utf8'));
               const runContext = JSON.parse(fs.readFileSync(runContextFile, 'utf8'));
               const trustedFailedJobs = JSON.parse(fs.readFileSync(trustedFailedJobsFile, 'utf8'));
+              const testEvidence = JSON.parse(fs.readFileSync(testEvidenceFile, 'utf8'));
               const owner = context.repo.owner;
               const repo = context.repo.repo;
               const requestedRunId = Number(item.run_id);
@@ -1233,6 +1257,24 @@ safe-outputs:
               if (!Array.isArray(analysis.failed_tests) || analysis.failed_tests.length !== 0) {
                 core.setFailed('Rerun requires a transient-infra analysis without failed tests');
                 return;
+              }
+              if (!testEvidence ||
+                  typeof testEvidence !== 'object' ||
+                  (testEvidence.state !== 'complete' && testEvidence.state !== 'not-applicable')) {
+                core.setFailed('Rerun requires available trusted test evidence');
+                return;
+              }
+              if (testEvidence.state === 'complete') {
+                if (!fs.existsSync(trustedTestFailuresFile)) {
+                  core.setFailed('Rerun requires complete trusted test evidence without failed tests');
+                  return;
+                }
+
+                const trustedTestFailures = JSON.parse(fs.readFileSync(trustedTestFailuresFile, 'utf8'));
+                if (!Array.isArray(trustedTestFailures) || trustedTestFailures.length !== 0) {
+                  core.setFailed('Rerun requires complete trusted test evidence without failed tests');
+                  return;
+                }
               }
               if (!Array.isArray(trustedFailedJobs) ||
                   !trustedFailedJobs.every(job => job && Number.isInteger(job.id))) {
@@ -1464,7 +1506,7 @@ Field details:
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_jobs[].reason`: A single-line explanation, limited to 500 characters.
 - `failed_jobs` MUST contain exactly one object for every failed job in the summary, using its exact numeric ID, with no additions, omissions, or duplicates.
-- Include a `failed_tests` entry only when its non-empty `name` and `job` exactly match the same trusted TRX test failure in the summary. Do not infer failed tests from job logs.
+- When trusted TRX evidence is complete, `failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates. When no failed job uses the reusable test workflow, use an empty array. Do not infer failed tests from job logs.
 - `failed_tests[].name`: The exact single-line TRX test name, limited to 500 characters.
 - `failed_tests[].job`: The exact failed job name from the summary, limited to 500 characters.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.

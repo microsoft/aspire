@@ -126,6 +126,7 @@ collect_test_failures()
   local failed_jobs_file="$3"
   local output_file="$4"
   local json_lines
+  local parse_failed=false
 
   if [ ! -d "$test_results_directory" ] ||
      [ -z "$job_name" ] ||
@@ -140,6 +141,7 @@ collect_test_failures()
     return 1
   fi
 
+  rm -f "$output_file"
   json_lines=$(mktemp)
   while IFS= read -r -d '' extracted_path; do
     local parsed_lines
@@ -147,7 +149,11 @@ collect_test_failures()
     if ! yq -p xml -o json '.' "$extracted_path" 2>/dev/null | jq -cr --arg job "$job_name" '
       # TRX represents one result as an object and multiple results as an array:
       #   <UnitTestResult testName="Tests.Failed" outcome="Failed">...</UnitTestResult>
-      (.TestRun.Results.UnitTestResult // []) |
+      if type != "object" or (.TestRun | type) != "object" then
+        error("test result does not have a TRX TestRun root")
+      else
+        .TestRun.Results.UnitTestResult // []
+      end |
       (if type == "array" then . else [.] end) |
       map(select(.["+@outcome"] == "Failed")) |
       .[] |
@@ -158,12 +164,18 @@ collect_test_failures()
         stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
       }
     ' > "$parsed_lines"; then
-      echo "::warning::Unable to parse extracted test result $(basename "$extracted_path")" >&2
+      echo "::error::Unable to parse extracted test result $(basename "$extracted_path")" >&2
+      parse_failed=true
     else
       cat "$parsed_lines" >> "$json_lines"
     fi
     rm -f "$parsed_lines"
   done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.trx" -print0)
+
+  if [ "$parse_failed" = "true" ]; then
+    rm -f "$json_lines"
+    return 1
+  fi
 
   jq -sc '.' "$json_lines" > "$output_file"
   rm -f "$json_lines"
@@ -297,12 +309,22 @@ select_test_result_artifacts()
         capture("(^| / )(?<short>[^/]+) \\((?<runner>[^()]*)\\)$") |
         "logs-\(.short)-\(.runner)";
 
+      def is_test_job:
+        # Keep these caller prefixes aligned with the run-tests.yml jobs in tests.yml.
+        # The step check covers completed jobs; the prefixes cover force-killed jobs.
+        any(.steps[]?; .name == "Upload logs, and test results") or
+        (.name | test(
+          "^Tests / (No-package tests|Package tests - (Linux|Windows|macOS)|CLI archive tests)( \\(| / )"));
+
       [
         .[] |
-        select(type == "object" and (.name | type) == "string") |
+        select(type == "object" and (.name | type) == "string" and is_test_job) |
         . as $job |
-        (try ($job | artifact_name) catch null) as $artifact_name |
-        select($artifact_name != null) |
+        (if ($job.name | test("(^| / )[^/]+ \\([^()]*\\)$")) then
+           ($job | artifact_name)
+         else
+           error("failed test job name does not match the artifact naming contract")
+         end) as $artifact_name |
         [
           $artifacts[0][] |
           select(
@@ -313,7 +335,7 @@ select_test_result_artifacts()
             (.created_at > $started_at and .created_at <= $updated_at))
         ] as $matches |
         if $matches | length == 0 then
-          empty
+          error("test result artifact is missing for a failed test job")
         elif $matches | length == 1 then
           $matches[0] |
           {

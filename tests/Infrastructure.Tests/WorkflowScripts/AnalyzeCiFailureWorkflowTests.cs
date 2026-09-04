@@ -724,6 +724,31 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsReusedFlakyCauseForDifferentTest()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.New","job":"Tests","error":"boom","stack_trace":"frame","classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "flaky-failure.json",
+            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.New","error_pattern":"boom","job_ids":[123]}""");
+        var priorCausesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "ci-failure-data", "prior-causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(priorCausesDirectory, "flaky-failure.json"),
+            """{"id":"flaky-failure","type":"flaky-test","title":"Stored failure","test_name":"Tests.Original","error_pattern":"old"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause flaky-failure.json cannot change stored test_name",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsFailedTestWithoutTrustedEvidence()
     {
         await WriteValidationFixtureAsync(
@@ -890,6 +915,67 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsUnavailableTestEvidence()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timed out","job_ids":[123]}""",
+            testEvidenceState: "unavailable");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Trusted test evidence is unavailable",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAcceptsNotApplicableTestEvidence()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Build"}]""",
+            "nuget-timeout.json",
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timed out","job_ids":[123]}""",
+            testEvidenceState: "not-applicable");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsOmittedTrustedTestFailure()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timed out","job_ids":[123]}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
+            """[{"test":"Tests.Failed","job":"Tests","error":"boom","stack_trace":"frame"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsFlakyCauseForDifferentTest()
     {
         await WriteValidationFixtureAsync(
@@ -960,6 +1046,29 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Flaky","job":"Tests","error":"linux failure","stack_trace":"linux frame"},{"test":"Tests.Flaky","job":"Tests","error":"windows failure","stack_trace":"windows frame"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsDuplicateReportedAndTrustedTestPairs()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"first","stack_trace":"first frame","classification":"flaky","reason":"Intermittent"},{"name":"Tests.Flaky","job":"Tests","error":"second","stack_trace":"second frame","classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "flaky-failure.json",
+            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[123]}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
+            """[{"test":"Tests.Flaky","job":"Tests","error":"first","stack_trace":"first frame"},{"test":"Tests.Flaky","job":"Tests","error":"second","stack_trace":"second frame"}]""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -2297,7 +2406,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Include a `failed_tests` entry only when its non-empty `name` and `job` exactly match the same trusted TRX test failure in the summary.",
+            "`failed_tests` MUST contain exactly one entry for every `{name, job}` pair in the summary, with no additions, omissions, or duplicates.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2392,6 +2501,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${CURRENT_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}\"\nexit 1",
                 publisher,
                 StringComparison.Ordinal);
+            Assert.Contains(
+                "Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change test_name\"\nexit 1",
+                publisher,
+                StringComparison.Ordinal);
+            Assert.True(
+                publisher.IndexOf("Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change test_name", StringComparison.Ordinal) <
+                publisher.IndexOf("merge-cause", StringComparison.Ordinal));
             Assert.Contains("printf -v CURRENT_CAUSE_TYPE_DISPLAY '%q' \"$CURRENT_CAUSE_TYPE\"", publisher, StringComparison.Ordinal);
             var causeTypeIndex = publisher.IndexOf("CAUSE_TYPE=$(jq -r '.type' \"$CAUSE_FILE\")", StringComparison.Ordinal);
             var currentCauseTypeIndex = publisher.IndexOf("CURRENT_CAUSE_TYPE=$(jq -r '.type // \"\"' \"$EXISTING\")", StringComparison.Ordinal);
@@ -2596,6 +2712,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "[ -f ci-failure-data/test-failures.json ] || echo \"[]\"",
                 collectionStep,
                 StringComparison.Ordinal);
+            Assert.Contains("TEST_EVIDENCE_STATE=unavailable", collectionStep, StringComparison.Ordinal);
+            Assert.Contains("TEST_EVIDENCE_STATE=not-applicable", collectionStep, StringComparison.Ordinal);
+            Assert.Contains("TEST_EVIDENCE_STATE=complete", collectionStep, StringComparison.Ordinal);
+            Assert.Contains("> ci-failure-data/test-evidence.json", collectionStep, StringComparison.Ordinal);
             var normalizedCollectionStep = NormalizeIndentation(collectionStep);
             Assert.Contains(
                 "gh api --paginate \"repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations\" \\\n--jq '.[]' | jq -s '.'",
@@ -2945,8 +3065,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             jobsPath,
             """
             [
-              {"id":1,"name":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"},
-              {"id":2,"name":"Tests / No-package tests / Dashboard (ubuntu-latest)"}
+              {
+                "id":1,
+                "name":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              },
+              {"id":2,"name":"Tests / Build native CLI archive (Linux) / Build CLI (linux-x64)"}
             ]
             """);
 
@@ -2966,6 +3090,114 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             [{"id":10,"name":"logs-Infrastructure-8-core-ubuntu-latest","size_in_bytes":1024,"job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)"}]
             """,
             result.Output.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorRejectsMissingArtifactForRecognizedTestJob()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(artifactsPath, "[]");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {
+                "id":1,
+                "name":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              }
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "test result artifact is missing for a failed test job",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorRejectsRecognizedTestJobWithMalformedName()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(artifactsPath, "[]");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {
+                "id":1,
+                "name":"Tests / malformed",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              }
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "failed test job name does not match the artifact naming contract",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task TestResultArtifactSelectorRecognizesTestJobBeforeUploadStepStarts()
+    {
+        var artifactsPath = Path.Combine(_workspace.Path, "artifacts.json");
+        await File.WriteAllTextAsync(artifactsPath, "[]");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """
+            [
+              {
+                "id":1,
+                "name":"Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+                "steps":[{"name":"Checkout code","conclusion":"failure"}]
+              }
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "select-test-result-artifacts",
+                artifactsPath,
+                "2026-09-04T12:00:00Z",
+                "2026-09-04T12:02:00Z",
+                jobsPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "test result artifact is missing for a failed test job",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2991,8 +3223,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             jobsPath,
             """
             [
-              {"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"},
-              {"id":2,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}
+              {
+                "id":1,
+                "name":"Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              },
+              {
+                "id":2,
+                "name":"Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                "steps":[{"name":"Upload logs, and test results","conclusion":"success"}]
+              }
             ]
             """);
 
@@ -3058,6 +3298,79 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             [{"test":"Tests.Failed","job":"Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)","error":"boom","stack_trace":"frame"}]
             """,
             (await File.ReadAllTextAsync(outputPath)).Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "yq"])]
+    public async Task TrustedTestFailureCollectorRejectsPartialEvidenceWhenAnyTrxIsMalformed()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.trx"),
+            """
+            <TestRun>
+              <Results>
+                <UnitTestResult testName="Tests.Failed" outcome="Failed" />
+              </Results>
+            </TestRun>
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00002.trx"),
+            "<TestRun><");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                jobsPath,
+                outputPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+        Assert.Contains(
+            "::error::Unable to parse extracted test result 00002.trx",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "yq"])]
+    public async Task TrustedTestFailureCollectorRejectsWellFormedXmlThatIsNotTrx()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(
+            Path.Combine(testResultsDirectory.FullName, "00001.trx"),
+            "<NotATrx />");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                jobsPath,
+                outputPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+        Assert.Contains(
+            "::error::Unable to parse extracted test result 00001.trx",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3581,6 +3894,51 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Empty(result.Failed);
         Assert.Equal([123], result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsUnavailableTestEvidence()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            testEvidenceState: "unavailable");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(["Rerun requires available trusted test evidence"], result.Failed);
+        Assert.Empty(result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunAllowsNotApplicableTestEvidence()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            testEvidenceState: "not-applicable");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Empty(result.Failed);
+        Assert.Equal([123], result.Reruns);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsOmittedTrustedTestFailure()
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            trustedTestFailuresJson: """[{"test":"Tests.Failed","job":"Tests","error":"boom","stack_trace":"frame"}]""");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(["Rerun requires complete trusted test evidence without failed tests"], result.Failed);
+        Assert.Empty(result.Reruns);
     }
 
     [Fact]
@@ -5413,7 +5771,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string trustedFailedJobsJson = """[{"id":456,"name":"Tests"}]""",
         string runScope = "pull-request",
         string prNumbers = "42",
-        string rerunReason = "Transient infrastructure failure")
+        string rerunReason = "Transient infrastructure failure",
+        string testEvidenceState = "complete",
+        string trustedTestFailuresJson = "[]")
     {
         var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
         var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
@@ -5438,6 +5798,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "failed-jobs.json"),
             trustedFailedJobsJson);
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "test-evidence.json"),
+            JsonSerializer.Serialize(new { state = testEvidenceState }));
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "test-failures.json"),
+            trustedTestFailuresJson);
         if (priorCause is not null)
         {
             var priorCausesDirectory = Directory.CreateDirectory(Path.Combine(failureDataDirectory, "prior-causes")).FullName;
@@ -5688,7 +6054,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string trustedFailedJobs,
         string? causeFileName = null,
         string? cause = null,
-        bool writeTrustedTestFailures = true)
+        bool writeTrustedTestFailures = true,
+        string testEvidenceState = "complete")
     {
         var agentDirectory = Path.Combine(_workspace.Path, "agent");
         var failureDataDirectory = Path.Combine(_workspace.Path, "ci-failure-data");
@@ -5701,6 +6068,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "run.json"),
             """{"id":123,"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""");
+        await File.WriteAllTextAsync(
+            Path.Combine(failureDataDirectory, "test-evidence.json"),
+            JsonSerializer.Serialize(new { state = testEvidenceState }));
         if (writeTrustedTestFailures)
         {
             var trustedTestFailures = new List<Dictionary<string, string>>();

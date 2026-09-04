@@ -10,13 +10,15 @@ ANALYSIS_FILE="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/analysis-result.json"
 CAUSES_DIR="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
 TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
+TEST_EVIDENCE_FILE="ci-failure-data/test-evidence.json"
 RUN_FILE="ci-failure-data/run.json"
 NORMALIZED_TRUSTED_FAILED_JOBS_FILE="${ANALYSIS_FILE}.trusted-failed-jobs.tmp"
 NORMALIZED_TRUSTED_TEST_FAILURES_FILE="${ANALYSIS_FILE}.trusted-test-failures.tmp"
 BOUND_ANALYSIS_FILE="${ANALYSIS_FILE}.bound.tmp"
 trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE"' EXIT
 if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
-   [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$RUN_FILE" ]; then
+   [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$TEST_EVIDENCE_FILE" ] ||
+   [ ! -f "$RUN_FILE" ]; then
   echo "::error::Analysis result or trusted run data not found"
   exit 1
 fi
@@ -122,7 +124,27 @@ fi
 TRUSTED_FAILED_JOBS_FILE="$NORMALIZED_TRUSTED_FAILED_JOBS_FILE"
 
 FAILED_TEST_COUNT=$(jq '[.failed_tests[]?] | length' "$ANALYSIS_FILE")
-if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
+TEST_EVIDENCE_STATE=$(jq -r 'if (type == "object") then (.state // "") else "" end' "$TEST_EVIDENCE_FILE")
+case "$TEST_EVIDENCE_STATE" in
+  unavailable)
+    echo "::error::Trusted test evidence is unavailable"
+    exit 1
+    ;;
+  complete)
+    ;;
+  not-applicable)
+    if [ "$FAILED_TEST_COUNT" -ne 0 ]; then
+      echo "::error::Analysis failed_tests do not match trusted test failure evidence"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "::error::Trusted test evidence state is invalid"
+    exit 1
+    ;;
+esac
+
+if [ "$TEST_EVIDENCE_STATE" = "complete" ]; then
   TRUSTED_TEST_FAILURES_FILE="ci-failure-data/test-failures.json"
   if [ ! -f "$TRUSTED_TEST_FAILURES_FILE" ] ||
      ! bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
@@ -136,31 +158,32 @@ if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
   if ! jq -e \
     --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" \
     --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
-      all(.failed_tests[];
-        . as $reported |
-        ([
-          $trusted_tests[0][] |
-          select(.test == $reported.name and .job == $reported.job)
-        ]) as $matches |
-        ($matches | length) == 1 and
+      ([.failed_tests[] | [.name, .job]]) as $reported_pairs |
+      ([$trusted_tests[0][] | [.test, .job]]) as $trusted_pairs |
+      ($reported_pairs | length) == ($reported_pairs | unique | length) and
+      ($trusted_pairs | length) == ($trusted_pairs | unique | length) and
+      ($reported_pairs | sort) == ($trusted_pairs | sort) and
+      all(.failed_tests[]; . as $reported |
         any($trusted_jobs[0][]; .name == $reported.job))
     ' "$ANALYSIS_FILE" >/dev/null; then
     echo "::error::Analysis failed_tests do not match trusted test failure evidence"
     exit 1
   fi
 
-  jq \
-    --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" '
-      .failed_tests |= map(
-        . as $reported |
-        ([
-          $trusted_tests[0][] |
-          select(.test == $reported.name and .job == $reported.job)
-        ][0]) as $trusted |
-        .error = $trusted.error |
-        .stack_trace = $trusted.stack_trace)
-    ' "$ANALYSIS_FILE" > "$BOUND_ANALYSIS_FILE"
-  mv "$BOUND_ANALYSIS_FILE" "$ANALYSIS_FILE"
+  if [ "$FAILED_TEST_COUNT" -gt 0 ]; then
+    jq \
+      --slurpfile trusted_tests "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" '
+        .failed_tests |= map(
+          . as $reported |
+          ([
+            $trusted_tests[0][] |
+            select(.test == $reported.name and .job == $reported.job)
+          ][0]) as $trusted |
+          .error = $trusted.error |
+          .stack_trace = $trusted.stack_trace)
+      ' "$ANALYSIS_FILE" > "$BOUND_ANALYSIS_FILE"
+    mv "$BOUND_ANALYSIS_FILE" "$ANALYSIS_FILE"
+  fi
 fi
 
 case "${TRUSTED_RUN_SCOPE}:${VERDICT}" in
@@ -316,6 +339,14 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       if [ "$PRIOR_CAUSE_TYPE" != "$CAUSE_TYPE" ]; then
         echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
         exit 1
+      fi
+      if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+        PRIOR_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$PRIOR_CAUSE_FILE")
+        CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
+        if [ "$PRIOR_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
+          echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change stored test_name"
+          exit 1
+        fi
       fi
     fi
 

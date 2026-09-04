@@ -34,9 +34,10 @@ successful `main` run. Candidate attribution is withheld when run history is
 incomplete or when a candidate commit does not map to exactly one PR merged
 into `main`.
 
-PR comments, locks, and reruns require an unambiguous subject PR. Run-scoped
-recurring-cause persistence can continue without one, but its PR occurrence
-context is recorded as unavailable.
+PR comments, locks, and pull-request reruns require an unambiguous subject PR.
+Validated transient `main` failures can be rerun without a subject PR.
+Run-scoped recurring-cause persistence can also continue without one, but its
+PR occurrence context is recorded as unavailable.
 
 ## Agent trust boundary
 
@@ -60,20 +61,23 @@ Each failed test job's logs artifact is selected within the analyzed run and
 attempt, downloaded by artifact ID, and extracted separately. TRX results from
 that artifact are stamped with the corresponding GitHub Actions job name.
 
-Reported failures must match the same trusted `{test, job}` record. Diagnostic
-rebinding and flaky-cause validation use that exact pair, so a real test from
-one job cannot be attributed to another failed job.
+Complete evidence requires the agent to report exactly the same unique
+`{test, job}` records. Diagnostic rebinding and flaky-cause validation use that
+exact pair, so a real test from one job cannot be attributed to another failed
+job.
 
 GitHub's artifact API does not expose a producer job ID. The selector therefore
 uses the job and artifact naming contract in
 [`run-tests.yml`](../../.github/workflows/run-tests.yml). Missing, oversized,
-or ambiguous artifacts make test evidence unavailable rather than producing an
-empty successful result.
+ambiguous, or malformed artifacts make test evidence unavailable rather than
+producing an empty successful result. When no failed job uses the reusable test
+workflow, evidence is explicitly marked not applicable.
 
 ## Side-effect gates
 
-- Only validated transient failures from the same run attempt can request a
-  rerun, and the subject PR must still be open.
+- Only validated transient failures from the same run attempt and with available
+  test evidence can request a rerun. Pull-request reruns additionally require
+  the subject PR to remain open and unlocked.
 - Failures attributed to one PR are reported on that PR.
 - Deterministic `main` failures are reported through `[Main CI Failure]`
   issues.
