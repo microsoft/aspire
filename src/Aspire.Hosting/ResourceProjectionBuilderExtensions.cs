@@ -12,6 +12,13 @@ namespace Aspire.Hosting;
 /// <remarks>
 /// These extensions deliberately target <see cref="IResource"/> rather than <see cref="ContainerResource"/>: the
 /// point of a projection is to give a resource that is not already a container a container shape for one operation.
+/// <para>
+/// A configuration callback receives a builder whose resource is a distinct typed projection, not the model
+/// owner. Use that builder for container-specific configuration and
+/// <see cref="ResourceExtensions.GetOwnerOrSelf"/> for identity-sensitive state, model membership, or reference
+/// comparisons. Casting the projection to <see cref="IResource"/> does not resolve its owner.
+/// Typed resource-event callbacks registered through the projection also retain that typed view.
+/// </para>
 /// </remarks>
 public static class ResourceProjectionBuilderExtensions
 {
@@ -40,6 +47,10 @@ public static class ResourceProjectionBuilderExtensions
     /// The projection is a typed configuration view, not a logical model member, so it is never added to
     /// <see cref="IDistributedApplicationBuilder.Resources"/>; the owner remains the only member representing the
     /// pair. That keeps references, events, and notifications addressed to a single canonical identity.
+    /// Extension authors storing resource references in custom annotations or dictionaries should call
+    /// <see cref="ResourceExtensions.GetOwnerOrSelf"/> inside <paramref name="configure"/> when those references
+    /// represent logical identity. During <paramref name="createProjection"/>, use the original owner directly:
+    /// a custom projection is not registered until its factory returns.
     /// </para>
     /// <para>
     /// Nothing is selected and the callback does not run when the AppHost is not performing <paramref name="operation"/>,
@@ -193,6 +204,8 @@ public static class ResourceProjectionBuilderExtensions
     /// The image is required so a projection can never exist without a valid container source. Configuration
     /// written inside <paramref name="configure"/> applies only to the run-mode container; configuration written
     /// on <paramref name="builder"/> applies to the resource itself and is seen by every projection of it.
+    /// The callback's resource is a distinct container view. Use <see cref="ResourceExtensions.GetOwnerOrSelf"/>
+    /// when capturing its logical identity rather than its container-specific configuration.
     /// </remarks>
     // Hidden from container resources in the generated SDKs. Polyglot callers have no analyzer, so without
     // this the method would be offered on every container type and only fail at run time.
@@ -229,6 +242,8 @@ public static class ResourceProjectionBuilderExtensions
     /// This is the overload integrations use to implement their own <c>RunAsContainer</c> convention when the
     /// container has an integration-specific type, such as the Azure emulator resources. The owner keeps its own
     /// type so the call can be chained, and the integration's container type is what reaches the callback.
+    /// Use <see cref="ResourceExtensions.GetOwnerOrSelf"/> in the callback to obtain the logical model identity
+    /// without assuming that the owner has the container's CLR type.
     /// </para>
     /// <para>
     /// An integration's <c>RunAsContainer</c> nests the caller's callback inside its own, so a single callback is

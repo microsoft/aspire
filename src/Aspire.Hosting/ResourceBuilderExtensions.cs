@@ -128,7 +128,7 @@ public static class ResourceBuilderExtensions
             return builder.WithAnnotation(new PersistenceAnnotation
             {
                 Mode = PersistenceMode.Resource,
-                SourceResource = sourceBuilder.Resource
+                SourceResource = sourceBuilder.Resource.GetOwnerOrSelf()
             }, ResourceAnnotationMutationBehavior.Replace);
         }
 
@@ -2271,7 +2271,7 @@ public static class ResourceBuilderExtensions
 
         return builder.WithAnnotation(new ContainerFilesDestinationAnnotation()
         {
-            Source = source.Resource,
+            Source = source.Resource.GetOwnerOrSelf(),
             DestinationPath = destinationPath
         });
     }
@@ -4357,7 +4357,9 @@ public static class ResourceBuilderExtensions
                 var context = new HttpsEndpointUpdateCallbackContext
                 {
                     Services = @event.Services,
-                    Resource = resource,
+                    // Resolve when invoked so even subscriptions made by a custom projection factory
+                    // use the owner after registration. Certificate annotations are shared by both views.
+                    Resource = resource.GetOwnerOrSelf(),
                     Model = @event.Model,
                     CancellationToken = cancellationToken,
                 };

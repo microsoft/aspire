@@ -32,34 +32,39 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to canonicalize.</param>
     /// <returns>The projection owner when <paramref name="resource"/> is a projection; otherwise, <paramref name="resource"/>.</returns>
     /// <remarks>
-    /// Callers resolving a contract such as <see cref="IResourceWithConnectionString"/> should test the result of
-    /// this method first and fall back to the original resource, because a projection shares its owner's annotations
-    /// but not its interfaces: an untyped projection facade is a plain <see cref="ContainerResource"/> and silently
-    /// fails an <c>is</c> test the owner would pass. Contracts resolve to the owner because they describe identity —
-    /// what other resources reference and what <c>WithReference</c> binds to — while the projection is authoritative
-    /// only for shape. The fallback is what still lets a typed projection carry a contract its owner does not have.
     /// <para>
-    /// Owner-first does not stop a projection from changing a contract's value, so resist "flipping" it to make a
-    /// projection win. Both sanctioned mechanisms route through the owner, because the owner is the identity
-    /// consumers reference and must be the one that hands the value out:
+    /// A projection is a typed configuration view that shares its owner's name and annotations, but is a distinct
+    /// object. Only the owner is added to the application model. Use this method when storing resource identity,
+    /// comparing resources, or looking up a resource in the model. For an ordinary resource, this method returns
+    /// the same instance; it does not search the model by name or unwrap arbitrary resource wrappers.
     /// </para>
-    /// <list type="number">
-    /// <item>The owner branches on its own shape, as in <c>AzureCosmosDBResource.IsEmulator => this.IsContainer()</c>
-    /// and <c>AzureSignalRResource.ConnectionStringExpression</c>. <c>IsContainer</c> resolves projections, so the
-    /// projection genuinely drives the answer.</item>
-    /// <item>The owner consults an annotation the projection wrote. Because the projection shares the owner's
-    /// annotation collection, a <see cref="ConnectionStringRedirectAnnotation"/> registered from the projected
-    /// builder is the same annotation the owner reads back — this is how <c>RunAsContainer</c> already overrides
-    /// connection strings for Redis, Postgres, SQL Server, and Key Vault.</item>
-    /// </list>
     /// <para>
-    /// Consistent with that, none of the eight shipped Azure emulator resources declares a contract; they are all
-    /// shape-only <see cref="ContainerResource"/> types. Projection-first would instead let publish emit a value
-    /// that run never uses, since only the manifest writer and <c>WithReference</c> ever see a projection.
+    /// Keep using the projection for container-specific configuration. The owner need not have the same CLR type
+    /// or implement the same interfaces, so the result is deliberately returned as <see cref="IResource"/>.
+    /// When resolving a contract such as <see cref="IResourceWithConnectionString"/>, prefer the owner when it
+    /// implements that contract and otherwise fall back to the projection. An owner can vary a contract's value
+    /// by inspecting its selected shape or shared annotations, such as <see cref="ConnectionStringRedirectAnnotation"/>.
+    /// </para>
+    /// <para>
+    /// Integration-authored projections are associated with their owner before the projection configuration
+    /// callback runs. Owner resolution is not available during construction of an unregistered custom projection;
+    /// use the owner supplied to its factory or constructor there.
     /// </para>
     /// </remarks>
+    /// <example>
+    /// Keep container configuration separate from logical resource identity:
+    /// <code lang="csharp">
+    /// executable.RunAsContainerImage("contoso/worker:1.0", container =>
+    /// {
+    ///     container.Resource.Entrypoint = "/app/worker";
+    ///     IResource owner = container.Resource.GetOwnerOrSelf();
+    ///     resourcesByIdentity[owner] = "worker";
+    /// });
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
     [AspireExportIgnore(Reason = "Projection identity helper is not part of the ATS surface.")]
-    internal static IResource GetOwnerOrSelf(this IResource resource)
+    public static IResource GetOwnerOrSelf(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 

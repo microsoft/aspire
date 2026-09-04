@@ -5,12 +5,200 @@ using System.Collections.ObjectModel;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
 public class ResourceProjectionTests
 {
+    [Fact]
+    public void GetOwnerOrSelfIsPublicAndPreservesOrdinaryResourceIdentity()
+    {
+        Assert.NotNull(typeof(ResourceExtensions).GetMethod(nameof(ResourceExtensions.GetOwnerOrSelf)));
+
+        var resource = new PlainOwnerResource("worker");
+        var container = new ContainerResource("container");
+
+        Assert.Same(resource, resource.GetOwnerOrSelf());
+        Assert.Same(container, container.GetOwnerOrSelf());
+        Assert.Throws<ArgumentNullException>(() => ResourceExtensions.GetOwnerOrSelf(null!));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetOwnerOrSelfResolvesSelectedProjectionsInsideConfiguration(bool customProjection)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddResource(new PlainOwnerResource("worker"));
+        ContainerResource? configuredProjection = null;
+
+        void Configure(IResourceBuilder<ContainerResource> container)
+        {
+            configuredProjection = container.Resource;
+            Assert.Same(owner.Resource, container.Resource.GetOwnerOrSelf());
+            Assert.Same(owner.Resource, owner.Resource.GetOwnerOrSelf());
+        }
+
+        if (customProjection)
+        {
+            owner.WithContainerProjection(
+                DistributedApplicationOperation.Run,
+                () => new FirstTestProjection(owner.Resource),
+                Configure);
+        }
+        else
+        {
+            owner.RunAsContainerImage("contoso/worker:1.0", Configure);
+        }
+
+        Assert.NotNull(configuredProjection);
+        Assert.Same(owner.Resource, configuredProjection.GetOwnerOrSelf().GetOwnerOrSelf());
+        Assert.Same(owner.Resource, Assert.Single(builder.Resources));
+        Assert.False(builder.Resources.Contains(configuredProjection));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProjectionEndpointReferencesPreserveContractsAndUseOwnerIdentity(bool ownerHasEndpoints)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddResource<IResource>(ownerHasEndpoints
+            ? new ExecutableResource("worker", "worker", ".")
+            : new PlainOwnerResource("worker"));
+        var references = new List<EndpointReference>();
+
+        owner.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () =>
+            {
+                var projection = new FirstTestProjection(owner.Resource);
+                references.Add(new EndpointReference(projection, "http"));
+                Assert.Same(projection, references[0].Resource);
+                return projection;
+            },
+            container =>
+            {
+                container.WithImage("contoso/worker:1.0")
+                    .WithHttpEndpoint(targetPort: 8080, env: "PORT");
+                var annotation = Assert.Single(container.Resource.Annotations.OfType<EndpointAnnotation>());
+
+                references.Add(new EndpointReference(container.Resource, "http"));
+                references.Add(new EndpointReference(container.Resource, annotation));
+                references.Add(container.GetEndpoint("http"));
+            });
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, owner.Resource);
+        foreach (var callback in owner.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        var port = Assert.IsType<EndpointReferenceExpression>(context.EnvironmentVariables["PORT"]);
+        references.Add(port.Endpoint);
+        Assert.Equal("8080", await port.GetValueAsync(TestContext.Current.CancellationToken));
+
+        var endpoint = Assert.Single(owner.Resource.Annotations.OfType<EndpointAnnotation>());
+        var provider = ownerHasEndpoints ? owner.Resource : owner.Resource.AsContainer();
+        Assert.NotNull(provider);
+        foreach (var reference in references)
+        {
+            Assert.Same(provider, reference.Resource);
+            Assert.Same(endpoint, reference.EndpointAnnotation);
+            Assert.Same(owner.Resource, Assert.Single(((IValueWithReferences)reference).References));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task HttpsEndpointCallbacksUseOwnerIdentity(bool useProjection, bool useHttps)
+    {
+#pragma warning disable ASPIRECERTIFICATES001
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddExecutable("worker", "worker", ".");
+        var contexts = new List<HttpsEndpointUpdateCallbackContext>();
+
+        void Configure(IResourceBuilder<IResource> resource)
+        {
+            resource.WithAnnotation(new HttpsCertificateAnnotation { UseDeveloperCertificate = useHttps });
+            resource.SubscribeHttpsEndpointsUpdate(contexts.Add);
+        }
+
+        if (useProjection)
+        {
+            owner.RunAsContainerImage("contoso/worker:1.0", Configure);
+        }
+        else
+        {
+            Configure(owner);
+        }
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(
+            new TestDeveloperCertificateService([], false, false, false));
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(
+            new BeforeStartEvent(app.Services, model),
+            TestContext.Current.CancellationToken);
+
+        if (useHttps)
+        {
+            var context = Assert.Single(contexts);
+            Assert.Same(owner.Resource, context.Resource);
+            Assert.Same(owner.Resource, Assert.Single(context.Model.Resources));
+            Assert.True(context.Model.Resources.Contains(context.Resource));
+            Assert.Same(app.Services, context.Services);
+        }
+        else
+        {
+            Assert.Empty(contexts);
+        }
+#pragma warning restore ASPIRECERTIFICATES001
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ContainerFilesSourcesUseOwnerIdentity(bool useProjection)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var owner = new PlainOwnerResource("source");
+        var destination = builder.AddResource(new ProjectResource("destination"));
+        var files = new ContainerFilesTestProjection(owner);
+
+        void Configure(IResourceBuilder<ContainerFilesTestProjection> source)
+        {
+            source.WithImage("contoso/files:1.0")
+                .WithContainerFilesSource("/files");
+            destination.PublishWithContainerFiles(source, "/app");
+        }
+
+        if (useProjection)
+        {
+            builder.AddResource(owner).WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                () => files,
+                Configure);
+        }
+        else
+        {
+            Configure(builder.AddResource(files));
+        }
+
+        var annotation = Assert.Single(destination.Resource.Annotations.OfType<ContainerFilesDestinationAnnotation>());
+        Assert.Same(useProjection ? owner : (IResource)files, annotation.Source);
+        Assert.True(builder.Resources.Contains(annotation.Source));
+        Assert.Equal("/app", annotation.DestinationPath);
+        Assert.Equal("/files", Assert.Single(annotation.Source.Annotations.OfType<ContainerFilesSourceAnnotation>()).SourcePath);
+        Assert.True(annotation.Source.TryGetContainerImageName(out var image));
+        Assert.Equal("contoso/files:1.0", image);
+    }
+
     [Fact]
     public async Task TypedProjectionConfiguresOwnerAndOwnerRemainsSoleModelMember()
     {
@@ -422,10 +610,14 @@ public class ResourceProjectionTests
                 DistributedApplicationOperation.Publish,
                 container => container
                     .WithImage("projected-image")
-                    .OnResourceReady((resource, _, _) =>
-                        notificationService.PublishUpdateAsync(
+                    .OnResourceReady((resource, @event, _) =>
+                    {
+                        Assert.Same(resource, @event.Resource.AsContainer());
+                        Assert.Same(@event.Resource, resource.GetOwnerOrSelf());
+                        return notificationService.PublishUpdateAsync(
                             resource,
-                            state => state with { State = KnownResourceStates.Running })));
+                            state => state with { State = KnownResourceStates.Running });
+                    }));
 
         await notificationService.PublishUpdateAsync(executable.Resource, state => state);
         await builder.Eventing.PublishAsync(
@@ -964,7 +1156,13 @@ public class ResourceProjectionTests
 
     private sealed class PlainOwnerResource(string name) : Resource(name);
 
-    private sealed class FirstTestProjection(PlainOwnerResource owner) : ContainerResource(owner.Name)
+    private sealed class ContainerFilesTestProjection(PlainOwnerResource owner)
+        : ContainerResource(owner.Name), IResourceWithContainerFiles
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+    }
+
+    private sealed class FirstTestProjection(IResource owner) : ContainerResource(owner.Name)
     {
         public override ResourceAnnotationCollection Annotations => owner.Annotations;
     }
