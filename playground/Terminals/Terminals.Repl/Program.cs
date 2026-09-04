@@ -59,6 +59,9 @@ while (true)
         case "kgp":
             PrintKittyImage();
             break;
+        case "sixel":
+            PrintSixelImage();
+            break;
         case "echo":
             Console.WriteLine(rest);
             break;
@@ -94,6 +97,7 @@ static void PrintHelp()
     Console.WriteLine($"  {Cyan}echo <text>{Reset}           Echo a line back");
     Console.WriteLine($"  {Cyan}rainbow [text]{Reset}        Print rainbow text");
     Console.WriteLine($"  {Cyan}kgp{Reset}                   Draw a Kitty graphics image (re-run to replace it)");
+    Console.WriteLine($"  {Cyan}sixel{Reset}                 Draw a Sixel graphics image");
     Console.WriteLine($"  {Cyan}clear{Reset}                 Clear the screen");
     Console.WriteLine($"  {Cyan}exit{Reset}                  Quit the REPL");
 }
@@ -177,5 +181,65 @@ static void PrintKittyImage()
     Console.Out.Flush();
     Console.WriteLine();
     Console.WriteLine($"{Green}Sent a {Size}x{Size} RGBA Kitty image (id={ImageId}, placement={PlacementId}).{Reset}");
+}
+
+// Emits a Sixel image, the other graphics protocol the dashboard terminal can
+// render. Useful as an A/B against `kgp`: both travel the same PTY -> Hex1b
+// HMP1 -> WebSocket -> xterm.js path, so if one renders and the other does not,
+// the difference is in protocol handling rather than the transport.
+//
+// A Sixel sequence is DCS-framed rather than APC-framed:
+//
+//   ESC P <macro>;<bg>;<hgrid> q  <color defs> <sixel data>  ESC \
+//   ESC P 0;1;0 q #0;2;0;0;0#1;2;100;40;0 #1~~~~$-  ESC \
+//
+//   #<n>;2;<r>;<g>;<b>   define colour n as RGB percentages (0-100), not 0-255
+//   #<n>                 select colour n for subsequent sixels
+//   ?..~                 one sixel = 6 vertical pixels, value = char - 63,
+//                        bit 0 = top pixel ... bit 5 = bottom pixel
+//                        so '~' (126-63 = 63) sets all six
+//   $                    carriage return: back to column 0, same sixel row
+//   -                    newline: advance to the next six-pixel band
+//
+// Spec: https://vt100.net/docs/vt3xx-gp/chapter14.html
+static void PrintSixelImage()
+{
+    const int Bands = 8;     // 8 bands x 6 pixels = 48 pixels tall
+    const int Columns = 64;  // 64 pixels wide
+
+    var sb = new System.Text.StringBuilder();
+
+    // P1=0 (pixel aspect 1:1), P2=1 (leave background untouched), P3=0.
+    sb.Append("\u001bP0;1;0q");
+
+    // Four colours, cycled per band so the result is obviously an image and not
+    // a solid block. Sixel colour components are percentages.
+    sb.Append("#0;2;100;20;20");
+    sb.Append("#1;2;20;100;40");
+    sb.Append("#2;2;30;50;100");
+    sb.Append("#3;2;100;85;20");
+
+    for (var band = 0; band < Bands; band++)
+    {
+        sb.Append(CultureInfo.InvariantCulture, $"#{band % 4}");
+
+        // '!' is the repeat introducer: !<count><char> repeats a sixel, which
+        // keeps the payload small compared with emitting 64 separate chars.
+        sb.Append(CultureInfo.InvariantCulture, $"!{Columns}~");
+
+        // '-' ends the band; omitted after the last one so we don't leave the
+        // cursor a row lower than the image actually extends.
+        if (band < Bands - 1)
+        {
+            sb.Append('-');
+        }
+    }
+
+    sb.Append("\u001b\\");
+
+    Console.Write(sb.ToString());
+    Console.Out.Flush();
+    Console.WriteLine();
+    Console.WriteLine($"{Green}Sent a {Columns}x{Bands * 6} Sixel image.{Reset}");
 }
 

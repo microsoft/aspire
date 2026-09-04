@@ -126,10 +126,16 @@ After re-vendoring, update the hashes in this file and re-check the terminal:
 open a Hex1b `KgpDemo` image window in the dashboard and drag it around, then
 confirm no grey rectangles remain at the previous positions.
 
-## Kitty graphics constraints
+## Graphics protocol constraints
 
-`TerminalView.razor.js` loads the addon with Sixel and iTerm inline images
-disabled and Kitty enabled, because Hex1b only emits Kitty sequences.
+`TerminalView.razor.js` loads the addon with **Kitty and Sixel enabled** and
+iTerm inline images (IIP) disabled, because Hex1b can emit the first two but
+never the third.
+
+Both protocols travel the same path — workload PTY → Hex1b HMP1 producer →
+dashboard WebSocket → `addon-image` — and the dashboard does not interpret
+either. Sixel arrives DCS-framed (`ESC P … q … ESC \`) and is picked up by the
+addon's DCS `q` handler; Kitty arrives APC-framed (`ESC _G … ESC \`).
 
 ### Why the CSP needs `'wasm-unsafe-eval'`
 
@@ -142,10 +148,11 @@ KittyGraphicsHandler.put -> _streamPayload -> decoder.init()
   -> new WebAssembly.Module / new WebAssembly.Instance
 ```
 
-This is on the mandatory path for every Kitty transmission, so turning Sixel off
-does not avoid it, and the addon has no JavaScript fallback for this decoder.
-(The `atob` fallbacks elsewhere in the bundle decode the embedded wasm binary
-itself, which is stored as base64.)
+This is on the mandatory path for every Kitty transmission, so it is not a
+consequence of enabling Sixel — disabling Sixel would not avoid it, and the
+addon has no JavaScript fallback for this decoder. (The `atob` fallbacks
+elsewhere in the bundle decode the embedded wasm binary itself, which is stored
+as base64.)
 
 Under a bare `script-src 'self'` the browser refuses to compile the module, the
 addon throws part-way through the APC sequence, and xterm's parser is left

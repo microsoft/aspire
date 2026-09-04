@@ -1055,28 +1055,29 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     const FitAddon = window.FitAddon.FitAddon;
     const fitAddon = new FitAddon();
     const ImageAddon = window.ImageAddon.ImageAddon;
-    // Sixel and iTerm inline images (IIP) are switched off because Hex1b only
-    // emits Kitty sequences; leaving them on would register extra DCS/OSC
-    // handlers and decoders for formats that can never arrive here.
+    // Kitty and Sixel are both enabled; Hex1b can emit either. iTerm inline
+    // images (IIP) stay off because Hex1b never emits them, and leaving that
+    // handler registered would only add an OSC hook for a format that cannot
+    // arrive here.
     //
-    // The Kitty path itself decodes payloads through a WebAssembly module, so
-    // the dashboard's CSP carries 'wasm-unsafe-eval' (see
-    // BrowserSecurityHeadersMiddleware). Note that turning Sixel off does not
-    // avoid this: Kitty payloads are base64, and the addon decodes them with a
-    // wasm-compiled streaming base64 decoder that has no JS fallback
-    // (KittyGraphicsHandler.put -> _streamPayload -> decoder.init()). Without
-    // the CSP entry the addon throws mid-APC and the terminal stops advancing
-    // until the next reconnect.
+    // Both decode paths go through a WebAssembly module, so the dashboard's CSP
+    // carries 'wasm-unsafe-eval' (see BrowserSecurityHeadersMiddleware). Note
+    // this is not specific to Sixel: Kitty payloads are base64, and the addon
+    // decodes them with a wasm-compiled streaming base64 decoder that has no JS
+    // fallback (KittyGraphicsHandler.put -> _streamPayload -> decoder.init()).
+    // Without the CSP entry the addon throws mid-sequence and the terminal
+    // stops advancing until the next reconnect.
     //
     // The limits below bound how much browser memory a workload can pin by
-    // spraying images down the PTY. They mirror the Hex1b WebMuxerDemo
-    // sample so behaviour matches the reference implementation.
+    // spraying images down the PTY. sixelSizeLimit mirrors kittySizeLimit so
+    // neither protocol is a cheaper way to exhaust the same budget.
     const imageAddon = new ImageAddon({
         enableSizeReports: true,
         pixelLimit: 4 * 1024 * 1024,
         storageLimit: 64,
         showPlaceholder: true,
-        sixelSupport: false,
+        sixelSupport: true,
+        sixelSizeLimit: 8 * 1024 * 1024,
         iipSupport: false,
         kittySupport: true,
         kittySizeLimit: 8 * 1024 * 1024,
