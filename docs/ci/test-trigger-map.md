@@ -331,7 +331,7 @@ it.
      target to schedule; record why in the adjacent YAML comment;
    - add a top-level skip pattern only when the path cannot affect main CI, or a
      dedicated workflow fully validates it; preserve any `keep_routed` carve-out;
-   - use `affected_project_rules` only when an affected non-matrix project
+   - use `affected_project_rules` only when an affected production/non-test project
      implies work beyond the graph-selected tests, and `derived_targets` only
      when selecting one test inherently requires another target;
    - keep `reason` to a short description of what the rule covers or why the
