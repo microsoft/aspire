@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { AspireConfigFile, aspireConfigFileName } from './cliTypes';
-import { findAspireSettingsFiles } from './workspace';
+import { AspireConfigFile } from './cliTypes';
+import { findAspireConfigFiles } from './workspace';
 import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
@@ -107,8 +107,11 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
             extensionLogOutputChannel.info('Auto-restore is disabled or the workspace is not trusted; skipping restore');
             return;
         }
-        const allConfigs = await findAspireSettingsFiles();
-        const configs = allConfigs.filter(uri => uri.fsPath.endsWith(aspireConfigFileName));
+        // Auto-restore only ever targets the new-format config file, so use the config-only
+        // finder directly instead of findAspireSettingsFiles()+filter: that avoids discarding an
+        // entire legacy-settings glob walk this path never needed, and lets this call coalesce
+        // with any concurrent caller of findAspireConfigFiles() during activation.
+        const configs = await findAspireConfigFiles();
         if (configs.length === 0) {
             return;
         }

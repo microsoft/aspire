@@ -129,7 +129,7 @@ suite('AspirePackageRestoreProvider', () => {
         sandbox.stub(vscode.workspace, 'getConfiguration').returns({
             get: <T>() => true as T,
         } as unknown as vscode.WorkspaceConfiguration);
-        sandbox.stub(workspaceModule, 'findAspireSettingsFiles').resolves([configUri]);
+        sandbox.stub(workspaceModule, 'findAspireConfigFiles').resolves([configUri]);
         const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
         const provider = new AspirePackageRestoreProvider(
             { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
@@ -372,7 +372,7 @@ suite('AspirePackageRestoreProvider', () => {
 
         const getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder');
         configUris.forEach((uri, i) => getWorkspaceFolderStub.withArgs(uri).returns(folders[i]));
-        sandbox.stub(workspaceModule, 'findAspireSettingsFiles').resolves(configUris);
+        sandbox.stub(workspaceModule, 'findAspireConfigFiles').resolves(configUris);
         sandbox.stub(vscode.workspace, 'getConfiguration').returns({
             get: <T>() => true as T,
         } as unknown as vscode.WorkspaceConfiguration);

@@ -7,10 +7,30 @@ import { resolveCliPath, tryExecuteCli, type CliPathResolutionResult } from './c
 import { CliPathResolutionTarget } from './cliPathVariables';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import { sendTelemetryEvent } from './telemetry';
-import { getCommonExcludeGlob } from './workspaceFileSearch';
+import { getCommonExcludeGlob, appHostDiscoveryFindFilesMaxResults } from './workspaceFileSearch';
 import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
+
+/**
+ * Searches for aspire.config.json files in the workspace, excluding common build output and
+ * dependency directories. Callers that race during activation (e.g. the startup AppHost-path
+ * check and AspirePackageRestoreProvider's auto-restore pass) share a single in-flight glob walk
+ * instead of each starting an independent vscode.workspace.findFiles call.
+ * @returns An array of URIs pointing to found aspire.config.json files
+ */
+export function findAspireConfigFiles(): Promise<vscode.Uri[]> {
+    if (!inFlightConfigFilesSearch) {
+        inFlightConfigFilesSearch = Promise.resolve(vscode.workspace.findFiles(`**/${aspireConfigFileName}`, getCommonExcludeGlob(), appHostDiscoveryFindFilesMaxResults))
+            .finally(() => {
+                inFlightConfigFilesSearch = undefined;
+            });
+    }
+
+    return inFlightConfigFilesSearch;
+}
+
+let inFlightConfigFilesSearch: Promise<vscode.Uri[]> | undefined;
 
 /**
  * Searches for Aspire configuration files in the workspace, excluding common build output
@@ -21,10 +41,12 @@ export { getCommonExcludeGlob } from './workspaceFileSearch';
 export async function findAspireSettingsFiles(): Promise<vscode.Uri[]> {
     const excludePattern = getCommonExcludeGlob();
 
-    // Search for both new and legacy config files in parallel
+    // Search for both new and legacy config files in parallel. The new-format search goes
+    // through findAspireConfigFiles so it is shared with other discovery call sites racing
+    // concurrently during activation (see findAspireConfigFiles).
     const [newConfigFiles, legacySettingsFiles] = await Promise.all([
-        vscode.workspace.findFiles(`**/${aspireConfigFileName}`, excludePattern),
-        vscode.workspace.findFiles('**/.aspire/settings.json', excludePattern),
+        findAspireConfigFiles(),
+        vscode.workspace.findFiles('**/.aspire/settings.json', excludePattern, appHostDiscoveryFindFilesMaxResults),
     ]);
 
     // Build a set of directories that already have an aspire.config.json
