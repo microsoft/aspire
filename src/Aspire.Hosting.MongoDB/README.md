@@ -14,29 +14,89 @@ aspire add Aspire.Hosting.MongoDB
 
 ## Usage example
 
-In the AppHost, add a MongoDB resource and reference it from another resource with either C# or TypeScript:
+Then, in the AppHost, add a MongoDB server with a single-member replica set for local transactions and change streams. Add a database and reference it using the normal resource APIs:
+
+> **Experimental:** Replica set, keyfile, and TLS configuration APIs are marked `ASPIREMONGODB001` and may change. C# AppHosts must explicitly opt in by suppressing this diagnostic where these APIs are used.
 
 **C#**
 
 ```csharp
-var db = builder.AddMongoDB("mongodb").AddDatabase("mydb");
+#pragma warning disable ASPIREMONGODB001
+var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet();
+#pragma warning restore ASPIREMONGODB001
+var db = mongodb.AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
-                       .WithReference(db);
+var myService = builder.AddProject<Projects.MyService>("myservice")
+                       .WithReference(db)
+                       .WaitFor(db);
 ```
 
 **TypeScript**
 
 ```typescript
-const db = await builder.addMongoDB("mongodb").addDatabase("mydb");
+const mongodb = await builder.addMongoDB("mongodb").withReplicaSet();
+const db = await mongodb.addDatabase("mydb");
 
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
-                       .withReference(db);
+    .withReference(db)
+    .waitFor(db);
 ```
 
-### Replica set
+Omit `WithReplicaSet()` / `withReplicaSet()` when a standalone server is sufficient.
 
-A replica set groups several MongoDB servers into one logical resource, which is what enables transactions and change streams. Reference the replica set rather than any individual member:
+### Single-member replica set
+
+`WithReplicaSet()` configures **and initializes** a single-member replica set on the same `MongoDBServerResource`; it is no longer just a low-level `mongod` option. No separate replica set resource is needed. `AddDatabase`, `WithReference`, and `WaitFor` continue to work with the server or its databases. Initialization runs during the resource lifecycle, not in health checks. Readiness waits for initialization and primary election, so consumers can use transactions and change streams after `WaitFor`.
+
+The optional set name defaults to the server's Aspire resource name. To choose a different name:
+
+**C#**
+
+```csharp
+var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet("app-rs");
+```
+
+**TypeScript**
+
+```typescript
+const mongodb = await builder.addMongoDB("mongodb").withReplicaSet({ name: "app-rs" });
+```
+
+Repeating the same configuration is a no-op; a conflicting name throws. Omitting the name on a later call preserves the previously configured name.
+
+Consumer connection strings use the server's normal endpoint with `directConnection=true` and the driver's default primary read preference. This path does not use topology discovery, split-horizon addresses, or fixed host ports. It preserves normal automatic TLS behavior but does not require a developer certificate or insecure TLS flags.
+
+#### Keyfiles and persistence
+
+MongoDB requires a keyfile when authentication and replication are enabled, even with one member. `WithReplicaSet()` generates a secret keyfile if none is configured. To supply your own keyfile content, pass a secret parameter to `WithKeyFile` **before** calling `WithReplicaSet`:
+
+**C#**
+
+```csharp
+var keyfile = builder.AddParameter("mongo-keyfile", secret: true);
+var mongodb = builder.AddMongoDB("mongodb")
+    .WithKeyFile(keyfile.Resource)
+    .WithReplicaSet();
+```
+
+**TypeScript**
+
+```typescript
+const keyfile = await builder.addParameter("mongo-keyfile", { secret: true });
+const mongodb = await builder.addMongoDB("mongodb")
+    .withKeyFile(keyfile)
+    .withReplicaSet();
+```
+
+The parameter supplies the file's **contents**, not a host file path. Contents must satisfy [MongoDB's keyfile requirements](https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile). The file is mounted inside the container at `/etc/rs.key` by default with restricted permissions. It authenticates replica set members and does not replace the username and password used by applications. Supplying a different keyfile after `WithReplicaSet()` conflicts with the generated keyfile and throws; repeating the same explicit keyfile parameter and container path is a no-op.
+
+Use `WithDataVolume()` or `WithDataBindMount()` to persist data. MongoDB only applies initial credentials to an empty data directory, so keep the configured credentials and replica set identity unchanged when reusing data. With the default set name, renaming the Aspire resource also changes the set identity. Existing compatible single-member data is reused without forced reconfiguration; mismatched set names, member addresses, or multi-member data are rejected. Preserve the original configuration or deliberately start with an empty development volume rather than expecting automatic migration.
+
+### Advanced multi-member experiments
+
+`AddMongoDBReplicaSet(...).WithMember(...)` is a separate experimental path for **local multi-member replication experiments**, not a production-ready deployment model. Use it when exploring replication or elections across multiple containers, not merely to enable transactions or change streams. Production topology and deployment projection require separate support.
+
+Create plain MongoDB servers and let `WithMember` configure their shared replication settings. Do **not** call `WithReplicaSet` on these servers: a single-member set configured that way cannot be adopted by the advanced API, and `WithMember` rejects it even if the set names match.
 
 **C#**
 
@@ -50,7 +110,7 @@ var replicaSet = builder.AddMongoDBReplicaSet("rs0")
                         .WithMember(mongo2)
                         .WithMember(mongo3);
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddProject<Projects.MyService>("myservice")
                        .WithReference(replicaSet)
                        .WaitFor(replicaSet);
 ```
@@ -72,11 +132,13 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
     .waitFor(replicaSet);
 ```
 
-A single member is enough if all you need is transactions and change streams rather than redundancy. A replica set holds at most 50 members, the first seven of which vote in elections; the rest join as non-voting members that still carry a full copy of the data.
+Reference and wait for the advanced replica set resource, rather than an individual member. A replica set holds at most 50 members, the first seven of which vote in elections; the rest join as non-voting members that still carry a full copy of the data.
 
-> **Replica sets only work when running locally.** The set is initialized by the app host itself, and nothing performs that step during a deployment, so `AddMongoDBReplicaSet` throws when the app host runs in publish mode. The same applies to `WithReplicaSet`, `WithKeyFile` and the TLS configuration methods. An application that uses a replica set therefore cannot be published or deployed yet.
+Members share credentials and a keyfile owned by the advanced replica set. Pass a username or password to `AddMongoDBReplicaSet`, not to individual members; conflicting credentials or member-specific keyfiles are rejected. Existing volumes retain their original credentials, so use matching credential parameters or intentionally start with empty development volumes. This does not migrate an existing single-member set into the advanced topology.
 
-Members share one set of credentials, which the replica set owns. Pass a user name or password to `AddMongoDBReplicaSet` rather than to the individual members; passing different ones to a member is rejected. Note that MongoDB only applies the initial credentials to an empty data directory, so a server that already has a data volume from a previous run as a standalone server keeps the credentials that volume was created with. Adding such a server to a replica set means starting from an empty volume, or passing that server's existing password parameter to `AddMongoDBReplicaSet` so that both agree.
+### Publish limitation
+
+**Both replica set paths are supported only for local runs.** `WithReplicaSet` and `AddMongoDBReplicaSet` reject publish mode as unsupported, rather than being silently excluded or becoming no-ops. `WithKeyFile` and the TLS configuration methods also reject publish mode. Applications using these configurations cannot be published or deployed yet; production deployment projection is separate work.
 
 ## TLS
 
@@ -84,7 +146,9 @@ A MongoDB server serves TLS whenever an HTTPS/TLS certificate is available for i
 
 The developer certificate is issued for `localhost`, so a consumer running on the host validates it without any further configuration. A consumer running in a container is a different matter: it reaches the server by its resource name on the container network, which is not a name the certificate carries, so its TLS handshake fails host name validation. Until certificates covering container network names are available, a containerized consumer of a TLS-enabled MongoDB server has to be configured to relax host name validation.
 
-Opting the server out of TLS with `WithoutHttpsCertificate()` is the other way around this, but only for a standalone server. Replica set members have to serve TLS, because the split-horizon addressing that advertises host-reachable addresses to outside clients keys off the SNI of the incoming connection, and a member without TLS fails initialization with an explicit error. A containerized consumer of a replica set therefore has to relax host name validation.
+`WithoutHttpsCertificate()` can opt out of TLS for either a standalone server or the simple `WithReplicaSet()` path. The single-member path does not require TLS and does not automatically enable `WithTlsAllowInvalidCertificates()`. When TLS is available, consumers still need to trust the certificate and connect using a hostname it covers.
+
+Only the advanced `AddMongoDBReplicaSet(...).WithMember(...)` path requires TLS for split-horizon addressing: host-reachable addresses are selected using the incoming connection's SNI, and a member without TLS fails initialization. Its current member configuration relaxes peer certificate validation, and containerized clients need certificates covering container network names or development-only hostname-validation relaxation. These limitations are another reason to keep this path for local experiments.
 
 ## Connection Properties
 
@@ -104,6 +168,8 @@ The MongoDB server resource exposes the following connection properties:
 | `AuthenticationMechanism` | The authentication mechanism (available when a password parameter is configured) |
 | `Uri` | The connection URI, with the format `mongodb://{Username}:{Password}@{Host}:{Port}/?authSource={AuthenticationDatabase}&authMechanism={AuthenticationMechanism}` |
 
+With `WithReplicaSet()`, this remains a server resource with a single `Host` and `Port`; its URI adds `directConnection=true` and keeps the default primary read preference. TLS adds `tls=true` when enabled.
+
 ### MongoDB database
 
 The MongoDB database resource combines the server properties above and adds the following connection property:
@@ -112,9 +178,9 @@ The MongoDB database resource combines the server properties above and adds the 
 |---------------|-------------|
 | `DatabaseName` | The MongoDB database name |
 
-### MongoDB replica set
+### Advanced MongoDB replica set
 
-The MongoDB replica set resource exposes the following connection properties. It has no single `Host` and `Port`, because clients discover the members through the seed list carried in the `Uri`:
+The resource returned by `AddMongoDBReplicaSet` exposes the following connection properties. Unlike the server configured with `WithReplicaSet`, it has no single `Host` and `Port`, because clients discover the members through the seed list carried in the `Uri`:
 
 | Property Name | Description |
 |---------------|-------------|

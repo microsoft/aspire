@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -74,16 +75,7 @@ public static class MongoDBReplicaSetBuilderExtensions
 
         var rsResource = new MongoDBReplicaSetResource(
             name: name,
-            keyFile: ParameterResourceBuilderExtensions.CreateGeneratedParameter(
-                builder,
-                $"{name}-keyfile-content",
-                secret: true,
-                new GenerateParameterDefault
-                {
-                    MinLength = 512, // NOTE: MongoDB requires the key file content to be between 6 and 1024 characters — see https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
-                    Special = false,
-                }
-            ),
+            keyFile: MongoDBBuilderExtensions.CreateReplicaSetKeyFile(builder, name),
             sharedUserName: userName?.Resource,
             sharedPassword: password?.Resource
                 ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false)
@@ -393,7 +385,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     /// <remarks>
     /// Internally calls the following methods on the member's builder:
     /// <list type="number">
-    /// <item> <description><see cref="MongoDBBuilderExtensions.WithReplicaSet(IResourceBuilder{MongoDBServerResource}, string)"/> to set the replica set name on the member resource and configure it accordingly. </description></item>
+    /// <item> <description>Configures the member's replica set name and command-line arguments without initializing a separate single-member set. Do not call <see cref="MongoDBBuilderExtensions.WithReplicaSet"/> on these members. </description></item>
     /// <item> <description><see cref="MongoDBBuilderExtensions.WithKeyFile(IResourceBuilder{MongoDBServerResource}, IExpressionValue, string)"/> to set the key file parameter on the member resource, which is required for internal authentication between replica set members. </description></item>
     /// <item> <description><see cref="MongoDBBuilderExtensions.WithTlsAllowInvalidCertificates(IResourceBuilder{MongoDBServerResource})"/> because members authenticate to each other with the same certificate they serve to clients, which does not carry a <c>clientAuth</c> extended key usage. </description></item>
     /// <item> <description><see cref="ResourceBuilderExtensions.WithHttpsDeveloperCertificate{TResource}(IResourceBuilder{TResource}, IResourceBuilder{ParameterResource}?)"/>, unless the member already has certificate configuration of its own. TLS is required for members of a replica set, because the split-horizon member hostname advertisement performed by the server operates on top of SNI. </description></item>
@@ -407,6 +399,11 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(member);
+
+        if (member.Resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+        {
+            throw new InvalidOperationException($"The MongoDB server resource '{member.Resource.Name}' is configured as a single-member replica set. Remove WithReplicaSet before adding it to the advanced replica set '{builder.Resource.Name}'. Migrating existing single-member data to an advanced replica set is not supported.");
+        }
 
         if (builder.Resource.Members.Count() >= MaxMembers)
         {
@@ -454,7 +451,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 $"The MongoDB server resource '{member.Resource.Name}' was given an explicit password that differs from the one of the replica set '{builder.Resource.Name}'. Members of a replica set share a single set of credentials: pass the password to '{nameof(AddMongoDBReplicaSet)}' instead of to the individual members.");
         }
 
-        member.WithReplicaSet(builder.Resource.Name);
+        MongoDBBuilderExtensions.ConfigureReplicaSetMember(member, builder.Resource.Name);
 
         // NOTE: A member that already carries the replica set's shared key file keeps it exactly as it is, mounted wherever
         // the caller put it. Configuring it again would only be a no-op when the path happened to match the default too,
