@@ -132,7 +132,7 @@ public static class ExecutableResourceBuilderExtensions
         }
 
         var resource = builder.Resource;
-        var hasProjection = resource.AsContainer() is not null;
+        var hasProjection = resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -156,11 +156,10 @@ public static class ExecutableResourceBuilderExtensions
             return builder;
         }
 
-        var container = resource.AsContainer() ??
-            throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.");
-
         return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(container));
+            context => context.WriteContainerAsync(
+                resource.AsContainer() ??
+                    throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.")));
     }
 
     /// <summary>

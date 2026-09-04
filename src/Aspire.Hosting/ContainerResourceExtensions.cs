@@ -43,11 +43,11 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        // A registered projection is authoritative: the owner executes as the projected container even when the
-        // owner itself is not a ContainerResource. The reference check excludes the projection side of the pair,
-        // which shares the owner's annotations, so a bare ContainerResource without an image is still classified
-        // by the legacy image annotation fallback below rather than by merely being its own container view.
-        if (resource.AsContainer() is { } container && !ReferenceEquals(container, resource))
+        // Registration selects the owner's effective shape before the default projection is materialized during
+        // model building. Check the owner reference rather than merely the shared annotation collection so a bare
+        // ContainerResource without an image still uses the legacy image annotation fallback below.
+        if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } registration &&
+            ReferenceEquals(resource, registration.Owner))
         {
             return true;
         }
@@ -56,21 +56,24 @@ public static class ContainerResourceExtensions
     }
 
     /// <summary>
-    /// Gets the container resource represented by the specified resource.
+    /// Gets the effective container for a resource after application model construction has evaluated its
+    /// projection callbacks.
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
     /// <returns>
-    /// The resource itself when it is a <see cref="ContainerResource"/>, the container projection applied for
-    /// the current AppHost invocation, or <see langword="null"/> when no strongly typed container view exists.
+    /// The resource itself when it is a <see cref="ContainerResource"/>, its evaluated container projection,
+    /// or <see langword="null"/> when the resource has no projection, projection callbacks have not yet completed,
+    /// or the resource is classified as a container only through legacy annotations.
     /// </returns>
     /// <remarks>
-    /// This method reflects projection configuration completed so far. It returns <see langword="null"/> before
-    /// an applicable projection is registered and for resources classified as containers solely through the
-    /// legacy <see cref="ContainerImageAnnotation"/> fallback. Use <see cref="IsContainer(IResource)"/> when only
-    /// effective container classification is required.
+    /// Use this method only after application model construction has begun. Registering a projection selects its
+    /// container but does not make that container effective. The projection becomes available only after
+    /// <see cref="DistributedApplicationBuilder.Build"/> starts constructing the model and all projection
+    /// configuration callbacks complete successfully. Use <see cref="IsContainer(IResource)"/> when only container
+    /// classification is required.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
-    /// <ats-summary>Gets the container resource represented by a resource.</ats-summary>
+    /// <ats-summary>Gets a resource's effective container after model construction evaluates its projection callbacks.</ats-summary>
     [AspireExport]
     public static ContainerResource? AsContainer(this IResource resource)
     {
@@ -81,9 +84,10 @@ public static class ContainerResourceExtensions
             return container;
         }
 
-        return resource.Annotations
+        var registration = resource.Annotations
             .OfType<ContainerResourceProjectionAnnotation>()
-            .SingleOrDefault()
-            ?.Projection;
+            .SingleOrDefault();
+
+        return registration is { CallbacksEvaluated: true } ? registration.Projection : null;
     }
 }

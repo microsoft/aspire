@@ -8,13 +8,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotation
 {
-    private readonly List<Action> _pendingConfiguration = [];
-    private bool _configuring;
-
-    internal ContainerResourceProjectionAnnotation(IResource owner, ContainerResource projection)
+    internal ContainerResourceProjectionAnnotation(IResource owner)
     {
         Owner = owner;
-        Projection = projection;
     }
 
     /// <summary>
@@ -28,46 +24,36 @@ internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotatio
     /// </remarks>
     internal IResource Owner { get; }
 
-    internal ContainerResource Projection { get; }
-
     /// <summary>
-    /// Queues configuration for the projection and applies anything not yet applied.
+    /// Gets the custom projection registered for the owner, or <see langword="null"/> when callbacks use the
+    /// default container projection.
     /// </summary>
-    /// <remarks>
-    /// Configuration is routed through the annotation rather than invoked by the caller so the projection owns
-    /// when callbacks run. Queuing before draining is what lets a callback project the same resource again
-    /// without the nested configuration running ahead of the configuration that is already in flight.
-    /// </remarks>
-    internal void Configure(Action configure)
-    {
-        _pendingConfiguration.Add(configure);
-        EnsureConfigured();
-    }
+    internal ContainerResource? Projection { get; set; }
 
-    private void EnsureConfigured()
+    internal bool CallbacksEvaluated { get; set; }
+
+    internal void RegisterProjection(ContainerResource projection)
     {
-        // A configuration callback can project the same resource again (for example an integration whose
-        // RunAsContainer defaults call another RunAsContainer overload). Guarding reentrancy keeps the nested
-        // registration from draining the queue mid-flight, and draining by index lets configuration queued during
-        // a callback still run, in declaration order, once control returns to the outermost drain.
-        if (_configuring)
+        if (Projection is null)
         {
+            Projection = projection;
             return;
         }
 
-        _configuring = true;
-        try
+        if (Projection.GetType() != projection.GetType())
         {
-            for (var i = 0; i < _pendingConfiguration.Count; i++)
-            {
-                _pendingConfiguration[i]();
-            }
-
-            _pendingConfiguration.Clear();
-        }
-        finally
-        {
-            _configuring = false;
+            throw new InvalidOperationException(
+                $"The resource '{Owner.Name}' already has a custom container projection of type " +
+                $"'{Projection.GetType().Name}' and cannot also use '{projection.GetType().Name}'.");
         }
     }
+}
+
+/// <summary>
+/// Stores one configuration callback registered for a container projection.
+/// </summary>
+internal sealed class ContainerResourceProjectionCallbackAnnotation(
+    Action<ContainerResource> callback) : IResourceAnnotation
+{
+    internal Action<ContainerResource> Callback { get; } = callback;
 }

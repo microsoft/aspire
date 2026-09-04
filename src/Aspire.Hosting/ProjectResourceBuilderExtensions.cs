@@ -982,7 +982,7 @@ public static class ProjectResourceBuilderExtensions
         var projectFilePath = builder.Resource.GetProjectMetadata().ProjectPath;
         var projectDirectoryPath = Path.GetDirectoryName(projectFilePath) ?? throw new InvalidOperationException($"Unable to get directory name for {projectFilePath}");
         var resource = builder.Resource;
-        var hasProjection = resource.AsContainer() is not null;
+        var hasProjection = resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -1013,11 +1013,10 @@ public static class ProjectResourceBuilderExtensions
             return builder;
         }
 
-        var container = resource.AsContainer() ??
-            throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.");
-
         return builder.WithManifestPublishingCallback(
-            context => context.WriteContainerAsync(container));
+            context => context.WriteContainerAsync(
+                resource.AsContainer() ??
+                    throw new InvalidOperationException($"Resource '{resource.Name}' does not have a container projection.")));
     }
 
     private static IConfiguration GetConfiguration(IResource projectResource)

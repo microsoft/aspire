@@ -46,12 +46,12 @@ public static class ResourceProjectionBuilderExtensions
     /// so a run-mode projection contributes no configuration to a publish and vice versa.
     /// </para>
     /// <para>
-    /// Projecting the same resource again reconfigures the projection that already exists instead of replacing it:
-    /// <paramref name="createProjection"/> runs only for the first projection because the projection is an identity,
-    /// while <paramref name="configure"/> runs every time. An integration nests the caller's callback inside its own,
-    /// so its defaults and the caller's configuration are a single callback and are applied together on every call.
-    /// That matches the pre-projection <c>RunAsEmulator</c> conventions, which also re-applied their defaults on each
-    /// call, and it is what lets a repeat call override a value such as the image.
+    /// Projecting the same resource again reconfigures the projection that already exists instead of replacing it.
+    /// The projection factory runs during registration so an incompatible projection type is rejected immediately.
+    /// Configuration callbacks run in registration order when the application model is built. An integration nests
+    /// the caller's callback inside its own, so its defaults and the caller's configuration are applied together on
+    /// every call. That matches the pre-projection <c>RunAsEmulator</c> conventions, which also re-applied their
+    /// defaults on each call, and it is what lets a repeat call override a value such as the image.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
@@ -73,6 +73,27 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(createProjection);
         ArgumentNullException.ThrowIfNull(configure);
 
+        if (TryGetOrCreateProjectionRegistration(builder, operation) is not { } registration)
+        {
+            return builder;
+        }
+
+        var candidate = createProjection();
+        ValidateProjection(registration.Owner, candidate);
+        registration.RegisterProjection(candidate);
+        registration.CallbacksEvaluated = false;
+
+        registration.Owner.Annotations.Add(new ContainerResourceProjectionCallbackAnnotation(
+            projection => configure(builder.ApplicationBuilder.CreateResourceBuilder((TContainer)projection))));
+
+        return builder;
+    }
+
+    private static ContainerResourceProjectionAnnotation? TryGetOrCreateProjectionRegistration<T>(
+        IResourceBuilder<T> builder,
+        DistributedApplicationOperation operation)
+        where T : IResource
+    {
         // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. Projecting a
         // container onto a container is always an authoring mistake: the projection shares the owner's annotation
         // collection, so its image and endpoints would collide with the ones the owner already has. This is checked
@@ -86,27 +107,21 @@ public static class ResourceProjectionBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.Operation != operation)
         {
-            return builder;
+            return null;
         }
 
-        var owner = builder.Resource;
-
-        if (owner.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } existing)
+        if (builder.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } existing)
         {
-            if (existing.Projection is not TContainer existingProjection)
-            {
-                throw new InvalidOperationException(
-                    $"The resource '{owner.Name}' is already projected as '{existing.Projection.GetType().Name}' " +
-                    $"and cannot also be projected as '{typeof(TContainer).Name}'.");
-            }
-
-            existing.Configure(() => configure(builder.ApplicationBuilder.CreateResourceBuilder(existingProjection)));
-
-            return builder;
+            return existing;
         }
 
-        var projection = createProjection();
+        var registration = new ContainerResourceProjectionAnnotation(builder.Resource);
+        builder.Resource.Annotations.Add(registration);
+        return registration;
+    }
 
+    private static void ValidateProjection(IResource owner, ContainerResource projection)
+    {
         // A projection stands in for its owner, so it must share the owner's identity and annotation storage.
         // Validating both here turns an easy authoring mistake into an actionable error instead of a projection
         // that silently drops configuration or competes with the owner for a name.
@@ -122,17 +137,6 @@ public static class ResourceProjectionBuilderExtensions
                 $"The container projection for '{owner.Name}' must share its owner's annotation collection. " +
                 $"Override '{nameof(IResource.Annotations)}' on '{projection.GetType().Name}' to return the owner's annotations.");
         }
-
-        var annotation = new ContainerResourceProjectionAnnotation(owner, projection);
-
-        // Register before any configuration runs so lookups performed by the callbacks resolve the projection.
-        owner.Annotations.Add(annotation);
-
-        var projectionBuilder = builder.ApplicationBuilder.CreateResourceBuilder(projection);
-
-        annotation.Configure(() => configure(projectionBuilder));
-
-        return builder;
     }
 
     /// <summary>
@@ -149,10 +153,57 @@ public static class ResourceProjectionBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithContainerProjection(
-            operation,
-            () => new ContainerResourceProjection<T>(builder.Resource),
-            configure);
+        if (TryGetOrCreateProjectionRegistration(builder, operation) is not { } registration)
+        {
+            return builder;
+        }
+
+        registration.CallbacksEvaluated = false;
+        registration.Owner.Annotations.Add(new ContainerResourceProjectionCallbackAnnotation(
+            projection => configure(builder.ApplicationBuilder.CreateResourceBuilder(projection))));
+
+        return builder;
+    }
+
+    internal static void EvaluateContainerProjectionCallbacks(this IDistributedApplicationBuilder builder)
+    {
+        foreach (var resource in builder.Resources)
+        {
+            if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is not { } registration)
+            {
+                continue;
+            }
+
+            var projection = registration.Projection ??= new ContainerResourceProjection<IResource>(registration.Owner);
+            var callbacks = resource.Annotations
+                .OfType<ContainerResourceProjectionCallbackAnnotation>()
+                .ToArray();
+
+            foreach (var callback in callbacks)
+            {
+                var annotationsBeforeCallback = new HashSet<IResourceAnnotation>(
+                    resource.Annotations,
+                    ReferenceEqualityComparer.Instance);
+
+                callback.Callback(projection);
+
+                // The callback runs during model construction, but its annotations must retain the position where
+                // the projection API was called. Otherwise configuration added later to the owner can move ahead
+                // of callback configuration and change order-sensitive behavior such as argument clearing.
+                var addedAnnotations = resource.Annotations
+                    .Where(annotation => !annotationsBeforeCallback.Contains(annotation))
+                    .ToArray();
+                var insertionIndex = resource.Annotations.IndexOf(callback) + 1;
+
+                foreach (var annotation in addedAnnotations)
+                {
+                    resource.Annotations.Remove(annotation);
+                    resource.Annotations.Insert(insertionIndex++, annotation);
+                }
+            }
+
+            registration.CallbacksEvaluated = true;
+        }
     }
 
     /// <summary>
@@ -212,7 +263,7 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(image);
 
-        var hadProjection = builder.Resource.AsContainer() is not null;
+        var hadProjection = builder.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -296,7 +347,7 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(image);
 
-        var hadProjection = builder.Resource.AsContainer() is not null;
+        var hadProjection = builder.Resource.HasAnnotationOfType<ContainerResourceProjectionAnnotation>();
 
         builder.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -332,9 +383,9 @@ public static class ResourceProjectionBuilderExtensions
             return builder;
         }
 
-        var container = builder.Resource.AsContainer() ??
-            throw new InvalidOperationException($"Resource '{builder.Resource.Name}' does not have a container projection.");
-
-        return builder.WithManifestPublishingCallback(context => context.WriteContainerAsync(container));
+        return builder.WithManifestPublishingCallback(context =>
+            context.WriteContainerAsync(
+                builder.Resource.AsContainer() ??
+                    throw new InvalidOperationException($"Resource '{builder.Resource.Name}' does not have a container projection.")));
     }
 }
