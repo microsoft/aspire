@@ -18,5 +18,19 @@ internal enum TerminalSurface
     /// that interaction's dialog. These are addressed directly by the dialog and are deliberately excluded
     /// from the dock's tab list.
     /// </summary>
-    Interaction
+    Interaction,
+
+    /// <summary>
+    /// The terminal is attached to a resource in the application model and is displayed on that resource's
+    /// own terminal view rather than in the dock.
+    /// </summary>
+    /// <remarks>
+    /// Nothing produces this value yet. It exists so that resource terminals — which today are owned by the
+    /// DCP terminal host rather than by <see cref="TerminalService"/> — can be adopted into the same registry
+    /// and exposed through <see cref="IAspireTerminal"/> for automation. Every surface check in
+    /// <see cref="TerminalService"/> is written as an explicit test for <see cref="Dock"/>, so a resource
+    /// terminal already behaves correctly by default: it stays out of the dock's tab list and
+    /// <see cref="IAspireTerminal.Show"/> is a no-op for it.
+    /// </remarks>
+    Resource
 }
