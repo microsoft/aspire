@@ -84,6 +84,9 @@ type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScri
 /** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
 
+/** Handle to TestHandlePropertyContext */
+type TestHandlePropertyContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext'>;
+
 /** Handle to TestMutableCollectionContext */
 type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext'>;
 
@@ -462,6 +465,180 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
     };
 
 }
+
+// ============================================================================
+// TestHandlePropertyContext
+// ============================================================================
+
+export interface TestHandlePropertyContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the OptionalResource property */
+    optionalResource: {
+        get: () => Promise<TestResourceContext | null>;
+        set: (value: Awaitable<TestResourceContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the RequiredResource property */
+    requiredResource: {
+        get: () => TestResourceContextPromise;
+        set: (value: Awaitable<TestResourceContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the OptionalContext property */
+    optionalContext: {
+        get: () => Promise<TestEnvironmentContext | null>;
+        set: (value: Awaitable<TestEnvironmentContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the RequiredContext property */
+    requiredContext: {
+        get: () => Promise<TestEnvironmentContext>;
+        set: (value: Awaitable<TestEnvironmentContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+export interface TestHandlePropertyContextPromise extends PromiseLike<TestHandlePropertyContext> {
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+// ============================================================================
+// TestHandlePropertyContextImpl
+// ============================================================================
+
+/** Type class for TestHandlePropertyContext. */
+class TestHandlePropertyContextImpl implements TestHandlePropertyContext {
+    constructor(private _handle: TestHandlePropertyContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    optionalResource = {
+        get: async (): Promise<TestResourceContext | null> => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestResourceContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalResource(): Promise<TestResourceContext | null> {
+        const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+    }
+
+    requiredResource = {
+        get: (): TestResourceContextPromise => {
+            const promise = (async () => {
+                const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                    'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource',
+                    { context: this._handle }
+                );
+                return new TestResourceContextImpl(handle, this._client);
+            })();
+            return new TestResourceContextPromiseImpl(promise, this._client, false);
+        },
+        set: async (value: Awaitable<TestResourceContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    readOnlyRequiredResource(): TestResourceContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource',
+                { context: this._handle }
+            );
+            return new TestResourceContextImpl(handle, this._client);
+        })();
+        return new TestResourceContextPromiseImpl(promise, this._client, false);
+    }
+
+    optionalContext = {
+        get: async (): Promise<TestEnvironmentContext | null> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalContext(): Promise<TestEnvironmentContext | null> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+    requiredContext = {
+        get: async (): Promise<TestEnvironmentContext> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext',
+                { context: this._handle }
+            );
+            return new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyRequiredContext(): Promise<TestEnvironmentContext> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext',
+            { context: this._handle }
+        );
+        return new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+}
+
+/** @internal */
+const TestHandlePropertyContextPromiseImpl = $aspireCreateFluentPromiseClass<TestHandlePropertyContext, TestHandlePropertyContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["readOnlyOptionalResource"]: null,
+    ["readOnlyRequiredResource"]: [() => TestResourceContextPromiseImpl, false] as const,
+    ["readOnlyOptionalContext"]: null,
+    ["readOnlyRequiredContext"]: null,
+}));
 
 // ============================================================================
 // TestMutableCollectionContext
@@ -3849,6 +4026,7 @@ process.on('uncaughtException', (error: Error) => {
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext', (handle, client) => new TestHandlePropertyContextImpl(handle as TestHandlePropertyContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));

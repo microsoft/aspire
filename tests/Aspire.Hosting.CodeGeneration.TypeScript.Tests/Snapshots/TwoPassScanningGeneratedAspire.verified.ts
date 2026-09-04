@@ -84,6 +84,9 @@ type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScri
 /** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
 
+/** Handle to TestHandlePropertyContext */
+type TestHandlePropertyContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext'>;
+
 /** Handle to TestMutableCollectionContext */
 type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext'>;
 
@@ -4181,7 +4184,13 @@ const DockerfileStagePromiseImpl = $aspireCreateFluentPromiseClass<DockerfileSta
 /** Represents an endpoint reference for a resource with endpoints. */
 export interface EndpointReference {
     toJSON(): MarshalledHandle;
-    /** Gets the resource owner of the endpoint reference. */
+    /**
+     * Gets the resource owner of the endpoint reference.
+     *
+     * For a projection, returns the model owner when it implements `IResourceWithEndpoints`;
+     * otherwise, retains the typed projection that supplies the endpoint contract. Use
+     * `GetOwnerOrSelf` when logical resource identity is required.
+     */
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
@@ -4248,7 +4257,13 @@ export interface EndpointReference {
 }
 
 export interface EndpointReferencePromise extends PromiseLike<EndpointReference> {
-    /** Gets the resource owner of the endpoint reference. */
+    /**
+     * Gets the resource owner of the endpoint reference.
+     *
+     * For a projection, returns the model owner when it implements `IResourceWithEndpoints`;
+     * otherwise, retains the typed projection that supplies the endpoint contract. Use
+     * `GetOwnerOrSelf` when logical resource identity is required.
+     */
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
@@ -8725,6 +8740,180 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
 }
 
 // ============================================================================
+// TestHandlePropertyContext
+// ============================================================================
+
+export interface TestHandlePropertyContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the OptionalResource property */
+    optionalResource: {
+        get: () => Promise<TestResourceContext | null>;
+        set: (value: Awaitable<TestResourceContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the RequiredResource property */
+    requiredResource: {
+        get: () => TestResourceContextPromise;
+        set: (value: Awaitable<TestResourceContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the OptionalContext property */
+    optionalContext: {
+        get: () => Promise<TestEnvironmentContext | null>;
+        set: (value: Awaitable<TestEnvironmentContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the RequiredContext property */
+    requiredContext: {
+        get: () => Promise<TestEnvironmentContext>;
+        set: (value: Awaitable<TestEnvironmentContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+export interface TestHandlePropertyContextPromise extends PromiseLike<TestHandlePropertyContext> {
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+// ============================================================================
+// TestHandlePropertyContextImpl
+// ============================================================================
+
+/** Type class for TestHandlePropertyContext. */
+class TestHandlePropertyContextImpl implements TestHandlePropertyContext {
+    constructor(private _handle: TestHandlePropertyContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    optionalResource = {
+        get: async (): Promise<TestResourceContext | null> => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestResourceContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalResource(): Promise<TestResourceContext | null> {
+        const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+    }
+
+    requiredResource = {
+        get: (): TestResourceContextPromise => {
+            const promise = (async () => {
+                const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                    'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource',
+                    { context: this._handle }
+                );
+                return new TestResourceContextImpl(handle, this._client);
+            })();
+            return new TestResourceContextPromiseImpl(promise, this._client, false);
+        },
+        set: async (value: Awaitable<TestResourceContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    readOnlyRequiredResource(): TestResourceContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource',
+                { context: this._handle }
+            );
+            return new TestResourceContextImpl(handle, this._client);
+        })();
+        return new TestResourceContextPromiseImpl(promise, this._client, false);
+    }
+
+    optionalContext = {
+        get: async (): Promise<TestEnvironmentContext | null> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalContext(): Promise<TestEnvironmentContext | null> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+    requiredContext = {
+        get: async (): Promise<TestEnvironmentContext> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext',
+                { context: this._handle }
+            );
+            return new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyRequiredContext(): Promise<TestEnvironmentContext> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext',
+            { context: this._handle }
+        );
+        return new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+}
+
+/** @internal */
+const TestHandlePropertyContextPromiseImpl = $aspireCreateFluentPromiseClass<TestHandlePropertyContext, TestHandlePropertyContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["readOnlyOptionalResource"]: null,
+    ["readOnlyRequiredResource"]: [() => TestResourceContextPromiseImpl, false] as const,
+    ["readOnlyOptionalContext"]: null,
+    ["readOnlyRequiredContext"]: null,
+}));
+
+// ============================================================================
 // TestMutableCollectionContext
 // ============================================================================
 
@@ -12764,6 +12953,8 @@ export interface ContainerRegistryResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -13097,6 +13288,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -13927,6 +14120,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -19607,6 +19802,8 @@ export interface CSharpAppResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -20256,6 +20453,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -22055,6 +22254,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -23405,6 +23606,8 @@ export interface DotnetToolResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -24076,6 +24279,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -25959,6 +26164,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -27268,6 +27475,8 @@ export interface ExecutableResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -27906,6 +28115,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -29685,6 +29896,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -30700,6 +30913,8 @@ export interface ExternalServiceResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -31038,6 +31253,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -31892,6 +32109,8 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -32794,6 +33013,8 @@ export interface ParameterResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -33140,6 +33361,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -34012,6 +34235,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -35193,6 +35418,8 @@ export interface ProjectResource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -35842,6 +36069,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -37642,6 +37871,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -52965,6 +53196,8 @@ export interface Resource {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -53298,6 +53531,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -54129,6 +54364,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * The image is required so a projection can never exist without a valid container source. Configuration
      * written inside `configure` applies only to the run-mode container; configuration written
      * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
      * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
      * @param options Additional options.
      * @returns The resource builder.
@@ -56820,6 +57057,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUr
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext', (handle, client) => new TestHandlePropertyContextImpl(handle as TestHandlePropertyContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));

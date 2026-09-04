@@ -1198,7 +1198,7 @@ internal sealed partial class TypeScriptApiProjector
             {
                 var getReturn = TryGetPromiseWrapperType(getter.ReturnType, out var promiseInterfaceName, out _)
                     ? promiseInterfaceName
-                    : $"Promise<{MapTypeRefToTypeScript(getter.ReturnType)}>";
+                    : $"Promise<{MapTypeRefToTypeScriptPreservingHandleNullability(getter.ReturnType)}>";
                 accessors.Add($"get: () => {getReturn}");
             }
 
@@ -2474,7 +2474,7 @@ internal sealed partial class TypeScriptApiProjector
             return $"AspireList<{elementType}>";
         }
 
-        return MapTypeRefToTypeScript(typeRef);
+        return MapTypeRefToTypeScriptPreservingHandleNullability(typeRef);
     }
 
     internal bool TryGetPromiseWrapperType(AtsTypeRef? typeRef, out string promiseInterfaceName, out string promiseImplementationClassName)
