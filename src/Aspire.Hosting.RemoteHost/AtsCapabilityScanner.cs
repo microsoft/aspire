@@ -3,6 +3,7 @@
 
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -858,7 +859,35 @@ public static class AtsCapabilityScanner
                 };
                 capability.ExpandedTargetTypes = [targetTypeRef];
             }
+
+            ApplyTargetTypeExclusions(capability);
         }
+    }
+
+    /// <summary>
+    /// Removes the capability's excluded target types, and anything assignable to them, from its expansion.
+    /// </summary>
+    /// <remarks>
+    /// Expansion is otherwise mechanical, so an export declared on a broad interface lands on every implementer.
+    /// The exclusion is assignability-based rather than an identity match so that excluding a base type also
+    /// excludes everything deriving from it, which is what an author asking to hide a capability from
+    /// <c>ContainerResource</c> means.
+    /// </remarks>
+    private static void ApplyTargetTypeExclusions(AtsCapabilityInfo capability)
+    {
+        var excludedTargetTypes = GetCapabilityExcludedTargetTypesIfSupported(capability);
+        if (excludedTargetTypes.Count == 0)
+        {
+            return;
+        }
+
+        var retained = capability.ExpandedTargetTypes
+            .Where(expanded => expanded.ClrType is null ||
+                !excludedTargetTypes.Any(excluded => excluded.IsAssignableFrom(expanded.ClrType)))
+            .ToList();
+
+        // Targeted capabilities with an empty expansion are removed before code generation.
+        capability.ExpandedTargetTypes = retained;
     }
 
     /// <summary>
@@ -1893,6 +1922,7 @@ public static class AtsCapabilityScanner
 
                 // Get return type
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+                returnTypeRef = WithNullableHandleReturn(method, returnTypeRef);
 
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
@@ -2067,12 +2097,13 @@ public static class AtsCapabilityScanner
 
         // Get return type
         var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+        returnTypeRef = WithNullableHandleReturn(method, returnTypeRef);
         var returnTypeId = MapToAtsTypeId(method.ReturnType, assemblyExportedTypeCache);
 
         // Only set ReturnsBuilder if the return type is actually a resource builder type
         var returnsBuilder = returnTypeId != null && IsResourceBuilderType(method.ReturnType);
 
-        return new AtsCapabilityInfo
+        var capability = new AtsCapabilityInfo
         {
             CapabilityId = capabilityId,
             MethodName = methodName,
@@ -2090,6 +2121,108 @@ public static class AtsCapabilityScanner
             RunSyncOnBackgroundThread = exportAttr.RunSyncOnBackgroundThread ||
                 (method.DeclaringType is not null && (GetAspireExportAttribute(method.DeclaringType)?.RunSyncOnBackgroundThread ?? false))
         };
+
+        SetCapabilityExcludedTargetTypesIfSupported(
+            capability,
+            GetExportExcludedTargetTypesIfSupported(exportAttr));
+
+        return capability;
+    }
+
+    internal static IReadOnlyList<Type> GetExportExcludedTargetTypesIfSupported(object exportData)
+    {
+        return GetExcludedTargetTypesIfSupported(
+            exportData,
+            nameof(AspireExportData.ExcludeTargetTypes));
+    }
+
+    internal static IReadOnlyList<Type> GetCapabilityExcludedTargetTypesIfSupported(object capability)
+    {
+        return GetExcludedTargetTypesIfSupported(
+            capability,
+            nameof(AtsCapabilityInfo.ExcludedTargetTypes));
+    }
+
+    internal static void SetCapabilityExcludedTargetTypesIfSupported(
+        object capability,
+        IReadOnlyList<Type> excludedTargetTypes)
+    {
+        var property = GetOptionalExcludedTargetTypesProperty(
+            capability,
+            nameof(AtsCapabilityInfo.ExcludedTargetTypes));
+
+        if (property is null)
+        {
+            return;
+        }
+
+        if (property.SetMethod is not { IsPublic: true })
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{capability.GetType().FullName}.{property.Name}' does not have a public setter.");
+        }
+
+        property.SetValue(capability, excludedTargetTypes);
+    }
+
+    private static IReadOnlyList<Type> GetExcludedTargetTypesIfSupported(
+        object instance,
+        string propertyName)
+    {
+        var property = GetOptionalExcludedTargetTypesProperty(instance, propertyName);
+        if (property is null)
+        {
+            return [];
+        }
+
+        if (property.GetMethod is not { IsPublic: true } ||
+            property.GetValue(instance) is not IReadOnlyList<Type> excludedTargetTypes)
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{instance.GetType().FullName}.{property.Name}' does not have the expected public getter.");
+        }
+
+        return excludedTargetTypes;
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The installed CLI roots the force-shared contract when this property exists.")]
+    private static PropertyInfo? GetOptionalExcludedTargetTypesProperty(
+        object instance,
+        string propertyName)
+    {
+        // Aspire.TypeSystem is force-shared from the installed CLI. A newer RemoteHost can therefore
+        // run against an older contract with the same assembly identity but without these additive
+        // properties. Probe by name so target exclusions are skipped instead of failing the scan.
+        var property = instance.GetType().GetProperty(propertyName);
+        if (property is not null && property.PropertyType != typeof(IReadOnlyList<Type>))
+        {
+            throw new MissingMemberException(
+                $"The runtime property '{instance.GetType().FullName}.{property.Name}' does not have the expected type.");
+        }
+
+        return property;
+    }
+
+    private static AtsTypeRef? WithNullableHandleReturn(MethodInfo method, AtsTypeRef? returnTypeRef)
+    {
+        if (returnTypeRef is not { Category: AtsTypeCategory.Handle })
+        {
+            return returnTypeRef;
+        }
+
+        var declaredType = method.ReturnType;
+        var nullability = new NullabilityInfoContext().Create(method.ReturnParameter);
+
+        // Task<T?> and ValueTask<T?> carry nullability on the generic result rather than the task itself.
+        while (declaredType.IsGenericType &&
+               declaredType.GetGenericTypeDefinition() is { } genericTypeDefinition &&
+               (genericTypeDefinition == typeof(Task<>) || genericTypeDefinition == typeof(ValueTask<>)))
+        {
+            declaredType = declaredType.GetGenericArguments()[0];
+            nullability = nullability.GenericTypeArguments[0];
+        }
+
+        return WithNullability(returnTypeRef, declaredType, nullability.ReadState);
     }
 
     private static AtsParameterInfo? CreateParameterInfo(
@@ -2970,12 +3103,10 @@ public static class AtsCapabilityScanner
         // GetInterfaces() returns all interfaces including inherited ones
         foreach (var iface in type.GetInterfaces())
         {
-            // Skip interfaces that are not visible outside the defining assembly (internal
-            // implementation abstractions). They are not part of the public API surface, so they must
-            // not leak into the generated language bindings.
-            // GetInterfaces() returns the flattened set, so any public interfaces an internal one
-            // extends are still collected directly here and the type's public contract is preserved.
-            if (!iface.IsVisible)
+            // Internal and explicitly ignored interfaces are implementation abstractions, not generated
+            // language base classes. GetInterfaces() returns the flattened set, so public ATS interfaces
+            // they extend are still collected directly and the resource's language-facing contract is preserved.
+            if (!iface.IsVisible || AttributeDataReader.HasAspireExportIgnoreData(iface))
             {
                 continue;
             }

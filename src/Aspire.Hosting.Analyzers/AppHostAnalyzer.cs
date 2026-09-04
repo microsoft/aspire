@@ -52,6 +52,10 @@ public partial class AppHostAnalyzer : DiagnosticAnalyzer
             });
         });
 
+        // Reported per invocation rather than per operation block: the diagnostic depends only on the type
+        // argument at the call site, so it needs none of the block-level state the model name rule collects.
+        context.RegisterOperationAction(c => DetectContainerResourceProjection(c, wellKnownTypes), OperationKind.Invocation);
+
         void DoOperationAnalysis(OperationAnalysisContext context, ConcurrentDictionary<ModelNameOperation, byte> modelNameOperations)
         {
             var invocation = (IInvocationOperation)context.Operation;

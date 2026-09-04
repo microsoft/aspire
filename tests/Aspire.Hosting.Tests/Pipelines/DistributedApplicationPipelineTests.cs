@@ -278,6 +278,113 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithProjectionPipelineStepFactory_UsesProjectionAnnotations()
+    {
+        using var builder = CreatePipelineTestBuilder();
+
+        var stepExecuted = false;
+        var configurationCallbackInvoked = false;
+        IResource? factoryResource = null;
+        var owner = builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithPipelineConfiguration(_ =>
+                    {
+                        configurationCallbackInvoked = true;
+                        return Task.CompletedTask;
+                    })
+                    .WithPipelineStepFactory(factoryContext =>
+                    {
+                        factoryResource = factoryContext.Resource;
+                        return new PipelineStep
+                        {
+                            Name = "projected-step",
+                            Action = _ =>
+                            {
+                                stepExecuted = true;
+                                return Task.CompletedTask;
+                            }
+                        };
+                    }));
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.True(stepExecuted);
+        Assert.True(configurationCallbackInvoked);
+        Assert.Same(owner.Resource, factoryResource);
+        Assert.Collection(context.Model.Resources, resource => Assert.Same(owner.Resource, resource));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithProjectedDockerfileBuildStep_UsesOwnerResource()
+    {
+        using var builder = CreatePipelineTestBuilder(step: "build-test-resource");
+        var imageBuilder = new MockImageBuilder();
+        builder.Services.AddSingleton<IResourceContainerImageManager>(imageBuilder);
+        var owner = builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("test-resource")
+                    .WithDockerfile("."));
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        var buildStep = Assert.Single(steps, step => step.Name == "build-test-resource");
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Same(owner.Resource, buildStep.Resource);
+        Assert.Same(owner.Resource, Assert.Single(imageBuilder.BuildImageResources));
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_WithProjectedProjectDockerfile_UsesContainerBuildStep()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var project = builder.AddProject(
+                "test-project",
+                Path.Combine(builder.AppHostDirectory, "dummy.csproj"),
+                options => options.ExcludeLaunchProfile = true)
+            .PublishAsDockerFile();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var buildStep = Assert.Single(steps, step => step.Name == "build-test-project");
+        Assert.Same(project.Resource, buildStep.Resource);
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_WithStepRegisteredThroughProjection_AssociatesStepWithOwner()
+    {
+        using var builder = CreatePipelineTestBuilder();
+
+        var owner = builder.AddExecutable("test-resource", "worker", ".")
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container.WithPipelineStepFactory(
+                    "projected-step",
+                    _ => Task.CompletedTask));
+
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(builder.Build());
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        // The projection facade is not a member of the model, so a step registered through it must still point at
+        // the owner. The pipeline only fills in a null Resource, so this cannot be fixed up during collection.
+        var projectedStep = Assert.Single(steps, step => step.Name == "projected-step");
+        Assert.Same(owner.Resource, projectedStep.Resource);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
         using var builder = CreatePipelineTestBuilder();
@@ -2117,6 +2224,34 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Act & Assert - Should not throw an exception even though no registry is configured
         // because the Destination is Archive, not Registry
         await pipeline.ExecuteAsync(context).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task PushPrereq_UsesProjectionBuildOptions()
+    {
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
+
+        var callbackInvoked = false;
+        builder.AddResource(new CustomResource("test-resource"))
+            .WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                container => container
+                    .WithImage("projected-image")
+                    .WithDockerfile(".")
+                    .WithContainerBuildOptions(context =>
+                    {
+                        callbackInvoked = true;
+                        context.Destination = ContainerImageDestination.Archive;
+                        context.OutputPath = "/tmp/output";
+                    }));
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.True(callbackInvoked);
     }
 
     [Fact]

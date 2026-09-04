@@ -1496,6 +1496,44 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesNullableHandleReturns()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireTs = _generator.GenerateDistributedApplication(atsContext)["aspire.mts"];
+
+        Assert.Contains("asContainer(): Promise<ContainerResource | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("findResourceByName(name: string): Promise<Resource | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("getEndpoint(name: string): Promise<EndpointReference | null>;", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("return handle === null ? null : new ContainerResourceImpl(handle, this._client);", aspireTs, StringComparison.Ordinal);
+        Assert.Contains("getEndpoint(name: string): EndpointReferencePromise;", aspireTs, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GenerateDistributedApplication_PreservesNullableHandlePropertiesInApiExport()
+    {
+        var context = CreateContextFromTestAssembly();
+        var typeId = GetAtsTypeId(typeof(TestHandlePropertyContext));
+        var getters = context.Capabilities
+            .Where(capability => capability.TargetTypeId == typeId && capability.CapabilityKind == AtsCapabilityKind.PropertyGetter)
+            .ToList();
+
+        Assert.Equal(8, getters.Count);
+        Assert.All(getters, getter =>
+        {
+            Assert.NotNull(getter.ReturnType);
+            Assert.Equal(AtsTypeCategory.Handle, getter.ReturnType.Category);
+            Assert.Equal(getter.MethodName.Contains("Optional", StringComparison.OrdinalIgnoreCase), getter.ReturnType.IsNullable == true);
+        });
+
+        var declaration = Assert.Single(
+            ProjectApi(context, ApiExportPackageName).Declarations,
+            declaration => declaration.Content.StartsWith("export interface TestHandlePropertyContext {", StringComparison.Ordinal));
+
+        await Verify(declaration.Content, extension: "ts")
+            .UseFileName("NullableHandlePropertiesApi");
+    }
+
+    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();

@@ -102,31 +102,35 @@ public static class AzureAppConfigurationExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
+        => builder.RunAsContainer(configureEmulator);
+
+    /// <summary>
+    /// Configures an Azure App Configuration resource to run as a container.
+    /// </summary>
+    /// <param name="builder">The Azure App Configuration resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes the underlying container to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureAppConfigurationResource> RunAsContainer(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureContainer = null)
     {
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
+        ArgumentNullException.ThrowIfNull(builder);
 
-        builder.WithHttpEndpoint(name: EmulatorEndpointName, targetPort: 8483)
-            .WithHttpHealthCheck(endpointName: EmulatorEndpointName, path: "/health")
-            .WithAnnotation(new ContainerImageAnnotation
+        // The projection shares the owner's annotation collection, so configuration applied through either builder
+        // is observed by both. The owner stays the only member of the application model.
+        return builder.RunAsContainerImage<AzureAppConfigurationResource, AzureAppConfigurationEmulatorResource>(
+            $"{AppConfigurationEmulatorContainerImageTags.Registry}/{AppConfigurationEmulatorContainerImageTags.Image}:{AppConfigurationEmulatorContainerImageTags.Tag}",
+            container =>
             {
-                Registry = AppConfigurationEmulatorContainerImageTags.Registry,
-                Image = AppConfigurationEmulatorContainerImageTags.Image,
-                Tag = AppConfigurationEmulatorContainerImageTags.Tag
+                container.WithHttpEndpoint(name: EmulatorEndpointName, targetPort: 8483)
+                    .WithHttpHealthCheck(endpointName: EmulatorEndpointName, path: "/health")
+                    .WithAnonymousAccess(role: "Owner"); // enable anonymous access by default
+
+                // The caller's configuration is nested so it lands on the projection after this integration's
+                // defaults. RunAsContainerImage itself has no notion of defaults; that distinction only exists
+                // here, where a container shape specific to App Configuration is being defined.
+                configureContainer?.Invoke(container);
             });
-
-        var surrogate = new AzureAppConfigurationEmulatorResource(builder.Resource);
-        var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
-        surrogateBuilder.WithAnonymousAccess(role: "Owner"); // enable anonymous access by default
-
-        if (configureEmulator != null)
-        {
-            configureEmulator(surrogateBuilder);
-        }
-
-        return builder;
     }
 
     /// <summary>

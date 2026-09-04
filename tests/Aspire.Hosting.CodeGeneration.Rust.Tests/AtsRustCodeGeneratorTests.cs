@@ -300,6 +300,19 @@ public class AtsRustCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesNullableHandleReturns()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireRs = _generator.GenerateDistributedApplication(atsContext)["aspire.rs"].ReplaceLineEndings("\n");
+
+        Assert.Contains("pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>>", aspireRs, StringComparison.Ordinal);
+        Assert.Contains("pub fn find_resource_by_name(&self, name: &str) -> Result<Option<IResource>, Box<dyn std::error::Error>>", aspireRs, StringComparison.Ordinal);
+        Assert.Contains("pub fn get_endpoint(&self, name: &str) -> Result<Option<EndpointReference>, Box<dyn std::error::Error>>", aspireRs, StringComparison.Ordinal);
+        Assert.Contains("pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>>", aspireRs, StringComparison.Ordinal);
+        Assert.Contains("if result.is_null() {\n            return Ok(None);", aspireRs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GeneratedCode_UsesSnakeCaseMethodNames()
     {
         // Verify that the generated Rust code uses snake_case for method names

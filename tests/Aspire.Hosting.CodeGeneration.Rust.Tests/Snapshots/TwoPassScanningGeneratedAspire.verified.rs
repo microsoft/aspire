@@ -2321,6 +2321,18 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3084,6 +3096,18 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an interactive terminal session to a resource using the default terminal options.
@@ -4288,6 +4312,18 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4546,6 +4582,18 @@ impl ContainerRegistryResource {
             args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -5208,6 +5256,18 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -6579,13 +6639,16 @@ impl DistributedApplicationModel {
     }
 
     /// Finds a resource by name.
-    pub fn find_resource_by_name(&self, name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn find_resource_by_name(&self, name: &str) -> Result<Option<IResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("model".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/findResourceByName", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
+        Ok(Some(IResource::new(handle, self.client.clone())))
     }
 }
 
@@ -7008,6 +7071,18 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBaseImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
     }
 
     /// Sets the package identifier for the tool configuration associated with the resource builder.
@@ -7820,6 +7895,18 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an interactive terminal session to a resource using the default terminal options.
@@ -8918,6 +9005,18 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Publishes an executable as a Docker file
     pub fn publish_as_docker_file(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9673,6 +9772,18 @@ impl ExecutableResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an interactive terminal session to a resource using the default terminal options.
     pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10209,6 +10320,18 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Adds an HTTP health check to the external service for polyglot app hosts.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<ExternalServiceResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10485,6 +10608,18 @@ impl ExternalServiceResource {
             args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -13720,6 +13855,18 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Sets the description of the parameter resource.
     pub fn with_description(&self, description: &str, enable_markdown: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -14001,6 +14148,18 @@ impl ParameterResource {
             args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -14923,6 +15082,18 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
+    }
+
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15686,6 +15857,18 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+    pub fn run_as_container_image(&self, image: &str, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/runAsContainerImage", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an interactive terminal session to a resource using the default terminal options.
@@ -16753,13 +16936,16 @@ impl ResourceUrlsCallbackContext {
     }
 
     /// Gets an endpoint reference from the associated resource
-    pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
+    pub fn get_endpoint(&self, name: &str) -> Result<Option<EndpointReference>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/getEndpoint", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointReference::new(handle, self.client.clone()))
+        Ok(Some(EndpointReference::new(handle, self.client.clone())))
     }
 }
 
@@ -17232,6 +17418,18 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -18809,6 +19007,18 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -20524,6 +20734,18 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerNetworkAlias", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a resource's effective container.
+    pub fn as_container(&self) -> Result<Option<ContainerResource>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/asContainer", args)?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(Some(ContainerResource::new(handle, self.client.clone())))
     }
 
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.

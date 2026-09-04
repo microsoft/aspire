@@ -338,6 +338,19 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DotnetProjectResource_WithRawContainerImageAnnotation_InPublishMode_PipelineThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddResource(new DotnetProjectResource("svc", workspace.Path))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "example" });
+
+        using var app = builder.Build();
+        await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app));
+    }
+
+    [Fact]
     public async Task MultipleDotnetProjectResources_WithExplicitOptIns_InPublishMode_PipelineThrows()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

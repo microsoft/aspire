@@ -62,13 +62,16 @@ public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDis
         // Ensure uniform C# project defaults, including the Rebuild command and Kestrel endpoint wiring.
         Annotations.Add(new ProjectLaunchDefaultsAnnotation());
 
-        _unsupportedPublishCallback = new ManifestPublishingCallbackAnnotation(_ =>
-            Task.FromException(new DistributedApplicationException(GetUnsupportedPublishMessage(Name))));
+        // PublishAsDockerFile now keeps the DotnetProjectResource as the canonical model member, so its fallback
+        // callback remains in the shared annotation collection. Delegate to the selected projection when present;
+        // otherwise keep rejecting accidental executable-manifest publishing.
+        _unsupportedPublishCallback = new ManifestPublishingCallbackAnnotation(context =>
+            this.AsContainer() is { } container
+                ? context.WriteContainerAsync(container)
+                : Task.FromException(new DistributedApplicationException(GetUnsupportedPublishMessage(Name))));
 
-        // PublishAsDockerFile replaces the executable with a container that shares this annotation collection,
-        // while ExcludeFromManifest appends the ignore callback and WithManifestPublishingCallback replaces the
-        // default callback. Evaluate the effective publisher so explicit choices remain valid and only an
-        // untransformed DotnetProjectResource fails.
+        // PublishAsDockerFile, ExcludeFromManifest, and explicit manifest callbacks supersede the
+        // unsupported callback. Validate only resources where that callback remains effective.
         Annotations.Add(new PipelineStepAnnotation(context =>
         {
             var unsupportedResources = context.PipelineContext.Model.Resources
@@ -125,6 +128,7 @@ public class DotnetProjectResource : ExecutableResource, IResourceWithServiceDis
     }
 
     private bool RequiresPublishValidation() =>
+        this.AsContainer() is null &&
         this.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var effectiveCallback) &&
         ReferenceEquals(effectiveCallback, _unsupportedPublishCallback);
 

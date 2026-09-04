@@ -375,21 +375,19 @@ public class ExecutableResourceBuilderExtensionTests
         // container's arguments would run the wrong command.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddExecutable("myexe", "command", "workingdirectory")
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
             .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
             .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(container);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Empty(args);
 
         var processedArgs = new List<string>();
 #pragma warning disable CS0618 // Type or member is obsolete
-        await container.ProcessArgumentValuesAsync(
+        await executable.Resource.ProcessArgumentValuesAsync(
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
             (_, value, exception, _) =>
             {

@@ -19,6 +19,74 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
+    internal static IResource GetEffectiveResource(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.AsContainer() ?? resource;
+    }
+
+    /// <summary>
+    /// Gets the canonical model resource represented by the specified resource.
+    /// </summary>
+    /// <param name="resource">The resource to canonicalize.</param>
+    /// <returns>The projection owner when <paramref name="resource"/> is a projection; otherwise, <paramref name="resource"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// A projection is a typed configuration view that shares its owner's name and annotations, but is a distinct
+    /// object. Only the owner is added to the application model. Use this method when storing resource identity,
+    /// comparing resources, or looking up a resource in the model. For an ordinary resource, this method returns
+    /// the same instance; it does not search the model by name or unwrap arbitrary resource wrappers.
+    /// </para>
+    /// <para>
+    /// Keep using the projection for container-specific configuration. The owner need not have the same CLR type
+    /// or implement the same interfaces, so the result is deliberately returned as <see cref="IResource"/>.
+    /// When resolving a contract such as <see cref="IResourceWithConnectionString"/>, prefer the owner when it
+    /// implements that contract and otherwise fall back to the projection. An owner can vary a contract's value
+    /// by inspecting its selected shape or shared annotations, such as <see cref="ConnectionStringRedirectAnnotation"/>.
+    /// </para>
+    /// <para>
+    /// Integration-authored projections are associated with their owner before the projection configuration
+    /// callback runs. Owner resolution is not available during construction of an unregistered custom projection;
+    /// use the owner supplied to its factory or constructor there.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Keep container configuration separate from logical resource identity:
+    /// <code lang="csharp">
+    /// executable.RunAsContainerImage("contoso/worker:1.0", container =>
+    /// {
+    ///     container.Resource.Entrypoint = "/app/worker";
+    ///     IResource owner = container.Resource.GetOwnerOrSelf();
+    ///     resourcesByIdentity[owner] = "worker";
+    /// });
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Projection identity helper is not part of the ATS surface.")]
+    public static IResource GetOwnerOrSelf(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        if (resource is IResourceProjection projection)
+        {
+            return projection.Owner;
+        }
+
+        // A projection shares its owner's annotation collection, so the registration annotation is reachable from
+        // the projection as well as the owner. Matching on reference equality distinguishes the two sides of the
+        // pair without requiring integration-authored projection types to implement a marker interface.
+        foreach (var annotation in resource.Annotations.OfType<ContainerResourceProjectionAnnotation>())
+        {
+            if (ReferenceEquals(annotation.Projection, resource))
+            {
+                return annotation.Owner;
+            }
+        }
+
+        return resource;
+    }
+
     /// <summary>
     /// Attempts to get the last annotation of the specified type from the resource.
     /// </summary>
@@ -89,21 +157,22 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsIncludingAncestorsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
-        if (resource is IResourceWithParent)
+        var owner = resource.GetOwnerOrSelf();
+        if (owner is IResourceWithParent)
         {
             List<T>? annotations = null;
 
             while (true)
             {
-                foreach (var annotation in resource.Annotations.OfType<T>())
+                foreach (var annotation in owner.Annotations.OfType<T>())
                 {
                     annotations ??= [];
                     annotations.Add(annotation);
                 }
 
-                if (resource is IResourceWithParent child)
+                if (owner is IResourceWithParent child)
                 {
-                    resource = child.Parent;
+                    owner = child.Parent.GetOwnerOrSelf();
                 }
                 else
                 {
@@ -115,7 +184,7 @@ public static class ResourceExtensions
             return annotations is not null;
         }
 
-        return TryGetAnnotationsOfType(resource, out result);
+        return TryGetAnnotationsOfType(owner, out result);
     }
 
     /// <summary>
@@ -755,9 +824,10 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Resource handle endpoint enumeration is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource)
     {
-        if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
+        if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            return endpoints.Select(e => new EndpointReference(resource, e));
+            var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
+            return endpoints.Select(e => new EndpointReference(owner, e));
         }
 
         return [];
@@ -772,9 +842,10 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Network-specific endpoint enumeration is not part of the ATS surface.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkId)
     {
-        if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
+        if (((IResource)resource).TryGetEndpoints(out var endpoints))
         {
-            return endpoints.Select(e => new EndpointReference(resource, e, contextNetworkId));
+            var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
+            return endpoints.Select(e => new EndpointReference(owner, e, contextNetworkId));
         }
 
         return [];
@@ -789,16 +860,17 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
+        var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
-            return new EndpointReference(resource, endpointName);
+            return new EndpointReference(owner, endpointName);
         }
         else
         {
-            return new EndpointReference(resource, endpoint);
+            return new EndpointReference(owner, endpoint);
         }
     }
 
@@ -812,17 +884,17 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkId)
     {
-
+        var owner = resource.GetOwnerOrSelf() as IResourceWithEndpoints ?? resource;
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
             endpoints.FirstOrDefault(e => string.Equals(e.Name, endpointName, StringComparisons.EndpointAnnotationName)) :
             null;
         if (endpoint is null)
         {
-            return new EndpointReference(resource, endpointName, contextNetworkId);
+            return new EndpointReference(owner, endpointName, contextNetworkId);
         }
         else
         {
-            return new EndpointReference(resource, endpoint, contextNetworkId);
+            return new EndpointReference(owner, endpoint, contextNetworkId);
         }
     }
 
@@ -858,7 +930,7 @@ public static class ResourceExtensions
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
 
                 // Container resources get their default listening port from the exposed port (implicit)
-                (ContainerResource, _, null, int port) => ResolvedPort.Implicit(port),
+                (_, _, null, int port) when resource.AsContainer() is not null => ResolvedPort.Implicit(port),
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
@@ -869,7 +941,9 @@ public static class ResourceExtensions
             };
 
             // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            if (resource is ProjectResource &&
+                resource.AsContainer() is null &&
+                IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -1006,9 +1080,19 @@ public static class ResourceExtensions
             return false;
         }
 
+        // A selected projection is authoritative for shape, so a projected resource is built only when the
+        // projection itself describes a build. Without this a project published from a prebuilt image would still
+        // be classified as build-and-push — requiring a container registry and a deploy tag — even though its
+        // step factory emits no build step, because the classic rule below keys off the owner's CLR type.
+        // The annotation lookup is the same either way: a projection shares the owner's annotation collection,
+        // so WithDockerfile on the projection is visible here.
+        if (resource.AsContainer() is not null)
+        {
+            return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        }
+
         return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
-
     /// <summary>
     /// Determines whether the specified resource requires image building and pushing.
     /// </summary>
@@ -1590,7 +1674,7 @@ public static class ResourceExtensions
         // Ensure the input resources are not in its own dependency set, even if referenced transitively.
         foreach (var resource in resources)
         {
-            dependencies.Remove(resource);
+            dependencies.Remove(resource.GetOwnerOrSelf());
         }
 
         return dependencies;
@@ -1614,12 +1698,11 @@ public static class ResourceExtensions
         CancellationToken cancellationToken)
     {
         var visited = new HashSet<object>();
-
-        // Collect direct dependencies from annotations
-        CollectAnnotationDependencies(resource, dependencies, newDependencies);
+        var owner = resource.GetOwnerOrSelf();
+        CollectAnnotationDependencies(owner, dependencies, newDependencies);
 
         // Collect raw (unresolved) environment variable and argument values
-        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, options, cancellationToken).ConfigureAwait(false);
+        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(owner, executionContext, options, cancellationToken).ConfigureAwait(false);
 
         foreach (var value in rawValues)
         {
@@ -1742,10 +1825,7 @@ public static class ResourceExtensions
         // Parent relationship
         if (resource is IResourceWithParent resourceWithParent)
         {
-            if (dependencies.Add(resourceWithParent.Parent))
-            {
-                newDependencies.Add(resourceWithParent.Parent);
-            }
+            AddDependency(resourceWithParent.Parent, dependencies, newDependencies);
         }
 
         // Wait annotations
@@ -1753,20 +1833,26 @@ public static class ResourceExtensions
         {
             foreach (var waitAnnotation in waitAnnotations)
             {
-                if (dependencies.Add(waitAnnotation.Resource))
-                {
-                    newDependencies.Add(waitAnnotation.Resource);
-                }
+                AddDependency(waitAnnotation.Resource, dependencies, newDependencies);
             }
         }
 
         // Connection string redirect
         if (resource.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var redirectAnnotation))
         {
-            if (dependencies.Add(redirectAnnotation.Resource))
-            {
-                newDependencies.Add(redirectAnnotation.Resource);
-            }
+            AddDependency(redirectAnnotation.Resource, dependencies, newDependencies);
+        }
+    }
+
+    private static void AddDependency(
+        IResource resource,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies)
+    {
+        var owner = resource.GetOwnerOrSelf();
+        if (dependencies.Add(owner))
+        {
+            newDependencies.Add(owner);
         }
     }
 
@@ -1793,19 +1879,13 @@ public static class ResourceExtensions
         // Direct resource references
         if (value is IResource resource)
         {
-            if (dependencies.Add(resource))
-            {
-                newDependencies.Add(resource);
-            }
+            AddDependency(resource, dependencies, newDependencies);
         }
 
         // Resource builder wrapping a resource
         if (value is IResourceBuilder<IResource> resourceBuilder)
         {
-            if (dependencies.Add(resourceBuilder.Resource))
-            {
-                newDependencies.Add(resourceBuilder.Resource);
-            }
+            AddDependency(resourceBuilder.Resource, dependencies, newDependencies);
             value = resourceBuilder.Resource;
         }
 
@@ -1845,11 +1925,16 @@ public static class ResourceExtensions
             return;
         }
 
-        foreach (var resource in model.Resources.Where(r => !r.IsContainer()).OfType<IResourceWithEndpoints>())
+        foreach (var resource in model.Resources)
         {
-            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)) && dependencies.Add(resource))
+            if (resource.IsContainer() || resource is not IResourceWithEndpoints)
             {
-                newDependencies.Add(resource);
+                continue;
+            }
+
+            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)))
+            {
+                AddDependency(resource, dependencies, newDependencies);
             }
         }
     }
@@ -1860,8 +1945,8 @@ public static class ResourceExtensions
     /// </summary>
     internal static string GetResourceType(this IResource resource) => resource switch
     {
+        _ when resource.AsContainer() is not null => KnownResourceTypes.Container,
         ProjectResource => KnownResourceTypes.Project,
-        ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,
         DotnetToolResource => KnownResourceTypes.Tool,
         ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,

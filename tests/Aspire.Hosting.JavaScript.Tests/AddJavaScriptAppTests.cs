@@ -36,7 +36,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
-        var dockerBuildAnnotation = yarnApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        var dockerBuildAnnotation = yarnApp.GetDockerfileBuildAnnotation();
         Assert.False(dockerBuildAnnotation.HasEntrypoint);
     }
 
@@ -245,6 +245,24 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishWithExistingDockerfileStillThrowsAfterRepeatedPublishConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
+        var app = builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun()
+            .PublishAsDockerFile(container => container.WithBuildArg("BUILD_CONFIGURATION", "Release"));
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenRunScriptNameIsExplicit()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -303,6 +321,30 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("bun", manifest["entrypoint"]?.ToString());
         Assert.Contains("src/migrate.ts", manifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task PublishModeConfigurationPreservesContainerArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package.json"), """
+            {
+              "scripts": {
+                "start": "node src/index.js"
+              }
+            }
+            """);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .PublishAsDockerFile(container => container.WithArgs("--configured"))
+            .WithRunScript("start");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Contains("--configured", manifest.ToJsonString());
     }
 
     [Fact]

@@ -9,10 +9,14 @@ namespace Aspire.Hosting.Azure;
 /// Wraps an <see cref="AzureSignalRResource" /> in a type that exposes container extension methods.
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
-public class AzureSignalREmulatorResource(AzureSignalRResource innerResource) : ContainerResource(innerResource.Name), IResource
+public class AzureSignalREmulatorResource(AzureSignalRResource innerResource)
+    : ContainerResource(innerResource.Name), IResource, IContainerProjection<AzureSignalRResource, AzureSignalREmulatorResource>
 {
     private readonly AzureSignalRResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc/>
     public override ResourceAnnotationCollection Annotations => _innerResource.Annotations;
+
+    /// <inheritdoc/>
+    public static AzureSignalREmulatorResource CreateProjection(AzureSignalRResource owner) => new(owner);
 }

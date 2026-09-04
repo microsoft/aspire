@@ -13,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public static class ProjectResourceExtensions
 {
     /// <summary>
-    /// Returns all project resources in the distributed application model.
+    /// Returns project resources whose effective shape remains a project for the current AppHost invocation.
     /// </summary>
     /// <param name="model">The distributed application model.</param>
     /// <returns>An enumerable collection of project resources.</returns>
@@ -22,7 +22,9 @@ public static class ProjectResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources.OfType<ProjectResource>();
+        return model.Resources
+            .OfType<ProjectResource>()
+            .Where(static resource => resource.AsContainer() is null);
     }
 
     /// <summary>

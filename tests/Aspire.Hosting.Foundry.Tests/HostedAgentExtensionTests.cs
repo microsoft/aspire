@@ -435,6 +435,37 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public async Task AsHostedAgent_InPublishMode_UsesOwnerIdentityForProjectedExecutableTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .WithHttpEndpoint(targetPort: 9000, env: "AGENT_PORT");
+
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        using var app = builder.Build();
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
+
+        Assert.Same(agent.Resource, hostedAgent.Target);
+        var relationship = Assert.Single(
+            hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            annotation => annotation.Type == "Reference");
+        Assert.Same(agent.Resource, relationship.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            hostedAgent.Target,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.DoesNotContain("AGENT_PORT", envVars.Keys);
+    }
+
+    [Fact]
     public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -726,13 +757,14 @@ public class HostedAgentExtensionTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app");
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        Assert.Single(agent.Resource.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>

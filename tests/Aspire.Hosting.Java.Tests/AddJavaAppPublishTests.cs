@@ -115,7 +115,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
             .WithJvmArgs("-Xmx128m", "-javaagent:/app/coverage-agent.jar")
             .WithOtelAgent("target/agent/opentelemetry-javaagent.jar");
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "worker");
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             container, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
 
@@ -446,7 +446,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
                .WithMavenGoal("spring-boot:run")
                .WithOtelAgent("target/otel/javaagent.jar");
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -477,7 +477,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
                .WithMavenGoal("spring-boot:run")
                .WithOtelAgent("/opt/otel/javaagent.jar");
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             container, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
 
@@ -1235,9 +1235,7 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        // PublishAsDockerFile swaps the executable for a container that shares this annotation collection,
-        // so the published resource carries the same name.
-        var published = Assert.Single(model.Resources.OfType<ContainerResource>(), r => r.Name == "worker");
+        var published = model.Resources.Single(resource => resource.Name == "worker");
         var args = await ArgumentEvaluator.GetArgumentListAsync(published, app.Services);
 
         // PublishAsDockerFile clears the arguments because they routinely contain host paths, and it does so
@@ -2378,14 +2376,13 @@ public class AddJavaAppPublishTests(ITestOutputHelper outputHelper)
         // The build context is fixed when the resource is added and cannot move afterwards, so the
         // Dockerfile callback has to refuse rather than build an image from a directory the author no
         // longer points at. The message is what the author acts on, so assert it names both directories.
-        var annotation = model.Resources
-            .SelectMany(resource => resource.Annotations.OfType<DockerfileBuildAnnotation>())
-            .Single();
+        var container = Assert.Single(model.GetContainerResources());
+        var annotation = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
 
         var context = new DockerfileFactoryContext
         {
             Services = app.Services,
-            Resource = model.Resources.Single(resource => resource.Name == "api"),
+            Resource = container,
             CancellationToken = TestContext.Current.CancellationToken
         };
 

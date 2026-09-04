@@ -1012,10 +1012,10 @@ internal static class AzureSandboxContainerDeployment
         return $"{repository}@{digest}";
     }
 
-    private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
+    internal static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
     {
         var modeledCommand = await ResolveModeledCommandAsync(context, resource).ConfigureAwait(false);
-        if (resource is not ContainerResource || !resource.RequiresImageBuildAndPush())
+        if (!resource.IsContainer() || !resource.RequiresImageBuildAndPush())
         {
             return new ContainerImageMetadata(
                 modeledCommand.Entrypoint ?? [],
@@ -1060,17 +1060,22 @@ internal static class AzureSandboxContainerDeployment
             egressHosts.UnionWith(resolvedArg.EgressHosts);
         }
 
-        var entrypoint = resource is ContainerResource container && !string.IsNullOrWhiteSpace(container.Entrypoint)
-            ? new[] { container.Entrypoint }
+        var configuredEntrypoint = resource.AsContainer()?.Entrypoint;
+        var entrypoint = !string.IsNullOrWhiteSpace(configuredEntrypoint)
+            ? new[] { configuredEntrypoint }
             : null;
         var command = resolvedArgs.Count == 0 ? null : resolvedArgs;
 
         return new ResolvedModeledCommand(entrypoint, command, egressHosts);
     }
 
-    internal static bool HasModeledCommandConfiguration(IResource resource) =>
-        resource is ContainerResource { Entrypoint: { Length: > 0 } } ||
-        resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks) && callbacks.Any();
+    internal static bool HasModeledCommandConfiguration(IResource resource)
+    {
+        var entrypoint = resource.AsContainer()?.Entrypoint;
+
+        return entrypoint is { Length: > 0 } ||
+            resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks) && callbacks.Any();
+    }
 
     private static async Task<ContainerImageMetadata> InspectLocalContainerImageAsync(PipelineStepContext context, string imageReference)
     {

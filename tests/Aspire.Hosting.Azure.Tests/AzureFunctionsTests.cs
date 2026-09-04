@@ -50,6 +50,22 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectedAzureFunctionsProjectRetainsDefaultHostStorage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureFunctionsProject<TestProjectWithDirectory>("funcapp")
+            .PublishAsDockerFile();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Contains(
+            builder.Resources,
+            resource => resource is AzureStorageResource &&
+                resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
+    }
+
+    [Fact]
     public async Task AddAzureFunctionsProject_WiresUpHttpEndpointCorrectly_WhenPortArgumentIsProvided()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -472,6 +488,13 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
                 }
             }
         };
+    }
+
+    private sealed class TestProjectWithDirectory : IProjectMetadata
+    {
+        public string ProjectPath => "some-path/TestProject.csproj";
+
+        public LaunchSettings LaunchSettings => new();
     }
 
     private sealed class TestProjectWithMalformedPort : IProjectMetadata

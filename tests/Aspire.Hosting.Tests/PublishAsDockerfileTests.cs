@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -23,9 +26,8 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile();
 
-        // There should be an equivalent container resource with the same name
-        // as the npm app resource.
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        Assert.Collection(builder.Resources, resource => Assert.Same(frontend.Resource, resource));
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -69,9 +71,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             ]);
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        // There should be an equivalent container resource with the same name
-        // as the npm app resource.
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -118,9 +118,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             ]);
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        // There should be an equivalent container resource with the same name
-        // as the npm app resource.
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -136,6 +134,51 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                   "SOME_ARG": null
                 }
               },
+              "env": {
+                "NODE_ENV": "{{builder.Environment.EnvironmentName.ToLowerInvariant()}}"
+              }
+            }
+            """;
+
+        var actual = manifest.ToString();
+
+        Assert.Equal(expected, actual, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Fact]
+    public async Task PublishAsDockerFileConfiguresManifestWithBuildArgsAndContainerCallback()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var frontend = builder.AddJavaScriptApp("frontend", path)
+            .PublishAsDockerFile(
+                buildArgs: [new DockerBuildArg("BUILD_CONFIGURATION", "Release")],
+                configure: container => container.WithArgs("/app"));
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        Assert.Equal("frontend", containerResource.Name);
+
+        var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
+
+        var expected =
+            $$"""
+            {
+              "type": "container.v1",
+              "build": {
+                "context": ".",
+                "dockerfile": "Dockerfile",
+                "args": {
+                  "BUILD_CONFIGURATION": "Release"
+                }
+              },
+              "args": [
+                "/app"
+              ],
               "env": {
                 "NODE_ENV": "{{builder.Environment.EnvironmentName.ToLowerInvariant()}}"
               }
@@ -167,9 +210,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithVolume("vol", "/app/node_modules");
             });
 
-        // There should be an equivalent container resource with the same name
-        // as the npm app resource.
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -210,6 +251,64 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishExecutableAsDockerFileSerializesEarlierCustomProjectionAsContainer()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var executable = builder.AddExecutable("worker", "worker", workspace.WorkspaceRoot.FullName);
+
+        executable.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(executable.Resource),
+            _ => { });
+        executable.PublishAsDockerFile();
+
+        var manifest = await ManifestUtils.GetManifest(
+            executable.Resource,
+            manifestDirectory: workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.NotNull(manifest["build"]);
+    }
+
+    [Fact]
+    public async Task ProjectedManifestCallbacksReceiveOwnerResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+        var executable = builder.AddExecutable("worker", "worker", path);
+        IResource? argumentResource = null;
+        IResource? environmentResource = null;
+        IResource? dockerfileResource = null;
+
+        executable
+            .WithArgs(context =>
+            {
+                argumentResource = context.Resource;
+                context.Args.Add("--projected");
+            })
+            .WithEnvironment(context =>
+            {
+                environmentResource = context.Resource;
+                context.EnvironmentVariables["PROJECTED"] = "true";
+            })
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+            .PublishAsDockerFile(container => container.WithDockerfileBuilder(path, context =>
+            {
+                dockerfileResource = context.Resource;
+                context.Builder.From("scratch");
+            }));
+#pragma warning restore ASPIREDOCKERFILEBUILDER001
+
+        await ManifestUtils.GetManifest(executable.Resource, manifestDirectory: path).DefaultTimeout();
+
+        Assert.Same(executable.Resource, argumentResource);
+        Assert.Same(executable.Resource, environmentResource);
+        Assert.Same(executable.Resource, dockerfileResource);
+    }
+
+    [Fact]
     public async Task PublishProjectAsDockerFile()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -227,9 +326,8 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                                  c.WithArgs("/app");
                                  c.WithVolume("vol", "/app/shared");
                              });
-        // There should be an equivalent container resource with the same name
-        // as the project resource.
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        Assert.Collection(builder.Resources, resource => Assert.Same(project.Resource, resource));
+        var containerResource = GetContainerConfiguredOwner(project.Resource);
         Assert.Equal("project", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(project.Resource, manifestDirectory: path).DefaultTimeout();
@@ -266,6 +364,28 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishProjectAsDockerFileSerializesEarlierCustomProjectionAsContainer()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = CreateDirectoryWithDockerFile();
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "project.csproj");
+        var project = builder.AddProject("project", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        project.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new TestContainerProjection(project.Resource),
+            _ => { });
+        project.PublishAsDockerFile();
+
+        var manifest = await ManifestUtils.GetManifest(
+            project.Resource,
+            manifestDirectory: workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.NotNull(manifest["build"]);
+    }
+
+    [Fact]
     public void PublishProjectAsDockerFile_NoExistingEndpoints_DoesNotAddDefaultEndpoints()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -277,7 +397,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
                               .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = GetContainerConfiguredOwner(project.Resource);
         // No endpoints should have been created since createIfNotExists=false and the project had none.
         Assert.Empty(container.Annotations.OfType<EndpointAnnotation>());
     }
@@ -295,7 +415,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                              .WithHttpEndpoint()
                              .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = GetContainerConfiguredOwner(project.Resource);
         var endpoint = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
 
         Assert.Equal("http", endpoint.Name);
@@ -319,7 +439,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                              })
                              .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = GetContainerConfiguredOwner(project.Resource);
         var endpoint = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
 
         Assert.Equal("http", endpoint.Name);
@@ -337,8 +457,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var project = builder.AddProject<TestProjectWithHttpAndHttpsProfile>("project", o => o.LaunchProfileName = "https")
                              .PublishAsDockerFile();
 
-        // Container resource produced
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = GetContainerConfiguredOwner(project.Resource);
 
         var endpoints = container.Annotations.OfType<EndpointAnnotation>().OrderBy(e => e.Name).ToList();
 
@@ -367,8 +486,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile()
             .PublishAsDockerFile(); // Call again - should not throw
 
-        // There should be an equivalent container resource with the same name
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
     }
 
@@ -393,8 +511,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithBuildArg("ARG2", "value2");
             });
 
-        // There should be an equivalent container resource with the same name
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
         
         // Both callbacks should have been invoked
@@ -402,7 +519,29 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PublishProjectAsDockerFile_CalledMultipleTimes_IsIdempotent()
+    public async Task PublishExecutableAsDockerFile_CalledMultipleTimes_PreservesExistingArgumentBehavior()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+
+        var executable = builder.AddExecutable("worker", "worker", path)
+            .WithArgs("before")
+            .PublishAsDockerFile(container => container.WithArgs("first"))
+            .WithArgs("between")
+            .PublishAsDockerFile(container => container.WithArgs("second"))
+            .WithArgs("after");
+
+        var containerResource = GetContainerConfiguredOwner(executable.Resource);
+
+        // Executable conversion historically clears on every call. The second clear removes the owner argument,
+        // the first callback's argument, and the argument registered between calls.
+        Assert.Equal(["second", "after"], await ArgumentEvaluator.GetArgumentListAsync(containerResource));
+    }
+
+    [Fact]
+    public async Task PublishProjectAsDockerFile_CalledMultipleTimes_PreservesExistingArgumentBehavior()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -411,11 +550,17 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(path, "project.csproj");
 
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
-            .PublishAsDockerFile()
-            .PublishAsDockerFile(); // Call again - should not throw
+            .WithArgs("before")
+            .PublishAsDockerFile(container => container.WithArgs("first"))
+            .WithArgs("between")
+            .PublishAsDockerFile(container => container.WithArgs("second"))
+            .WithArgs("after");
 
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
-        Assert.Equal("project", containerResource.Name);
+        var containerResource = GetContainerConfiguredOwner(project.Resource);
+
+        // Project conversion historically clears only on its first call. Arguments registered by or after that
+        // call therefore remain when the resource is converted again.
+        Assert.Equal(["first", "between", "second", "after"], await ArgumentEvaluator.GetArgumentListAsync(containerResource));
     }
 
     [Fact]
@@ -441,11 +586,34 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithBuildArg("ARG2", "value2");
             });
 
-        var containerResource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var containerResource = GetContainerConfiguredOwner(project.Resource);
         Assert.Equal("project", containerResource.Name);
         
         // Both callbacks should have been invoked
         Assert.Equal(2, callbackCount);
+    }
+
+    [Fact]
+    public void WithDockerfilePreservesUnrelatedPipelineStepsAndIsIdempotent()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var container = builder.AddContainer("api", "api:latest");
+
+        container.WithPipelineStepFactory(_ => new PipelineStep
+        {
+            Name = "custom",
+            Resource = container.Resource,
+            Action = _ => Task.CompletedTask
+        });
+
+        container
+            .WithDockerfile(".")
+            .WithDockerfile(".");
+
+        // PipelineStepAnnotation supports multiple independent factories. WithDockerfile must own and replace only
+        // its build/push factory rather than deleting the caller's factory or appending another copy of its own.
+        Assert.Equal(2, container.Resource.Annotations.OfType<PipelineStepAnnotation>().Count());
+        Assert.Single(container.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
     }
 
     [Fact]
@@ -516,11 +684,26 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         return workspace;
     }
 
+    private static IResource GetContainerConfiguredOwner(IResource owner)
+    {
+        Assert.Same(owner, owner.GetOwnerOrSelf());
+        var projection = Assert.Single(owner.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        Assert.NotNull(projection.Projection);
+        Assert.Same(owner, projection.Projection.GetOwnerOrSelf());
+        Assert.True(owner.IsContainer());
+        return owner;
+    }
+
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "another-path";
 
         public LaunchSettings? LaunchSettings { get; set; }
+    }
+
+    private sealed class TestContainerProjection(IResource owner) : ContainerResource(owner.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
     }
 
     private sealed class TestProjectWithHttpAndHttpsProfile : IProjectMetadata

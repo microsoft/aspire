@@ -163,6 +163,22 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WithTerminalOnProjectionUsesOwnerAsTerminalHostParent()
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("worker", "worker", ".")
+            .RunAsContainerImage("contoso/worker:1.0", container => container.WithTerminal());
+
+        var model = await BuildAndPublishBeforeStartAsync(builder);
+
+        var host = Assert.Single(model.Resources.OfType<TerminalHostResource>());
+        Assert.Same(resource.Resource, host.Parent);
+        Assert.True(model.Resources.Contains(host.Parent));
+        Assert.Same(resource.Resource, Assert.Single(model.Resources, r => r.Name == "worker"));
+        Assert.Same(host, Assert.Single(resource.Resource.Annotations.OfType<WaitAnnotation>()).Resource);
+    }
+
+    [Fact]
     public async Task WithTerminalAddsWaitAnnotationForEachTerminalHost()
     {
         using var builder = CreateBuilder();

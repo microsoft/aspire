@@ -158,9 +158,10 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
     /// <inheritdoc cref="IDistributedApplicationEventing.Subscribe{T}(Func{T, CancellationToken, Task})" />
     public DistributedApplicationEventSubscription Subscribe<T>(IResource resource, Func<T, CancellationToken, Task> callback) where T : IDistributedApplicationResourceEvent
     {
+        var resourceOwner = resource.GetOwnerOrSelf();
         var resourceFilteredCallback = async (T @event, CancellationToken cancellationToken) =>
         {
-            if (@event.Resource == resource)
+            if (@event.Resource.GetOwnerOrSelf() == resourceOwner)
             {
                 await callback(@event, cancellationToken).ConfigureAwait(false);
             }

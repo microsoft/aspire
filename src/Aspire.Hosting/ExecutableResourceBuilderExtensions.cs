@@ -93,14 +93,38 @@ public static class ExecutableResourceBuilderExtensions
     [Obsolete("Use builder.PublishAsDockerFile(c => c.WithBuildArg(name, value)) instead.")]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, IEnumerable<DockerBuildArg>? buildArgs) where T : ExecutableResource
     {
+        return builder.PublishAsDockerFile(buildArgs, configure: null);
+    }
+
+    /// <summary>
+    /// Adds annotation to <see cref="ExecutableResource" /> to support containerization during deployment.
+    /// The resulting container image is built using the optional <paramref name="buildArgs"/>, and the
+    /// <paramref name="configure"/> callback provides access to the projected container.
+    /// </summary>
+    /// <typeparam name="T">Type of executable resource.</typeparam>
+    /// <param name="builder">Resource builder.</param>
+    /// <param name="buildArgs">The optional build arguments, used with <c>docker build --build-arg</c>.</param>
+    /// <param name="configure">Optional action to configure the projected container resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This C# compatibility overload is not available in polyglot app hosts. Use the configure callback overload instead.</remarks>
+    [Obsolete("Use builder.PublishAsDockerFile(c => { c.WithBuildArg(name, value); /* additional configuration */ }) instead.")]
+    [AspireExportIgnore(Reason = "Uses the obsolete DockerBuildArg type. Polyglot AppHosts use the configure callback overload.")]
+    public static IResourceBuilder<T> PublishAsDockerFile<T>(
+        this IResourceBuilder<T> builder,
+        IEnumerable<DockerBuildArg>? buildArgs,
+        Action<IResourceBuilder<ContainerResource>>? configure)
+        where T : ExecutableResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.PublishAsDockerFile(c =>
+        return builder.PublishAsDockerFile(container =>
         {
             foreach (var arg in buildArgs ?? [])
             {
-                c.WithBuildArg(arg.Name, arg.Value);
+                container.WithBuildArg(arg.Name, arg.Value);
             }
+
+            configure?.Invoke(container);
         });
     }
 
@@ -111,7 +135,7 @@ public static class ExecutableResourceBuilderExtensions
     /// </summary>
     /// <ats-summary>Publishes an executable as a Docker file</ats-summary>
     /// <remarks>
-    /// When the executable resource is converted to a container resource, the arguments to the executable
+    /// When the executable resource is projected as a container resource, the arguments to the executable
     /// are not used. This is because arguments to the executable often contain physical paths that are not valid
     /// in the container. The container can be set up with the correct arguments using the <paramref name="configure"/> action.
     /// </remarks>
@@ -124,49 +148,33 @@ public static class ExecutableResourceBuilderExtensions
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure)
         where T : ExecutableResource
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
 
-        // Check if this resource has already been converted to a container resource.
-        // This makes the method idempotent - multiple calls won't cause errors.
-        if (builder.ApplicationBuilder.TryCreateResourceBuilder<ExecutableContainerResource>(builder.Resource.Name, out var existingBuilder))
-        {
-            // Arguments to the executable often contain physical paths that are not valid in the container
-            // Clear them out so that the container can be set up with the correct arguments
-            existingBuilder.WithArgs(c => c.Args.Clear());
+        var resource = builder.Resource;
 
-            // Resource has already been converted, just invoke the configure callback if provided
-            configure?.Invoke(existingBuilder);
-            return builder;
-        }
+        builder.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container =>
+            {
+                if (!resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
+                {
+                    container.WithImage(resource.Name);
+                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
+                }
 
-        // The implementation here is less than ideal, but we don't have a clean way of building resource types
-        // that change their behavior based on the context. In this case, we want to change the behavior of the
-        // resource from an ExecutableResource to a ContainerResource. We do this by removing the ExecutableResource
-        // from the application model and adding a new ContainerResource in its place in publish mode.
+                // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on
+                // every call, so only arguments configured by or after the most recent call reach the container.
+                // Project conversion differs and clears only on its first call. See https://github.com/microsoft/aspire/issues/19922.
+                container.WithArgs(context => context.Args.Clear());
+                configure?.Invoke(container);
+            });
 
-        // There are still dangling references to the original ExecutableResource in the application model, but
-        // in publish mode, it won't be used. This is a limitation of the current design.
-        builder.ApplicationBuilder.Resources.Remove(builder.Resource);
-
-        var container = new ExecutableContainerResource(builder.Resource);
-        var cb = builder.ApplicationBuilder.AddResource(container);
-        // WithImage makes this a container resource (adding the annotation)
-        cb.WithImage(builder.Resource.Name);
-        cb.WithDockerfile(contextPath: builder.Resource.WorkingDirectory);
-        // Arguments to the executable often contain physical paths that are not valid in the container
-        // Clear them out so that the container can be set up with the correct arguments
-        cb.WithArgs(c => c.Args.Clear());
-
-        configure?.Invoke(cb);
-
-        // Even through we're adding a ContainerResource
-        // update the manifest publishing callback on the original ExecutableResource
-        // so that the container resource is written to the manifest
-        return builder.WithManifestPublishingCallback(context =>
-            context.WriteContainerAsync(container));
+        return builder;
     }
 
     /// <summary>
@@ -221,11 +229,5 @@ public static class ExecutableResourceBuilderExtensions
         }
 
         throw new InvalidOperationException($"The resource '{builder.Resource.Name}' is missing the ExecutableAnnotation");
-    }
-
-    // Allows us to mirror annotations from ExecutableResource to ContainerResource
-    private sealed class ExecutableContainerResource(ExecutableResource er) : ContainerResource(er.Name)
-    {
-        public override ResourceAnnotationCollection Annotations => er.Annotations;
     }
 }

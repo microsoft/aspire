@@ -126,7 +126,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         app.Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var logger = app.Services.GetRequiredService<ILogger<AddRustAppPublishTests>>();
         var buildOptions = await container.ProcessContainerBuildOptionsCallbackAsync(
             app.Services,
@@ -256,7 +256,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         app.Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var logger = app.Services.GetRequiredService<ILogger<AddRustAppPublishTests>>();
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => container.ProcessContainerBuildOptionsCallbackAsync(
@@ -286,7 +286,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
                 ResourceAnnotationMutationBehavior.Replace));
         builder.Build().Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
 
         Assert.Same(pipelineSteps, Assert.Single(container.Annotations.OfType<PipelineStepAnnotation>()));
     }
@@ -319,9 +319,8 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         var frontendBuildStep = CreateBuildComputeStep("build-frontend", frontend.Resource);
         var assetsBuildStep = CreateBuildComputeStep("build-assets", assets.Resource);
 
-        // Run every configuration callback the pipeline would, from the model rather than from the Rust
-        // resource: PublishAsDockerFile removes that resource, so this also proves the annotation is still
-        // reachable through the container substituted in its place.
+        // Run every configuration callback the pipeline would from the canonical model. The Rust owner
+        // remains the sole model member while its container projection supplies the effective build steps.
         foreach (var annotation in model.Resources.SelectMany(resource => resource.Annotations.OfType<PipelineConfigurationAnnotation>()))
         {
             await annotation.Callback(new PipelineConfigurationContext
@@ -537,7 +536,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile(container => container.WithDockerfile(customContext.FullName, "Dockerfile.prod"));
         builder.Build().Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
 
         Assert.Equal(customContext.FullName, dockerfile.ContextPath);
@@ -560,7 +559,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
                 _ => Task.FromResult("FROM scratch\n")));
         builder.Build().Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
         var content = await File.ReadAllTextAsync(
             Path.Combine(outputDir.FullName, "api.Dockerfile"),
@@ -1015,12 +1014,12 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
         builder.Services.AddSingleton<ICargoMetadataReader>(reader);
         builder.AddRustApp("api", sourceDir.FullName).WithWorkingDirectory(relocatedDir.FullName);
-        var initialContainer = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var initialContainer = builder.Resources.Single(resource => resource.Name == "api");
         var initialDockerfile = Assert.Single(initialContainer.Annotations.OfType<DockerfileBuildAnnotation>());
         initialDockerfile.BuildContextIgnoreContent = "custom-ignore\n";
         builder.Build().Run();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = builder.Resources.Single(resource => resource.Name == "api");
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
 
         Assert.Equal(relocatedDir.FullName, dockerfile.ContextPath);

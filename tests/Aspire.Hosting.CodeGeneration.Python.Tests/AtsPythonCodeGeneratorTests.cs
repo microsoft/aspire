@@ -241,6 +241,18 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesNullableHandleReturns()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspirePy = _generator.GenerateDistributedApplication(atsContext)["aspire_app.py"];
+
+        Assert.Contains("def as_container(self) -> ContainerResource | None:", aspirePy, StringComparison.Ordinal);
+        Assert.Contains("def find_resource_by_name(self, name: str) -> AbstractResource | None:", aspirePy, StringComparison.Ordinal);
+        Assert.Contains("def get_endpoint(self, name: str) -> EndpointReference | None:", aspirePy, StringComparison.Ordinal);
+        Assert.Contains("def get_endpoint(self, name: str) -> EndpointReference:", aspirePy, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GeneratedCode_UsesSnakeCaseMethodNames()
     {
         // Verify that the generated Python code uses snake_case for method names

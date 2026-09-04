@@ -4519,7 +4519,7 @@ class DistributedApplicationModel:
         )
         return result
 
-    def find_resource_by_name(self, name: str) -> AbstractResource:
+    def find_resource_by_name(self, name: str) -> AbstractResource | None:
         """Finds a resource by name."""
         rpc_args: dict[str, typing.Any] = {'model': self._handle}
         rpc_args['name'] = name
@@ -4527,7 +4527,7 @@ class DistributedApplicationModel:
             'Aspire.Hosting/findResourceByName',
             rpc_args,
         )
-        return typing.cast(AbstractResource, result)
+        return typing.cast(AbstractResource | None, result)
 
 
 class DockerfileBuilder:
@@ -6983,7 +6983,7 @@ class ResourceUrlsCallbackContext:
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    def get_endpoint(self, name: str) -> EndpointReference:
+    def get_endpoint(self, name: str) -> EndpointReference | None:
         """Gets an endpoint reference from the associated resource"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['name'] = name
@@ -6991,7 +6991,7 @@ class ResourceUrlsCallbackContext:
             'Aspire.Hosting.ApplicationModel/getEndpoint',
             rpc_args,
         )
-        return typing.cast(EndpointReference, result)
+        return typing.cast(EndpointReference | None, result)
 
 
 class ResourceUrlsEditor:
@@ -7378,6 +7378,10 @@ class AbstractResource(abc.ABC):
         """Configures custom base images for generated Dockerfiles."""
 
     @abc.abstractmethod
+    def as_container(self) -> ContainerResource | None:
+        """Gets a resource's effective container."""
+
+    @abc.abstractmethod
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
 
@@ -7468,6 +7472,10 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
+
+    @abc.abstractmethod
+    def run_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged."""
 
     @abc.abstractmethod
     def with_terminal(self) -> typing.Self:
@@ -7866,6 +7874,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
+    run_as_container_image: str | tuple[str, typing.Callable[[ContainerResource], None]]
     terminal: typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
@@ -7930,6 +7939,15 @@ class _BaseResource(AbstractResource):
         )
         self._handle = self._wrap_builder(result)
         return self
+
+    def as_container(self) -> ContainerResource | None:
+        """Gets a resource's effective container."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/asContainer',
+            rpc_args,
+        )
+        return typing.cast(ContainerResource | None, result)
 
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
@@ -8197,6 +8215,19 @@ class _BaseResource(AbstractResource):
             rpc_args['exitCodes'] = exit_codes
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHiddenOnCompletion',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def run_as_container_image(self, image: str, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
+        """Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['image'] = image
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/runAsContainerImage',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8760,6 +8791,18 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
+        if _run_as_container_image := kwargs.pop("run_as_container_image", None):
+            if _validate_type(_run_as_container_image, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(str, _run_as_container_image)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/runAsContainerImage', rpc_args))
+            elif _validate_tuple_types(_run_as_container_image, (str, typing.Callable[[ContainerResource], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _run_as_container_image)[0]
+                rpc_args["configure"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerResource], None]], _run_as_container_image)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/runAsContainerImage', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'run_as_container_image'. Expected: str or (str, Callable[[ContainerResource], None])")
         if _terminal := kwargs.pop("terminal", None):
             if _terminal is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
