@@ -115,25 +115,77 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Contains(JsonEncodedPath(cliSourcePath), assetsContent);
     }
 
-    [Fact]
-    public void RestoreCommand_PreservesCaseDistinctCliSources()
+    [Theory]
+    [InlineData("https://example.invalid/Feed/index.json", "https://example.invalid/feed/index.json")]
+    [InlineData("https://example.invalid/feed?token=A", "https://example.invalid/feed?token=a")]
+    public void RestoreCommand_PreservesCaseDistinctUriComponents(string firstSource, string secondSource)
     {
         var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
         File.WriteAllText(
             nugetConfigPath,
             "<configuration><packageSources><clear /></packageSources></configuration>");
         var settings = Settings.LoadSpecificSettings(_workspace.Path, Path.GetFileName(nugetConfigPath));
-        const string upperCasePathSource = "https://example.invalid/Feed/index.json";
-        const string lowerCasePathSource = "https://example.invalid/feed/index.json";
 
         var sources = RestoreCommand.ResolvePackageSources(
             settings,
-            [upperCasePathSource, lowerCasePathSource],
+            [firstSource, secondSource],
             noNugetOrg: true);
 
         Assert.Equal(
-            [upperCasePathSource, lowerCasePathSource],
+            [firstSource, secondSource],
             sources.Select(static source => source.Source));
+    }
+
+    [Fact]
+    public void RestoreCommand_UsesPlatformPathComparisonForLocalSources()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            "<configuration><packageSources><clear /></packageSources></configuration>");
+        var settings = Settings.LoadSpecificSettings(_workspace.Path, Path.GetFileName(nugetConfigPath));
+        var firstSource = Path.Combine(_workspace.Path, "Feed");
+        var secondSource = Path.Combine(_workspace.Path, "feed");
+
+        var sources = RestoreCommand.ResolvePackageSources(
+            settings,
+            [firstSource, secondSource],
+            noNugetOrg: true);
+
+        string[] expectedSources = OperatingSystem.IsWindows() ? [firstSource] : [firstSource, secondSource];
+        Assert.Equal(expectedSources, sources.Select(static source => source.Source));
+    }
+
+    [Fact]
+    public void RestoreCommand_DeduplicatesUriSchemeAndHostCasingWhileRetainingConfiguredCredentials()
+    {
+        var nugetConfigPath = Path.Combine(_workspace.Path, "NuGet.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="HTTPS://HOST.example/Feed/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </private>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+        var settings = Settings.LoadSpecificSettings(_workspace.Path, Path.GetFileName(nugetConfigPath));
+
+        var sources = RestoreCommand.ResolvePackageSources(
+            settings,
+            ["https://host.example/Feed/index.json"],
+            noNugetOrg: true);
+
+        var source = Assert.Single(sources);
+        Assert.Equal("HTTPS://HOST.example/Feed/index.json", source.Source);
+        Assert.NotNull(source.Credentials);
     }
 
     [Fact]

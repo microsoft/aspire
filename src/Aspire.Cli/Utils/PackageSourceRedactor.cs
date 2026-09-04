@@ -76,11 +76,42 @@ internal static class PackageSourceRedactor
     /// </summary>
     public static string RedactOccurrences(string value, IReadOnlyList<string> sensitiveSources)
     {
-        foreach (var source in sensitiveSources.OrderByDescending(static source => source.Length))
+        var replacements = sensitiveSources
+            .SelectMany(static source => GetDiagnosticSpellings(source)
+                .Select(spelling => (Spelling: spelling, Replacement: RedactForDisplay(source))))
+            .DistinctBy(static replacement => replacement.Spelling, StringComparer.Ordinal)
+            .OrderByDescending(static replacement => replacement.Spelling.Length);
+
+        foreach (var (spelling, replacement) in replacements)
         {
-            value = value.Replace(source, RedactForDisplay(source), StringComparison.Ordinal);
+            value = value.Replace(spelling, replacement, StringComparison.Ordinal);
         }
 
         return value;
+    }
+
+    private static IEnumerable<string> GetDiagnosticSpellings(string source)
+    {
+        if (source.Length > 0)
+        {
+            yield return source;
+        }
+
+        var trimmedSource = source.Trim();
+        if (trimmedSource.Length == 0)
+        {
+            yield break;
+        }
+
+        yield return trimmedSource;
+
+        // NuGet diagnostics can render the parsed URI rather than the original configuration text.
+        // For example, `HTTPS://user:secret@HOST/Feed?sig=secret` can be emitted as
+        // `https://user:secret@host/Feed?sig=secret`.
+        if (Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            yield return uri.AbsoluteUri;
+        }
     }
 }
