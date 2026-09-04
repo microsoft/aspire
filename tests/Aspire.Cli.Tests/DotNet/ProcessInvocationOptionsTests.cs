@@ -35,6 +35,7 @@ public sealed class ProcessInvocationOptionsTests
             EnvironmentVariableFilter = _ => false,
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
+            ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,
         };
 
         // Compare against a pristine instance so we assert every property was given a value that

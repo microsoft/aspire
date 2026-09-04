@@ -494,9 +494,8 @@ public class AtsTypeScriptCodeGeneratorTests
         // The public fluent method must return TestDatabaseResourcePromise, not TestRedisResourcePromise.
         Assert.Matches(@"addTestChildDatabase\([^)]*\):\s*TestDatabaseResourcePromise", aspireTs);
 
-        // Verify the thenable class also uses the child type's promise class.
-        // In TestRedisResourcePromise, addTestChildDatabase should return TestDatabaseResourcePromise.
-        Assert.Contains("new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(", aspireTs);
+        // The compact transition table must wrap this factory with the child promise implementation.
+        Assert.Contains("[\"addTestChildDatabase\"]: () => TestDatabaseResourcePromiseImpl", aspireTs);
     }
 
     [Fact]
@@ -1141,7 +1140,7 @@ public class AtsTypeScriptCodeGeneratorTests
             "export interface TestMarkerResourcePromise extends PromiseLike<TestMarkerResource>",
             aspireTs);
         Assert.Contains(
-            "class TestMarkerResourcePromiseImpl implements TestMarkerResourcePromise",
+            "const TestMarkerResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>",
             aspireTs);
     }
 
@@ -1212,7 +1211,7 @@ public class AtsTypeScriptCodeGeneratorTests
             "export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>"));
         Assert.Equal(1, CountOccurrences(
             aspireTs,
-            "class TestVaultResourcePromiseImpl implements TestVaultResourcePromise"));
+            "const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>"));
         var returnedAliasTypeId = fixtureCapabilities
             .Single(capability => capability.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault")
             .ReturnType!.TypeId;
@@ -1338,9 +1337,10 @@ public class AtsTypeScriptCodeGeneratorTests
             $"Generated aspire.mts references Promise wrapper type(s) that are never declared: {string.Join(", ", dangling)}");
     }
 
-    // Declarations: "export interface FooPromise extends ...", "class FooPromiseImpl implements ...".
+    // Declarations: "export interface FooPromise extends ..." and
+    // "const FooPromiseImpl = $aspireCreateFluentPromiseClass(...)".
     private static readonly Regex s_promiseDeclarationPattern =
-        new(@"\b(?:interface|class|type)\s+(\w*Promise(?:Impl)?)\b", RegexOptions.Compiled);
+        new(@"\b(?:interface|class|type|const)\s+(\w*Promise(?:Impl)?)\b", RegexOptions.Compiled);
 
     // Uses of a wrapper type name: return types, "new FooPromiseImpl(", type arguments. Anchored on
     // a leading capital so "PromiseLike", bare "Promise" and "trackPromise" are not matched.
@@ -1983,8 +1983,9 @@ public class AtsTypeScriptCodeGeneratorTests
         var code = GenerateTwoPassCode();
 
         // TestResourceContext has ExposeMethods=true - gets Promise wrapper
-        Assert.Contains("class TestResourceContextPromiseImpl implements TestResourceContextPromise", code);
-        Assert.Contains("implements TestResourceContextPromise", code);
+        Assert.Contains(
+            "const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResourceContext, TestResourceContextPromise>",
+            code);
     }
 
     [Fact]

@@ -641,6 +641,13 @@ internal class ConsoleInteractionService : IInteractionService
 
     public async Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (!_hostEnvironment.SupportsInteractiveOutput)
+        {
+            // The callback supplies replacement snapshots, so appending them would duplicate prior
+            // content. Callers must define incremental static output when a live region is unavailable.
+            throw new InvalidOperationException("Live rendering requires interactive output.");
+        }
+
         await MessageConsole.Live(initialRenderable)
             .AutoClear(false)
             .StartAsync(async ctx =>

@@ -190,6 +190,8 @@ export const configInfoTimedOut = (seconds: number) => vscode.l10n.t('Aspire con
 export const outdatedAspireCliWarning = (version: string, cliPath: string, recommendedVersion: string) => vscode.l10n.t('Aspire CLI {0} at {1} has a newer version available for its current channel: {2}.', version, cliPath, recommendedVersion);
 export const updateAspireCliAction = vscode.l10n.t({ message: 'Update Aspire CLI', comment: 'Button label that updates the installed Aspire CLI.' });
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
+export const denoInspectorAddressUnavailable = vscode.l10n.t('Could not reserve a loopback address for the Deno inspector.');
+export const denoAppHostRunCommandMissing = vscode.l10n.t("The Deno AppHost command does not contain the required 'run' subcommand.");
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
 export const unsupportedBrowserDebugTarget = (browser: string, url: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.", browser, url, supportedBrowsers);

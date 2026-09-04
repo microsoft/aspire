@@ -106,8 +106,10 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 /// </summary>
 internal class FakeAppHostRpcClient : IAppHostRpcClient
 {
+    public RuntimeSpec? RuntimeSpec { get; init; }
+
     public virtual Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
-        => Task.FromResult(new RuntimeSpec
+        => Task.FromResult(RuntimeSpec ?? new RuntimeSpec
         {
             Language = languageId,
             DisplayName = "Fake",

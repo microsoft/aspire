@@ -26,6 +26,7 @@ import {
     refExpr,
     AspireDict,
     AspireList,
+    createFluentPromiseClass as $aspireCreateFluentPromiseClass,
     InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
@@ -42,6 +43,7 @@ export type {
 
 import type {
     Awaitable,
+    FluentPromiseTransitions as $aspireFluentPromiseTransitions,
     InteractionInput,
     InteractionInputCollection,
     InteractionInputCollectionPromise,
@@ -373,30 +375,11 @@ class TestCollectionContextImpl implements TestCollectionContext {
 
 }
 
-/**
- * Thenable wrapper for TestCollectionContext that enables fluent chaining.
- */
-class TestCollectionContextPromiseImpl implements TestCollectionContextPromise {
-    constructor(private _promise: Promise<TestCollectionContext>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestCollectionContext, TResult2 = never>(
-        onfulfilled?: ((value: TestCollectionContext) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    items(): Promise<AspireList<string>> {
-        return this._promise.then(obj => obj.items());
-    }
-
-    metadata(): Promise<AspireDict<string, string>> {
-        return this._promise.then(obj => obj.metadata());
-    }
-
-}
+/** @internal */
+const TestCollectionContextPromiseImpl = $aspireCreateFluentPromiseClass<TestCollectionContext, TestCollectionContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["items"]: null,
+    ["metadata"]: null,
+}));
 
 // ============================================================================
 // TestEnvironmentContext
@@ -641,34 +624,12 @@ class TestResourceContextImpl implements TestResourceContext {
 
 }
 
-/**
- * Thenable wrapper for TestResourceContext that enables fluent chaining.
- */
-class TestResourceContextPromiseImpl implements TestResourceContextPromise {
-    constructor(private _promise: Promise<TestResourceContext>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestResourceContext, TResult2 = never>(
-        onfulfilled?: ((value: TestResourceContext) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    getValueAsync(): Promise<string> {
-        return this._promise.then(obj => obj.getValueAsync());
-    }
-
-    setValueAsync(value: string): TestResourceContextPromise {
-        return new TestResourceContextPromiseImpl(this._promise.then(obj => obj.setValueAsync(value)), this._client);
-    }
-
-    validateAsync(): Promise<boolean> {
-        return this._promise.then(obj => obj.validateAsync());
-    }
-
-}
+/** @internal */
+const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResourceContext, TestResourceContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["getValueAsync"]: null,
+    ["setValueAsync"]: () => TestResourceContextPromiseImpl,
+    ["validateAsync"]: null,
+}));
 
 // ============================================================================
 // DistributedApplicationBuilder
@@ -780,34 +741,12 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
 
 }
 
-/**
- * Thenable wrapper for DistributedApplicationBuilder that enables fluent chaining.
- */
-class DistributedApplicationBuilderPromiseImpl implements DistributedApplicationBuilderPromise {
-    constructor(private _promise: Promise<DistributedApplicationBuilder>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = DistributedApplicationBuilder, TResult2 = never>(
-        onfulfilled?: ((value: DistributedApplicationBuilder) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.addTestRedis(name, options)), this._client);
-    }
-
-    addTestMarker(name: string): TestMarkerResourcePromise {
-        return new TestMarkerResourcePromiseImpl(this._promise.then(obj => obj.addTestMarker(name)), this._client);
-    }
-
-    addTestVault(name: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.addTestVault(name)), this._client);
-    }
-
-}
+/** @internal */
+const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationBuilder, DistributedApplicationBuilderPromise>((): $aspireFluentPromiseTransitions => ({
+    ["addTestRedis"]: () => TestRedisResourcePromiseImpl,
+    ["addTestMarker"]: () => TestMarkerResourcePromiseImpl,
+    ["addTestVault"]: () => TestVaultResourcePromiseImpl,
+}));
 
 // ============================================================================
 // TestDatabaseResource
@@ -1389,124 +1328,34 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
 }
 
-/**
- * Thenable wrapper for TestDatabaseResource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
-    constructor(private _promise: Promise<TestDatabaseResource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestDatabaseResource, TResult2 = never>(
-        onfulfilled?: ((value: TestDatabaseResource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
-    }
-
-    withConfig(config: TestConfigDto): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
-    }
-
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
-    }
-
-    withCreatedAt(createdAt: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
-    }
-
-    withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
-    }
-
-    withCorrelationId(correlationId: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
-    }
-
-    withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
-    }
-
-    withStatus(status: TestResourceStatus): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
-    }
-
-    withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
-    }
-
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
-    }
-
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
-    }
-
-    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
-    }
-
-    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
-    }
-
-    withEndpoints(endpoints: string[]): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
-    }
-
-    withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
-    }
-
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
-    }
-
-    withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
-    }
-
-    withMergeLabel(label: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
-    }
-
-    withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
-    }
-
-    withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
-    }
-
-    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
-    }
-
-    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
-    }
-
-    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
-    }
-
-    withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
-    }
-
-    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
-    }
-
-}
+/** @internal */
+const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestDatabaseResource, TestDatabaseResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withOptionalString"]: () => TestDatabaseResourcePromiseImpl,
+    ["withConfig"]: () => TestDatabaseResourcePromiseImpl,
+    ["testWithEnvironmentCallback"]: () => TestDatabaseResourcePromiseImpl,
+    ["withCreatedAt"]: () => TestDatabaseResourcePromiseImpl,
+    ["withModifiedAt"]: () => TestDatabaseResourcePromiseImpl,
+    ["withCorrelationId"]: () => TestDatabaseResourcePromiseImpl,
+    ["withOptionalCallback"]: () => TestDatabaseResourcePromiseImpl,
+    ["withStatus"]: () => TestDatabaseResourcePromiseImpl,
+    ["withNestedConfig"]: () => TestDatabaseResourcePromiseImpl,
+    ["withValidator"]: () => TestDatabaseResourcePromiseImpl,
+    ["testWaitFor"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDependency"]: () => TestDatabaseResourcePromiseImpl,
+    ["withUnionDependency"]: () => TestDatabaseResourcePromiseImpl,
+    ["withEndpoints"]: () => TestDatabaseResourcePromiseImpl,
+    ["withEnvironmentVariables"]: () => TestDatabaseResourcePromiseImpl,
+    ["withCancellableOperation"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDataVolume"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeLabel"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeLabelCategorized"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeEndpoint"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeEndpointScheme"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeLogging"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeLoggingPath"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeRoute"]: () => TestDatabaseResourcePromiseImpl,
+    ["withMergeRouteMiddleware"]: () => TestDatabaseResourcePromiseImpl,
+}));
 
 // ============================================================================
 // TestRedisResource
@@ -2433,180 +2282,48 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
 }
 
-/**
- * Thenable wrapper for TestRedisResource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
-    constructor(private _promise: Promise<TestRedisResource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestRedisResource, TResult2 = never>(
-        onfulfilled?: ((value: TestRedisResource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPromiseCollisionResources(resource, resourcePromise)), this._client);
-    }
-
-    withMutablePromiseCollisionResources(resource: Awaitable<TestMutablePromiseCollisionResource>, resourcePromise: Awaitable<TestMutablePromiseCollisionResourcePromise>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMutablePromiseCollisionResources(resource, resourcePromise)), this._client);
-    }
-
-    addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
-    }
-
-    withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPersistence(options)), this._client);
-    }
-
-    withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
-    }
-
-    withConfig(config: TestConfigDto): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
-    }
-
-    getTags(): Promise<AspireList<string>> {
-        return this._promise.then(obj => obj.getTags());
-    }
-
-    getMetadata(): Promise<AspireDict<string, string>> {
-        return this._promise.then(obj => obj.getMetadata());
-    }
-
-    withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
-    }
-
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
-    }
-
-    withCreatedAt(createdAt: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
-    }
-
-    withModifiedAt(modifiedAt: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
-    }
-
-    withCorrelationId(correlationId: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
-    }
-
-    withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
-    }
-
-    withStatus(status: TestResourceStatus): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
-    }
-
-    withNestedConfig(config: TestNestedDto): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
-    }
-
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
-    }
-
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
-    }
-
-    getEndpoints(): Promise<string[]> {
-        return this._promise.then(obj => obj.getEndpoints());
-    }
-
-    withConnectionStringDirect(connectionString: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
-    }
-
-    withRedisSpecific(option: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRedisSpecific(option)), this._client);
-    }
-
-    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
-    }
-
-    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
-    }
-
-    withEndpoints(endpoints: string[]): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
-    }
-
-    withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
-    }
-
-    getStatusAsync(options?: GetStatusAsyncOptions): Promise<string> {
-        return this._promise.then(obj => obj.getStatusAsync(options));
-    }
-
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
-    }
-
-    waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean> {
-        return this._promise.then(obj => obj.waitForReadyAsync(timeout, options));
-    }
-
-    withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMultiParamHandleCallback(callback)), this._client);
-    }
-
-    withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
-    }
-
-    withConcreteVaultResource(resource: Awaitable<TestVaultResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConcreteVaultResource(resource)), this._client);
-    }
-
-    withMergeLabel(label: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
-    }
-
-    withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
-    }
-
-    withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
-    }
-
-    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
-    }
-
-    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
-    }
-
-    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
-    }
-
-    withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
-    }
-
-    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
-    }
-
-}
+/** @internal */
+const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisResource, TestRedisResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withPromiseCollisionResources"]: () => TestRedisResourcePromiseImpl,
+    ["withMutablePromiseCollisionResources"]: () => TestRedisResourcePromiseImpl,
+    ["addTestChildDatabase"]: () => TestDatabaseResourcePromiseImpl,
+    ["withPersistence"]: () => TestRedisResourcePromiseImpl,
+    ["withOptionalString"]: () => TestRedisResourcePromiseImpl,
+    ["withConfig"]: () => TestRedisResourcePromiseImpl,
+    ["getTags"]: null,
+    ["getMetadata"]: null,
+    ["withConnectionString"]: () => TestRedisResourcePromiseImpl,
+    ["testWithEnvironmentCallback"]: () => TestRedisResourcePromiseImpl,
+    ["withCreatedAt"]: () => TestRedisResourcePromiseImpl,
+    ["withModifiedAt"]: () => TestRedisResourcePromiseImpl,
+    ["withCorrelationId"]: () => TestRedisResourcePromiseImpl,
+    ["withOptionalCallback"]: () => TestRedisResourcePromiseImpl,
+    ["withStatus"]: () => TestRedisResourcePromiseImpl,
+    ["withNestedConfig"]: () => TestRedisResourcePromiseImpl,
+    ["withValidator"]: () => TestRedisResourcePromiseImpl,
+    ["testWaitFor"]: () => TestRedisResourcePromiseImpl,
+    ["getEndpoints"]: null,
+    ["withConnectionStringDirect"]: () => TestRedisResourcePromiseImpl,
+    ["withRedisSpecific"]: () => TestRedisResourcePromiseImpl,
+    ["withDependency"]: () => TestRedisResourcePromiseImpl,
+    ["withUnionDependency"]: () => TestRedisResourcePromiseImpl,
+    ["withEndpoints"]: () => TestRedisResourcePromiseImpl,
+    ["withEnvironmentVariables"]: () => TestRedisResourcePromiseImpl,
+    ["getStatusAsync"]: null,
+    ["withCancellableOperation"]: () => TestRedisResourcePromiseImpl,
+    ["waitForReadyAsync"]: null,
+    ["withMultiParamHandleCallback"]: () => TestRedisResourcePromiseImpl,
+    ["withDataVolume"]: () => TestRedisResourcePromiseImpl,
+    ["withConcreteVaultResource"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeLabel"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeLabelCategorized"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeEndpoint"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeEndpointScheme"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeLogging"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeLoggingPath"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeRoute"]: () => TestRedisResourcePromiseImpl,
+    ["withMergeRouteMiddleware"]: () => TestRedisResourcePromiseImpl,
+}));
 
 // ============================================================================
 // TestVaultResource
@@ -3177,124 +2894,34 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
 }
 
-/**
- * Thenable wrapper for TestVaultResource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
-    constructor(private _promise: Promise<TestVaultResource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestVaultResource, TResult2 = never>(
-        onfulfilled?: ((value: TestVaultResource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
-    }
-
-    withConfig(config: TestConfigDto): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
-    }
-
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
-    }
-
-    withCreatedAt(createdAt: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
-    }
-
-    withModifiedAt(modifiedAt: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
-    }
-
-    withCorrelationId(correlationId: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
-    }
-
-    withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
-    }
-
-    withStatus(status: TestResourceStatus): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
-    }
-
-    withNestedConfig(config: TestNestedDto): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
-    }
-
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
-    }
-
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
-    }
-
-    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
-    }
-
-    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
-    }
-
-    withEndpoints(endpoints: string[]): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
-    }
-
-    withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
-    }
-
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
-    }
-
-    withVaultDirect(option: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withVaultDirect(option)), this._client);
-    }
-
-    withMergeLabel(label: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
-    }
-
-    withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
-    }
-
-    withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
-    }
-
-    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
-    }
-
-    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
-    }
-
-    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
-    }
-
-    withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
-    }
-
-    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
-    }
-
-}
+/** @internal */
+const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultResource, TestVaultResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withOptionalString"]: () => TestVaultResourcePromiseImpl,
+    ["withConfig"]: () => TestVaultResourcePromiseImpl,
+    ["testWithEnvironmentCallback"]: () => TestVaultResourcePromiseImpl,
+    ["withCreatedAt"]: () => TestVaultResourcePromiseImpl,
+    ["withModifiedAt"]: () => TestVaultResourcePromiseImpl,
+    ["withCorrelationId"]: () => TestVaultResourcePromiseImpl,
+    ["withOptionalCallback"]: () => TestVaultResourcePromiseImpl,
+    ["withStatus"]: () => TestVaultResourcePromiseImpl,
+    ["withNestedConfig"]: () => TestVaultResourcePromiseImpl,
+    ["withValidator"]: () => TestVaultResourcePromiseImpl,
+    ["testWaitFor"]: () => TestVaultResourcePromiseImpl,
+    ["withDependency"]: () => TestVaultResourcePromiseImpl,
+    ["withUnionDependency"]: () => TestVaultResourcePromiseImpl,
+    ["withEndpoints"]: () => TestVaultResourcePromiseImpl,
+    ["withEnvironmentVariables"]: () => TestVaultResourcePromiseImpl,
+    ["withCancellableOperation"]: () => TestVaultResourcePromiseImpl,
+    ["withVaultDirect"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeLabel"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeLabelCategorized"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeEndpoint"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeEndpointScheme"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeLogging"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeLoggingPath"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeRoute"]: () => TestVaultResourcePromiseImpl,
+    ["withMergeRouteMiddleware"]: () => TestVaultResourcePromiseImpl,
+}));
 
 // ============================================================================
 // Resource
@@ -3803,112 +3430,31 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 
 }
 
-/**
- * Thenable wrapper for Resource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class ResourcePromiseImpl implements ResourcePromise {
-    constructor(private _promise: Promise<Resource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = Resource, TResult2 = never>(
-        onfulfilled?: ((value: Resource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
-    }
-
-    withConfig(config: TestConfigDto): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
-    }
-
-    withCreatedAt(createdAt: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
-    }
-
-    withModifiedAt(modifiedAt: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
-    }
-
-    withCorrelationId(correlationId: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
-    }
-
-    withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
-    }
-
-    withStatus(status: TestResourceStatus): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
-    }
-
-    withNestedConfig(config: TestNestedDto): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
-    }
-
-    withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
-    }
-
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
-    }
-
-    withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
-    }
-
-    withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
-    }
-
-    withEndpoints(endpoints: string[]): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
-    }
-
-    withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
-    }
-
-    withMergeLabel(label: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
-    }
-
-    withMergeLabelCategorized(label: string, category: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
-    }
-
-    withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
-    }
-
-    withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
-    }
-
-    withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
-    }
-
-    withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
-    }
-
-    withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
-    }
-
-    withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
-    }
-
-}
+/** @internal */
+const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
+    ["withOptionalString"]: () => ResourcePromiseImpl,
+    ["withConfig"]: () => ResourcePromiseImpl,
+    ["withCreatedAt"]: () => ResourcePromiseImpl,
+    ["withModifiedAt"]: () => ResourcePromiseImpl,
+    ["withCorrelationId"]: () => ResourcePromiseImpl,
+    ["withOptionalCallback"]: () => ResourcePromiseImpl,
+    ["withStatus"]: () => ResourcePromiseImpl,
+    ["withNestedConfig"]: () => ResourcePromiseImpl,
+    ["withValidator"]: () => ResourcePromiseImpl,
+    ["testWaitFor"]: () => ResourcePromiseImpl,
+    ["withDependency"]: () => ResourcePromiseImpl,
+    ["withUnionDependency"]: () => ResourcePromiseImpl,
+    ["withEndpoints"]: () => ResourcePromiseImpl,
+    ["withCancellableOperation"]: () => ResourcePromiseImpl,
+    ["withMergeLabel"]: () => ResourcePromiseImpl,
+    ["withMergeLabelCategorized"]: () => ResourcePromiseImpl,
+    ["withMergeEndpoint"]: () => ResourcePromiseImpl,
+    ["withMergeEndpointScheme"]: () => ResourcePromiseImpl,
+    ["withMergeLogging"]: () => ResourcePromiseImpl,
+    ["withMergeLoggingPath"]: () => ResourcePromiseImpl,
+    ["withMergeRoute"]: () => ResourcePromiseImpl,
+    ["withMergeRouteMiddleware"]: () => ResourcePromiseImpl,
+}));
 
 // ============================================================================
 // ResourceWithConnectionString
@@ -3970,32 +3516,11 @@ class ResourceWithConnectionStringImpl extends ResourceBuilderBase<IResourceWith
 
 }
 
-/**
- * Thenable wrapper for ResourceWithConnectionString that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class ResourceWithConnectionStringPromiseImpl implements ResourceWithConnectionStringPromise {
-    constructor(private _promise: Promise<ResourceWithConnectionString>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = ResourceWithConnectionString, TResult2 = never>(
-        onfulfilled?: ((value: ResourceWithConnectionString) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
-        return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
-    }
-
-    withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise {
-        return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
-    }
-
-}
+/** @internal */
+const ResourceWithConnectionStringPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithConnectionString, ResourceWithConnectionStringPromise>((): $aspireFluentPromiseTransitions => ({
+    ["withConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
+    ["withConnectionStringDirect"]: () => ResourceWithConnectionStringPromiseImpl,
+}));
 
 // ============================================================================
 // ResourceWithEnvironment
@@ -4062,32 +3587,11 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
 
 }
 
-/**
- * Thenable wrapper for ResourceWithEnvironment that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromise {
-    constructor(private _promise: Promise<ResourceWithEnvironment>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = ResourceWithEnvironment, TResult2 = never>(
-        onfulfilled?: ((value: ResourceWithEnvironment) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
-    }
-
-}
+/** @internal */
+const ResourceWithEnvironmentPromiseImpl = $aspireCreateFluentPromiseClass<ResourceWithEnvironment, ResourceWithEnvironmentPromise>((): $aspireFluentPromiseTransitions => ({
+    ["testWithEnvironmentCallback"]: () => ResourceWithEnvironmentPromiseImpl,
+    ["withEnvironmentVariables"]: () => ResourceWithEnvironmentPromiseImpl,
+}));
 
 // ============================================================================
 // TestMarkerResource
@@ -4111,24 +3615,9 @@ class TestMarkerResourceImpl extends ResourceBuilderBase<ITestMarkerResourceHand
 
 }
 
-/**
- * Thenable wrapper for TestMarkerResource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class TestMarkerResourcePromiseImpl implements TestMarkerResourcePromise {
-    constructor(private _promise: Promise<TestMarkerResource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = TestMarkerResource, TResult2 = never>(
-        onfulfilled?: ((value: TestMarkerResource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-}
+/** @internal */
+const TestMarkerResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestMarkerResource, TestMarkerResourcePromise>((): $aspireFluentPromiseTransitions => ({
+}));
 
 // ============================================================================
 // TestMutablePromiseCollisionResource

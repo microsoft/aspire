@@ -458,6 +458,12 @@ jobs:
       # Sandboxes remain an explicit opt-in until the deployment-testing environment has
       # preview enrollment and the Container Apps SandboxGroup Data Owner role.
       ASPIRE_DEPLOYMENT_TEST_ENABLE_SANDBOXES: ${{ vars.ASPIRE_DEPLOYMENT_TEST_ENABLE_SANDBOXES || 'false' }}
+      # Connector Namespace remains opt-in until the deployment-testing subscription is enrolled
+      # in the preview and has a tenant user dedicated to access-policy validation.
+      ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE: ${{ vars.ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE || 'false' }}
+      ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_LOCATION: ${{ vars.ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_LOCATION }}
+      ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_PRINCIPAL_OBJECT_ID: ${{ vars.ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_PRINCIPAL_OBJECT_ID }}
+      ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

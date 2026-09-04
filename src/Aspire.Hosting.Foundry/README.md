@@ -52,6 +52,56 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(chat);
 ```
 
+## Foundry Local usage
+
+To let Aspire start Foundry Local and download or load models with the Foundry CLI installed on the AppHost machine:
+
+**C#**
+
+```csharp
+var chat = builder.AddFoundry("foundry")
+                  .RunAsFoundryLocal()
+                  .AddDeployment("chat", FoundryModel.Local.Phi4Mini);
+```
+
+**TypeScript**
+
+```typescript
+const chat = await builder.addFoundry('foundry')
+    .runAsFoundryLocal()
+    .addDeployment('chat', FoundryModels.Local.Phi4Mini);
+```
+
+To connect from WSL2 or Linux to an existing Foundry Local service on another host, provide its reachable endpoint. Aspire observes this service but does not start, stop, download, or load anything on the remote host, so the model must already be loaded there:
+
+**C#**
+
+```csharp
+var foundry = builder.AddFoundry("foundry")
+                     .RunAsFoundryLocal("http://windows-host:5273");
+
+var chat = foundry.AddDeployment("chat", FoundryModel.Local.Phi4Mini)
+                  .WithProperties(deployment =>
+                  {
+                      deployment.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
+                  });
+```
+
+**TypeScript**
+
+```typescript
+const foundry = await builder.addFoundry('foundry')
+    .runAsFoundryLocal({ endpoint: 'http://windows-host:5273' });
+
+const chat = await foundry
+    .addDeployment('chat', 'Phi-3.5-mini-instruct', { modelVersion: '1', format: 'Microsoft' })
+    .withProperties(async (deployment) => {
+        await deployment.localModelId.set('Phi-3.5-mini-instruct-generic-gpu:1');
+    });
+```
+
+The endpoint must be reachable from the AppHost and every consuming resource. Set `LocalModelId` to the identifier reported by the remote service when the deployment's model name is an alias.
+
 ## Connection Properties
 
 When you reference Microsoft Foundry resources using `WithReference`, the following connection properties are made available to the consuming project:
@@ -74,7 +124,7 @@ The Microsoft Foundry deployment resource inherits all properties from its paren
 
 | Property Name | Description |
 |---------------|-------------|
-| `ModelName` | The deployment name when targeting Azure or model identifier when running Foundry Local, e.g., `Phi-4`, `my-chat` |
+| `ModelName` | The deployment name when targeting Azure or `LocalModelId` when running Foundry Local, e.g., `Phi-4-mini-instruct-generic-gpu:5` |
 | `Format` | The deployment format, e.g., `OpenAI`, `Microsoft`, `xAi`, `Deepseek` |
 | `Version` | The deployment version, e.g., `1`, `2025-08-07` |
 

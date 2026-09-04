@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
+import { dayMs, hourMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
 import {
   actorIdentityKey,
   computeCommunityItems,
@@ -70,6 +70,7 @@ function makePr(overrides = {}) {
     authorType: "User",
     authorAvatarUrl: null,
     createdAt: isoAgo(2 * dayMs),
+    readyForReviewAt: null,
     updatedAt: isoAgo(dayMs),
     baseRef: "main",
     milestone: null,
@@ -125,6 +126,22 @@ test("createAttentionBuckets only surfaces the My draft PRs bucket when a login 
 
   const withoutLogin = createAttentionBuckets([draft]);
   assert.equal(withoutLogin.find((b) => b.label === "My draft PRs"), undefined);
+});
+
+test("createAttentionSignals measures open age from the latest ready-for-review transition", () => {
+  const recentlyReady = makePr({
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(2 * dayMs),
+  });
+  const alwaysReady = makePr({ createdAt: isoAgo(28 * dayMs) });
+
+  const recentlyReadyOpen = createAttentionSignals({ pullRequest: recentlyReady })
+    .find((signal) => signal.label.startsWith("open "));
+  const alwaysReadyOpen = createAttentionSignals({ pullRequest: alwaysReady })
+    .find((signal) => signal.label.startsWith("open "));
+
+  assert.deepEqual(recentlyReadyOpen, { label: "open 2d", tone: "muted" });
+  assert.deepEqual(alwaysReadyOpen, { label: "open 28d", tone: "warning" });
 });
 
 test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-failing PRs", () => {
@@ -255,6 +272,27 @@ test("computeCommunityItems includes active external contributors and excludes t
   assert.equal(items[0].reason, "Community");
 });
 
+test("community wait signal starts when a draft becomes ready for review", () => {
+  const recentlyReady = makePr({
+    number: 24,
+    author: "recent-contributor",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(11 * hourMs),
+  });
+  const waiting = makePr({
+    number: 25,
+    author: "waiting-contributor",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(13 * hourMs),
+  });
+
+  const recentlyReadyAction = createAttentionSignals({ pullRequest: recentlyReady })[0];
+  const waitingAction = createAttentionSignals({ pullRequest: waiting })[0];
+
+  assert.deepEqual(recentlyReadyAction, { label: "community", tone: "accent" });
+  assert.deepEqual(waitingAction, { label: "community wait", tone: "warning" });
+});
+
 test("computeFocusExclusionItems explains why my own PRs are outside the focused queue", () => {
   const failing = makePr({ number: 30, author: "octo", isMine: true, checks: { state: "failure", failureCount: 1 } });
   const notMine = makePr({ number: 31, author: "davidfowl", isMine: false, checks: { state: "failure" } });
@@ -277,6 +315,26 @@ test("createForMeItems returns personal picks only when a login is supplied", ()
   const byNumber = new Map(picks.map((p) => [p.pullRequest.number, p]));
   assert.equal(byNumber.get(40)?.action, personalPickActions.reviewThis);
   assert.equal(byNumber.get(41)?.action, personalPickActions.finishThis);
+});
+
+test("createForMeItems ranks review requests by time waiting for review", () => {
+  const oldDraft = makePr({
+    number: 42,
+    author: "old-draft-author",
+    createdAt: isoAgo(28 * dayMs),
+    readyForReviewAt: isoAgo(dayMs),
+    review: { state: "waiting", reviewRequestedFromViewer: true },
+  });
+  const longerWait = makePr({
+    number: 43,
+    author: "longer-wait-author",
+    createdAt: isoAgo(3 * dayMs),
+    review: { state: "waiting", reviewRequestedFromViewer: true },
+  });
+
+  const picks = createForMeItems([oldDraft, longerWait], ["octo"]);
+
+  assert.deepEqual(picks.map((pick) => pick.pullRequest.number), [43, 42]);
 });
 
 test("createDeveloperPullRequestCounts attributes open PRs to core-team members and honors alias suffixes", () => {
