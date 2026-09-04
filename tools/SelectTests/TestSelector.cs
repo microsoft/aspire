@@ -32,7 +32,7 @@ public enum CauseKind
     /// <summary>A changed file matched a <c>path_rules</c> glob (<see cref="Cause.Trigger"/> is the file; <see cref="Cause.Reason"/> is the rule's <c>reason</c>).</summary>
     PathRule,
 
-    /// <summary>An affected production project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
+    /// <summary>An affected non-matrix project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
     AffectedProject,
 
     /// <summary>The Layer 1 MSBuild graph marked this test project affected by a changed source file (<see cref="Cause.Trigger"/> is the project name).</summary>
@@ -131,10 +131,9 @@ public sealed class TestSelector
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
     /// <param name="layer1Affected">
-    /// The full affected project set reported by the graph tool — production <em>and</em> test
-    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Test names are
-    /// intersected with the matrix and selected; production names drive <c>project_rules</c>. May be
-    /// empty.
+    /// The full affected project set reported by the graph tool — matrix <em>and</em> non-matrix
+    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Matrix test names
+    /// are intersected and selected; non-matrix names drive <c>affected_project_rules</c>. May be empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
     /// <param name="layer1AttributedPaths">
@@ -240,9 +239,8 @@ public sealed class TestSelector
             reason ??= $"run-all fallback: '{file}' is neither Layer-1-owned nor matched by a Layer 2 rule";
         }
 
-        // Layer 1: the graph tool reports the full affected set (production + test projects). The
-        // affected TEST projects are always part of the answer; the production names drive
-        // project_rules below.
+        // Layer 1 reports the full affected set. Affected matrix test projects are always part of the
+        // answer; non-matrix project names drive affected_project_rules below.
         foreach (var project in layer1Affected)
         {
             if (_allTestProjects.Contains(project))
@@ -259,26 +257,24 @@ public sealed class TestSelector
             }
         }
 
-        // affected_project_rules: an affected PRODUCTION project (matched by name glob) pulls in
+        // affected_project_rules: an affected non-matrix project (matched by name glob) pulls in
         // jobs/tests. This replaces the duplicated src/<Project>/** path globs the job rules used to
         // carry, and follows the graph's transitive closure (a dependency change marks the project
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
         // produced none (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers.
         //
-        // Match ONLY production project names: Layer 1 reports production AND test projects, and the
-        // affected test projects are already selected via the intersection above. Without this filter
-        // an affected matrix test name (e.g. "Aspire.Hosting.Python.Tests") would match a production
-        // glob like "Aspire.Hosting*" and spuriously fire production jobs (extension-e2e /
-        // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
-        // affected_project_rules comment ("matched against the affected PRODUCTION projects").
-        var affectedProductionProjects = layer1Affected
+        // Exclude matrix test project names because they are already selected via the intersection
+        // above. Without this filter, an affected matrix test name (e.g.
+        // "Aspire.Hosting.Python.Tests") would match a broad glob like "Aspire.Hosting*" and
+        // spuriously fire jobs for a test-only change.
+        var affectedNonMatrixProjects = layer1Affected
             .Where(name => !_allTestProjects.Contains(name))
             .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {
             // Attribute the rule to the first affected project that matched it, so the cause names a
             // concrete project rather than the rule's whole glob set.
-            var matchedProject = affectedProductionProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
+            var matchedProject = affectedNonMatrixProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
             if (matchedProject is not null)
             {
                 ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
