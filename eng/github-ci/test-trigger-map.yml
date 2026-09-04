@@ -203,8 +203,9 @@ path_rules:
   # changes -- the same surface the per-language polyglot playground scripts regenerate and compile
   # (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). So an exported-surface
   # change must run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate+compile in every
-  # language), even when the author has not also touched the tests/PolyglotAppHosts fixtures. The baseline
-  # is not a compiled item, so Layer 1 is blind to it and these targets must be enumerated here.
+  # language), even when the author has not also touched the tests/PolyglotAppHosts fixtures. Layer 1 can
+  # attribute the baseline by project-directory containment, but this explicit rule preserves both jobs
+  # when Layer 1 is skipped and records the runtime polyglot dependency.
   - paths:
       - src/Aspire.Hosting*/api/*.ats.txt
     targets: [job:typescript-api-compat, job:polyglot]
@@ -219,24 +220,27 @@ path_rules:
     reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
   - paths:
       - extension/**
+      - src/Aspire.AppHost.Sdk/**
       - src/Aspire.Cli/**
-      - src/Aspire.Hosting*/**
       - src/Aspire.Dashboard*/**
-      - tests/Aspire.Cli.Tests/**
-      - tests/Aspire.Cli.EndToEnd.Tests/**
-      - tests/Aspire.Hosting.Tests/Cli/**
-      - eng/scripts/get-aspire-cli*
+      - src/Aspire.Hosting/**
+      - src/Aspire.Hosting.AppHost/**
+      - src/Aspire.Hosting.Azure.Functions/**
+      - src/Aspire.Hosting.CodeGeneration.Java/**
+      - src/Aspire.Hosting.CodeGeneration.TypeScript/**
+      - src/Aspire.Hosting.Docker/**
+      - src/Aspire.Hosting.Java/**
+      - src/Aspire.Hosting.JavaScript/**
+      - src/Aspire.Hosting.Redis/**
+      - src/Aspire.Hosting.RemoteHost/**
+      - src/Aspire.Managed/**
       - .github/workflows/tests.yml
       - .github/workflows/extension-unit-tests.yml
       - .github/workflows/extension-e2e-tests.yml
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
     targets: [job:extension-e2e]
-    reason: >-
-      verbatim mirror of the tests.yml extension_e2e_changes regex. extension-e2e is
-      intentionally double-routed: its production triggers also live in affected_project_rules
-      (transitive coverage when Layer 1 runs), but these path globs keep the gate working without
-      Layer 1 -- a src/Aspire.Cli|Hosting*|Dashboard* change still fires it via pure path match.
+    reason: extension e2e inputs and runtime dependencies; path fallback when Layer 1 is unavailable
   - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
@@ -268,12 +272,23 @@ path_rules:
       - eng/scripts/get-aspire-cli.ps1
       - eng/scripts/get-aspire-cli-pr.sh
       - eng/scripts/get-aspire-cli-pr.ps1
-    targets: [test:Aspire.Acquisition.Tests, test:Aspire.Cli.EndToEnd.Tests, job:extension-e2e]
+    targets: [test:Aspire.Acquisition.Tests, test:Aspire.Cli.EndToEnd.Tests]
     reason: Acquisition.Tests asserts script behavior; CliE2EAutomatorHelpers.cs:406,415 invokes get-aspire-cli*.sh at runtime
   - paths:
       - eng/clipack/**
-    targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
+    targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
+    reason: CLI/package tests inspect packaging inputs; installer jobs package the native archives
+  - paths:
+      - eng/clipack/Common.projitems
+      - eng/clipack/Aspire.Cli.linux-x64.csproj
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: CLI e2e consumes the Linux x64 CLI archive
+  - paths:
+      - eng/clipack/Common.projitems
+      - eng/clipack/Aspire.Cli.linux-x64.csproj
+      - eng/clipack/Aspire.Cli.win-x64.csproj
+    targets: [job:extension-e2e]
+    reason: extension-e2e consumes the Linux and Windows x64 CLI archives
   - paths:
       - eng/clipack/Common.projitems
       - eng/clipack/Aspire.Cli.linux-x64.csproj
@@ -342,16 +357,20 @@ path_rules:
     reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests]
-    reason: AppHostSdkTargetsTests asserts the per-RID dashboard package reference used when the CLI bundle is disabled
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, job:extension-e2e]
+    reason: Dashboard package consumers; the broad match keeps new packaging inputs covered
   - paths:
       - eng/dcppack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests]
-    reason: AppHostSdkTargetsTests asserts the per-RID orchestration package reference; TerminalHost exercises packaged DCP
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, test:Aspire.TerminalHost.Tests, job:extension-e2e]
+    reason: DCP package consumers; the broad match keeps new packaging inputs covered
   - paths:
       - src/Aspire.ProjectTemplates/**
-    targets: [test:Aspire.Templates.Tests]
-    reason: Templates.Tests installs the template hive from src/Aspire.ProjectTemplates
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests, job:winget-installer, job:homebrew-installer]
+    reason: template package consumers; the broad match keeps new templates covered
+  - paths:
+      - playground/JavaSpringBoot/**
+    targets: [job:extension-e2e]
+    reason: Java extension e2e copies this playground into its workspace
   - paths:
       - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
       - src/Aspire.ProjectTemplates/templates/aspire-starter/**
@@ -373,8 +392,9 @@ path_rules:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
+      - .gitignore
     targets: [test:Infrastructure.Tests]
-    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/github-ci/test-trigger-map.yml and reads eng/github-ci/ci-skip-entirely-patterns.txt (the prefilter source), so a change to any of them must run it
+    reason: Infrastructure.Tests validates the selector map, prefilter, and root ignore behavior
   - paths:
       - .github/workflows/**
       - eng/pipelines/**
@@ -382,15 +402,17 @@ path_rules:
       - eng/Publishing.props
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files; NpmCliPackageTests reads eng/Signing.props, and Publishing.props is AzDO-publish-only infra grouped with it (no GH-CI build/test path -> not ALL)
-  - paths: [eng/Bundle.proj]
+  - paths:
+      - eng/Bundle.proj
+      - tools/CreateLayout/**
     targets: [CLI_BUNDLE]
-    reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
+    reason: CreateLayout assembles the CLI bundle consumed by CLI e2e, extension e2e, and installers
 
-# Project rules: an affected PRODUCTION project (Layer 1, matched by project-NAME glob) -> targets.
+# Project rules: an affected non-matrix project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
 # so its jobs fire too (more correct than a literal path glob, and additive -- never removes a
-# trigger). Matched only against the affected PRODUCTION projects (matrix test projects are handled
-# by the Layer 1 intersection), so a name glob like "Aspire.Hosting*" keys off production identity.
+# trigger). Matrix test projects are handled by the Layer 1 intersection and excluded here; broad
+# globs can also match non-matrix test-support projects.
 # Inert when Layer 1 did not run (--skip-layer1); the loose-file path_rules above still cover those
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
@@ -428,18 +450,69 @@ affected_project_rules:
   - projects: [Aspire.Hosting*, Aspire.Cli]
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
-  - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
+  - projects: [Aspire.Dashboard]
+    targets: [test:Aspire.Templates.Tests]
+    reason: Templates.Tests launches generated AppHosts with the packaged dashboard
+  - projects:
+      - Aspire.AppHost.Sdk
+      - Aspire.Cli
+      - Aspire.Dashboard*
+      - Aspire.Hosting
+      - Aspire.Hosting.AppHost
+      - Aspire.Hosting.Azure.Functions
+      - Aspire.Hosting.CodeGeneration.Java
+      - Aspire.Hosting.CodeGeneration.TypeScript
+      - Aspire.Hosting.Docker
+      - Aspire.Hosting.Java
+      - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.Redis
+      - Aspire.Hosting.RemoteHost
+      - Aspire.Managed
     targets: [job:extension-e2e]
-    reason: mirrors the production-project half of tests.yml extension_e2e_changes
+    reason: direct runtime and build dependencies of extension e2e
   - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
-  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk]
+  - projects:
+      - Aspire.AppHost.Sdk
+      - Aspire.Cli
+      - Aspire.Hosting
+      - Aspire.Hosting.AppHost
+      - Aspire.Hosting.Blazor
+      - Aspire.Hosting.CodeGeneration.Java
+      - Aspire.Hosting.CodeGeneration.TypeScript
+      - Aspire.Hosting.Docker
+      - Aspire.Hosting.Dotnet
+      - Aspire.Hosting.EntityFrameworkCore
+      - Aspire.Hosting.Garnet
+      - Aspire.Hosting.Java
+      - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.Kubernetes
+      - Aspire.Hosting.MongoDB
+      - Aspire.Hosting.MySql
+      - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.Python
+      - Aspire.Hosting.RabbitMQ
+      - Aspire.Hosting.Radius
+      - Aspire.Hosting.Redis
+      - Aspire.Hosting.RemoteHost
+      - Aspire.Hosting.SqlServer
+      - Aspire.Hosting.Valkey
+      - Aspire.Managed
+      - Aspire.Microsoft.Data.SqlClient
+      - Aspire.MongoDB.Driver
+      - Aspire.MySqlConnector
+      - Aspire.Npgsql
+      - Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
+      - Aspire.RabbitMQ.Client
+      - Aspire.StackExchange.Redis
+      - Aspire.StackExchange.Redis.OutputCaching
+      - Aspire.TypeSystem
     targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources
+    reason: regular-lane runtime packages used by CLI e2e AppHosts, add/update, code generation, publish, and deploy scenarios
 
 # Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
 # Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how
