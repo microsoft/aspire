@@ -44,7 +44,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     private static readonly TimeSpan s_disposeTimeout = TimeSpan.FromSeconds(10);
 
     // Regex for normalizing application names.
-    [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""^(?<name>.+?)[.-]?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex ApplicationNameRegex();
 
     private readonly ILogger<DistributedApplication> _distributedApplicationLogger;
@@ -334,7 +334,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     /// <summary>
     /// Normalizes the application name for use in physical container resource names (only guaranteed valid as a suffix).
-    /// Removes the ".AppHost" suffix if present and takes only characters that are valid in resource names.
+    /// Removes the ".AppHost" or "-AppHost" suffix if present and takes only characters that are valid in resource names.
     /// Invalid characters are simply omitted from the name as the result doesn't need to be identical.
     /// </summary>
     /// <param name="applicationName">The application name to normalize.</param>

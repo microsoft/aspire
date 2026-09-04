@@ -782,14 +782,15 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("FallbackAppName", response.ApplicationName);
     }
 
-    [Fact]
-    public async Task GetApplicationInformation_StripsAppHostSuffix()
+    [Theory]
+    [InlineData("MyApp.AppHost", "MyApp")]
+    [InlineData("aspire-apphost", "aspire")]
+    public async Task GetApplicationInformation_StripsAppHostSuffix(string applicationName, string expectedApplicationName)
     {
-        // Arrange
         var configBuilder = new ConfigurationBuilder();
         configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["AppHost:DashboardApplicationName"] = "MyApp.AppHost"
+            ["AppHost:DashboardApplicationName"] = applicationName
         });
         var configuration = configBuilder.Build();
 
@@ -798,14 +799,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
 
-        // Act
         var response = await dashboardService.GetApplicationInformation(
             new ApplicationInformationRequest(),
             context);
 
-        // Assert
-        // The ComputeApplicationName method should strip the .AppHost suffix
-        Assert.Equal("MyApp", response.ApplicationName);
+        Assert.Equal(expectedApplicationName, response.ApplicationName);
     }
 
     [Theory]

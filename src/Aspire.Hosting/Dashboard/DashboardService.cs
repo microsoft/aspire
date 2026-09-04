@@ -40,7 +40,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     // with IHostApplicationLifetime.ApplicationStopping to ensure eager cancellation
     // of pending connections during shutdown.
 
-    [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""^(?<name>.+?)[.-]?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex ApplicationNameRegex();
 
     public override Task<ApplicationInformationResponse> GetApplicationInformation(
