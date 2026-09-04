@@ -988,23 +988,26 @@ public static class ProjectResourceBuilderExtensions
             DistributedApplicationOperation.Publish,
             container =>
             {
-                container.WithImage(resource.Name);
-                container.WithDockerfile(contextPath: projectDirectoryPath);
+                var addDockerfileDefaults = !container.Resource.HasAnnotationOfType<DockerfileBuildAnnotation>();
+                if (addDockerfileDefaults)
+                {
+                    container.WithImage(resource.Name);
+                    container.WithDockerfile(contextPath: projectDirectoryPath);
 
-                // ASP.NET container images listen on port 8080 by default.
-                container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
-                container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                    // ASP.NET container images listen on port 8080 by default.
+                    container.WithEndpoint("http", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                    container.WithEndpoint("https", endpoint => endpoint.TargetPort ??= 8080, createIfNotExists: false);
+                }
 
                 // Preserve the existing PublishAsDockerFile behavior: project conversion clears arguments only on
                 // its first call, so arguments configured after that call survive later conversions. Executable
                 // conversion differs and clears on every call. See https://github.com/microsoft/aspire/issues/19922.
-                if (!hasProjection)
+                if (addDockerfileDefaults)
                 {
                     container.WithArgs(context => context.Args.Clear());
                 }
-
-                configure?.Invoke(container);
-            });
+            },
+            container => configure?.Invoke(container));
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
         // manifest callback that an integration installed after the first conversion.

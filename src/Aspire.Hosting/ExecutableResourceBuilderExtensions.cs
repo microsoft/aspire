@@ -93,14 +93,38 @@ public static class ExecutableResourceBuilderExtensions
     [Obsolete("Use builder.PublishAsDockerFile(c => c.WithBuildArg(name, value)) instead.")]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, IEnumerable<DockerBuildArg>? buildArgs) where T : ExecutableResource
     {
+        return builder.PublishAsDockerFile(buildArgs, configure: null);
+    }
+
+    /// <summary>
+    /// Adds annotation to <see cref="ExecutableResource" /> to support containerization during deployment.
+    /// The resulting container image is built using the optional <paramref name="buildArgs"/>, and the
+    /// <paramref name="configure"/> callback provides access to the projected container.
+    /// </summary>
+    /// <typeparam name="T">Type of executable resource.</typeparam>
+    /// <param name="builder">Resource builder.</param>
+    /// <param name="buildArgs">The optional build arguments, used with <c>docker build --build-arg</c>.</param>
+    /// <param name="configure">Optional action to configure the projected container resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This C# compatibility overload is not available in polyglot app hosts. Use the configure callback overload instead.</remarks>
+    [Obsolete("Use builder.PublishAsDockerFile(c => { c.WithBuildArg(name, value); /* additional configuration */ }) instead.")]
+    [AspireExportIgnore(Reason = "Uses the obsolete DockerBuildArg type. Polyglot AppHosts use the configure callback overload.")]
+    public static IResourceBuilder<T> PublishAsDockerFile<T>(
+        this IResourceBuilder<T> builder,
+        IEnumerable<DockerBuildArg>? buildArgs,
+        Action<IResourceBuilder<ContainerResource>>? configure)
+        where T : ExecutableResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.PublishAsDockerFile(c =>
+        return builder.PublishAsDockerFile(container =>
         {
             foreach (var arg in buildArgs ?? [])
             {
-                c.WithBuildArg(arg.Name, arg.Value);
+                container.WithBuildArg(arg.Name, arg.Value);
             }
+
+            configure?.Invoke(container);
         });
     }
 
@@ -138,16 +162,18 @@ public static class ExecutableResourceBuilderExtensions
             DistributedApplicationOperation.Publish,
             container =>
             {
-                container.WithImage(resource.Name);
-                container.WithDockerfile(contextPath: resource.WorkingDirectory);
+                if (!container.Resource.HasAnnotationOfType<DockerfileBuildAnnotation>())
+                {
+                    container.WithImage(resource.Name);
+                    container.WithDockerfile(contextPath: resource.WorkingDirectory);
+                }
 
                 // Preserve the existing PublishAsDockerFile behavior: executable conversion appends a clear on
                 // every call, so only arguments configured by or after the most recent call reach the container.
                 // Project conversion differs and clears only on its first call. See https://github.com/microsoft/aspire/issues/19922.
                 container.WithArgs(context => context.Args.Clear());
-
-                configure?.Invoke(container);
-            });
+            },
+            container => configure?.Invoke(container));
 
         // Repeated conversion only reconfigures the existing projection. Preserve any specialized
         // manifest callback that an integration installed after the first conversion.

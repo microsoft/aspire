@@ -146,6 +146,51 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsDockerFileConfiguresManifestWithBuildArgsAndContainerCallback()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        using var workspace = CreateDirectoryWithDockerFile();
+        var path = workspace.WorkspaceRoot.FullName;
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var frontend = builder.AddJavaScriptApp("frontend", path)
+            .PublishAsDockerFile(
+                buildArgs: [new DockerBuildArg("BUILD_CONFIGURATION", "Release")],
+                configure: container => container.WithArgs("/app"));
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        var containerResource = GetContainerConfiguredOwner(builder, frontend.Resource);
+        Assert.Equal("frontend", containerResource.Name);
+
+        var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
+
+        var expected =
+            $$"""
+            {
+              "type": "container.v1",
+              "build": {
+                "context": ".",
+                "dockerfile": "Dockerfile",
+                "args": {
+                  "BUILD_CONFIGURATION": "Release"
+                }
+              },
+              "args": [
+                "/app"
+              ],
+              "env": {
+                "NODE_ENV": "{{builder.Environment.EnvironmentName.ToLowerInvariant()}}"
+              }
+            }
+            """;
+
+        var actual = manifest.ToString();
+
+        Assert.Equal(expected, actual, ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Fact]
     public async Task PublishAsDockerFileConfigureContainer()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
