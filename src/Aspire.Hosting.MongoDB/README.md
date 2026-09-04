@@ -53,7 +53,9 @@ The optional set name defaults to the server's Aspire resource name. To choose a
 **C#**
 
 ```csharp
+#pragma warning disable ASPIREMONGODB001
 var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet("app-rs");
+#pragma warning restore ASPIREMONGODB001
 ```
 
 **TypeScript**
@@ -74,9 +76,11 @@ MongoDB requires a keyfile when authentication and replication are enabled, even
 
 ```csharp
 var keyfile = builder.AddParameter("mongo-keyfile", secret: true);
+#pragma warning disable ASPIREMONGODB001
 var mongodb = builder.AddMongoDB("mongodb")
     .WithKeyFile(keyfile.Resource)
     .WithReplicaSet();
+#pragma warning restore ASPIREMONGODB001
 ```
 
 **TypeScript**
@@ -105,6 +109,7 @@ var mongo1 = builder.AddMongoDB("mongo-1");
 var mongo2 = builder.AddMongoDB("mongo-2");
 var mongo3 = builder.AddMongoDB("mongo-3");
 
+#pragma warning disable ASPIREMONGODB001
 var replicaSet = builder.AddMongoDBReplicaSet("rs0")
                         .WithMember(mongo1)
                         .WithMember(mongo2)
@@ -113,6 +118,7 @@ var replicaSet = builder.AddMongoDBReplicaSet("rs0")
 var myService = builder.AddProject<Projects.MyService>("myservice")
                        .WithReference(replicaSet)
                        .WaitFor(replicaSet);
+#pragma warning restore ASPIREMONGODB001
 ```
 
 **TypeScript**

@@ -140,6 +140,7 @@ public class SingleMemberReplicaSetFunctionalTests(ITestOutputHelper testOutputH
                 using var client = new MongoClient(await mongo1.Resource.ConnectionStringExpression.GetValueAsync(ready.Token));
                 await VerifyTransactionsAndChangeStreamsAsync(client.GetDatabase("orders"), ready.Token);
                 originalConfig = await client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetConfig", 1), cancellationToken: ready.Token);
+                Assert.Equal("localhost:27017", Assert.Single(originalConfig["config"]["members"].AsBsonArray)["host"].AsString);
 
                 using var restart = new CancellationTokenSource(TimeSpan.FromMinutes(2));
                 var orchestrator = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
@@ -149,30 +150,36 @@ public class SingleMemberReplicaSetFunctionalTests(ITestOutputHelper testOutputH
                 await app.ResourceNotifications.WaitForResourceAsync(mongo1.Resource.Name, KnownResourceStates.Running, restart.Token);
                 await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo1.Resource.Name, restart.Token);
                 await VerifyTransactionsAndChangeStreamsAsync(client.GetDatabase("aftercontainerrestart"), restart.Token);
+
+                // Stop mongod to release the data volume, but keep this AppHost and its endpoint proxy alive.
+                // Holding the first port guarantees that the second AppHost gets a different random host port.
+                using var stop = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                await orchestrator.StopResourceAsync(running.ResourceId, stop.Token);
+                await app.ResourceNotifications.WaitForResourceAsync(mongo1.Resource.Name, KnownResourceStates.Exited, stop.Token);
+
+                using var builder2 = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+                var mongo2 = builder2.AddMongoDB("mongo", password: builder2.AddParameter("password", password, secret: true))
+                    .WithoutHttpsCertificate().WithReplicaSet("orders-rs").WithDataVolume(volumeName);
+                using var app2 = builder2.Build();
+                using var secondStartup = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+                await app2.StartAsync(secondStartup.Token);
+                using var secondReady = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                await app2.ResourceNotifications.WaitForResourceHealthyAsync(mongo2.Resource.Name, secondReady.Token);
+                Assert.Equal(2, new[] { originalPort, mongo2.Resource.PrimaryEndpoint.Port }.Distinct().Count());
+
+                using var secondClient = new MongoClient(await mongo2.Resource.ConnectionStringExpression.GetValueAsync(secondReady.Token));
+                var currentConfig = await secondClient.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetConfig", 1), cancellationToken: secondReady.Token);
+                // Elections advance the term without changing the configuration version or replicaSetId.
+                Assert.True(currentConfig["config"]["term"].ToInt64() >= originalConfig["config"]["term"].ToInt64());
+                originalConfig["config"].AsBsonDocument.Remove("term");
+                currentConfig["config"].AsBsonDocument.Remove("term");
+                Assert.Equal(originalConfig["config"], currentConfig["config"]);
+                var item = await secondClient.GetDatabase("orders").GetCollection<BsonDocument>("items").Find(new BsonDocument("_id", 1)).SingleAsync(secondReady.Token);
+                Assert.Equal("committed", item["name"].AsString);
+                await VerifyTransactionsAndChangeStreamsAsync(secondClient.GetDatabase("afterrestart"), secondReady.Token);
+                await app2.StopAsync();
                 await app.StopAsync();
             }
-
-            using var builder2 = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
-            var mongo2 = builder2.AddMongoDB("mongo", password: builder2.AddParameter("password", password, secret: true))
-                .WithoutHttpsCertificate().WithReplicaSet("orders-rs").WithDataVolume(volumeName);
-            using var app2 = builder2.Build();
-            using var secondStartup = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-            await app2.StartAsync(secondStartup.Token);
-            using var secondReady = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-            await app2.ResourceNotifications.WaitForResourceHealthyAsync(mongo2.Resource.Name, secondReady.Token);
-            testOutputHelper.WriteLine($"Host ports across AppHost runs: {originalPort}, {mongo2.Resource.PrimaryEndpoint.Port}");
-
-            using var secondClient = new MongoClient(await mongo2.Resource.ConnectionStringExpression.GetValueAsync(secondReady.Token));
-            var currentConfig = await secondClient.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetConfig", 1), cancellationToken: secondReady.Token);
-            // Elections advance the term without changing the configuration version or replicaSetId.
-            Assert.True(currentConfig["config"]["term"].ToInt64() >= originalConfig["config"]["term"].ToInt64());
-            originalConfig["config"].AsBsonDocument.Remove("term");
-            currentConfig["config"].AsBsonDocument.Remove("term");
-            Assert.Equal(originalConfig["config"], currentConfig["config"]);
-            var item = await secondClient.GetDatabase("orders").GetCollection<BsonDocument>("items").Find(new BsonDocument("_id", 1)).SingleAsync(secondReady.Token);
-            Assert.Equal("committed", item["name"].AsString);
-            await VerifyTransactionsAndChangeStreamsAsync(secondClient.GetDatabase("afterrestart"), secondReady.Token);
-            await app2.StopAsync();
         }
         finally
         {
