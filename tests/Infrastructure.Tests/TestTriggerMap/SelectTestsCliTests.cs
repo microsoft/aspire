@@ -411,7 +411,7 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("**would**", comment);
                 Assert.Contains("under enforcement", comment);
                 Assert.Contains("regular PR test matrix and PR-gated jobs", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory-only targets", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -455,9 +455,9 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
                 Assert.Contains("### Selected PR jobs (1)", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("`Aspire.EndToEnd.Tests` *(outerloop-only)*", comment);
-                Assert.Contains("`deployment-e2e` *(schedule/dispatch-only)*", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
+                Assert.Contains("How these were chosen", comment);
 
                 var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
                 Assert.Contains("- selected PR test projects: 1 / 1", summary);
@@ -507,8 +507,8 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("**Selects the full PR test matrix + all PR-gated jobs (ALL)**", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -583,12 +583,9 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
-                Assert.Contains(
-                    $"### Advisory workflow impact ({expectedAdvisoryProjects.Count})",
-                    comment);
                 foreach (var project in expectedAdvisoryProjects)
                 {
-                    Assert.Contains($"`{project}`", comment);
+                    Assert.DoesNotContain($"`{project}`", comment);
                 }
             }
             finally

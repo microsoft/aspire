@@ -751,9 +751,9 @@ internal static class Selection
 
         if (!options.Enforce)
         {
-            // Audit mode runs all regular PR work regardless of the selection. Schedule/outerloop-only
-            // targets are reported separately because the PR selector cannot cause them to run.
-            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The PR tests and jobs below are what selective CI **would** run under enforcement. Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates; independent workflows may still run them for a PR._");
+            // Audit mode runs all regular PR work regardless of the selection. The projects and jobs
+            // below are what selective CI **would** run under enforcement.
+            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The projects and jobs below are what selective CI **would** run under enforcement._");
             sb.AppendLine();
         }
 
@@ -762,23 +762,20 @@ internal static class Selection
         var jobs = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
         var prTests = tests.Where(test => !s_advisoryTestTargets.ContainsKey(test)).ToList();
         var prJobs = jobs.Where(job => !s_advisoryJobTargets.ContainsKey(job)).ToList();
-        var advisoryTargets = GetAdvisoryTargets(tests, jobs);
         var allPrTestProjects = allTestProjects.Count(test => !s_advisoryTestTargets.ContainsKey(test));
 
         if (result.SelectsAll)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"**Selects the full PR test matrix + all PR-gated jobs (ALL)** — {result.EscalationReason}");
             sb.AppendLine();
-            AppendAdvisoryTargets(sb, advisoryTargets);
             WriteCommentFile(commentPath, sb.ToString());
             return;
         }
 
         var fileWord = changedFiles.Count == 1 ? "changed file" : "changed files";
         var jobWord = prJobs.Count == 1 ? "job" : "jobs";
-        var advisoryWord = advisoryTargets.Count == 1 ? "target" : "targets";
         sb.AppendLine(CultureInfo.InvariantCulture,
-            $"**{prTests.Count} / {allPrTestProjects} PR test projects · {prJobs.Count} PR {jobWord} · {advisoryTargets.Count} advisory-only {advisoryWord}**, from {changedFiles.Count} {fileWord}.");
+            $"**{prTests.Count} / {allPrTestProjects} PR test projects · {prJobs.Count} PR {jobWord}**, from {changedFiles.Count} {fileWord}.");
         sb.AppendLine();
 
         // WHAT runs -- the flat lists up front. A reviewer scanning a large selection sees the complete
@@ -798,10 +795,8 @@ internal static class Selection
             : string.Join(", ", prJobs.Select(j => $"`{StripJobPrefix(j)}`")));
         sb.AppendLine();
 
-        AppendAdvisoryTargets(sb, advisoryTargets);
-
         // HOW it was chosen -- the per-trigger grouping.
-        AppendSelectionRationale(sb, result, tests, jobs);
+        AppendSelectionRationale(sb, result, prTests, prJobs);
 
         sb.AppendLine();
         WriteCommentFile(commentPath, sb.ToString());
@@ -820,24 +815,6 @@ internal static class Selection
             .Select(job => new AdvisoryTarget(job, StripJobPrefix(job), s_advisoryJobTargets[job])));
 
         return targets;
-    }
-
-    private static void AppendAdvisoryTargets(StringBuilder sb, IReadOnlyList<AdvisoryTarget> targets)
-    {
-        sb.AppendLine(CultureInfo.InvariantCulture, $"### Advisory workflow impact ({targets.Count})");
-        sb.AppendLine();
-        if (targets.Count == 0)
-        {
-            sb.AppendLine("_none_");
-        }
-        else
-        {
-            foreach (var target in targets)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{target.DisplayName}` *({target.Qualifier})*");
-            }
-        }
-        sb.AppendLine();
     }
 
     // Renders the "how these were chosen" section: every selected test project grouped under each
