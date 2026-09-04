@@ -57,14 +57,16 @@ jq -c '.commits[]? | {sha, message: .commit.message, html_url}' "$COMPARISON" |
       gh api --paginate --slurp \
         "repos/${REPO}/commits/${COMMIT_SHA}/pulls?per_page=100" 2>/dev/null |
         jq -c --arg repo "$REPO" \
-          '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] | first // null'
+        '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] |
+         unique_by(.number) |
+         if length == 1 then .[0] else null end'
     ); then
       echo "::warning::Unable to associate commit ${COMMIT_SHA} with a merged pull request."
       printf '%s\n' '{"state":"incomplete"}' > "$STATUS_FILE"
       continue
     fi
     if [ "${MERGE_PR}" = "null" ]; then
-      echo "::warning::Commit ${COMMIT_SHA} has no merged pull request association."
+      echo "::warning::Commit ${COMMIT_SHA} does not have exactly one merged pull request association."
       printf '%s\n' '{"state":"incomplete"}' > "$STATUS_FILE"
       continue
     fi

@@ -180,6 +180,28 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         ]
         """,
         null)]
+    [InlineData(
+        """
+        [
+          [
+            {"number":42,"merged_at":"2026-08-31T12:00:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}},
+            {"number":43,"merged_at":"2026-08-31T12:01:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}}
+          ]
+        ]
+        """,
+        null)]
+    [InlineData(
+        """
+        [
+          [
+            {"number":42,"merged_at":"2026-08-31T12:00:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}}
+          ],
+          [
+            {"number":42,"merged_at":"2026-08-31T12:00:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}}
+          ]
+        ]
+        """,
+        42)]
     [RequiresTools(["jq"])]
     public async Task TriggeringMergeSelectorUsesOnlyMergedPrsTargetingMain(
         string associatedPullRequests,
@@ -281,9 +303,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Theory]
-    [InlineData("""[{"number":42,"head":{"sha":"abc"}}]""", "42")]
-    [InlineData("""[{"number":42,"head":{"sha":"newer"}}]""", "")]
-    [InlineData("""[{"number":42,"head":{"sha":"abc"}},{"number":43,"head":{"sha":"abc"}}]""", "")]
+    [InlineData("""[[{"number":42,"head":{"sha":"abc"}}]]""", "42")]
+    [InlineData("""[[{"number":42,"head":{"sha":"newer"}}]]""", "")]
+    [InlineData("""[[{"number":42,"head":{"sha":"newer"}}],[{"number":43,"head":{"sha":"abc"}}]]""", "43")]
+    [InlineData("""[[{"number":42,"head":{"sha":"abc"}},{"number":43,"head":{"sha":"abc"}}]]""", "")]
     [RequiresTools(["bash", "jq"])]
     public async Task CollectionAcceptsBranchPrOnlyWhenHeadShaMatches(
         string branchCandidates,
@@ -303,8 +326,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               *"commits/abc/pulls?per_page=100"*)
                 echo '[[]]'
                 ;;
-              "api --method GET repos/microsoft/aspire/pulls "*)
-                # gh api --method GET repos/.../pulls -f state=open -f head=owner:branch
+              "api --method GET --paginate --slurp repos/microsoft/aspire/pulls "*)
                 echo '__BRANCH_CANDIDATES__'
                 ;;
               "api --paginate "*)
@@ -347,9 +369,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(0, result.ExitCode);
         var githubOutput = await File.ReadAllTextAsync(githubOutputPath);
         Assert.Contains($"pr_numbers={expectedPrNumber}", githubOutput.Split('\n'), StringComparer.Ordinal);
+        var ghCalls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        Assert.Contains(
+            ghCalls,
+            call => call.Contains("--paginate", StringComparison.Ordinal)
+                && call.Contains("--slurp", StringComparison.Ordinal)
+                && call.Contains("state=all", StringComparison.Ordinal)
+                && call.Contains("per_page=100", StringComparison.Ordinal));
         if (expectedPrNumber.Length == 0)
         {
-            var ghCalls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
             Assert.Equal(1, ghCalls.Count(call => call.Contains("commits/abc/pulls", StringComparison.Ordinal)));
         }
     }
@@ -583,6 +611,81 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "::error::Analysis result does not match trusted run context",
             result.Output,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorKeepsRejectedVerdictOnOneWorkflowCommandLine()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"invalid\n::add-mask::injected","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Single(GetWorkflowCommandLines(result.Output));
+    }
+
+    [Theory]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [InlineData("not-json")]
+    [InlineData("""{"id":"nuget-timeout","type":"infra-failure","job_ids":[123]}""")]
+    [InlineData("""{"id":"nuget-timeout","type":"infra-failure","title":"Failure","error_pattern":"boom","job_ids":[123]}""")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorKeepsRejectedCauseFilenameOnOneWorkflowCommandLine(string cause)
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "invalid\n::warning::injected.json",
+            cause);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Single(GetWorkflowCommandLines(result.Output));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorKeepsRejectedCauseTypeOnOneWorkflowCommandLine()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            """{"id":"nuget-timeout","type":"invalid\n::warning::injected","title":"Failure","error_pattern":"boom","job_ids":[123]}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Single(GetWorkflowCommandLines(result.Output));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorKeepsRejectedPriorCauseTypeOnOneWorkflowCommandLine()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            """{"id":"nuget-timeout","type":"infra-failure","title":"Failure","error_pattern":"boom","job_ids":[123]}""");
+        var priorCausesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "ci-failure-data", "prior-causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(priorCausesDirectory, "nuget-timeout.json"),
+            """{"id":"nuget-timeout","type":"invalid\n::warning::injected"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Single(GetWorkflowCommandLines(result.Output));
     }
 
     [Fact]
@@ -1771,12 +1874,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("TRUSTED_FAILED_JOBS_FILE=\"ci-failure-data/failed-jobs.json\"", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis must contain numeric-ID failed_jobs and string-valued causes arrays\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis failed_tests must match the safe field schema\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} contains unsupported or publisher-owned fields\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis failed-job IDs do not match the trusted failed jobs\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Verdict '${VERDICT}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("type '${CAUSE_TYPE}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME} cannot change type from '${PRIOR_CAUSE_TYPE}' to '${CAUSE_TYPE}'\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME} is not referenced by the analysis summary\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Verdict ${VERDICT_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("type ${CAUSE_TYPE_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} is not referenced by the analysis summary\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis cause IDs must uniquely match the generated cause files\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis must classify every failed job with a recognized classification\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis contains a failed-job classification that is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
@@ -1893,11 +1996,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Contains("jq 'del(.job_ids, .job_names)'", publisher, StringComparison.Ordinal);
             Assert.Contains("merge-cause", publisher, StringComparison.Ordinal);
             Assert.Contains("\"$CAUSE_STORED\" \"$RUN_CONTEXT_FILE\"", publisher, StringComparison.Ordinal);
-            Assert.Contains("Stored cause ID must match its filename: ${CAUSE_BASENAME}", publisher, StringComparison.Ordinal);
+            Assert.Contains("Stored cause ID must match its filename: ${CAUSE_BASENAME_DISPLAY}", publisher, StringComparison.Ordinal);
             Assert.Contains(
-                "Stored cause ${CAUSE_BASENAME} cannot change type from '${CURRENT_CAUSE_TYPE}' to '${CAUSE_TYPE}'\"\nexit 1",
+                "Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${CURRENT_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}\"\nexit 1",
                 publisher,
                 StringComparison.Ordinal);
+            Assert.Contains("printf -v CURRENT_CAUSE_TYPE_DISPLAY '%q' \"$CURRENT_CAUSE_TYPE\"", publisher, StringComparison.Ordinal);
             var causeTypeIndex = publisher.IndexOf("CAUSE_TYPE=$(jq -r '.type' \"$CAUSE_FILE\")", StringComparison.Ordinal);
             var currentCauseTypeIndex = publisher.IndexOf("CURRENT_CAUSE_TYPE=$(jq -r '.type // \"\"' \"$EXISTING\")", StringComparison.Ordinal);
             Assert.True(causeTypeIndex >= 0 && causeTypeIndex < currentCauseTypeIndex);
@@ -2866,7 +2970,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             echo "$*" >> "${GH_CALL_LOG}"
             cat <<'JSON'
             {
-              "total_count": 4,
+              "total_count": 3,
               "workflow_runs": [
                 {"id": 30, "created_at": "2026-08-30T11:00:00Z", "head_sha": "after"},
                 {"id": 20, "created_at": "2026-08-30T09:00:00Z", "head_sha": "latest"},
@@ -2936,9 +3040,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             #!/usr/bin/env bash
             echo "$*" >> "${GH_CALL_LOG}"
             if [[ "$*" == *"page=2"* ]]; then
-              echo '{"total_count":101,"workflow_runs":[{"id":20,"created_at":"2026-08-30T09:30:00Z","head_sha":"page-two"}]}'
+              echo '{"total_count":101,"workflow_runs":[{"id":101,"created_at":"2026-08-30T09:30:00Z","head_sha":"page-two"}]}'
             else
-              echo '{"total_count":101,"workflow_runs":[{"id":10,"created_at":"2026-08-30T09:00:00Z","head_sha":"page-one"}]}'
+              jq -n '{
+                total_count: 101,
+                workflow_runs: [range(100; 0; -1) | {
+                  id: .,
+                  created_at: "2026-08-30T09:00:00Z",
+                  head_sha: "page-one"
+                }]
+              }'
             fi
             """;
 
@@ -2947,7 +3058,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
-        Assert.Equal(20, output.RootElement.GetProperty("id").GetInt64());
+        Assert.Equal(101, output.RootElement.GetProperty("id").GetInt64());
         Assert.All(
             await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
             call =>
@@ -2956,6 +3067,61 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 Assert.Contains("event=push", call, StringComparison.Ordinal);
                 Assert.Contains("status=success", call, StringComparison.Ordinal);
             });
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task LastSuccessfulMainRunContinuesPastStaleTotalCount()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            if [[ "$*" == *"page=3"* ]]; then
+              echo '{"total_count":150,"workflow_runs":[{"id":301,"created_at":"2026-08-30T09:45:00Z","head_sha":"page-three"}]}'
+            elif [[ "$*" == *"page=2"* ]]; then
+              jq -n '{total_count: 150, workflow_runs: [range(201; 101; -1) | {
+                id: ., created_at: "2026-08-30T09:30:00Z", head_sha: "page-two"
+              }]}'
+            else
+              jq -n '{total_count: 150, workflow_runs: [range(101; 1; -1) | {
+                id: ., created_at: "2026-08-30T09:00:00Z", head_sha: "page-one"
+              }]}'
+            fi
+            """;
+        var outputPath = Path.Combine(_workspace.Path, "last-success.json");
+
+        var result = await RunHistoryScriptAsync(fakeGh, "2026-08-30T10:00:00Z", outputPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(301, output.RootElement.GetProperty("id").GetInt64());
+        Assert.Contains(
+            await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
+            call => call.Contains("page=3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task LastSuccessfulMainRunRejectsPartialPagination()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            if [[ "$*" == *"page=2"* ]]; then
+              echo '{"total_count":150,"workflow_runs":[{"id":101,"created_at":"2026-08-30T09:30:00Z","head_sha":"partial"}]}'
+            else
+              jq -n '{total_count: 150, workflow_runs: [range(100; 0; -1) | {
+                id: ., created_at: "2026-08-30T09:00:00Z", head_sha: "page-one"
+              }]}'
+            fi
+            """;
+
+        var result = await RunHistoryScriptAsync(
+            fakeGh,
+            "2026-08-30T10:00:00Z",
+            Path.Combine(_workspace.Path, "last-success.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("GitHub returned only 101 of 150 unique workflow runs.", result.Output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3150,6 +3316,41 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             call => call.Contains("commits/associated/pulls?per_page=100", StringComparison.Ordinal)
                 && call.Contains("--paginate", StringComparison.Ordinal)
                 && call.Contains("--slurp", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CandidateMergeCollectionReportsIncompleteWhenAssociationIsAmbiguous()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            case "$*" in
+              *"compare/trusted-success...trusted-failure"*)
+                echo '[{"total_commits":1,"commits":[{"sha":"ambiguous","commit":{"message":"Ambiguous commit"},"html_url":"https://github.com/microsoft/aspire/commit/ambiguous"}]}]'
+                ;;
+              *"commits/ambiguous/pulls"*)
+                cat <<'JSON'
+            [[
+              {"number":41,"title":"First PR","html_url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-30T00:00:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}},
+              {"number":42,"title":"Second PR","html_url":"https://github.com/microsoft/aspire/pull/42","merged_at":"2026-08-30T00:01:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}}
+            ]]
+            JSON
+                ;;
+              *)
+                exit 99
+                ;;
+            esac
+            """;
+        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
+        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
+
+        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var candidates = JsonDocument.Parse(await File.ReadAllTextAsync(candidatesPath));
+        Assert.Empty(candidates.RootElement.EnumerateArray());
+        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
+        Assert.Equal("incomplete", status.RootElement.GetProperty("state").GetString());
     }
 
     [Fact]
@@ -4164,6 +4365,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     private static string NormalizeIndentation(string value)
         => string.Join('\n', value.ReplaceLineEndings("\n").Split('\n').Select(line => line.TrimStart()));
+
+    private static string[] GetWorkflowCommandLines(string output)
+        => output.ReplaceLineEndings("\n")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.StartsWith("::", StringComparison.Ordinal))
+            .ToArray();
 
     private static string GetSection(string value, string start, string end)
     {

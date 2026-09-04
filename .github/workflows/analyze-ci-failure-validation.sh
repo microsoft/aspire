@@ -28,6 +28,7 @@ RUN_URL=$(jq -r 'if (.html_url | type) == "string" then .html_url else "" end' "
 ANALYSIS_RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
 ANALYSIS_RUN_SCOPE=$(jq -r '.run_scope' "$ANALYSIS_FILE")
 VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+printf -v VERDICT_DISPLAY '%q' "$VERDICT"
 
 if [ "$RUN_METADATA_ID" != "$TRUSTED_RUN_ID" ] ||
    [[ ! "$RUN_URL" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/${TRUSTED_RUN_ID}$ ]]; then
@@ -109,7 +110,7 @@ case "${TRUSTED_RUN_SCOPE}:${VERDICT}" in
   main:transient-infra|main:flaky-test|main:main-repository-breakage|main:mixed|pull-request:transient-infra|pull-request:flaky-test|pull-request:code-issue|pull-request:mixed)
     ;;
   *)
-    echo "::error::Verdict '${VERDICT}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
+    echo "::error::Verdict ${VERDICT_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
     exit 1
     ;;
 esac
@@ -166,12 +167,15 @@ fi
 
 if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
   for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
+    CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+    # %q keeps rejected untrusted values on one physical line so they cannot
+    # start a second GitHub Actions workflow command.
+    printf -v CAUSE_BASENAME_DISPLAY '%q' "$CAUSE_BASENAME"
     if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
-      echo "::error::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+      echo "::error::Invalid JSON in cause file: ${CAUSE_BASENAME_DISPLAY}"
       exit 1
     fi
 
-    CAUSE_BASENAME=$(basename "$CAUSE_FILE")
     bash "$SCRIPT_DIR/analyze-ci-failure-persistence.sh" \
       sanitize-cause "$CAUSE_FILE" "${CAUSE_FILE}.tmp"
     mv "${CAUSE_FILE}.tmp" "$CAUSE_FILE"
@@ -198,17 +202,18 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       ((.test_name // "") | safe_single_line(500)) and
       (.type != "infra-failure" or (.test_name // "") == "")
     ' "$CAUSE_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} contains unsupported or publisher-owned fields"
       exit 1
     fi
     CAUSE_ID=$(jq -r '.id // ""' "$CAUSE_FILE")
     CAUSE_TYPE=$(jq -r '.type // ""' "$CAUSE_FILE")
+    printf -v CAUSE_TYPE_DISPLAY '%q' "$CAUSE_TYPE"
     if [[ ! "$CAUSE_ID" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || [ "${CAUSE_ID}.json" != "$CAUSE_BASENAME" ]; then
-      echo "::error::Cause ID must be a lowercase hyphenated slug matching its filename: ${CAUSE_BASENAME}"
+      echo "::error::Cause ID must be a lowercase hyphenated slug matching its filename: ${CAUSE_BASENAME_DISPLAY}"
       exit 1
     fi
     if ! jq -e --arg cause_id "$CAUSE_ID" '.causes | index($cause_id) != null' "$ANALYSIS_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} is not referenced by the analysis summary"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} is not referenced by the analysis summary"
       exit 1
     fi
 
@@ -216,7 +221,7 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       main:flaky-test|main:infra-failure|main:main-repository-breakage|pull-request:flaky-test|pull-request:infra-failure)
         ;;
       *)
-        echo "::error::Cause ${CAUSE_BASENAME} type '${CAUSE_TYPE}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
+        echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} type ${CAUSE_TYPE_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}"
         exit 1
         ;;
     esac
@@ -244,15 +249,16 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
             end)
         )
       ' "$CAUSE_FILE" >/dev/null; then
-      echo "::error::Cause ${CAUSE_BASENAME} references an unknown or incompatible failed job"
+      echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} references an unknown or incompatible failed job"
       exit 1
     fi
 
     PRIOR_CAUSE_FILE="ci-failure-data/prior-causes/${CAUSE_BASENAME}"
     if [ -f "$PRIOR_CAUSE_FILE" ]; then
       PRIOR_CAUSE_TYPE=$(jq -r '.type // ""' "$PRIOR_CAUSE_FILE")
+      printf -v PRIOR_CAUSE_TYPE_DISPLAY '%q' "$PRIOR_CAUSE_TYPE"
       if [ "$PRIOR_CAUSE_TYPE" != "$CAUSE_TYPE" ]; then
-        echo "::error::Cause ${CAUSE_BASENAME} cannot change type from '${PRIOR_CAUSE_TYPE}' to '${CAUSE_TYPE}'"
+        echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
         exit 1
       fi
     fi

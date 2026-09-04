@@ -172,14 +172,15 @@ jobs:
                 # GitHub does not return commit associations for every fork PR. Use
                 # branch identity only to find candidates, then require the immutable
                 # failed-run SHA to match before accepting one.
-                if ! PR_CANDIDATE_DATA=$(gh api --method GET "repos/${REPO}/pulls" \
-                    -f state=open \
+                if ! PR_CANDIDATE_DATA=$(gh api --method GET --paginate --slurp "repos/${REPO}/pulls" \
+                    -f state=all \
+                    -f per_page=100 \
                     -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" 2>/dev/null); then
                   echo "::error::Failed to look up pull requests for ${HEAD_OWNER}:${HEAD_BRANCH}."
                   exit 1
                 fi
                 PR_CANDIDATES=$(jq -c --arg head_sha "$HEAD_SHA" \
-                  '[.[] | select((.number | type) == "number" and .head.sha == $head_sha) | .number]' \
+                  '[.[][] | select((.number | type) == "number" and .head.sha == $head_sha) | .number]' \
                   <<< "$PR_CANDIDATE_DATA")
                 consider_pr_candidates "${PR_CANDIDATES}"
               fi
@@ -197,7 +198,9 @@ jobs:
             gh api --paginate --slurp \
               "repos/${REPO}/commits/${HEAD_SHA}/pulls?per_page=100" 2>/dev/null |
               jq -c --arg repo "$REPO" \
-                '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] | first // {} |
+                '[.[][] | select(.base.repo.full_name == $repo and .base.ref == "main" and .merged_at != null)] |
+                unique_by(.number) |
+                if length == 1 then .[0] else {} end |
                 if .number then
                   {number, title, state, user: {login: .user.login}, head: {ref: .head.ref},
                     base: {ref: .base.ref}, html_url, merged_at}
@@ -761,6 +764,8 @@ safe-outputs:
                   [ -f "$CAUSE_FILE" ] || continue
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
+                  printf -v CAUSE_BASENAME_DISPLAY '%q' "$CAUSE_BASENAME"
+                  printf -v CAUSE_TYPE_DISPLAY '%q' "$CAUSE_TYPE"
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
                   CAUSE_JOBS_PLAIN=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
                     cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" plain)
@@ -773,12 +778,13 @@ safe-outputs:
                   if [ -f "$EXISTING" ]; then
                     CURRENT_CAUSE_TYPE=$(jq -r '.type // ""' "$EXISTING")
                     CURRENT_CAUSE_ID=$(jq -r '.id // ""' "$EXISTING")
+                    printf -v CURRENT_CAUSE_TYPE_DISPLAY '%q' "$CURRENT_CAUSE_TYPE"
                     if [ "${CURRENT_CAUSE_ID}.json" != "$CAUSE_BASENAME" ]; then
-                      echo "::error::Stored cause ID must match its filename: ${CAUSE_BASENAME}"
+                      echo "::error::Stored cause ID must match its filename: ${CAUSE_BASENAME_DISPLAY}"
                       exit 1
                     fi
                     if [ "$CURRENT_CAUSE_TYPE" != "$CAUSE_TYPE" ]; then
-                      echo "::error::Stored cause ${CAUSE_BASENAME} cannot change type from '${CURRENT_CAUSE_TYPE}' to '${CAUSE_TYPE}'"
+                      echo "::error::Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${CURRENT_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
                       exit 1
                     fi
                     # Stored cause fields are publisher-authoritative. A later
