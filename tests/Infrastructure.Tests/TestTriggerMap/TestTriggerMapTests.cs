@@ -1131,21 +1131,21 @@ public sealed class TestTriggerMapTests
         var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
         var job = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
         var needs = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("needs")]);
-        var archiveJobIds = needs.Children
+        var archiveJobs = needs.Children
             .OfType<YamlScalarNode>()
             .Select(node => node.Value)
-            .Where(value => value?.StartsWith("build_cli_archive_", StringComparison.Ordinal) is true)
-            .Select(value => value!)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => (
+                Id: value!,
+                Job: Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(value!)])))
+            .Where(entry => entry.Job.Children.TryGetValue(new YamlScalarNode("uses"), out var uses)
+                && uses.ToString() == "./.github/workflows/build-cli-native-archives.yml")
             .ToList();
-        Assert.NotEmpty(archiveJobIds);
+        Assert.NotEmpty(archiveJobs);
 
         var rids = new List<string>();
-        foreach (var archiveJobId in archiveJobIds)
+        foreach (var (archiveJobId, archiveJob) in archiveJobs)
         {
-            var archiveJob = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(archiveJobId)]);
-            Assert.Equal(
-                "./.github/workflows/build-cli-native-archives.yml",
-                archiveJob.Children[new YamlScalarNode("uses")].ToString());
             var inputs = Assert.IsType<YamlMappingNode>(archiveJob.Children[new YamlScalarNode("with")]);
             var targetsJson = Assert.IsType<YamlScalarNode>(inputs.Children[new YamlScalarNode("targets")]).Value;
             Assert.False(string.IsNullOrWhiteSpace(targetsJson), $"CLI archive build job '{archiveJobId}' has no targets input.");
