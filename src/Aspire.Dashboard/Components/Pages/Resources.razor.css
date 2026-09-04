@@ -269,8 +269,12 @@
     stroke-width: calc(var(--focus-stroke-width) * 1px);
 }
 
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    stroke: transparent;
+}
+
 ::deep .resource-menu-cog-icon {
-    fill: var(--neutral-foreground-rest);
+    fill: var(--accent-fill-rest);
     pointer-events: none;
 }
 

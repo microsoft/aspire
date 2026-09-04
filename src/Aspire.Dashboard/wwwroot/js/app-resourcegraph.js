@@ -459,7 +459,7 @@ class ResourceGraph {
 
             // Scale and center the icon inside the cog background, matching how resource icons are sized.
             cogIcon.each(function () {
-                const iconSize = 18;
+                const iconSize = 16;
                 const path = d3.select(this);
                 const bbox = this.getBBox();
                 const scale = iconSize / Math.max(bbox.width, bbox.height);
