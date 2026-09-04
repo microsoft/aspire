@@ -107,7 +107,24 @@ internal static class FoundryLocalService
         await RunFoundryCommandAsync(["model", "load", modelId], onOutput: null, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<bool> IsModelLoadedAsync(Uri endpoint, string modelId, HttpClient httpClient, CancellationToken cancellationToken)
+    public static Task<bool> IsModelLoadedAsync(Uri endpoint, string modelId, HttpClient httpClient, CancellationToken cancellationToken)
+    {
+        Func<CancellationToken, Task<string>>? legacyModelListProvider = null;
+        if (endpoint == Endpoint && s_daemonVerb == "service")
+        {
+            legacyModelListProvider = static cancellationToken =>
+                RunFoundryCommandAsync(["service", "ps"], onOutput: null, cancellationToken);
+        }
+
+        return IsModelLoadedCoreAsync(endpoint, modelId, httpClient, legacyModelListProvider, cancellationToken);
+    }
+
+    internal static async Task<bool> IsModelLoadedCoreAsync(
+        Uri endpoint,
+        string modelId,
+        HttpClient httpClient,
+        Func<CancellationToken, Task<string>>? legacyModelListProvider,
+        CancellationToken cancellationToken)
     {
         foreach (var path in new[] { "models/loaded", "openai/loadedmodels" })
         {
@@ -124,14 +141,18 @@ internal static class FoundryLocalService
             }
 
             var output = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return TryParseModelIds(output, out var modelIds) &&
+            var isLoaded = TryParseModelIds(output, out var modelIds) &&
                 modelIds.Contains(modelId, StringComparer.OrdinalIgnoreCase);
+            if (isLoaded || path == "models/loaded")
+            {
+                return isLoaded;
+            }
         }
 
-        if (endpoint == Endpoint && s_daemonVerb == "service")
+        if (legacyModelListProvider is not null)
         {
-            var result = await RunFoundryCommandAsync(["service", "ps"], onOutput: null, cancellationToken).ConfigureAwait(false);
-            return result.Contains(modelId, StringComparison.OrdinalIgnoreCase);
+            var models = await legacyModelListProvider(cancellationToken).ConfigureAwait(false);
+            return models.Contains(modelId, StringComparison.OrdinalIgnoreCase);
         }
 
         return false;

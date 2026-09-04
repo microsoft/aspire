@@ -368,10 +368,11 @@ public class FoundryExtensionsTests
         });
         using var httpClient = new HttpClient(handler);
 
-        var result = await FoundryLocalService.IsModelLoadedAsync(
+        var result = await FoundryLocalService.IsModelLoadedCoreAsync(
             new Uri("http://windows-host:5273/"),
             modelId,
             httpClient,
+            _ => throw new InvalidOperationException("The legacy CLI fallback should not run after a successful modern endpoint response."),
             CancellationToken.None);
 
         Assert.Equal(expected, result);
@@ -407,6 +408,35 @@ public class FoundryExtensionsTests
             CancellationToken.None);
 
         Assert.True(result);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task FoundryLocalService_IsModelLoadedAsync_FallsBackToLegacyCliForVersionedModelId()
+    {
+        var handler = new CallbackHttpMessageHandler((attempt, _) =>
+            attempt is 1
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""["Phi-4-mini-instruct"]""")
+                });
+        using var httpClient = new HttpClient(handler);
+        var legacyFallbackCalled = false;
+
+        var result = await FoundryLocalService.IsModelLoadedCoreAsync(
+            new Uri("http://windows-host:5273/"),
+            "Phi-4-mini-instruct-generic-gpu:5",
+            httpClient,
+            _ =>
+            {
+                legacyFallbackCalled = true;
+                return Task.FromResult("Phi-4-mini-instruct-generic-gpu:5");
+            },
+            CancellationToken.None);
+
+        Assert.True(result);
+        Assert.True(legacyFallbackCalled);
         Assert.Equal(2, handler.CallCount);
     }
 
@@ -485,6 +515,21 @@ public class FoundryExtensionsTests
         Assert.False(foundry.Resource.ManageLocalService);
         Assert.Equal(new Uri("http://windows-host:5273/"), foundry.Resource.EmulatorServiceUri);
         Assert.Equal("Endpoint=http://windows-host:5273/;Key=unused", foundry.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_ConfiguresBoundedHealthCheckHttpClients()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddFoundry("foundry").RunAsFoundryLocal();
+        using var app = builder.Build();
+        var httpClientFactory = app.Services.GetRequiredService<IHttpClientFactory>();
+
+        using var serviceHealthClient = httpClientFactory.CreateClient(nameof(FoundryLocalHealthCheck));
+        using var modelHealthClient = httpClientFactory.CreateClient(nameof(LocalModelHealthCheck));
+
+        Assert.Equal(TimeSpan.FromSeconds(10), serviceHealthClient.Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(10), modelHealthClient.Timeout);
     }
 
     [Theory]

@@ -28,6 +28,7 @@ public static class FoundryExtensions
 {
     private const string DefaultCapabilityHostName = "foundry-caphost";
     internal const string LocalProjectsNotSupportedMessage = "Microsoft Foundry projects are not supported when the parent Foundry resource is configured with RunAsFoundryLocal().";
+    private static readonly TimeSpan s_healthCheckTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Adds a Microsoft Foundry resource to the application model.
@@ -235,7 +236,10 @@ public static class FoundryExtensions
                     tags: default,
                     timeout: default
                     ));
-        builder.ApplicationBuilder.Services.AddHttpClient();
+        builder.ApplicationBuilder.Services.AddHttpClient(nameof(FoundryLocalHealthCheck), client =>
+            client.Timeout = s_healthCheckTimeout);
+        builder.ApplicationBuilder.Services.AddHttpClient(nameof(LocalModelHealthCheck), client =>
+            client.Timeout = s_healthCheckTimeout);
 
         builder.WithHealthCheck(healthCheckKey);
 
