@@ -154,24 +154,32 @@ jobs:
               '[.pull_requests[]? | select(.base.repo.url == $repo_url and (.number | type) == "number") | .number]' \
               ci-failure-data/run.json)
             consider_pr_candidates "${PR_CANDIDATES}"
-            if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ]; then
-              HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
-              if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
-                # Branch names may contain '&' and '=', so pass state/head as
-                # separate -f fields rather than concatenating a query string;
-                # gh api URL-encodes -f values, preventing query injection.
-                PR_CANDIDATES=$(gh api --method GET "repos/${REPO}/pulls" \
-                  -f state=open \
-                  -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" \
-                  --jq '[.[] | select((.number | type) == "number") | .number]' 2>/dev/null || echo "[]")
-                consider_pr_candidates "${PR_CANDIDATES}"
+            if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ] && [ -n "${HEAD_SHA}" ]; then
+              if ! PR_CANDIDATES=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+                  --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and (.number | type) == \"number\") | .number]" \
+                  2>/dev/null); then
+                echo "::error::Failed to look up pull requests associated with commit ${HEAD_SHA}."
+                exit 1
               fi
+              consider_pr_candidates "${PR_CANDIDATES}"
             fi
             if [ -z "${PR_NUMBERS}" ] && [ "${PR_LOOKUP_AMBIGUOUS}" = "false" ] && [ -n "${HEAD_SHA}" ]; then
-              PR_CANDIDATES=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
-                --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and (.number | type) == \"number\") | .number]" \
-                2>/dev/null || echo "[]")
-              consider_pr_candidates "${PR_CANDIDATES}"
+              HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
+              if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
+                # GitHub does not return commit associations for every fork PR. Use
+                # branch identity only to find candidates, then require the immutable
+                # failed-run SHA to match before accepting one.
+                if ! PR_CANDIDATE_DATA=$(gh api --method GET "repos/${REPO}/pulls" \
+                    -f state=open \
+                    -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" 2>/dev/null); then
+                  echo "::error::Failed to look up pull requests for ${HEAD_OWNER}:${HEAD_BRANCH}."
+                  exit 1
+                fi
+                PR_CANDIDATES=$(jq -c --arg head_sha "$HEAD_SHA" \
+                  '[.[] | select((.number | type) == "number" and .head.sha == $head_sha) | .number]' \
+                  <<< "$PR_CANDIDATE_DATA")
+                consider_pr_candidates "${PR_CANDIDATES}"
+              fi
             fi
 
             if [ "${PR_LOOKUP_AMBIGUOUS}" = "true" ]; then
@@ -1134,7 +1142,20 @@ safe-outputs:
               const trustedRunAttempt = Number(runContext.run_attempt);
               const trustedPrNumberText = String(runContext.pr_numbers || '');
               const trustedRunScope = String(runContext.run_scope || '');
-              const reason = item.reason || '';
+              const sanitizeAgentLogText = value => {
+                if (typeof value !== 'string') {
+                  return '';
+                }
+
+                return value
+                  .replace(/[\r\n\t\u0085\u2028\u2029]+/gu, ' ')
+                  .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/gu, '')
+                  .replace(/[\p{Cf}\uFE00-\uFE0F]/gu, '')
+                  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu, '')
+                  .replace(/[\u{E0000}-\u{E007F}]/gu, '')
+                  .slice(0, 500);
+              };
+              const reason = sanitizeAgentLogText(item.reason);
               const enableRerun = String(process.env.ENABLE_RERUN).toLowerCase() === 'true';
 
               if (!Number.isInteger(requestedRunId) || requestedRunId <= 0) {

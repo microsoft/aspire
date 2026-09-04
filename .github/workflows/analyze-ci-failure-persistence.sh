@@ -157,14 +157,22 @@ cache_cause_issues()
   closed_issues_temp=$(mktemp)
   rm -f "$open_issues_file" "$closed_issues_file"
 
-  if ! gh issue list --repo "$repo" --label "ci-failure-cause" --state open --limit 500 --json number,body \
-      > "$open_issues_temp"; then
+  if ! gh api --method GET --paginate --slurp "repos/${repo}/issues" \
+      -f state=open \
+      -f labels=ci-failure-cause \
+      -f per_page=100 |
+      jq -c '[.[][] | select(has("pull_request") | not) | select((.number | type) == "number") | {number, body: (.body // "")}]' \
+        > "$open_issues_temp"; then
     echo "::error::Failed to load open cause issues" >&2
     rm -f "$open_issues_temp" "$closed_issues_temp" "$open_issues_file" "$closed_issues_file"
     return 1
   fi
-  if ! gh issue list --repo "$repo" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
-      > "$closed_issues_temp"; then
+  if ! gh api --method GET --paginate --slurp "repos/${repo}/issues" \
+      -f state=closed \
+      -f labels=ci-failure-cause \
+      -f per_page=100 |
+      jq -c '[.[][] | select(has("pull_request") | not) | select((.number | type) == "number") | {number, body: (.body // "")}]' \
+        > "$closed_issues_temp"; then
     echo "::error::Failed to load closed cause issues" >&2
     rm -f "$open_issues_temp" "$closed_issues_temp" "$open_issues_file" "$closed_issues_file"
     return 1

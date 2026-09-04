@@ -197,10 +197,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Theory]
-    [InlineData("[42]", "42")]
-    [InlineData("[42,43]", "")]
+    [InlineData("""[{"number":42,"head":{"sha":"abc"}}]""", "42")]
+    [InlineData("""[{"number":42,"head":{"sha":"newer"}}]""", "")]
+    [InlineData("""[{"number":42,"head":{"sha":"abc"}},{"number":43,"head":{"sha":"abc"}}]""", "")]
     [RequiresTools(["bash", "jq"])]
-    public async Task CollectionResolvesOnlyUnambiguousPrForBranchNameContainingQueryDelimiters(
+    public async Task CollectionAcceptsBranchPrOnlyWhenHeadShaMatches(
         string branchCandidates,
         string expectedPrNumber)
     {
@@ -215,8 +216,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {"id":123,"path":".github/workflows/ci.yml","run_attempt":1,"event":"pull_request","head_sha":"abc","head_branch":"feature&pr=999","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure","pull_requests":[],"head_repository":{"owner":{"login":"radical"}}}
             JSON
                 ;;
+              "api repos/microsoft/aspire/commits/abc/pulls")
+                echo '[]'
+                ;;
               "api --method")
-                # gh api --method GET repos/.../pulls -f state=open -f head=owner:branch --jq '.[].number'
+                # gh api --method GET repos/.../pulls -f state=open -f head=owner:branch
                 if [ "$3" = "GET" ] && [ "$4" = "repos/microsoft/aspire/pulls" ]; then
                   echo '__BRANCH_CANDIDATES__'
                 else
@@ -265,11 +269,69 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains($"pr_numbers={expectedPrNumber}", githubOutput.Split('\n'), StringComparer.Ordinal);
         if (expectedPrNumber.Length == 0)
         {
-            Assert.DoesNotContain(
-                "commits/abc/pulls",
-                await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "gh-calls.log")),
-                StringComparison.Ordinal);
+            var ghCalls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+            Assert.Equal(1, ghCalls.Count(call => call.Contains("commits/abc/pulls", StringComparison.Ordinal)));
         }
+    }
+
+    [Theory]
+    [InlineData("commit", "Failed to look up pull requests associated with commit abc.")]
+    [InlineData("branch", "Failed to look up pull requests for radical:feature.")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CollectionFailsClosedWhenPrLookupFails(string failingLookup, string expectedError)
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$1 $2" in
+              "api repos/microsoft/aspire/actions/runs/123")
+                cat <<'JSON'
+            {"id":123,"path":".github/workflows/ci.yml","run_attempt":1,"event":"pull_request","head_sha":"abc","head_branch":"feature","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure","pull_requests":[],"head_repository":{"owner":{"login":"radical"}}}
+            JSON
+                ;;
+              "api repos/microsoft/aspire/commits/abc/pulls")
+                if [ "${FAILING_LOOKUP}" = "commit" ]; then
+                  exit 1
+                fi
+                echo '[]'
+                ;;
+              "api --method")
+                if [ "${FAILING_LOOKUP}" = "branch" ]; then
+                  exit 1
+                fi
+                echo '[]'
+                ;;
+              *)
+                echo "unexpected downstream call: $*" >&2
+                exit 99
+                ;;
+            esac
+            """;
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
+        await WriteExecutableAsync(fakeGhPath, fakeGh);
+        var callLogPath = Path.Combine(_workspace.Path, "gh-calls.log");
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Collect CI failure data");
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["EVENT_NAME"] = "workflow_dispatch",
+                ["FAILING_LOOKUP"] = failingLookup,
+                ["GITHUB_OUTPUT"] = Path.Combine(_workspace.Path, "github-output"),
+                ["GH_CALL_LOG"] = callLogPath,
+                ["MANUAL_RUN_ID"] = "123",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["REPO"] = "microsoft/aspire",
+                ["WORKFLOW_RUN_ATTEMPT"] = string.Empty,
+                ["WORKFLOW_RUN_ID"] = string.Empty,
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(expectedError, result.Output, StringComparison.Ordinal);
+        Assert.Equal(failingLookup == "commit" ? 2 : 3, (await File.ReadAllLinesAsync(callLogPath)).Length);
     }
 
     [Theory]
@@ -1765,7 +1827,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var fakeGhPath = await CreateFakeGhAsync(
             """
             #!/usr/bin/env bash
-            if [[ "$*" == *"--state ${FAILING_STATE}"* ]]; then
+            if [[ "$*" == *"-f state=${FAILING_STATE}"* ]]; then
               echo "lookup failed" >&2
               exit 1
             fi
@@ -1875,14 +1937,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task CauseIssueCacheWritesBothSuccessfulLookupResults()
+    public async Task CauseIssueCachePaginatesAndExcludesPullRequests()
     {
+        var callLogPath = Path.Combine(_workspace.Path, "gh-calls.log");
         var fakeGhPath = await CreateFakeGhAsync(
             """
             #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
             case "$*" in
-              *"--state open"*) echo '[{"number":1,"body":"open"}]' ;;
-              *"--state closed"*) echo '[{"number":2,"body":"closed"}]' ;;
+              *"-f state=open"*) echo '[[{"number":1,"body":"open"},{"number":99,"body":"pr","pull_request":{}}],[{"number":3,"body":"second page"}]]' ;;
+              *"-f state=closed"*) echo '[[{"number":2,"body":"closed"},{"number":98,"body":"pr","pull_request":{}}],[{"number":4,"body":"second closed page"}]]' ;;
               *) exit 99 ;;
             esac
             """);
@@ -1894,12 +1958,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             ["cache-cause-issues", "microsoft/aspire", openIssuesPath, closedIssuesPath],
             new Dictionary<string, string>
             {
+                ["GH_CALL_LOG"] = callLogPath,
                 ["PATH"] = $"{Path.GetDirectoryName(fakeGhPath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
             });
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Equal("""[{"number":1,"body":"open"}]""" + Environment.NewLine, await File.ReadAllTextAsync(openIssuesPath));
-        Assert.Equal("""[{"number":2,"body":"closed"}]""" + Environment.NewLine, await File.ReadAllTextAsync(closedIssuesPath));
+        Assert.Equal("""[{"number":1,"body":"open"},{"number":3,"body":"second page"}]""" + Environment.NewLine, await File.ReadAllTextAsync(openIssuesPath));
+        Assert.Equal("""[{"number":2,"body":"closed"},{"number":4,"body":"second closed page"}]""" + Environment.NewLine, await File.ReadAllTextAsync(closedIssuesPath));
+        Assert.All(
+            await File.ReadAllLinesAsync(callLogPath),
+            call => Assert.Contains("api --method GET --paginate --slurp repos/microsoft/aspire/issues", call, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2390,6 +2458,29 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains(
             "Dry-run mode (ENABLE_RERUN is not 'true'). Would have rerun failed jobs for run 123. Reason: Transient infrastructure failure",
             result.Infos);
+    }
+
+    [Theory]
+    [InlineData("false")]
+    [InlineData("true")]
+    [RequiresTools(["node"])]
+    public async Task RerunLogsAgentReasonAsBoundedSingleLineText(string enableRerun)
+    {
+        var unsafeReason = "retry\r\n::warning::forged\t\u001b[31mred\u001b[0m\u202E" + new string('x', 600);
+        var expectedReason = ("retry ::warning::forged red" + new string('x', 600))[..500];
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"id":"nuget-timeout","type":"infra-failure","job_ids":[456]}""",
+            rerunReason: unsafeReason);
+
+        var result = await RunRerunScriptAsync(enableRerun: enableRerun);
+
+        Assert.Empty(result.Failed);
+        var expectedPrefix = enableRerun == "true"
+            ? "Requested rerun of failed jobs for run 123. Reason: "
+            : "Dry-run mode (ENABLE_RERUN is not 'true'). Would have rerun failed jobs for run 123. Reason: ";
+        Assert.Equal([expectedPrefix + expectedReason], result.Infos);
+        Assert.Equal(enableRerun == "true" ? [123] : [], result.Reruns);
     }
 
     [Fact]
@@ -3504,14 +3595,18 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string? priorCause = null,
         string trustedFailedJobsJson = """[{"id":456,"name":"Tests"}]""",
         string runScope = "pull-request",
-        string prNumbers = "42")
+        string prNumbers = "42",
+        string rerunReason = "Transient infrastructure failure")
     {
         var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
         var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
         var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "output.json"),
-            """{"items":[{"type":"rerun_failed_jobs","run_id":123,"reason":"Transient infrastructure failure"}]}""");
+            JsonSerializer.Serialize(new
+            {
+                items = new[] { new { type = "rerun_failed_jobs", run_id = 123, reason = rerunReason } },
+            }));
         await File.WriteAllTextAsync(Path.Combine(agentDirectory, "analysis-result.json"), analysis);
         await File.WriteAllTextAsync(Path.Combine(causesDirectory, "nuget-timeout.json"), cause);
         await File.WriteAllTextAsync(
@@ -3554,13 +3649,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 enableRerun,
             }));
 
-        var result = await RunProcessAsync(
-            "node",
-            [
-                Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "analyze-ci-failure-rerun.harness.js"),
-                requestPath,
-                outputPath,
-            ]);
+        using var command = new NodeCommand(output, "analyze-ci-failure-rerun")
+            .WithWorkingDirectory(_workspace.Path)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+        var result = await command.ExecuteScriptAsync(
+            Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "analyze-ci-failure-rerun.harness.js"),
+            requestPath,
+            outputPath);
 
         Assert.Equal(0, result.ExitCode);
         var response = JsonSerializer.Deserialize<RerunHarnessResult>(await File.ReadAllTextAsync(outputPath));
