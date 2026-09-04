@@ -767,13 +767,12 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Empty(r.Jobs);
     }
 
-    // Regression (production-only affected_project_rules): Layer 1 reports affected production AND test
-    // projects. affected_project_rules key off project NAME globs and must match only PRODUCTION names.
-    // A matrix test project ("Aspire.Hosting.Foo.Tests") matches a production glob ("Aspire.Hosting*"),
-    // so without the production-only filter a TEST-ONLY change would spuriously fire that rule's
-    // production jobs (extension-e2e / typescript-api-compat / deployment-e2e).
+    // Layer 1 reports both matrix and non-matrix projects. affected_project_rules key off project-name
+    // globs but exclude matrix test projects, which are already handled by the Layer 1 intersection.
+    // Without that exclusion, a test-only matrix project ("Aspire.Hosting.Foo.Tests") would spuriously
+    // fire jobs attached to a broad project rule such as "Aspire.Hosting*".
     [Fact]
-    public void AffectedProjectRulesMatchProductionProjectsNotTestProjects()
+    public void AffectedProjectRulesMatchNonMatrixProjectsNotMatrixTests()
     {
         const string map = """
             version: 1
@@ -792,9 +791,9 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Contains("Aspire.Hosting.Foo.Tests", testOnly.TestProjects);
         Assert.DoesNotContain("job:prodjob", testOnly.Jobs);
 
-        // A production project of the same name prefix DOES drive the rule.
-        var prod = selector.Select([], ["Aspire.Hosting.Foo"], new SelectorOptions());
-        Assert.Contains("job:prodjob", prod.Jobs);
+        // A non-matrix project of the same name prefix DOES drive the rule.
+        var nonMatrix = selector.Select([], ["Aspire.Hosting.Foo"], new SelectorOptions());
+        Assert.Contains("job:prodjob", nonMatrix.Jobs);
     }
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
@@ -819,7 +818,6 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
         // Repository metadata with no build/test impact: a PR touching only these must not force the
         // full matrix via the run-all fallback (the reason they are in the skip-gate patterns file).
-        Assert.True(filter.IsExcluded(".gitignore"));                    // repo-ROOT .gitignore (anchored)
         Assert.True(filter.IsExcluded(".github/CODEOWNERS"));
         Assert.True(filter.IsExcluded(".github/ISSUE_TEMPLATE/10_bug_report.yml"));
         Assert.True(filter.IsExcluded(".github/dependabot.yml"));
@@ -830,9 +828,10 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
         // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), root
-        // launch/task files are validated by extension tests, and .editorconfig / .gitattributes affect the
-        // build and checkout.
+        // launch/task files are validated by extension tests, root .gitignore controls discovery of the
+        // Java extension E2E workspace, and .editorconfig / .gitattributes affect the build and checkout.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/ts-starter/.gitignore"));
+        Assert.False(filter.IsExcluded(".gitignore"));
         Assert.False(filter.IsExcluded(".vscode/launch.json"));
         Assert.False(filter.IsExcluded(".vscode/tasks.json"));
         Assert.False(filter.IsExcluded(".editorconfig"));
@@ -884,6 +883,95 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.False(r.SelectsAll);
     }
 
+    [Theory]
+    [InlineData("tests/Aspire.Cli.Tests/CommandTests.cs", "Aspire.Cli.Tests")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/CommandTests.cs", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("tests/Aspire.Hosting.Tests/Cli/CommandTests.cs", "Aspire.Hosting.Tests")]
+    public void RealMapCliTestOnlyChangeDoesNotSelectExtensionE2e(string path, string testProject)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            [path],
+            [testProject],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Equal([testProject], r.TestProjects);
+        Assert.Empty(r.Jobs);
+    }
+
+    [Fact]
+    public void RealMapRepresentativeExtensionRuntimeConsumerSelectsExtensionE2e()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select([], ["Aspire.Hosting.Java"], new SelectorOptions());
+
+        Assert.Contains("job:extension-e2e", r.Jobs);
+    }
+
+    [Fact]
+    public void RealMapUnrelatedHostingProjectDoesNotSelectExtensionOrCliE2e()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var fromAffectedProject = selector.Select([], ["Aspire.Hosting.Qdrant"], new SelectorOptions());
+        var fromPath = selector.Select(
+            ["src/Aspire.Hosting.Qdrant/QdrantResource.cs"],
+            [],
+            new SelectorOptions());
+
+        Assert.False(fromAffectedProject.SelectsAll);
+        Assert.DoesNotContain("Aspire.Cli.EndToEnd.Tests", fromAffectedProject.TestProjects);
+        Assert.DoesNotContain("job:extension-e2e", fromAffectedProject.Jobs);
+        Assert.False(fromPath.SelectsAll);
+        Assert.DoesNotContain("Aspire.Cli.EndToEnd.Tests", fromPath.TestProjects);
+        Assert.DoesNotContain("job:extension-e2e", fromPath.Jobs);
+    }
+
+    [Theory]
+    [InlineData("Aspire.Hosting.Redis")]
+    [InlineData("Aspire.StackExchange.Redis")]
+    public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select([], [project], new SelectorOptions());
+
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+    }
+
+    public static TheoryData<string> CliE2eExcludedRuntimeProjects => new()
+    {
+        // The regular PR test selects the published Azure Redis package rather than this repo-built package.
+        "Aspire.Hosting.Azure.Redis",
+        // These Hosting/client pairs are consumed only by quarantined tests.
+        "Aspire.Hosting.Azure.Storage",
+        "Aspire.Azure.Storage.Blobs",
+        "Aspire.Hosting.Nats",
+        "Aspire.NATS.Net",
+        // This package is consumed only by a LocalHive-only test that regular PR CI skips.
+        "Aspire.Hosting.Kafka",
+    };
+
+    [Theory]
+    [MemberData(nameof(CliE2eExcludedRuntimeProjects))]
+    public void RealMapCliE2eDoesNotRunForExcludedRuntimeProjects(string project)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select([], [project], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.DoesNotContain("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+    }
+
     [Fact]
     public void RealMapExtensionReleaseFilesSelectUnitAndE2eWithoutDotNetTests()
     {
@@ -907,9 +995,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
     // baseline must therefore run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate +
     // compile in every language), so a breaking surface change is caught even if the author did not also
-    // touch the tests/PolyglotAppHosts fixtures. The baseline is not a compiled item, so Layer 1 is blind
-    // to it: routing here is the only thing that fires polyglot. Run with --skip-layer1 semantics (no
-    // Layer 1 affected set) to prove the curated layer alone carries both targets.
+    // touch the tests/PolyglotAppHosts fixtures. Run with --skip-layer1 semantics (no Layer 1 affected
+    // set) to prove the curated layer independently preserves both targets.
     [Fact]
     public void RealMapIntegrationAtsBaselineChangeRunsTypeScriptApiCompatAndPolyglot()
     {
