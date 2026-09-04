@@ -977,6 +977,14 @@ public partial class AzureKubernetesEnvironmentResource
 
         if (result.ExitCode != 0)
         {
+            // Azure CLI reports an out-of-band deleted resource group as:
+            //   (ResourceGroupNotFound) Resource group 'deployment-rg' could not be found.
+            // This proves the persisted AKS resource is absent, so cluster cleanup can be skipped.
+            if (result.StandardError.Contains("(ResourceGroupNotFound)", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             throw new InvalidOperationException(
                 $"az resource list failed while checking AKS cluster existence " +
                 $"(exit code {result.ExitCode}): {result.StandardError}");

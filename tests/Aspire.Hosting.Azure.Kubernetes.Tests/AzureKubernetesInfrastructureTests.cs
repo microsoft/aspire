@@ -795,8 +795,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
     }
 
-    [Fact]
-    public async Task DirectAzureDestroySkipsClusterCleanupWhenPersistedAksNoLongerExists()
+    [Theory]
+    [InlineData(0, "", "")]
+    [InlineData(3, "", "(ResourceGroupNotFound) Resource group 'cluster-resource-group' could not be found.")]
+    public async Task DirectAzureDestroySkipsClusterCleanupWhenPersistedAksNoLongerExists(
+        int resourceQueryExitCode,
+        string resourceQueryOutput,
+        string resourceQueryError)
     {
         const string subscriptionId = "00000000-5555-6666-7777-888888888888";
         const string resourceGroup = "cluster-resource-group";
@@ -839,9 +844,9 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         {
             azArguments.Add(arguments);
             return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
-                0,
-                string.Empty,
-                string.Empty));
+                resourceQueryExitCode,
+                resourceQueryOutput,
+                resourceQueryError));
         };
         aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
             .WithDestroy();
@@ -1310,6 +1315,23 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal(
             "az resource list failed while checking AKS cluster existence (exit code 1): authentication failed",
             exception.Message);
+    }
+
+    [Fact]
+    public async Task AksResourceDoesNotExistWhenResourceGroupWasDeleted()
+    {
+        var exists = await AzureKubernetesEnvironmentResource.AksResourceExistsAsync(
+            "/usr/bin/az",
+            "00000000-0000-0000-0000-000000000001",
+            "deleted-rg",
+            "deployment-aks",
+            (path, arguments) => Task.FromResult(
+                new AzureKubernetesEnvironmentResource.AzCommandResult(
+                    3,
+                    "",
+                    "(ResourceGroupNotFound) Resource group 'deleted-rg' could not be found.")));
+
+        Assert.False(exists);
     }
 
     [Fact]

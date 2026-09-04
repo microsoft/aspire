@@ -225,7 +225,11 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             // Step 16: Destroy the application and opted-in external Helm chart before
             // deleting the AKS resource group.
             output.WriteLine("Step 16: Destroying deployment...");
-            await auto.AspireDestroyAsync(counter);
+            await auto.TypeAsync("aspire destroy --yes");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("helm-uninstall-podinfo", timeout: TimeSpan.FromMinutes(10));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             // Step 17: Exit terminal
             await auto.TypeAsync("exit");

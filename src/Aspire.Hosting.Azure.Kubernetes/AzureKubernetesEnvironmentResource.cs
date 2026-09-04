@@ -102,9 +102,13 @@ public partial class AzureKubernetesEnvironmentResource :
                 .AcquireSectionAsync($"Azure:Deployments:{Name}")
                 .ConfigureAwait(false);
 
-            var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().Single();
+            var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault()
+                ?? throw new InvalidOperationException(
+                    $"Azure environment resource required by AKS environment '{Name}' was not found.");
             var destroyAzureStep = context.GetSteps(azureEnvironment)
-                .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
+                .SingleOrDefault(step => step.Name == $"destroy-azure-{azureEnvironment.Name}")
+                ?? throw new InvalidOperationException(
+                    $"Azure destroy step for environment '{azureEnvironment.Name}' was not found.");
 
             // A never-deployed AKS environment has no isolated kubeconfig to acquire. Likewise, a
             // partially deployed environment can persist the cluster ID before any Helm release saves
