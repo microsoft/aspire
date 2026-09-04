@@ -1,0 +1,47 @@
+{
+  "run_id": 33821649109,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33821649109",
+  "analyzed_at": "2026-09-04T02:07:22Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19910,
+    "title": "Fix Copilot setup workflow validation",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/fix-copilot-setup-workflow",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19910"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "id": 100866611880,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33821649109/job/100866611880",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 and unavailable logs; PR only modifies .github/workflows/copilot-setup-steps.yml, unrelated to TypeScript SDK validation. Matches recurring prior cause polyglot-typescript-sdk-validation-node24-failure.",
+      "failed_steps": ["Run TypeScript SDK validation"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 100867886459,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33821649109/job/100867886459",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 and unavailable logs; PR only modifies copilot-setup-steps.yml, unrelated to VS Code extension E2E launch-profiles shard. Matches recurring prior cause vscode-e2e-launch-profiles-flaky.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 100884606244,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33821649109/job/100884606244",
+      "classification": "flaky-test",
+      "reason": "Downstream aggregation job that fails because the upstream TypeScript SDK Validation (Node 24.x) job failed; not caused by PR changes.",
+      "failed_steps": ["Check validation results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["polyglot-typescript-sdk-validation-node24-failure", "vscode-e2e-launch-profiles-flaky"]
+}

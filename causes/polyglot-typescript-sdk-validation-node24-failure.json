@@ -17,6 +17,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests...) / Azure.Npgsql.EntityFrameworkCore.PostgreSQL (windows-latest)",
       "pr_number": 19918,
       "observed_at": "2026-09-03T22:45:50Z"
+    },
+    {
+      "run_id": 33821649109,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33821649109",
+      "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "pr_number": 19910,
+      "observed_at": "2026-09-04T02:07:22Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19361"
