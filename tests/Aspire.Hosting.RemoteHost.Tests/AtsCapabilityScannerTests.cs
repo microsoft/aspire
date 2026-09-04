@@ -585,6 +585,15 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_ExcludedTargetTypes_RemoveCapabilityWhenNoTargetsRemain()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.Capabilities,
+            capability => capability.CapabilityId.EndsWith("/fullyExcludedExporter", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ExcludedTargetTypeCompatibility_UsesCurrentContract()
     {
         Type[] excludedTargetTypes = [typeof(ExcludedEnvironmentResource)];
@@ -1027,6 +1036,13 @@ public class AtsCapabilityScannerTests
         [AspireExport("excludingExporter", ExcludeTargetTypes = [typeof(ExcludedEnvironmentResource)])]
         public static IResourceBuilder<T> ExcludingExporter<T>(IResourceBuilder<T> builder)
             where T : IResourceWithEnvironment
+        {
+            return builder;
+        }
+
+        [AspireExport("fullyExcludedExporter", ExcludeTargetTypes = [typeof(ExcludedEnvironmentResource)])]
+        public static IResourceBuilder<ExcludedEnvironmentResource> FullyExcludedExporter(
+            IResourceBuilder<ExcludedEnvironmentResource> builder)
         {
             return builder;
         }

@@ -886,13 +886,8 @@ public static class AtsCapabilityScanner
                 !excludedTargetTypes.Any(excluded => excluded.IsAssignableFrom(expanded.ClrType)))
             .ToList();
 
-        // Never leave the expansion empty. Several generators treat an empty expansion as "fall back to the
-        // declared target type", which would put the capability back on every implementer and invert the intent.
-        // An exclusion that removes every target is an authoring mistake, not a request to export nothing.
-        if (retained.Count > 0)
-        {
-            capability.ExpandedTargetTypes = retained;
-        }
+        // Targeted capabilities with an empty expansion are removed before code generation.
+        capability.ExpandedTargetTypes = retained;
     }
 
     /// <summary>
