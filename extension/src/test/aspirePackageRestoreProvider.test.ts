@@ -335,6 +335,85 @@ suite('AspirePackageRestoreProvider', () => {
         }
     });
 
+    test('skips automatic restore for .NET AppHosts (.csproj)', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-dotnet-csproj-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = createDotNetConfig(directory, 'AppHost.csproj');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess');
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.ok(spawnStub.notCalled);
+            assert.ok(getAspireCliExecutablePath.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
+    test('skips automatic restore for .NET AppHosts (.vbproj)', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-dotnet-vbproj-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = createDotNetConfig(directory, 'AppHost.vbproj');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess');
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.ok(spawnStub.notCalled);
+            assert.ok(getAspireCliExecutablePath.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
+    test('skips automatic restore for a .NET AppHost even when a stale version marker would otherwise trigger one', async () => {
+        // A stale/mismatched .codegen-version marker is exactly the condition that triggers a
+        // restore for a non-.NET guest AppHost (see the "runs automatic restore..." tests above).
+        // This proves the C# language classification bails out before that marker is ever
+        // consulted, so a .NET AppHost is never restored regardless of marker state.
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-dotnet-stale-marker-restore-'));
+        const folder = createWorkspaceFolder(directory);
+        const configUri = createDotNetConfig(directory, 'AppHost.csproj', '13.0.0-old');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').withArgs(configUri).returns(folder);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess');
+
+        try {
+            await (provider as any)._restoreIfNeeded(configUri, false);
+
+            assert.ok(spawnStub.notCalled);
+            assert.ok(getAspireCliExecutablePath.notCalled);
+        } finally {
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+        }
+    });
+
     test('skips automatic restore in an untrusted workspace', async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-untrusted-restore-'));
         const folder = createWorkspaceFolder(directory);
@@ -402,6 +481,68 @@ suite('AspirePackageRestoreProvider', () => {
 
             assert.strictEqual(thrown, undefined, `_restoreAll should isolate per-config failures instead of rejecting: ${String(thrown)}`);
             assert.strictEqual(spawnStub.callCount, 1, 'the healthy config queued after the failing ones should still be restored');
+        } finally {
+            provider.dispose();
+            for (const dir of allDirs) {
+                fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+            }
+        }
+    });
+
+    test('restores only the stale-marker guest AppHosts when .NET and non-.NET AppHosts share a workspace', async () => {
+        // Exercises the real discovery -> filter -> gate pipeline in _restoreAll (not
+        // _restoreIfNeeded called directly), proving the *combination* of a mixed workspace
+        // behaves correctly: .NET AppHosts never spawn a restore process, an up-to-date guest
+        // AppHost is skipped, and only the stale-marker guest AppHosts are restored.
+        const dotNetCsprojDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-mixed-dotnet-csproj-'));
+        const dotNetFsprojDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-mixed-dotnet-fsproj-'));
+        const staleGuestDir1 = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-mixed-stale-guest-1-'));
+        const staleGuestDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-mixed-stale-guest-2-'));
+        const currentGuestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-mixed-current-guest-'));
+        const allDirs = [dotNetCsprojDir, dotNetFsprojDir, staleGuestDir1, staleGuestDir2, currentGuestDir];
+
+        const dotNetCsprojConfig = createDotNetConfig(dotNetCsprojDir, 'AppHost.csproj', '13.0.0-old');
+        const dotNetFsprojConfig = createDotNetConfig(dotNetFsprojDir, 'AppHost.fsproj');
+        const staleGuestConfig1 = createGuestConfig(staleGuestDir1, '13.0.0-old');
+        const staleGuestConfig2 = createGuestConfig(staleGuestDir2, '13.0.0-old');
+        const currentGuestConfig = createGuestConfig(currentGuestDir, '13.6.0');
+        const configUris = [dotNetCsprojConfig, dotNetFsprojConfig, staleGuestConfig1, staleGuestConfig2, currentGuestConfig];
+        const folders = allDirs.map(dir => createWorkspaceFolder(dir));
+
+        const getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder');
+        configUris.forEach((uri, i) => getWorkspaceFolderStub.withArgs(uri).returns(folders[i]));
+        sandbox.stub(workspaceModule, 'findAspireConfigFiles').resolves(configUris);
+        sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+            get: <T>() => true as T,
+        } as unknown as vscode.WorkspaceConfiguration);
+
+        const getAspireCliExecutablePath = sandbox.stub().resolves('/repo/workspace/bin/aspire');
+        const provider = new AspirePackageRestoreProvider(
+            { getAspireCliExecutablePath } as unknown as AspireTerminalProvider,
+            createConfigInfoProvider('supported', '13.6.0'));
+        const restoredDirs: string[] = [];
+        const spawnStub = sandbox.stub(cliProcessModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            restoredDirs.push(options!.workingDirectory!);
+            const childProcess = createChildProcess();
+            queueMicrotask(() => {
+                options?.exitCallback?.(0);
+                childProcess.emit('close', 0);
+            });
+            return childProcess as unknown as ChildProcessWithoutNullStreams;
+        });
+
+        try {
+            await (provider as any)._restoreAll(false);
+
+            assert.strictEqual(spawnStub.callCount, 2, 'only the two stale-marker guest AppHosts should be restored');
+            // Compare via vscode.Uri.file(...).fsPath (as folders[] already does) rather than the
+            // raw mkdtemp string: on Windows the drive letter casing returned by os.tmpdir() can
+            // differ from the casing vscode.Uri normalizes to, which would otherwise make an
+            // exact-match comparison flaky for reasons unrelated to restore correctness.
+            assert.deepStrictEqual(
+                new Set(restoredDirs),
+                new Set([folders[2].uri.fsPath, folders[3].uri.fsPath]),
+                'restore should target only the stale-marker guest AppHost directories, never the .NET ones');
         } finally {
             provider.dispose();
             for (const dir of allDirs) {
@@ -533,6 +674,21 @@ function createGuestConfig(directory: string, generatedVersion?: string | null):
             language: 'typescript/nodejs',
         },
     }));
+
+    if (generatedVersion !== undefined) {
+        const modulesDirectory = path.join(directory, '.aspire', 'modules');
+        fs.mkdirSync(modulesDirectory, { recursive: true });
+        if (generatedVersion !== null) {
+            fs.writeFileSync(path.join(modulesDirectory, '.codegen-version'), generatedVersion);
+        }
+    }
+
+    return configUri;
+}
+
+function createDotNetConfig(directory: string, appHostFileName: string, generatedVersion?: string | null): vscode.Uri {
+    const configUri = vscode.Uri.file(path.join(directory, 'aspire.config.json'));
+    fs.writeFileSync(configUri.fsPath, JSON.stringify({ appHost: { path: appHostFileName } }));
 
     if (generatedVersion !== undefined) {
         const modulesDirectory = path.join(directory, '.aspire', 'modules');
