@@ -252,9 +252,9 @@ public static class MauiiOSExtensions
     /// The resource name will default to "{projectName}-ios-simulator".
     /// </para>
     /// <para>
-    /// This will run the application on the default iOS simulator. If no simulator is currently running,
-    /// Xcode will launch the default simulator. To target a specific simulator, use the overload with
-    /// simulatorId parameter.
+    /// This will run the application on an iOS simulator. If no simulator ID is provided, Aspire selects
+    /// from the available iOS simulators when the resource starts. To target a specific simulator, use
+    /// the overload with the <c>simulatorId</c> parameter.
     /// </para>
     /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
@@ -296,9 +296,9 @@ public static class MauiiOSExtensions
     /// a unique name.
     /// </para>
     /// <para>
-    /// This will run the application on the default iOS simulator. If no simulator is currently running,
-    /// Xcode will launch the default simulator. To target a specific simulator, use the overload with
-    /// simulatorId parameter.
+    /// This will run the application on an iOS simulator. If no simulator ID is provided, Aspire selects
+    /// from the available iOS simulators when the resource starts. To target a specific simulator, use
+    /// the overload with the <c>simulatorId</c> parameter.
     /// </para>
     /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
@@ -329,7 +329,7 @@ public static class MauiiOSExtensions
     /// </summary>
     /// <param name="builder">The MAUI project resource builder.</param>
     /// <param name="name">The name of the iOS simulator resource.</param>
-    /// <param name="simulatorId">Optional simulator UDID to target a specific iOS simulator. If not specified, uses the default simulator.</param>
+    /// <param name="simulatorId">Optional simulator UDID to target a specific iOS simulator. If not specified, Aspire selects from the available iOS simulators when the resource starts.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -353,7 +353,7 @@ public static class MauiiOSExtensions
     ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     ///
-    /// // Default simulator
+    /// // Select an iOS simulator when the resource starts
     /// var simulator1 = maui.AddiOSSimulator("ios-simulator-default");
     ///
     /// // Specific simulator by UDID

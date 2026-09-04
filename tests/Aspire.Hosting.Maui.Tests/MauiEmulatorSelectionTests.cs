@@ -10,14 +10,17 @@ using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
 using Aspire.Hosting.Maui.Utilities;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
-public class MauiEmulatorSelectionTests
+public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
 {
+    private static readonly object s_androidSdkEnvironmentLock = new();
+
     [Fact]
     public void ParseAvdList_WithMultipleAvds_ReturnsAll()
     {
@@ -79,6 +82,43 @@ public class MauiEmulatorSelectionTests
             """);
 
         Assert.Equal("Pixel_5_API_35", avdName);
+    }
+
+    [Fact]
+    public void FindAndroidToolPath_FallsBackToAndroidSdkRootWhenAndroidHomeDoesNotContainTool()
+    {
+        using var androidHome = TemporaryWorkspace.Create(outputHelper);
+        using var androidSdkRoot = TemporaryWorkspace.Create(outputHelper);
+        var relativePath = Path.Combine("emulator", "emulator");
+        var expectedPath = Path.Combine(androidSdkRoot.Path, relativePath);
+        if (OperatingSystem.IsWindows())
+        {
+            expectedPath += ".exe";
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(expectedPath)!);
+        File.WriteAllText(expectedPath, string.Empty);
+
+        WithAndroidSdkEnvironment(androidHome.Path, androidSdkRoot.Path, () =>
+        {
+            var path = AndroidEmulatorEnumerator.FindAndroidToolPath("emulator", relativePath);
+
+            Assert.Equal(expectedPath, path);
+        });
+    }
+
+    [Fact]
+    public void FindAndroidToolPath_ReturnsPathExecutableWhenNoSdkRootContainsTool()
+    {
+        using var androidHome = TemporaryWorkspace.Create(outputHelper);
+        var expectedPath = OperatingSystem.IsWindows() ? "emulator.exe" : "emulator";
+
+        WithAndroidSdkEnvironment(androidHome.Path, androidSdkRoot: null, () =>
+        {
+            var path = AndroidEmulatorEnumerator.FindAndroidToolPath("emulator", Path.Combine("emulator", "emulator"));
+
+            Assert.Equal(expectedPath, path);
+        });
     }
 
     [Fact]
@@ -243,6 +283,49 @@ public class MauiEmulatorSelectionTests
     }
 
     [Fact]
+    public async Task PublishMode_WithOmittedTargets_DoesNotEnumerateOrSelectTargets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(projectPath, MauiTestHelper.CreateProjectContent("net10.0-android;net10.0-ios"));
+
+        using var appBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var maui = appBuilder.AddMauiProject("mauiapp", projectPath);
+        var android = maui.AddAndroidEmulator("android").Resource;
+        var iosSimulator = maui.AddiOSSimulator("ios-simulator").Resource;
+
+        await using var app = appBuilder.Build();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var subscriber = new MauiEmulatorSelectionEventSubscriber(
+            interactionService,
+            app.Services.GetRequiredService<ResourceNotificationService>(),
+            app.Services.GetRequiredService<ResourceLoggerService>(),
+            app.Services.GetRequiredService<ILogger<MauiEmulatorSelectionEventSubscriber>>())
+        {
+            AndroidEnumeratorOverride = (_, _) => throw new InvalidOperationException("Android enumeration should not run in publish mode."),
+            IOSSimulatorEnumeratorOverride = (_, _) => throw new InvalidOperationException("iOS simulator enumeration should not run in publish mode."),
+            EnsureAndroidEmulatorRunningOverride = (_, _, _) => throw new InvalidOperationException("Android emulator startup should not run in publish mode.")
+        };
+
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        await subscriber.SubscribeAsync(
+            eventing,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            CancellationToken.None);
+
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(android, app.Services), CancellationToken.None);
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(iosSimulator, app.Services), CancellationToken.None);
+
+        Assert.True(android.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var androidSelection));
+        Assert.True(iosSimulator.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var iosSelection));
+        Assert.Null(androidSelection.SelectedId);
+        Assert.Null(iosSelection.SelectedId);
+        Assert.Null(MauiPlatformHelper.GetSelectedTargetMsBuildArgument(android));
+        Assert.Null(MauiPlatformHelper.GetSelectedTargetMsBuildArgument(iosSimulator));
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
     public async Task NonInteractiveMultipleTargets_ThrowsActionableError()
     {
         await using var env = await EmulatorSelectionTestEnvironment.CreateAsync(
@@ -257,6 +340,8 @@ public class MauiEmulatorSelectionTests
             () => env.PublishBeforeResourceStartedAsync(env.Android));
 
         Assert.Contains("interactive selection is not available", ex.Message);
+        Assert.Contains("adb serial", ex.Message);
+        Assert.Contains("Available Android Virtual Devices", ex.Message);
         Assert.Contains("Pixel_5_API_35", ex.Message);
     }
 
@@ -416,6 +501,26 @@ public class MauiEmulatorSelectionTests
         interaction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInput>());
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => publishTask);
+    }
+
+    private static void WithAndroidSdkEnvironment(string? androidHome, string? androidSdkRoot, Action action)
+    {
+        lock (s_androidSdkEnvironmentLock)
+        {
+            var previousAndroidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
+            var previousAndroidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+            try
+            {
+                Environment.SetEnvironmentVariable("ANDROID_HOME", androidHome);
+                Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", androidSdkRoot);
+                action();
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ANDROID_HOME", previousAndroidHome);
+                Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", previousAndroidSdkRoot);
+            }
+        }
     }
 
     private sealed class EmulatorSelectionTestEnvironment : IAsyncDisposable

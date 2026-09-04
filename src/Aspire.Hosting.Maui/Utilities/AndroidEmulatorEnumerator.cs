@@ -197,7 +197,7 @@ internal static class AndroidEmulatorEnumerator
             ["devices"],
             s_adbTimeout,
             "adb devices",
-            "Unable to list Android devices. Install Android SDK platform-tools and ensure adb is on PATH or ANDROID_HOME is set.",
+            "Unable to list Android devices. Install Android SDK platform-tools and ensure adb is on PATH or ANDROID_HOME or ANDROID_SDK_ROOT is set.",
             logger,
             cancellationToken).ConfigureAwait(false);
 
@@ -277,15 +277,22 @@ internal static class AndroidEmulatorEnumerator
         return !line.Contains(' ');
     }
 
-    private static string FindAndroidToolPath(string executableName, string androidSdkRelativePath)
+    internal static string FindAndroidToolPath(string executableName, string androidSdkRelativePath)
+    {
+        return FindAndroidToolPath(executableName, androidSdkRelativePath, GetAndroidSdkRoots());
+    }
+
+    private static string FindAndroidToolPath(string executableName, string androidSdkRelativePath, IEnumerable<string> androidSdkRoots)
     {
         var executable = OperatingSystem.IsWindows() ? $"{executableName}.exe" : executableName;
-        var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME")
-            ?? Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
-
-        if (!string.IsNullOrEmpty(androidHome))
+        foreach (var androidSdkRoot in androidSdkRoots)
         {
-            var path = Path.Combine(androidHome, androidSdkRelativePath);
+            if (string.IsNullOrWhiteSpace(androidSdkRoot))
+            {
+                continue;
+            }
+
+            var path = Path.Combine(androidSdkRoot, androidSdkRelativePath);
             if (!Path.HasExtension(path))
             {
                 path = OperatingSystem.IsWindows() ? $"{path}.exe" : path;
@@ -298,6 +305,22 @@ internal static class AndroidEmulatorEnumerator
         }
 
         return executable;
+    }
+
+    private static IEnumerable<string> GetAndroidSdkRoots()
+    {
+        var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
+        if (!string.IsNullOrWhiteSpace(androidHome))
+        {
+            yield return androidHome;
+        }
+
+        var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+        if (!string.IsNullOrWhiteSpace(androidSdkRoot) &&
+            !string.Equals(androidSdkRoot, androidHome, StringComparison.Ordinal))
+        {
+            yield return androidSdkRoot;
+        }
     }
 
     private static async Task<ToolResult> RunToolAsync(
