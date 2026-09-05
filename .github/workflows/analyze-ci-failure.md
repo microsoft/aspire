@@ -1375,7 +1375,7 @@ Field details:
 - `failed_tests[].stack_trace`: Copy the stack trace from the matching TRX test failure, or use `null` when it is absent. The validator replaces `error` and `stack_trace` with the bounded trusted TRX values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
-- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine distinct flaky tests merely to fit within it.
+- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine or omit distinct flaky tests merely to fit within it.
 
 #### 3b. Per-cause files
 
@@ -1475,7 +1475,7 @@ The failure is a deterministic code or repository failure on main. Indicators:
 - Deterministic test, API compatibility, lint, or formatting failures on main
 - Semantic merge conflicts where independently valid changes are incompatible together
 
-Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence and candidate history is available and complete. If candidate history is unavailable or incomplete, do not name any PR as causal, including the triggering merge; report only repository-level evidence.
+Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence and candidate history comes from a complete `ahead` comparison. Identical, behind, diverged, malformed, or incomplete comparisons are non-attributable; report only repository-level evidence and do not name any PR as causal, including the triggering merge.
 
 ## Analysis Process
 
@@ -1517,7 +1517,7 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
 ### If ALL failures are Main Repository Breakages:
 
-Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context when candidate history is available and complete, and include the main candidate range in `main_context`. If candidate history is unavailable or incomplete, do not identify a causal PR or claim a candidate range. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue.
+Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context when candidate history comes from a complete `ahead` comparison, and include the main candidate range in `main_context`. Otherwise, do not identify a causal PR or claim a candidate range. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue. The publisher derives the public issue title and diagnostic text from trusted run context; agent-proposed main-breakage title and error-pattern fields are not published as attribution.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 

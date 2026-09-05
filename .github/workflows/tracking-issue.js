@@ -92,9 +92,9 @@ function normalizeCanonicalActions(actions, issueNumber) {
     }));
 }
 
-// Returns an ordered, side-effect-free mutation plan. `isMatchingIssue` is an
-// Identity extension points let producers validate marker metadata and prefer
-// the canonical marker over historical aliases.
+// Returns an ordered, side-effect-free mutation plan. Identity callbacks let
+// producers validate marker metadata and prefer the canonical marker over
+// historical aliases.
 function planIssueReconciliation({
     issues,
     label,
@@ -108,6 +108,7 @@ function planIssueReconciliation({
     isCanonicalIssue = () => false,
     reopen = 'when-changing',
     actionsForCanonical = () => [],
+    canReconcileDuplicates = () => true,
 }) {
     const matches = findIssuesForMarkers(
         issues,
@@ -156,7 +157,7 @@ function planIssueReconciliation({
     }
     actions.push(...canonicalActions);
 
-    if (closeDuplicates) {
+    if (closeDuplicates && canReconcileDuplicates(canonical, { matches, canonicalActions })) {
         for (const duplicate of matches.filter(issue => issue.number !== canonical.number)) {
             if (duplicate.state === 'closed') {
                 continue;
@@ -200,7 +201,10 @@ async function executeAction(transport, action, canonicalIssueNumber) {
     const issueNumber = action.issueNumber ?? canonicalIssueNumber;
     switch (action.type) {
         case 'update':
-            await transport.updateIssue(issueNumber, { body: action.body });
+            await transport.updateIssue(issueNumber, {
+                ...(action.body === undefined ? {} : { body: action.body }),
+                ...(action.title === undefined ? {} : { title: action.title }),
+            });
             break;
         case 'comment':
             await transport.addComment(issueNumber, action.body);

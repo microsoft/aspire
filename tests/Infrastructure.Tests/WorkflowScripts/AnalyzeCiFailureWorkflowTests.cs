@@ -800,6 +800,61 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsFlakyTestWithoutMatchingCause()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":123,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.First","job":"Tests","error":"first","stack_trace":"","classification":"flaky","reason":"Intermittent"},
+               {"name":"Tests.Second","job":"Tests","error":"second","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
+             "causes":["first-failure"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "first-failure.json",
+            """{"id":"first-failure","type":"flaky-test","title":"First failure","test_name":"Tests.First","error_pattern":"first","job_ids":[123]}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Every flaky test and job must be covered by a matching cause",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAcceptsCompleteFlakyCoverageWithDuplicateJobNames()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.First","job":"Tests","error":"first","stack_trace":"","classification":"flaky","reason":"Intermittent"},
+               {"name":"Tests.Second","job":"Tests","error":"second","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
+             "causes":["first-failure","second-failure"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Tests"},{"id":2,"name":"Tests"}]""",
+            new Dictionary<string, string>
+            {
+                ["first-failure.json"] =
+                    """{"id":"first-failure","type":"flaky-test","title":"First failure","test_name":"Tests.First","error_pattern":"first","job_ids":[1]}""",
+                ["second-failure.json"] =
+                    """{"id":"second-failure","type":"flaky-test","title":"Second failure","test_name":"Tests.Second","error_pattern":"second","job_ids":[2]}""",
+            });
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRebuildsFailedTestDiagnosticsFromTrustedEvidence()
     {
         await WriteValidationFixtureAsync(
@@ -2169,7 +2224,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             StringComparison.Ordinal);
 
         Assert.Contains("cause.type === 'main-repository-breakage'", s_causeIssuePublisher, StringComparison.Ordinal);
-        Assert.Contains("? '[Main CI Failure]'", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains("`[Main CI Failure] ${mainIssueDescription(run)}`", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains(
+            "The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.",
+            s_causeIssuePublisher,
+            StringComparison.Ordinal);
         Assert.Contains("return [CAUSE_LABEL, 'main-ci-break'];", s_causeIssuePublisher, StringComparison.Ordinal);
 
         ForEachExecutableWorkflow(workflow =>
@@ -2250,6 +2309,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("A mixed verdict for main requires a main-breakage job and cause plus transient job or test evidence and cause\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("if [ \"$CODE_ISSUE_JOB_COUNT\" -eq 0 ] ||", validationScript, StringComparison.Ordinal);
         Assert.Contains("A mixed verdict for a pull request requires a code-issue job plus transient job or test evidence and a transient cause\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Every flaky test and job must be covered by a matching cause\"\nexit 1", validationScript, StringComparison.Ordinal);
 
         Assert.Contains("### If failures include Transient Test Failures and no deterministic failures:", s_sourceWorkflow, StringComparison.Ordinal);
         Assert.Contains("### If ALL failures are Non-Transient PR Code Issues:", s_sourceWorkflow, StringComparison.Ordinal);
@@ -2259,11 +2319,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "candidate history is available and complete. If candidate history is unavailable or incomplete, do not name any PR as causal, including the triggering merge",
+            "candidate history comes from a complete `ahead` comparison. Identical, behind, diverged, malformed, or incomplete comparisons are non-attributable",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "If candidate history is unavailable or incomplete, do not identify a causal PR or claim a candidate range",
+            "populate `triggering_merge_pr` only as non-causal context when candidate history comes from a complete `ahead` comparison",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2295,7 +2355,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "`causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt.",
+            "every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause",
+            s_sourceWorkflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "The publisher derives the public issue title and diagnostic text from trusted run context; agent-proposed main-breakage title and error-pattern fields are not published as attribution.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -4338,6 +4402,27 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal("unavailable", status.RootElement.GetProperty("state").GetString());
     }
 
+    [Theory]
+    [InlineData("""[{"status":"identical","total_commits":0,"commits":[]}]""")]
+    [InlineData("""[{"status":"behind","total_commits":0,"commits":[]}]""")]
+    [InlineData("""[{"status":"diverged","total_commits":1,"commits":[{"sha":"diverged","commit":{"message":"Diverged commit"},"html_url":"https://github.com/microsoft/aspire/commit/diverged"}]}]""")]
+    [InlineData("""[{"status":"unknown","total_commits":0,"commits":[]}]""")]
+    [InlineData("""[{"status":"ahead","total_commits":0,"commits":[]}]""")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CandidateMergeCollectionRequiresAheadComparison(string response)
+    {
+        var fakeGh = $"#!/usr/bin/env bash\nprintf '%s\\n' '{response}'";
+        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
+        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
+
+        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]" + Environment.NewLine, await File.ReadAllTextAsync(candidatesPath));
+        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
+        Assert.Equal("unavailable", status.RootElement.GetProperty("state").GetString());
+    }
+
     [Fact]
     [RequiresTools(["bash", "jq"])]
     public async Task CandidateMergeCollectionRequiresEveryUniqueCommit()
@@ -4349,6 +4434,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 cat <<'JSON'
             [
               {
+                "status": "ahead",
                 "total_commits": 2,
                 "commits": [
                   {"sha":"duplicate","commit":{"message":"Duplicate commit"},"html_url":"https://github.com/microsoft/aspire/commit/duplicate"}
@@ -4394,6 +4480,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 cat <<'JSON'
             [
               {
+                "status": "ahead",
                 "total_commits": 2,
                 "commits": [
                   {"sha":"unavailable","commit":{"message":"Unavailable commit"},"html_url":"https://github.com/microsoft/aspire/commit/unavailable"}
@@ -4452,6 +4539,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 cat <<'JSON'
             [
               {
+                "status": "ahead",
                 "total_commits": 1,
                 "commits": [
                   {"sha":"associated","commit":{"message":"Associated commit"},"html_url":"https://github.com/microsoft/aspire/commit/associated"}
@@ -4503,7 +4591,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             #!/usr/bin/env bash
             case "$*" in
               *"compare/trusted-success...trusted-failure"*)
-                echo '[{"total_commits":1,"commits":[{"sha":"ambiguous","commit":{"message":"Ambiguous commit"},"html_url":"https://github.com/microsoft/aspire/commit/ambiguous"}]}]'
+                echo '[{"status":"ahead","total_commits":1,"commits":[{"sha":"ambiguous","commit":{"message":"Ambiguous commit"},"html_url":"https://github.com/microsoft/aspire/commit/ambiguous"}]}]'
                 ;;
               *"commits/ambiguous/pulls"*)
                 cat <<'JSON'
@@ -4541,6 +4629,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 cat <<'JSON'
             [
               {
+                "status": "ahead",
                 "total_commits": 1,
                 "commits": [
                   {"sha":"direct","commit":{"message":"Direct commit"},"html_url":"https://github.com/microsoft/aspire/commit/direct"}
@@ -4584,6 +4673,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 cat <<'JSON'
             [
               {
+                "status": "ahead",
                 "total_commits": 5,
                 "commits": [
                   {"sha":"associated","commit":{"message":"Associated commit"},"html_url":"https://github.com/microsoft/aspire/commit/associated"}
@@ -5298,7 +5388,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    public void PublicationUsesBoundedOccurrenceRendererWithoutBlockingOtherEffects()
+    public void PublicationUsesBoundedOccurrenceRendererAndSuppressesUnsafeDuplicateReconciliation()
     {
         Assert.Contains("const MAX_ISSUE_BODY_BYTES = 65_000;", s_causeIssuePublisher, StringComparison.Ordinal);
         Assert.Contains("Buffer.byteLength(body, 'utf8')", s_causeIssuePublisher, StringComparison.Ordinal);
@@ -5307,9 +5397,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_causeIssuePublisher,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update.",
+            "Skipping occurrence update and duplicate reconciliation.",
             s_causeIssuePublisher,
             StringComparison.Ordinal);
+        Assert.Contains("canReconcileDuplicates: () => canReconcileDuplicates", s_causeIssuePublisher, StringComparison.Ordinal);
         Assert.Contains("occurrenceSection(rows, totalOccurrenceCount)", s_causeIssuePublisher, StringComparison.Ordinal);
     }
 

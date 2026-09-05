@@ -216,11 +216,17 @@ function renderOccurrenceHistory(body, newRow, totalOccurrenceCount) {
     return rendered;
 }
 
-function buildIssueTitle(cause) {
-    const prefix = cause.type === 'main-repository-breakage'
-        ? '[Main CI Failure]'
-        : '[CI Failure]';
-    return `${prefix} ${sanitizeSingleLine(cause.title, 238)}`;
+function mainIssueDescription(run) {
+    return `Main branch CI failure at ${sanitizeSingleLine(
+        run.mainContext?.failedSha ?? 'unknown',
+        238)}`;
+}
+
+function buildIssueTitle(cause, run) {
+    if (cause.type === 'main-repository-breakage') {
+        return `[Main CI Failure] ${mainIssueDescription(run)}`;
+    }
+    return `[CI Failure] ${sanitizeSingleLine(cause.title, 238)}`;
 }
 
 function labelsForCause(cause) {
@@ -235,6 +241,12 @@ function labelsForCause(cause) {
 
 function buildIssueBody(cause, run, totalOccurrenceCount = 1) {
     const jobs = renderJobNames(cause, '<br>');
+    const description = cause.type === 'main-repository-breakage'
+        ? mainIssueDescription(run)
+        : cause.title;
+    const errorPattern = cause.type === 'main-repository-breakage'
+        ? 'The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.'
+        : cause.error_pattern;
     const lines = [
         causeMarker(cause),
         causeTypeMarker(cause),
@@ -268,16 +280,51 @@ function buildIssueBody(cause, run, totalOccurrenceCount = 1) {
         '',
         '## Error Message',
         '',
-        ...renderIndentedBlock(cause.error_pattern),
+        ...renderIndentedBlock(errorPattern),
         '',
         '## Description',
         '',
-        renderCodeSpan(cause.title),
+        renderCodeSpan(description),
         '',
         `**Type**: ${cause.type}`,
         '',
         occurrenceSection([occurrenceRow(cause, run)], totalOccurrenceCount));
     return lines.join('\n');
+}
+
+function parseMainIssuePrefix(prefix) {
+    const lines = prefix.replace(/\n+$/, '').split('\n');
+    const typeIndexes = lines
+        .map((line, index) => line === '**Type**: main-repository-breakage' ? index : -1)
+        .filter(index => index >= 0);
+    if (typeIndexes.length !== 1) {
+        throw new OccurrenceRenderError('ambiguous main issue type');
+    }
+
+    const typeIndex = typeIndexes[0];
+    return {
+        generated: lines.slice(0, typeIndex + 1).join('\n'),
+        suffix: lines.slice(typeIndex + 1).join('\n').replace(/^\n+|\n+$/g, ''),
+    };
+}
+
+function migrateMainIssueBody(currentBody, canonicalBody) {
+    const current = parseOccurrenceSection(currentBody);
+    const canonical = parseOccurrenceSection(canonicalBody);
+    const currentPrefix = parseMainIssuePrefix(current.prefix);
+    const canonicalPrefix = parseMainIssuePrefix(canonical.prefix);
+    const occurrences = occurrenceSection(
+        current.rows,
+        current.totalOccurrenceCount ?? current.rows.length);
+    const rendered = [
+        canonicalPrefix.generated,
+        currentPrefix.suffix,
+        occurrences,
+    ].filter(part => part.length > 0).join('\n\n');
+    if (!isWithinIssueBodyBudget(rendered)) {
+        throw new OccurrenceRenderError('migrated issue body exceeds the publication budget');
+    }
+    return rendered;
 }
 
 function isWithinIssueBodyBudget(body) {
@@ -454,6 +501,7 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
     } = await readStoredCauseFamily(memoryCausesDirectory, cause);
     const totalOccurrenceCount = storedOccurrenceCount(storedOccurrences);
     const initialBody = buildIssueBody(cause, run, totalOccurrenceCount ?? 1);
+    const issueTitle = buildIssueTitle(cause, run);
     const marker = causeMarker(cause);
     const alternateMarkers = (cause.aliases ?? [])
         .filter(causeId => LEGACY_CAUSE_ID_PATTERN.test(causeId))
@@ -473,44 +521,60 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
 
     await ensureCauseLabels(github, context, cause);
     let occurrenceAlreadyPublished = false;
+    let canReconcileDuplicates = true;
     const result = await tracking.executeIssueReconciliation(transport, core, {
         issues,
         label: CAUSE_LABEL,
         labels: labelsForCause(cause),
         marker,
         alternateMarkers,
-        title: buildIssueTitle(cause),
+        title: issueTitle,
         buildBody: () => initialBody,
         closeDuplicates: true,
         reopen: 'when-changing',
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
         isCanonicalIssue: issue => normalizedBodyLines(issue.body)[0] === marker,
+        canReconcileDuplicates: () => canReconcileDuplicates,
         actionsForCanonical: (issue, { created }) => {
             if (created) {
                 return [];
             }
+            let updatedBody = issue.body;
             if (isOccurrencePublished(issue.body, storedOccurrences, run.runId)) {
                 occurrenceAlreadyPublished = true;
+            } else {
+                try {
+                    updatedBody = renderOccurrenceHistory(
+                        issue.body,
+                        occurrenceRow(cause, run),
+                        totalOccurrenceCount);
+                } catch (error) {
+                    if (!(error instanceof OccurrenceRenderError)) {
+                        throw error;
+                    }
+                    core.warning(
+                        `Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update and duplicate reconciliation.`);
+                    canReconcileDuplicates = false;
+                    return cause.type === 'main-repository-breakage' && issue.title !== issueTitle
+                        ? [{ type: 'update', title: issueTitle }]
+                        : [];
+                }
+            }
+            if (cause.type === 'main-repository-breakage') {
+                updatedBody = migrateMainIssueBody(updatedBody, initialBody);
+            }
+            if (updatedBody === issue.body &&
+                (cause.type !== 'main-repository-breakage' || issue.title === issueTitle)) {
                 return [];
             }
-            let updatedBody;
-            try {
-                updatedBody = renderOccurrenceHistory(
-                    issue.body,
-                    occurrenceRow(cause, run),
-                    totalOccurrenceCount);
-            } catch (error) {
-                if (!(error instanceof OccurrenceRenderError)) {
-                    throw error;
-                }
-                core.warning(
-                    `Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update.`);
-                return issue.state === 'closed' ? [{ type: 'reopen' }] : [];
-            }
-            return [{
+            const update = {
                 type: 'update',
                 body: updatedBody,
-            }];
+            };
+            if (cause.type === 'main-repository-breakage') {
+                update.title = issueTitle;
+            }
+            return [update];
         },
     });
 

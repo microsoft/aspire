@@ -189,6 +189,10 @@ function resolveCauses({
             })
             .find(record => record.issue_url)
             ?.issue_url;
+        const canonicalFamilyAliases = unique(canonicalPriorRecords
+            .filter(record => record.type === undefined || record.type === cause.type)
+            .flatMap(record => [record.id, ...(record.aliases ?? [])]))
+            .sort();
         const aliases = unique([
             ...(canonicalPriorCause?.aliases ?? []),
             ...(proposedAlias && proposedPriorCause.id !== canonicalId ? [proposedPriorCause.id] : []),
@@ -196,6 +200,7 @@ function resolveCauses({
             ...(supersededPriorCause
                 ? [supersededPriorCause.id, ...(supersededPriorCause.aliases ?? [])]
                 : []),
+            ...canonicalFamilyAliases,
             ...normalizedLegacyRecords.map(record => record.id),
             ...compatibleNormalizedRecords.flatMap(record => [
                 record.id,

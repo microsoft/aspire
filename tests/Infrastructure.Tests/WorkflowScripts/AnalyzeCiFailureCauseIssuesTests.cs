@@ -160,7 +160,20 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                     {
                         number = 20,
                         state = "closed",
-                        body = "<!-- ci-failure-cause:oldest-sample-test -->\n<!-- ci-failure-cause-type:flaky-test -->\n"
+                        body = """
+                            <!-- ci-failure-cause:oldest-sample-test -->
+                            <!-- ci-failure-cause-type:flaky-test -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Tests / Sample ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
                     }
                 }
             });
@@ -213,6 +226,16 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Equal(10, result.Publish.Number);
         Assert.False(result.Publish.Created);
         Assert.True(result.Publish.Skipped);
+        Assert.Empty(result.Publish.DuplicatesClosed);
+        Assert.DoesNotContain("update", result.Calls);
+        Assert.DoesNotContain("createComment", result.Calls);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 10).State);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 1000).State);
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains(
+                "Skipping occurrence update and duplicate reconciliation",
+                StringComparison.Ordinal));
         var occurrence = Assert.Single(
             result.StoredCause.GetProperty("occurrences").EnumerateArray(),
             occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
@@ -793,7 +816,10 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                 }
             });
 
+        Assert.True(result.Publish.Skipped);
+        Assert.Empty(result.Publish.DuplicatesClosed);
         Assert.DoesNotContain("update", result.Calls);
+        Assert.DoesNotContain("createComment", result.Calls);
         Assert.Contains(
             result.Warnings,
             warning => warning.Contains("ambiguous managed occurrence section", StringComparison.Ordinal));
@@ -881,7 +907,20 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                     {
                         number = 12,
                         state = "open",
-                        body = "<!-- ci-failure-cause:Legacy.Worker_Crash -->\n<!-- ci-failure-cause-type:infra-failure -->\n"
+                        body = """
+                            <!-- ci-failure-cause:Legacy.Worker_Crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
                     }
                 }
             });
@@ -970,7 +1009,14 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             new
             {
                 workspace = _workspace.Path,
-                cause = CreateCause(type: "main-repository-breakage"),
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    title = "Introduced by PR #99999",
+                    error_pattern = "PR #99999 broke main",
+                    job_names = new[] { "Build / Windows" }
+                },
                 issues = Array.Empty<object>(),
                 runScope = "main",
                 mainContext = new
@@ -983,7 +1029,9 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             });
 
         var issue = Assert.Single(result.Issues);
-        Assert.Equal("[Main CI Failure] Worker process crashed", issue.Title);
+        Assert.Equal(
+            "[Main CI Failure] Main branch CI failure at 2222222222222222222222222222222222222222",
+            issue.Title);
         Assert.Equal(["ci-failure-cause", "main-ci-break"], issue.Labels);
         Assert.StartsWith(
             "<!-- ci-failure-cause:worker-crash -->\n<!-- ci-failure-cause-type:main-repository-breakage -->\n",
@@ -995,6 +1043,12 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             "Triggering merge PR (context only, not necessarily causal): #42 `` Improve `CI` ``",
             issue.Body,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "    The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.",
+            issue.Body,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("PR #99999 broke main", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Introduced by PR #99999", issue.Body, StringComparison.Ordinal);
         Assert.Equal(
             "https://github.com/microsoft/aspire/issues/1000",
             result.StoredCause.GetProperty("issue_url").GetString());
@@ -1004,7 +1058,7 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
     [InlineData(238)]
     [InlineData(239)]
     [RequiresTools(["node"])]
-    public async Task PublishBoundsMainBreakageIssueTitle(int titleLength)
+    public async Task PublishIgnoresAgentMainBreakageIssueTitle(int titleLength)
     {
         var result = await InvokeHarnessAsync<PublishResult>(
             "publishCauseIssues",
@@ -1029,7 +1083,102 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                 }
             });
 
-        Assert.Equal(256, Assert.Single(result.Issues).Title.Length);
+        Assert.Equal(
+            "[Main CI Failure] Main branch CI failure at 2222222222222222222222222222222222222222",
+            Assert.Single(result.Issues).Title);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishRefreshesMainBreakageDetailsAndPreservesOperatorNotes()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    title = "Introduced by PR #99999",
+                    error_pattern = "PR #99999 broke main",
+                    job_names = new[] { "Build / Windows" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        title = "[Main CI Failure] Introduced by PR #99999",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:main-repository-breakage -->
+
+                            ## Build Information
+
+                            Build: https://github.com/microsoft/aspire/actions/runs/100
+
+                            ## Error Message
+
+                                PR #99999 broke main
+
+                            ## Description
+
+                            ` Introduced by PR #99999 `
+
+                            **Type**: main-repository-breakage
+
+                            ## Operator notes
+
+                            Preserve this human-authored text.
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | main |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                },
+                runScope = "main",
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222",
+                    candidateHistoryState = "available",
+                    triggeringMerge = new { number = 42, title = "Improve CI" }
+                }
+            });
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(
+            "[Main CI Failure] Main branch CI failure at 2222222222222222222222222222222222222222",
+            issue.Title);
+        Assert.Contains("Build: https://github.com/microsoft/aspire/actions/runs/991", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("Last successful main SHA: `1111111111111111111111111111111111111111`", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("Failed main SHA: `2222222222222222222222222222222222222222`", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("Preserve this human-authored text.", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("[100](", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("[991](", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("PR #99999 broke main", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Introduced by PR #99999", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("update", result.Calls);
     }
 
     [Theory]

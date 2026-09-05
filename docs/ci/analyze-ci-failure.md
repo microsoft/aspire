@@ -30,9 +30,10 @@ Missing or ambiguous associations do not produce a guessed subject.
 
 For a failed `main` run, the PR associated with the failed push is context, not
 the presumed cause. The workflow considers every merge since the most recent
-successful `main` run. Candidate attribution is withheld when run history is
-incomplete or when a candidate commit does not map to exactly one PR merged
-into `main`.
+successful `main` run. Candidate attribution requires a complete GitHub
+comparison whose relation is `ahead`; identical, behind, diverged, malformed,
+or incomplete comparisons are non-attributable. A candidate commit must also
+map to exactly one PR merged into `main`.
 
 PR comments and pull-request reruns require an unambiguous subject PR that is
 still open and unlocked immediately before the mutation. Validated transient
@@ -55,6 +56,13 @@ evidence rather than copied from agent output.
 
 External and agent-supplied text is bounded and rendered inert before it is
 used in workflow diagnostics, Markdown comments, or issue bodies.
+`[Main CI Failure]` issue titles and diagnostic text are publisher-owned and
+derived from trusted run and SHA context. Agent-proposed main-breakage titles
+and patterns remain matching metadata and are not published as attribution.
+Existing matching issues are migrated to the trusted rendering while retaining
+their occurrence history and operator notes appended after the generated
+details. Unsupported legacy body shapes are left intact rather than blocking
+other publication work, but their titles are still migrated.
 
 ## Failed-test provenance
 
@@ -65,7 +73,9 @@ that artifact are stamped with the corresponding GitHub Actions job name.
 Complete evidence requires the agent to report exactly the same unique
 `{test, job}` records. Diagnostic rebinding and flaky-cause validation use that
 exact pair, so a real test from one job cannot be attributed to another failed
-job.
+job. Every flaky `{test, job}` pair must also be covered by a matching cause.
+The ten-cause budget fails closed rather than silently dropping distinct flaky
+test identities.
 
 GitHub's artifact API does not expose a producer job ID. The selector therefore
 uses the job and artifact naming contract in

@@ -51,7 +51,7 @@ function makeGithub(store) {
                     store.issues.push(issue);
                     return { data: toRestIssue(issue) };
                 },
-                update: async ({ issue_number, state, state_reason, body }) => {
+                update: async ({ issue_number, state, state_reason, title, body }) => {
                     calls.push('update');
                     const issue = store.issues.find(candidate => candidate.number === issue_number);
                     if (!issue) {
@@ -59,6 +59,7 @@ function makeGithub(store) {
                     }
                     if (state !== undefined) { issue.state = state; }
                     if (state_reason !== undefined) { issue.stateReason = state_reason; }
+                    if (title !== undefined) { issue.title = title; }
                     if (body !== undefined) { issue.body = body; }
                     return { data: issue };
                 },

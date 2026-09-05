@@ -865,6 +865,90 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RetainsReverseAliasFamilyForExistingCanonicalCause()
+    {
+        static object CreatePayload(bool reverse)
+        {
+            object[] priorCauses =
+            [
+                new
+                {
+                    id = "canonical-infra-cause",
+                    type = "infra-failure",
+                    title = "Canonical infrastructure cause",
+                    error_pattern = "Infrastructure failed.",
+                    aliases = new[] { "canonical-marker" }
+                },
+                new
+                {
+                    id = "historical-infra-alias",
+                    canonical_id = "canonical-infra-cause",
+                    type = "infra-failure",
+                    aliases = new[] { "historical-marker" }
+                },
+                new
+                {
+                    id = "oldest-infra-alias",
+                    canonical_id = "historical-infra-alias",
+                    type = "infra-failure",
+                    aliases = new[] { "oldest-marker" }
+                }
+            ];
+            if (reverse)
+            {
+                Array.Reverse(priorCauses);
+            }
+
+            return new
+            {
+                analysis = new
+                {
+                    causes = new[] { "canonical-infra-cause" },
+                    failed_jobs = new[]
+                    {
+                        new
+                        {
+                            id = 1,
+                            name = "Tests / Sample / Sample (ubuntu-latest)",
+                            classification = "transient-infra",
+                            reason = "Infrastructure failed."
+                        }
+                    },
+                    failed_tests = Array.Empty<object>()
+                },
+                causes = new[]
+                {
+                    new
+                    {
+                        id = "canonical-infra-cause",
+                        type = "infra-failure",
+                        title = "Current infrastructure cause",
+                        error_pattern = "Infrastructure failed.",
+                        job_ids = new[] { 1 }
+                    }
+                },
+                priorCauses,
+                retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+            };
+        }
+
+        JsonElement forward = await ResolveAsync(CreatePayload(reverse: false));
+        JsonElement reversed = await ResolveAsync(CreatePayload(reverse: true));
+
+        Assert.Equal(forward.GetRawText(), reversed.GetRawText());
+        Assert.Equal(
+            [
+                "canonical-marker",
+                "historical-infra-alias",
+                "historical-marker",
+                "oldest-infra-alias",
+                "oldest-marker"
+            ],
+            ReadStrings(FindOnlyCause(forward), "aliases"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ExplicitAliasRemainsAuthoritativeWhenMatchersAreAmbiguous()
     {
         const string canonicalCauseId = "canonical-infra-cause";
