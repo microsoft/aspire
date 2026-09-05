@@ -35,15 +35,37 @@ if ! gh api --paginate --slurp \
   exit 0
 fi
 
+if ! jq -e '
+    type == "array" and
+    length > 0 and
+    (.[0].total_commits | type) == "number" and
+    .[0].total_commits >= 0 and
+    .[0].total_commits == (.[0].total_commits | floor) and
+    all(.[]; type == "object" and (.commits | type) == "array") and
+    all(.[].commits[];
+      type == "object" and
+      (.sha | type) == "string" and
+      (.sha | length) > 0 and
+      (.commit | type) == "object" and
+      (.commit.message | type) == "string" and
+      (.html_url | type) == "string")
+  ' "$COMPARISON_PAGES" >/dev/null; then
+  echo "::warning::GitHub returned invalid comparison metadata."
+  exit 0
+fi
+
 jq '{
-  total_commits: (.[0].total_commits // 0),
-  commits: [.[].commits[]?]
+  total_commits: .[0].total_commits,
+  commits: (
+    reduce [.[].commits[]][] as $commit
+      ([]; if any(.[]; .sha == $commit.sha) then . else . + [$commit] end)
+  )
 }' "$COMPARISON_PAGES" > "$COMPARISON"
 
 RECEIVED_COMMIT_COUNT=$(jq '.commits | length' "$COMPARISON")
 TOTAL_COMMIT_COUNT=$(jq '.total_commits' "$COMPARISON")
-if [ "$RECEIVED_COMMIT_COUNT" -lt "$TOTAL_COMMIT_COUNT" ]; then
-  echo "::warning::GitHub returned only ${RECEIVED_COMMIT_COUNT} of ${TOTAL_COMMIT_COUNT} commits in the comparison."
+if [ "$RECEIVED_COMMIT_COUNT" -ne "$TOTAL_COMMIT_COUNT" ]; then
+  echo "::warning::GitHub returned ${RECEIVED_COMMIT_COUNT} of ${TOTAL_COMMIT_COUNT} unique commits in the comparison."
   printf '%s\n' '{"state":"incomplete"}' > "$STATUS_FILE"
 else
   printf '%s\n' '{"state":"available"}' > "$STATUS_FILE"

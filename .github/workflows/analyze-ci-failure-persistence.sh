@@ -143,7 +143,9 @@ collect_test_failures()
 
   rm -f "$output_file"
   json_lines=$(mktemp)
+  local trx_count=0
   while IFS= read -r -d '' extracted_path; do
+    trx_count=$((trx_count + 1))
     local parsed_lines
     parsed_lines=$(mktemp)
     if ! yq -p xml -o json '.' "$extracted_path" 2>/dev/null | jq -cr --arg job "$job_name" '
@@ -171,6 +173,12 @@ collect_test_failures()
     fi
     rm -f "$parsed_lines"
   done < <(find "$test_results_directory" -maxdepth 1 -type f -name "*.trx" -print0)
+
+  if [ "$trx_count" -eq 0 ]; then
+    echo "::error::Selected test result artifact does not contain any TRX files" >&2
+    rm -f "$json_lines"
+    return 1
+  fi
 
   if [ "$parse_failed" = "true" ]; then
     rm -f "$json_lines"
@@ -686,33 +694,37 @@ cache_cause_issues()
   mv "$closed_issues_temp" "$closed_issues_file"
 }
 
-pr_locked()
+pr_actionable()
 {
   local repo="$1"
   local pr_number="$2"
   local pr_json
-  local locked
+  local actionable
 
   if ! pr_json=$(gh api "repos/${repo}/pulls/${pr_number}"); then
-    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+    echo "::warning::Unable to determine whether PR #${pr_number} is actionable" >&2
     return 1
   fi
-  if ! locked=$(jq -r '
-      if (.locked | type) == "boolean" then
-        .locked | tostring
+  if ! actionable=$(jq -r '
+      if
+        (.state | type) == "string" and
+        (.state == "open" or .state == "closed") and
+        (.locked | type) == "boolean"
+      then
+        (.state == "open" and (.locked | not)) | tostring
       else
-        error("locked must be a boolean")
+        error("state and locked must describe a pull request")
       end
     ' <<< "$pr_json"); then
-    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+    echo "::warning::Unable to determine whether PR #${pr_number} is actionable" >&2
     return 1
   fi
-  if [ "$locked" != "true" ] && [ "$locked" != "false" ]; then
-    echo "::warning::Unable to determine whether PR #${pr_number} is locked" >&2
+  if [ "$actionable" != "true" ] && [ "$actionable" != "false" ]; then
+    echo "::warning::Unable to determine whether PR #${pr_number} is actionable" >&2
     return 1
   fi
 
-  printf '%s\n' "$locked"
+  printf '%s\n' "$actionable"
 }
 
 find_analysis_comment()
@@ -814,10 +826,10 @@ case "$COMMAND" in
     CLOSED_ISSUES_FILE="${4:?closed issues file is required}"
     cache_cause_issues "$REPO" "$OPEN_ISSUES_FILE" "$CLOSED_ISSUES_FILE"
     ;;
-  pr-locked)
+  pr-actionable)
     REPO="${2:?repository is required}"
     PR_NUMBER="${3:?pull request number is required}"
-    pr_locked "$REPO" "$PR_NUMBER"
+    pr_actionable "$REPO" "$PR_NUMBER"
     ;;
   find-analysis-comment)
     REPO="${2:?repository is required}"

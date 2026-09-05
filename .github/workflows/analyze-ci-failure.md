@@ -730,24 +730,6 @@ safe-outputs:
             PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)
             RESOLVER_STATUS=0
 
-            # A locked or unreadable PR must remain side-effect free even if its
-            # state changed after collection or the agent missed the lock signal.
-            if [ "$RUN_SCOPE" = "pull-request" ]; then
-              if [ "$PR_NUMBER" != "0" ]; then
-                if ! PR_LOCKED=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                    pr-locked "$REPO" "$PR_NUMBER"); then
-                  echo "::warning::PR state is unknown. Skipping publication."
-                  echo "resolver_status=0" >> "$GITHUB_OUTPUT"
-                  exit 0
-                fi
-                if [ "$PR_LOCKED" = "true" ]; then
-                  echo "PR #${PR_NUMBER} is locked. Skipping publication."
-                  echo "resolver_status=0" >> "$GITHUB_OUTPUT"
-                  exit 0
-                fi
-              fi
-            fi
-
             # ── 1. Set up memory branch and merge cause data ──
             # Pull request code issues are handled on the PR and do not need
             # stable cause records. Main repository breakages are persisted.
@@ -960,15 +942,15 @@ safe-outputs:
               exit 0
             fi
 
-            # Recheck immediately before commenting because the PR can be locked
-            # after the publication job's earlier side-effect gate.
-            if ! PR_LOCKED=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                pr-locked "$REPO" "$SUBJECT_PR"); then
+            # Recheck immediately before the PR mutation because its state may
+            # have changed after collection.
+            if ! PR_ACTIONABLE=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                pr-actionable "$REPO" "$SUBJECT_PR"); then
               echo "::warning::PR state is unknown. Skipping comment."
               exit 0
             fi
-            if [ "$PR_LOCKED" = "true" ]; then
-              echo "PR #${SUBJECT_PR} is locked. Skipping comment."
+            if [ "$PR_ACTIONABLE" != "true" ]; then
+              echo "PR #${SUBJECT_PR} is closed or locked. Skipping comment."
               exit 0
             fi
 
@@ -1554,6 +1536,6 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 3. **Never rerun when there are code issues** — only emit `rerun-failed-jobs` for pure infrastructure failures with `ENABLE_RERUN` set to `'true'`.
 4. **Be specific** — include actual error messages and job/test names in the JSON fields.
 5. **Use scope-appropriate history** — cross-reference PR files only for pull-request scope; for main scope, consider every candidate merge since the last successful main run.
-6. **PR must not be locked** — for pull-request scope, check the PR state from the "Pull Request" section in the summary file. If the PR is locked, skip the analysis and call `noop`. Still analyze and comment on closed PRs. This rule does not apply to main scope.
+6. **PR-directed effects require an open, unlocked PR** — for pull-request scope, use the "Pull Request" section as analysis context even when the PR is closed or locked. Still emit `publish-data` so run-scoped persistence can continue; the publication and rerun jobs recheck live PR state immediately before any PR-directed mutation.
 7. **Do NOT use MCP to query GitHub** — all needed data (PR metadata, changed files, job logs, annotations) is already in the summary file. No GitHub API tools are available.
 8. **Do NOT post PR comments directly** — the `publish-data` job handles commenting using the JSON file. Do not use `add-comment`.

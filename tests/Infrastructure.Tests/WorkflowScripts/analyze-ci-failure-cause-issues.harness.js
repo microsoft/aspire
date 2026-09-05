@@ -31,10 +31,15 @@ function makeGithub(store) {
                     if (labels !== 'ci-failure-cause' || state !== 'all') {
                         throw new Error('Cause lookup must list all ci-failure-cause issues.');
                     }
-                    return { data: store.issues.map(toRestIssue) };
+                    return {
+                        data: store.issues
+                            .filter(issue => !issue.hiddenUntilAfterCreate || store.created)
+                            .map(toRestIssue),
+                    };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
+                    store.created = true;
                     const issue = {
                         number: store.next++,
                         state: 'open',
@@ -106,6 +111,7 @@ async function dispatch(operation, payload) {
 
     const store = {
         next: 1000,
+        created: false,
         issues: (payload.issues ?? []).map(issue => ({
             title: 'Existing issue',
             labels: ['ci-failure-cause'],

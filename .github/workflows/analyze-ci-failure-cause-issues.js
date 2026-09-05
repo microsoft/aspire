@@ -125,28 +125,39 @@ function occurrenceSection(rows, totalOccurrenceCount) {
 
 function parseOccurrenceSection(body) {
     const normalizedBody = (body ?? '').replaceAll('\r\n', '\n');
+    const bodyLines = normalizedBody.split('\n');
     let prefix;
     let managed;
     let legacy = false;
 
-    if (normalizedBody.includes(OCCURRENCES_START) || normalizedBody.includes(OCCURRENCES_END)) {
-        const startParts = normalizedBody.split(OCCURRENCES_START);
-        if (startParts.length !== 2) {
+    const startIndexes = bodyLines
+        .map((line, index) => line === OCCURRENCES_START ? index : -1)
+        .filter(index => index >= 0);
+    const endIndexes = bodyLines
+        .map((line, index) => line === OCCURRENCES_END ? index : -1)
+        .filter(index => index >= 0);
+    if (startIndexes.length > 0 || endIndexes.length > 0) {
+        if (startIndexes.length !== 1 || endIndexes.length !== 1) {
             throw new OccurrenceRenderError('ambiguous managed occurrence section');
         }
-        const endParts = startParts[1].split(OCCURRENCES_END);
-        if (endParts.length !== 2 || !/^\s*$/.test(endParts[1])) {
+        const startIndex = startIndexes[0];
+        const endIndex = endIndexes[0];
+        if (startIndex >= endIndex ||
+            bodyLines.slice(endIndex + 1).some(line => line.trim().length > 0)) {
             throw new OccurrenceRenderError('ambiguous managed occurrence section');
         }
-        [prefix] = startParts;
-        [managed] = endParts;
+        prefix = bodyLines.slice(0, startIndex).join('\n');
+        managed = bodyLines.slice(startIndex + 1, endIndex).join('\n');
     } else {
-        const legacyParts = normalizedBody.split('\n## Occurrences\n');
-        if (legacyParts.length !== 2) {
+        const legacyIndexes = bodyLines
+            .map((line, index) => line === '## Occurrences' ? index : -1)
+            .filter(index => index >= 0);
+        if (legacyIndexes.length !== 1) {
             throw new OccurrenceRenderError('unsupported legacy occurrence section');
         }
-        [prefix] = legacyParts;
-        managed = `## Occurrences\n${legacyParts[1]}`;
+        const legacyIndex = legacyIndexes[0];
+        prefix = bodyLines.slice(0, legacyIndex).join('\n');
+        managed = bodyLines.slice(legacyIndex).join('\n');
         legacy = true;
     }
 
@@ -206,7 +217,7 @@ function buildIssueTitle(cause) {
     const prefix = cause.type === 'main-repository-breakage'
         ? '[Main CI Failure]'
         : '[CI Failure]';
-    return `${prefix} ${cause.title}`;
+    return `${prefix} ${sanitizeSingleLine(cause.title, 238)}`;
 }
 
 function labelsForCause(cause) {
@@ -472,7 +483,10 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
         isCanonicalIssue: issue => normalizedBodyLines(issue.body)[0] === marker,
         actionsForCanonical: (issue, { created }) => {
-            if (created || isOccurrencePublished(issue.body, storedOccurrences, run.runId)) {
+            if (created) {
+                return [];
+            }
+            if (isOccurrencePublished(issue.body, storedOccurrences, run.runId)) {
                 occurrenceAlreadyPublished = true;
                 return [];
             }

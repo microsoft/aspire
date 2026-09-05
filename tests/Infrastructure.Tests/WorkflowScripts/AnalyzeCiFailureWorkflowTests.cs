@@ -16,7 +16,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private const string HistoryScriptRelativePath = ".github/workflows/analyze-ci-failure-history.sh";
     private const string CandidatesScriptRelativePath = ".github/workflows/analyze-ci-failure-candidates.sh";
     private const string PersistenceScriptRelativePath = ".github/workflows/analyze-ci-failure-persistence.sh";
-    private const string IssueScriptRelativePath = ".github/workflows/analyze-ci-failure-issue.sh";
     private const string CommentScriptRelativePath = ".github/workflows/analyze-ci-failure-comment.sh";
 
     private static readonly string s_sourceWorkflow = ReadWorkflow("analyze-ci-failure.md");
@@ -25,8 +24,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Path.Combine(RepoRoot.Path, ValidationScriptRelativePath));
     private static readonly string s_candidatesScript = File.ReadAllText(
         Path.Combine(RepoRoot.Path, CandidatesScriptRelativePath));
-    private static readonly string s_issueScript = File.ReadAllText(
-        Path.Combine(RepoRoot.Path, IssueScriptRelativePath));
     private static readonly string s_persistenceScript = File.ReadAllText(
         Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath));
 
@@ -2185,177 +2182,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task MainRepositoryBreakageIssueUsesTrustedMainContext()
-    {
-        var causePath = Path.Combine(_workspace.Path, "main-build-break.json");
-        var runContextPath = Path.Combine(_workspace.Path, "run-context.json");
-        var lastSuccessfulRunPath = Path.Combine(_workspace.Path, "last-successful-main-run.json");
-        var triggeringMergePath = Path.Combine(_workspace.Path, "triggering-merge-pr.json");
-        var candidateHistoryStatusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"Main build break","error_pattern":"Compilation failed"}""");
-        await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
-        await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
-        await File.WriteAllTextAsync(
-            triggeringMergePath,
-            """{"number":41,"title":"Candidate\r\n@reviewers [details](https://evil.example) `quoted`","html_url":"https://github.com/microsoft/aspire/pull/41"}""");
-        await File.WriteAllTextAsync(candidateHistoryStatusPath, """{"state":"available"}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                runContextPath,
-                lastSuccessfulRunPath,
-                triggeringMergePath,
-                candidateHistoryStatusPath,
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "main",
-                "0",
-                "Build",
-                "| 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(metadataPath));
-        Assert.Equal("[Main CI Failure] Main build break", metadata.RootElement.GetProperty("title").GetString());
-        Assert.Equal("ci-failure-cause,main-ci-break", metadata.RootElement.GetProperty("labels").GetString());
-        Assert.Equal(
-            """
-            <!-- ci-failure-cause:main-build-break -->
-            <!-- ci-failure-cause-type:main-repository-breakage -->
-
-            ## Build Information
-
-            Build: https://github.com/microsoft/aspire/actions/runs/123
-            Affected branch: `main`
-            Last successful main SHA: `trusted-success`
-            Failed main SHA: `trusted-failure`
-            Triggering merge PR (context only, not necessarily causal): #41 `` Candidate @reviewers [details](https://evil.example) `quoted` ``
-
-            ## Error Message
-
-                Compilation failed
-
-            ## Description
-
-            ` Main build break `
-
-            **Type**: main-repository-breakage
-
-            <!-- ci-failure-occurrences:start -->
-            ## Occurrences
-
-            Showing 1 most recent of 1 occurrences.
-
-            | Date | Build | Job | Context |
-            |------|-------|-----|----|
-            | 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |
-            <!-- ci-failure-occurrences:end -->
-            """.ReplaceLineEndings("\n") + "\n",
-            (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
-    }
-
-    [Theory]
-    [InlineData("unavailable")]
-    [InlineData("incomplete")]
-    [RequiresTools(["bash", "jq"])]
-    public async Task MainRepositoryBreakageIssueOmitsTriggeringMergeWithoutCompleteHistory(string historyState)
-    {
-        var causePath = Path.Combine(_workspace.Path, "main-build-break.json");
-        var runContextPath = Path.Combine(_workspace.Path, "run-context.json");
-        var lastSuccessfulRunPath = Path.Combine(_workspace.Path, "last-successful-main-run.json");
-        var triggeringMergePath = Path.Combine(_workspace.Path, "triggering-merge-pr.json");
-        var candidateHistoryStatusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"Main build break","error_pattern":"Compilation failed"}""");
-        await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
-        await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
-        await File.WriteAllTextAsync(
-            triggeringMergePath,
-            """{"number":41,"title":"Must not be published","html_url":"https://github.com/microsoft/aspire/pull/41"}""");
-        await File.WriteAllTextAsync(
-            candidateHistoryStatusPath,
-            $$"""{"state":"{{historyState}}"}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                runContextPath,
-                lastSuccessfulRunPath,
-                triggeringMergePath,
-                candidateHistoryStatusPath,
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "main",
-                "0",
-                "Build",
-                "| occurrence |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        var body = await File.ReadAllTextAsync(bodyPath);
-        Assert.DoesNotContain("Must not be published", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("Triggering merge PR", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task IssueRendererUsesStoredOccurrenceTotalWhenRecreatingIssue()
-    {
-        var causePath = Path.Combine(_workspace.Path, "flaky-failure.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """
-            {
-              "id":"flaky-failure",
-              "type":"flaky-test",
-              "title":"Flaky failure",
-              "test_name":"Tests.Flaky",
-              "error_pattern":"boom",
-              "job_ids":[1],
-              "occurrences":[{"run_id":1},{"run_id":2},{"run_id":3}]
-            }
-            """);
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "unused-history-status.json",
-                "https://github.com/microsoft/aspire/actions/runs/3",
-                "pull-request",
-                "42",
-                "Tests",
-                "| current occurrence |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Contains(
-            "Showing 1 most recent of 3 occurrences.",
-            await File.ReadAllTextAsync(bodyPath),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void PublisherValidatesAgentResultAgainstTrustedScope()
     {
         ForEachExecutableWorkflow(workflow =>
@@ -2719,10 +2545,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("legacyTypeLines.length === 1", s_causeIssuePublisher, StringComparison.Ordinal);
         Assert.Contains("tracking.executeIssueReconciliation(", s_causeIssuePublisher, StringComparison.Ordinal);
 
-        Assert.Contains("FAILED_SHA=$(jq -r '.head_sha // \"unknown\"' \"$RUN_CONTEXT_FILE\")", s_issueScript, StringComparison.Ordinal);
-        Assert.Contains("LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // \"unknown\"' \"$LAST_SUCCESSFUL_RUN_FILE\")", s_issueScript, StringComparison.Ordinal);
-        Assert.Contains("sanitize-json-field \"$TRIGGERING_MERGE_FILE\" title 238", s_issueScript, StringComparison.Ordinal);
-        Assert.Contains("TRIGGERING_MERGE_TITLE_CODE=$(render_code_span \"$TRIGGERING_MERGE_TITLE\")", s_issueScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3454,6 +3276,36 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq", "yq"])]
+    public async Task TrustedTestFailureCollectorRejectsArtifactWithoutTrx()
+    {
+        var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
+        await File.WriteAllTextAsync(Path.Combine(testResultsDirectory.FullName, "results.xml"), "<TestRun />");
+        var jobsPath = Path.Combine(_workspace.Path, "all-jobs.json");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Tests / No-package tests / Infrastructure (ubuntu-latest)"}]""");
+        var outputPath = Path.Combine(_workspace.Path, "test-failures.json");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "collect-test-failures",
+                testResultsDirectory.FullName,
+                "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                jobsPath,
+                outputPath,
+            ]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(outputPath));
+        Assert.Contains(
+            "::error::Selected test result artifact does not contain any TRX files",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq", "yq"])]
     public async Task TrustedTestFailureCollectorRejectsUnboundJobEvidence()
     {
         var testResultsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "test-results"));
@@ -3526,14 +3378,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Theory]
-    [InlineData("""{"locked":false}""", 0, "false")]
-    [InlineData("""{"locked":true}""", 0, "true")]
+    [InlineData("""{"state":"open","locked":false}""", 0, "true")]
+    [InlineData("""{"state":"closed","locked":false}""", 0, "false")]
+    [InlineData("""{"state":"open","locked":true}""", 0, "false")]
     [InlineData("", 1, "")]
     [InlineData("", 0, "")]
     [InlineData("{}", 0, "")]
-    [InlineData("""{"locked":"false"}""", 0, "")]
+    [InlineData("""{"state":"open","locked":"false"}""", 0, "")]
+    [InlineData("""{"state":1,"locked":false}""", 0, "")]
     [RequiresTools(["bash", "jq"])]
-    public async Task PrLockedLookupRequiresSuccessfulBooleanResponse(
+    public async Task PrActionableLookupRequiresOpenUnlockedResponse(
         string response,
         int ghExitCode,
         string expectedOutput)
@@ -3547,7 +3401,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["pr-locked", "microsoft/aspire", "42"],
+            ["pr-actionable", "microsoft/aspire", "42"],
             new Dictionary<string, string>
             {
                 ["GH_EXIT_CODE"] = ghExitCode.ToString(),
@@ -3558,7 +3412,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         if (expectedOutput.Length == 0)
         {
             Assert.NotEqual(0, result.ExitCode);
-            Assert.Contains("Unable to determine whether PR #42 is locked", result.Output, StringComparison.Ordinal);
+            Assert.Contains("Unable to determine whether PR #42 is actionable", result.Output, StringComparison.Ordinal);
         }
         else
         {
@@ -3660,10 +3514,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 workflow,
                 "- name: Publish analysis data and cause issues",
                 "- name: Publish cause issues");
-            var lockCheckIndex = publishStep.IndexOf("pr-locked \"$REPO\" \"$PR_NUMBER\"", StringComparison.Ordinal);
-            var memorySideEffectIndex = publishStep.IndexOf("# ── 1. Set up memory branch", StringComparison.Ordinal);
-            Assert.True(lockCheckIndex >= 0 && lockCheckIndex < memorySideEffectIndex);
-            Assert.Contains("if [ \"$PR_NUMBER\" != \"0\" ]; then", publishStep, StringComparison.Ordinal);
+            Assert.DoesNotContain("pr-actionable", publishStep, StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "No unambiguous subject PR found. Skipping publication.",
                 publishStep,
@@ -3672,8 +3523,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 workflow,
                 "- name: Comment on pull request",
                 "echo \"Posted new analysis comment");
-            Assert.Contains("pr-locked \"$REPO\" \"$SUBJECT_PR\"", commentStep, StringComparison.Ordinal);
+            Assert.Contains("pr-actionable \"$REPO\" \"$SUBJECT_PR\"", commentStep, StringComparison.Ordinal);
             Assert.Contains("find-analysis-comment \"$REPO\" \"$SUBJECT_PR\"", commentStep, StringComparison.Ordinal);
+            Assert.True(
+                commentStep.IndexOf("pr-actionable", StringComparison.Ordinal) <
+                commentStep.IndexOf("find-analysis-comment", StringComparison.Ordinal));
             Assert.True(
                 commentStep.IndexOf("find-analysis-comment", StringComparison.Ordinal) <
                 commentStep.IndexOf("COMMENT_FILE=$(mktemp)", StringComparison.Ordinal));
@@ -3682,61 +3536,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         });
     }
 
-    [Theory]
-    [InlineData("""{"locked":true}""")]
-    [InlineData("{}")]
-    [RequiresTools(["bash", "jq"])]
-    public async Task PublicationStepDoesNotMutateLockedOrUnreadablePr(string prResponse)
-    {
-        await PreparePublicationStepFixtureAsync();
-        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
-        var gitCallLog = Path.Combine(_workspace.Path, "git-calls.log");
-        await WriteExecutableAsync(
-            Path.Combine(fakeBinDirectory, "gh"),
-            """
-            #!/usr/bin/env bash
-            printf '%s' "${PR_RESPONSE}"
-            """);
-        await WriteExecutableAsync(
-            Path.Combine(fakeBinDirectory, "git"),
-            """
-            #!/usr/bin/env bash
-            echo "$*" >> "${GIT_CALL_LOG}"
-            exit 99
-            """);
-
-        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and cause issues")
-            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
-        var result = await RunProcessAsync(
-            "bash",
-            ["-c", script],
-            new Dictionary<string, string>
-            {
-                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
-                ["GH_TOKEN"] = "test-token",
-                ["GITHUB_OUTPUT"] = Path.Combine(_workspace.Path, "github-output"),
-                ["GIT_CALL_LOG"] = gitCallLog,
-                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
-                ["PR_RESPONSE"] = prResponse,
-            });
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.False(File.Exists(gitCallLog));
-        Assert.Equal(
-            "resolver_status=0",
-            (await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "github-output"))).Trim());
-    }
-
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task PublicationStepReachesMutationForUnlockedPr()
+    public async Task PublicationStepPersistsValidatedRunWithoutPrActionabilityLookup()
     {
         await PreparePublicationStepFixtureAsync();
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var gitCallLog = Path.Combine(_workspace.Path, "git-calls.log");
         await WriteExecutableAsync(
             Path.Combine(fakeBinDirectory, "gh"),
-            "#!/usr/bin/env bash\necho '{\"locked\":false}'");
+            "#!/usr/bin/env bash\nexit 99");
         await WriteExecutableAsync(
             Path.Combine(fakeBinDirectory, "git"),
             """
@@ -3767,6 +3576,43 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task CommentStepSkipsClosedPr()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        var ghCallLog = Path.Combine(_workspace.Path, "gh-calls.log");
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            echo "$*" >> "${GH_CALL_LOG}"
+            case "$*" in
+              "api repos/microsoft/aspire/pulls/42") echo '{"state":"closed","locked":false}' ;;
+              *) exit 99 ;;
+            esac
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Comment on pull request")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_CALL_LOG"] = ghCallLog,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.DoesNotContain(
+            await File.ReadAllLinesAsync(ghCallLog),
+            call => call.StartsWith("pr comment", StringComparison.Ordinal) ||
+                call.Contains("--method PATCH", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task CommentStepSkipsMutationAndCleansTempsWhenMarkerLookupFails()
     {
         await PreparePublicationStepFixtureAsync();
@@ -3779,7 +3625,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             #!/usr/bin/env bash
             echo "$*" >> "${GH_CALL_LOG}"
             case "$*" in
-              "api repos/microsoft/aspire/pulls/42") echo '{"locked":false}' ;;
+              "api repos/microsoft/aspire/pulls/42") echo '{"state":"open","locked":false}' ;;
               "api repos/microsoft/aspire/issues/42/comments --paginate"*) exit 1 ;;
               *) exit 99 ;;
             esac
@@ -3819,7 +3665,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             #!/usr/bin/env bash
             echo "$*" >> "${GH_CALL_LOG}"
             case "$*" in
-              "api repos/microsoft/aspire/pulls/42") echo '{"locked":false}' ;;
+              "api repos/microsoft/aspire/pulls/42") echo '{"state":"open","locked":false}' ;;
               "api repos/microsoft/aspire/issues/42/comments --paginate"*) : ;;
               "pr comment 42 --repo microsoft/aspire --body-file "*) : ;;
               *) exit 99 ;;
@@ -4374,6 +4220,24 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("GitHub returned only 101 of 150 unique workflow runs.", result.Output, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("""{"workflow_runs":[{"id":20,"created_at":"2026-08-30T09:00:00Z","head_sha":"latest"}]}""")]
+    [InlineData("""{"total_count":"1","workflow_runs":[{"id":20,"created_at":"2026-08-30T09:00:00Z","head_sha":"latest"}]}""")]
+    [InlineData("""{"total_count":1,"workflow_runs":[{"id":20,"created_at":"2026-08-30T09:00:00Z"}]}""")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task LastSuccessfulMainRunRejectsMalformedMetadata(string response)
+    {
+        var fakeGh = $"#!/usr/bin/env bash\nprintf '%s\\n' '{response}'";
+
+        var result = await RunHistoryScriptAsync(
+            fakeGh,
+            "2026-08-30T10:00:00Z",
+            Path.Combine(_workspace.Path, "last-success.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("GitHub returned invalid workflow-run metadata.", result.Output, StringComparison.Ordinal);
+    }
+
     [Fact]
     [RequiresTools(["bash", "jq"])]
     public async Task LastSuccessfulMainRunSubdividesCappedWindows()
@@ -4453,6 +4317,69 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "last-success.json"));
 
         Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("""[{"commits":[]}]""")]
+    [InlineData("""[{"total_commits":"0","commits":[]}]""")]
+    [InlineData("""[{"total_commits":1,"commits":[{"sha":"broken"}]}]""")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CandidateMergeCollectionRejectsMalformedComparisonMetadata(string response)
+    {
+        var fakeGh = $"#!/usr/bin/env bash\nprintf '%s\\n' '{response}'";
+        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
+        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
+
+        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("[]" + Environment.NewLine, await File.ReadAllTextAsync(candidatesPath));
+        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
+        Assert.Equal("unavailable", status.RootElement.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CandidateMergeCollectionRequiresEveryUniqueCommit()
+    {
+        var fakeGh = """
+            #!/usr/bin/env bash
+            case "$*" in
+              *"compare/trusted-success...trusted-failure"*)
+                cat <<'JSON'
+            [
+              {
+                "total_commits": 2,
+                "commits": [
+                  {"sha":"duplicate","commit":{"message":"Duplicate commit"},"html_url":"https://github.com/microsoft/aspire/commit/duplicate"}
+                ]
+              },
+              {
+                "commits": [
+                  {"sha":"duplicate","commit":{"message":"Duplicate commit"},"html_url":"https://github.com/microsoft/aspire/commit/duplicate"}
+                ]
+              }
+            ]
+            JSON
+                ;;
+              *"commits/duplicate/pulls"*)
+                echo '[[{"number":41,"title":"Associated PR","html_url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-30T00:00:00Z","base":{"repo":{"full_name":"microsoft/aspire"},"ref":"main"}}]]'
+                ;;
+              *)
+                exit 99
+                ;;
+            esac
+            """;
+        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
+        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
+
+        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
+
+        Assert.Equal(0, result.ExitCode);
+        using var candidates = JsonDocument.Parse(await File.ReadAllTextAsync(candidatesPath));
+        Assert.Single(candidates.RootElement.EnumerateArray());
+        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
+        Assert.Equal("incomplete", status.RootElement.GetProperty("state").GetString());
     }
 
     [Fact]
@@ -5111,72 +5038,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task IssueRendererTreatsCauseTextAsInertCode()
-    {
-        var causePath = Path.Combine(_workspace.Path, "cause.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """{"id":"test-failure","type":"flaky-test","title":"[click](https://evil.example)","test_name":"Tests.`![img](https://evil.example/image.png)","error_pattern":"Failure\r# heading\n```\n@reviewers","job_ids":[1]}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "unused-history-status.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                "Tests",
-                "| occurrence |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            """
-            <!-- ci-failure-cause:test-failure -->
-            <!-- ci-failure-cause-type:flaky-test -->
-
-            ## Build Information
-
-            Build: https://github.com/microsoft/aspire/actions/runs/123
-            Build error leg or test failing: Tests / `` Tests.`![img](https://evil.example/image.png) ``
-            Pull request: #42
-
-            ## Error Message
-
-                Failure
-                # heading
-                ```
-                @reviewers
-
-            ## Description
-
-            ` [click](https://evil.example) `
-
-            **Type**: flaky-test
-
-            <!-- ci-failure-occurrences:start -->
-            ## Occurrences
-
-            Showing 1 most recent of 1 occurrences.
-
-            | Date | Build | Job | Context |
-            |------|-------|-----|----|
-            | occurrence |
-            <!-- ci-failure-occurrences:end -->
-            """.ReplaceLineEndings("\n") + "\n",
-            (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
     public async Task CommentRendererTreatsJobAndTestDiagnosticsAsInertCode()
     {
         var analysisPath = Path.Combine(_workspace.Path, "analysis.json");
@@ -5437,41 +5298,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task IssueRendererRejectsBodyAbovePublicationBudget()
-    {
-        var causePath = Path.Combine(_workspace.Path, "cause.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """{"id":"test-failure","type":"flaky-test","title":"Failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[1]}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "unused-history-status.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                "Tests",
-                $"| 2026-08-04 | [123](https://github.com/microsoft/aspire/actions/runs/123) | {new string('x', 65000)} | #42 |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(2, result.ExitCode);
-        Assert.Contains(
-            "::warning::Rendered cause issue exceeds the 65000-byte publication budget",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void PublicationUsesBoundedOccurrenceRendererWithoutBlockingOtherEffects()
     {
         Assert.Contains("const MAX_ISSUE_BODY_BYTES = 65_000;", s_causeIssuePublisher, StringComparison.Ordinal);
@@ -5485,56 +5311,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_causeIssuePublisher,
             StringComparison.Ordinal);
         Assert.Contains("occurrenceSection(rows, totalOccurrenceCount)", s_causeIssuePublisher, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(0, 30)]
-    [InlineData(238, 256)]
-    [InlineData(239, 256)]
-    [RequiresTools(["bash", "jq"])]
-    public async Task MainIssueRendererBoundsLegacyTitles(int titleLength, int expectedIssueTitleLength)
-    {
-        var causePath = Path.Combine(_workspace.Path, "cause.json");
-        var runContextPath = Path.Combine(_workspace.Path, "run-context.json");
-        var lastSuccessfulPath = Path.Combine(_workspace.Path, "last-successful.json");
-        var triggeringMergePath = Path.Combine(_workspace.Path, "triggering-merge.json");
-        var candidateHistoryStatusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            JsonSerializer.Serialize(new
-            {
-                id = "main-failure",
-                type = "main-repository-breakage",
-                title = new string('x', titleLength),
-                error_pattern = "Failure",
-            }));
-        await File.WriteAllTextAsync(runContextPath, """{"head_sha":"failed"}""");
-        await File.WriteAllTextAsync(lastSuccessfulPath, """{"head_sha":"successful"}""");
-        await File.WriteAllTextAsync(triggeringMergePath, "{}");
-        await File.WriteAllTextAsync(candidateHistoryStatusPath, """{"state":"available"}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                runContextPath,
-                lastSuccessfulPath,
-                triggeringMergePath,
-                candidateHistoryStatusPath,
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "main",
-                "0",
-                "Build",
-                "| occurrence |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(metadataPath));
-        Assert.Equal(expectedIssueTitleLength, metadata.RootElement.GetProperty("title").GetString()!.Length);
     }
 
     [Fact]
@@ -5605,53 +5381,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 occurrence.RootElement.GetProperty("occurrences")[0].GetProperty("job").GetString());
         }
 
-        var buildBodyPath = Path.Combine(_workspace.Path, "build-body.md");
-        var buildMetadataPath = Path.Combine(_workspace.Path, "build-metadata.json");
-        var testBodyPath = Path.Combine(_workspace.Path, "test-body.md");
-        var testMetadataPath = Path.Combine(_workspace.Path, "test-metadata.json");
-        var buildIssueResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                buildCausePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "unused-history-status.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                buildResult.Output.TrimEnd(),
-                "| build occurrence |",
-                buildBodyPath,
-                buildMetadataPath,
-            ]);
-        var testIssueResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                testCausePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "unused-history-status.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                testResult.Output.TrimEnd(),
-                "| test occurrence |",
-                testBodyPath,
-                testMetadataPath,
-            ]);
-
-        Assert.Equal(0, buildIssueResult.ExitCode);
-        Assert.Equal(0, testIssueResult.ExitCode);
-        Assert.Contains(
-            "Build error leg: `` Build | [Linux](https://evil.example) @reviewers `quoted` ``\n",
-            await File.ReadAllTextAsync(buildBodyPath),
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Build error leg or test failing: ` Tests Windows ` / ` Tests.Flaky `\n",
-            await File.ReadAllTextAsync(testBodyPath),
-            StringComparison.Ordinal);
     }
 
     [Fact]

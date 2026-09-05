@@ -176,6 +176,51 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task CreateRelistDoesNotReceiptOccurrenceWhenOlderCanonicalCannotBeUpdated()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        hiddenUntilAfterCreate = true,
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            This historical issue has no supported occurrence section.
+                            """
+                    }
+                }
+            });
+
+        Assert.Equal(10, result.Publish.Number);
+        Assert.False(result.Publish.Created);
+        Assert.True(result.Publish.Skipped);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.False(occurrence.TryGetProperty("issue_published", out _));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReplayingExistingOccurrenceDoesNotReopenClosedIssue()
     {
         var result = await InvokeHarnessAsync<PublishResult>(
@@ -531,6 +576,100 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PublishIgnoresIndentedOccurrenceMarkersInDiagnosticText()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            ## Error Message
+
+                                <!-- ci-failure-occurrences:start -->
+                                <!-- ci-failure-occurrences:end -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        Assert.Contains("    <!-- ci-failure-occurrences:start -->", body, StringComparison.Ordinal);
+        Assert.Contains("[991](", body, StringComparison.Ordinal);
+        Assert.Contains("update", result.Calls);
+        Assert.DoesNotContain(
+            result.Warnings,
+            warning => warning.Contains("unsupported occurrence section", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishRejectsMultipleStandaloneOccurrenceSections()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            <!-- ci-failure-occurrences:end -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.DoesNotContain("update", result.Calls);
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains("ambiguous managed occurrence section", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishTrimsOldestOccurrencesToStayWithinBodyBudget()
     {
         var cause = CreateCause();
@@ -728,6 +867,38 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Equal(
             "https://github.com/microsoft/aspire/issues/1000",
             result.StoredCause.GetProperty("issue_url").GetString());
+    }
+
+    [Theory]
+    [InlineData(238)]
+    [InlineData(239)]
+    [RequiresTools(["node"])]
+    public async Task PublishBoundsMainBreakageIssueTitle(int titleLength)
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    title = new string('x', titleLength),
+                    error_pattern = "Worker crashed",
+                    job_names = new[] { "Build / Windows" }
+                },
+                issues = Array.Empty<object>(),
+                runScope = "main",
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222",
+                    candidateHistoryState = "unavailable"
+                }
+            });
+
+        Assert.Equal(256, Assert.Single(result.Issues).Title.Length);
     }
 
     [Theory]
