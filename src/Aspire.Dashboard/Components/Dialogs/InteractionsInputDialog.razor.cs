@@ -40,6 +40,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private ValidationMessageStore _validationMessages = default!;
     private List<InputViewModel> _inputDialogInputViewModels = default!;
     private Dictionary<InputViewModel, FluentComponentBase?> _elementRefs = default!;
+    private readonly HashSet<InputViewModel> _initializedSecretTextInputs = [];
     private MarkdownProcessor _markdownProcessor = default!;
     private IJSObjectReference? _jsModule;
 
@@ -61,6 +62,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             _content = Content;
             _inputDialogInputViewModels = Content.Inputs.Select(input => new InputViewModel(input)).ToList();
+            _initializedSecretTextInputs.Clear();
 
             // Initialize keys for @ref binding.
             // Do this in case Blazor tries to get the element from the dictionary.
@@ -84,10 +86,27 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/InteractionsInputDialog.razor.js");
+
+        var initializedSecretTextInput = false;
+        foreach (var inputViewModel in _inputDialogInputViewModels.Where(vm => vm.Input.InputType == InputType.SecretText && !_initializedSecretTextInputs.Contains(vm)))
+        {
+            if (_elementRefs.TryGetValue(inputViewModel, out var element) && element is not null)
+            {
+                await _jsModule.InvokeVoidAsync("suppressNativePasswordReveal", element.Id);
+                initializedSecretTextInput |= _initializedSecretTextInputs.Add(inputViewModel);
+            }
+        }
+
+        // Render Aspire's accessible reveal button only after Edge's native password reveal control
+        // is hidden. Otherwise both controls are briefly visible while the dialog initializes.
+        if (initializedSecretTextInput)
+        {
+            StateHasChanged();
+        }
+
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/InteractionsInputDialog.razor.js");
-
             // Focus the first input when the dialog loads.
             if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
             {
