@@ -447,6 +447,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 });
             }
         }
+
+        [JSInvokable]
+        public async Task CloseResourceContextMenu()
+        {
+            await resources.InvokeAsync(async () =>
+            {
+                await resources.CloseContextMenuAsync(closeMenu: true);
+            });
+        }
     }
 
     internal IEnumerable<ResourceViewModel> GetFilteredResources()
