@@ -251,18 +251,227 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task BuildIssueSearchQueryTargetsFailingTestIssuesByMetadataMarker()
+    public void WorkflowDelegatesLifecycleToCheckedInAdapter()
     {
-        var query = await InvokeHarnessAsync<string>(
-            "buildIssueSearchQuery",
+        var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("create-failing-test-issue-tracking.js", workflow, StringComparison.Ordinal);
+        Assert.Contains(".reconcile(", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracking.recordRun", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracking.duplicateExemptStamp()", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("github.rest.issues.create({", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("search.issuesAndPullRequests", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WorkflowQueuesOnlyAuthorizedIssueReconciliation()
+    {
+        var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue.yml");
+        var workflow = File.ReadAllText(workflowPath).ReplaceLineEndings("\n");
+        var authorizationJob = ExtractJob(workflow, "authorize_failing_test_issue");
+        var reconciliationJob = ExtractJob(workflow, "create_failing_test_issue");
+
+        Assert.DoesNotContain("github.run_id", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("\nconcurrency:\n", $"\n{workflow}", StringComparison.Ordinal);
+        Assert.Contains(
+            """
+                if: >-
+                  github.repository == 'microsoft/aspire' &&
+                  (github.event_name == 'workflow_dispatch' ||
+                   startsWith(github.event.comment.body, '/create-issue'))
+            """,
+            authorizationJob,
+            StringComparison.Ordinal);
+        Assert.Equal("contents=read;issues=write", ExtractJobMapping(authorizationJob, "permissions"));
+        Assert.DoesNotContain("\n    concurrency:\n", $"\n{authorizationJob}", StringComparison.Ordinal);
+        Assert.Equal(1, workflow.Split("getCollaboratorPermissionLevel", StringSplitOptions.None).Length - 1);
+        Assert.Contains("    needs: authorize_failing_test_issue\n", reconciliationJob, StringComparison.Ordinal);
+        Assert.Equal(
+            "cancel-in-progress=false;group=create-failing-test-issue;queue=max",
+            ExtractJobMapping(reconciliationJob, "concurrency"));
+    }
+
+    [Fact]
+    public void CheckedInLifecycleAdapterExists()
+    {
+        var adapterPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue-tracking.js");
+
+        Assert.True(File.Exists(adapterPath), $"Missing lifecycle adapter: {adapterPath}");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LifecycleAdapterUsesSharedReconciliationForExistingIssue()
+    {
+        const string marker = "<!-- failing-test-signature: v1:abc -->";
+        var result = await InvokeHarnessAsync<ReconciliationResponse>(
+            "reconcile",
             new
             {
-                owner = "microsoft",
-                repo = "aspire",
-                metadataMarker = "<!-- failing-test-signature: v1:abc123 -->"
+                marker,
+                body = $"{marker}\n\nBody",
+                issues = new[]
+                {
+                    new { number = 42, body = marker, state = "closed", comments = Array.Empty<string>() },
+                }
             });
 
-        Assert.Equal("repo:microsoft/aspire is:issue label:failing-test in:body \"<!-- failing-test-signature: v1:abc123 -->\"", query);
+        Assert.True(result.Available);
+        Assert.False(result.Result!.Created);
+        Assert.Equal(42, result.Result.Number);
+        var issue = Assert.Single(result.Issues!);
+        Assert.Equal("open", issue.State);
+        Assert.Contains(issue.Comments, comment => comment.Contains("<!-- run:123 -->", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LifecycleAdapterForceNewUsesPlannerAndStampsExemption()
+    {
+        const string marker = "<!-- failing-test-signature: v1:abc -->";
+        var result = await InvokeHarnessAsync<ReconciliationResponse>(
+            "reconcile",
+            new
+            {
+                marker,
+                body = $"{marker}\n\nBody",
+                forceNew = true,
+                issues = new[]
+                {
+                    new { number = 42, body = marker, state = "open", comments = Array.Empty<string>() },
+                }
+            });
+
+        Assert.True(result.Available);
+        Assert.True(result.Result!.Created);
+        Assert.Equal(1000, result.Result.Number);
+        var created = Assert.Single(result.Issues!, issue => issue.Number == 1000);
+        Assert.Contains("<!-- tracking-issue-duplicate-exempt -->", created.Body, StringComparison.Ordinal);
+        Assert.Empty(created.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LifecycleAdapterEnsuresFailingTestLabelBeforeReconciliation()
+    {
+        const string marker = "<!-- failing-test-signature: v1:abc -->";
+        var result = await InvokeHarnessAsync<ReconciliationResponse>(
+            "reconcile",
+            new
+            {
+                marker,
+                body = $"{marker}\n\nBody",
+                issues = Array.Empty<object>(),
+            });
+
+        Assert.NotNull(result.Calls);
+        Assert.Equal("ensureLabel", result.Calls[0]);
+        Assert.Contains("listIssues", result.Calls);
+        Assert.Contains("createIssue", result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GhApiTransportListsAllIssueStatesWithPagination()
+    {
+        var result = await InvokeHarnessAsync<GhTransportResponse>(
+            "ghTransport",
+            new { operation = "list" });
+
+        Assert.True(result.Available);
+        var call = Assert.Single(result.Calls!);
+        Assert.Contains("--paginate", call.Args);
+        Assert.Contains("--slurp", call.Args);
+        Assert.Contains("repos/microsoft/aspire/issues?labels=failing-test&state=all&per_page=100", call.Args);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GhApiTransportOwnsEveryIssueMutation()
+    {
+        var result = await InvokeHarnessAsync<GhTransportResponse>(
+            "ghTransport",
+            new { operation = "mutate" });
+
+        Assert.True(result.Available);
+        Assert.Equal(7, result.Calls!.Length);
+        Assert.All(result.Calls, call => Assert.Equal("api", call.Args[0]));
+        Assert.Contains(result.Calls, call => call.Args.Contains("POST") && call.Args.Contains("repos/microsoft/aspire/labels"));
+        Assert.Contains(result.Calls, call => call.Args.Contains("POST") && call.Args.Contains("repos/microsoft/aspire/issues"));
+        Assert.Contains(result.Calls, call => call.Args.Contains("PATCH") && call.Input!.Contains("\"state\":\"closed\"", StringComparison.Ordinal));
+        Assert.Contains(result.Calls, call => call.Args.Contains("PATCH") && call.Input!.Contains("\"state\":\"open\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GhApiTransportTreatsExistingLabelAsSuccess()
+    {
+        var result = await InvokeHarnessAsync<GhTransportResponse>(
+            "ghTransport",
+            new { operation = "ensure", labelAlreadyExists = true });
+
+        Assert.True(result.Available);
+        var call = Assert.Single(result.Calls!);
+        Assert.Contains("POST", call.Args);
+        Assert.Contains("repos/microsoft/aspire/labels", call.Args);
+    }
+
+    [Fact]
+    public void CSharpToolDelegatesLifecycleToCheckedInAdapter()
+    {
+        var commandPath = Path.Combine(_repoRoot, "tools", "CreateFailingTestIssue", "FailingTestIssueCommand.cs");
+        var command = File.ReadAllText(commandPath);
+
+        Assert.Contains("create-failing-test-issue-tracking.js", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("FindIssuesByMarkerAsync", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("CreateIssueAsync", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("IssueHasCommentMarkerAsync", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("CloseIssueAsNotPlannedAsync", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReopenIssueAsync", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CSharpToolTerminatesAdapterProcessTreeWhenCancelled()
+    {
+        var commandPath = Path.Combine(_repoRoot, "tools", "CreateFailingTestIssue", "FailingTestIssueCommand.cs");
+        var command = File.ReadAllText(commandPath);
+
+        Assert.Contains("process.Kill(entireProcessTree: true)", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CSharpToolBoundsWholeAdapterReconciliation()
+    {
+        var commandPath = Path.Combine(_repoRoot, "tools", "CreateFailingTestIssue", "FailingTestIssueCommand.cs");
+        var command = File.ReadAllText(commandPath);
+
+        Assert.Contains("s_issueReconciliationTimeout = TimeSpan.FromMinutes(5)", command, StringComparison.Ordinal);
+        Assert.Contains("using var reconciliationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);", command, StringComparison.Ordinal);
+        Assert.Contains("reconciliationCts.CancelAfter(s_issueReconciliationTimeout);", command, StringComparison.Ordinal);
+        Assert.Contains("StandardInput.WriteAsync(request.AsMemory(), reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("StandardOutput.ReadToEndAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("StandardError.ReadToEndAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("WaitForExitAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("cancellationToken.ThrowIfCancellationRequested();", command, StringComparison.Ordinal);
+        Assert.Contains("throw new TimeoutException(\"Failing-test issue reconciliation timed out after five minutes.\", ex);", command, StringComparison.Ordinal);
+        Assert.Contains("process.Kill(entireProcessTree: true)", command, StringComparison.Ordinal);
+        Assert.Contains("await process.WaitForExitAsync(CancellationToken.None)", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProducersUseSharedPlannerForTrustedCloseAndDryRun()
+    {
+        var reportCi = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", "report-ci-failure.js"));
+        var monitor = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", "monitor-scheduled-workflows.js"));
+
+        Assert.Contains("tracking.executeIssueReconciliation(", reportCi, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracking.listOpenIssuesByLabel(", reportCi, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracking.closeIssue(", reportCi, StringComparison.Ordinal);
+
+        Assert.Contains("tracking.planIssueReconciliation(", monitor, StringComparison.Ordinal);
+        Assert.Contains("tracking.executeIssueReconciliation(", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("tracking.closeIssue(", monitor, StringComparison.Ordinal);
     }
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
@@ -286,4 +495,32 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
 
     private sealed record FormatListResponseResult(bool Error, string Message, string[]? Tests);
+
+    private sealed record ReconciliationResponse(bool Available, ReconciliationResult? Result, ReconciliationIssue[]? Issues, string[]? Calls);
+
+    private sealed record ReconciliationResult(int Number, bool Created);
+
+    private sealed record ReconciliationIssue(int Number, string State, string Body, string[] Comments);
+
+    private sealed record GhTransportResponse(bool Available, GhInvocation[]? Calls);
+
+    private sealed record GhInvocation(string[] Args, string? Input);
+
+    private static string ExtractJob(string workflow, string jobName)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            workflow,
+            $@"(?ms)^  {System.Text.RegularExpressions.Regex.Escape(jobName)}:\n.*?(?=^  [A-Za-z0-9_-]+:\n|\z)");
+        Assert.True(match.Success, $"Could not find workflow job: {jobName}");
+
+        return match.Value;
+    }
+
+    private static string ExtractJobMapping(string job, string key)
+    {
+        var unindentedJob = string.Join(
+            '\n',
+            job.Split('\n').Select(line => line.StartsWith("    ", StringComparison.Ordinal) ? line[4..] : line));
+        return AnalyzeCiFailureWorkflowTests.ExtractTopLevelMapping(unindentedJob, key);
+    }
 }

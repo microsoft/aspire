@@ -82,6 +82,7 @@ module.exports = async function reportSpecializedTestFailure({ github, context, 
         runId: context.runId,
         buildBody: () => reporter.buildIssueBody({ marker, displayName, workflowFile, kind }),
         comment: reporter.formatComment({ kind, run, failedTests }),
+        closeDuplicates: true,
     });
 
     if (result.skipped) {

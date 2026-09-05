@@ -113,6 +113,44 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RefreshesCanonicalIssueAfterCreateRaceBeforeRecordingNextFailure()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            nextNumber = 1000,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 999, body = Marker, state = "open", comments = Array.Empty<string>() },
+                new { number = 1000, body = Marker, state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(1, result.Calls.Count(call => call == "create"));
+        Assert.Equal(2, result.Issues.Length);
+
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 999);
+        Assert.Equal("open", canonical.State);
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:9 -->", StringComparison.Ordinal));
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:10 -->", StringComparison.Ordinal));
+
+        var throwaway = Assert.Single(result.Issues, issue => issue.Number == 1000);
+        Assert.Equal("closed", throwaway.State);
+        Assert.Equal("not_planned", throwaway.StateReason);
+        Assert.DoesNotContain(result.Issues, issue => issue.Number > 1000);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DedupsWhenLatestFailedRunAlreadyRecorded()
     {
         // The scanner runs every 2h but watched workflows run less often, so the same
@@ -147,10 +185,39 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
             },
         });
 
+        Assert.False(result.Threw);
         Assert.DoesNotContain(result.Logs, log => log.Contains("would RECORD", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
         var issue = Assert.Single(result.Issues);
         Assert.Single(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunUsesOldestCanonicalAndReportsDuplicateClosures()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = FailingRun() },
+            issues = new[]
+            {
+                new
+                {
+                    number = 44,
+                    body = $"{Marker}\n<!-- tracking-issue-duplicate-exempt -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+                new { number = 55, body = Marker, state = "closed", comments = Array.Empty<string>() },
+                new { number = 66, body = Marker, state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.Contains(result.Logs, log => log.Contains("would CLOSE duplicate issue #66 as not_planned", StringComparison.Ordinal));
+        Assert.Contains(result.Logs, log => log.Contains("would RECORD failure for generate-api-diffs.yml on issue #55", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Logs, log => log.Contains("issue #44", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
     }
 
     [Fact]
@@ -177,6 +244,59 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DoesNotCloseIssueWhenAutoCloseStampIsRemovedBeforeSuccessEvaluation()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(2, result.ListIssuesCount);
+        Assert.Equal(["createLabel"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Contains("<!-- autoclose:false -->", issue.Body);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCloseIssueClosedByUserBeforeSuccessEvaluation()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "closed", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(2, result.ListIssuesCount);
+        Assert.Equal(["createLabel"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task LeavesIssueOpenWhenAutoCloseStampIsFalse()
     {
         var result = await InvokeAsync(new
@@ -194,6 +314,30 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
         var issue = Assert.Single(result.Issues);
         Assert.Equal("open", issue.State);
         Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DuplicateOnlyReconciliationDoesNotReportCanonicalAsClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+                new { number = 66, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 55);
+        Assert.Equal("open", canonical.State);
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(result.Logs, log => log.Contains("Closed #55", StringComparison.Ordinal));
+        Assert.Contains(result.Logs, log => log.Contains("Reconciled 1 duplicate", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -229,13 +373,22 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
                 [WatchedFile] = new[]
                 {
                     FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
-                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(45)),
+                    SucceedingRun(id: 11, runNumber: 11, updatedAt: MinutesAgo(15)),
                 },
             },
         });
 
-        Assert.Contains(result.Logs, log => log.Contains("would RECORD failure", StringComparison.Ordinal));
-        Assert.Contains(result.Logs, log => log.Contains("would CLOSE", StringComparison.Ordinal));
+        Assert.Equal(
+            [
+                "[dry-run] would RECORD failure for generate-api-diffs.yml on a new issue",
+                "[dry-run] would RECORD failure for generate-api-diffs.yml on the new issue",
+            ],
+            result.Logs.Where(log => log.Contains("would RECORD failure", StringComparison.Ordinal)));
+        Assert.Contains("[dry-run] would CLOSE the new issue (generate-api-diffs.yml)", result.Logs);
+        Assert.DoesNotContain(result.Logs, log =>
+            log.Contains("would RECORD", StringComparison.Ordinal) && log.Contains("issue #0", StringComparison.Ordinal) ||
+            log.Contains("would CLOSE", StringComparison.Ordinal) && log.Contains("issue #0", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
         Assert.Empty(result.Issues);
     }
@@ -307,6 +460,158 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
         Assert.Equal("closed", issue.State);
         Assert.Contains(issue.Comments, comment => comment.Contains("<!-- run:9 -->", StringComparison.Ordinal));
         Assert.Contains(issue.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DuplicateClosedDuringFailureIsNotClosedAgainByNewerSuccess()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "closed",
+                    comments = new[] { "earlier <!-- run:9 -->" },
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        Assert.Equal(1, result.Calls.Count(call => call == "update"));
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SuccessOnlyWindowClosesNewerDuplicateWhenCanonicalIsAlreadyClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "closed",
+                    comments = Array.Empty<string>(),
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunSuccessReportsDuplicateOnlyReconciliation()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "closed",
+                    comments = Array.Empty<string>(),
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Contains("[dry-run] would CLOSE duplicate issue #66 as not_planned (canonical #55)", result.Logs);
+        Assert.DoesNotContain("[dry-run] would CLOSE issue #55 (generate-api-diffs.yml)", result.Logs);
+        Assert.DoesNotContain(result.Calls, call => call is "update" or "createComment");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunSuccessReportsCanonicalAndDuplicateClosuresAccurately()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Single(result.Logs, log => log == "[dry-run] would CLOSE duplicate issue #66 as not_planned (canonical #55)");
+        Assert.DoesNotContain("[dry-run] would CLOSE duplicate issue #55 as not_planned (canonical #55)", result.Logs);
+        Assert.Contains("[dry-run] would CLOSE issue #55 (generate-api-diffs.yml)", result.Logs);
+        Assert.DoesNotContain(result.Calls, call => call is "update" or "createComment");
     }
 
     [Fact]
@@ -405,9 +710,15 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(MonitorResult Result);
 
-    private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues, string[] Logs, ListRunRequest[] ListRunRequests);
+    private sealed record MonitorResult(
+        bool Threw,
+        string[] Calls,
+        MonitorIssue[] Issues,
+        string[] Logs,
+        ListRunRequest[] ListRunRequests,
+        int ListIssuesCount);
 
-    private sealed record MonitorIssue(int Number, string State, string Body, string[] Labels, string[] Comments);
+    private sealed record MonitorIssue(int Number, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 
     private sealed record ListRunRequest(string WorkflowId, int? PerPage);
 }

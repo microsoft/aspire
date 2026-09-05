@@ -228,6 +228,33 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReconcilesExactDuplicatesIntoOldestIssue()
+    {
+        const string marker = "<!-- ci-failure:deployment-tests.yml:scheduled -->";
+        var result = await InvokeAsync(new
+        {
+            env = DeploymentEnv(),
+            labels = s_deploymentLabels,
+            issues = new[]
+            {
+                new { number = 42, body = marker, state = "open" },
+                new { number = 84, body = marker, state = "open" },
+            },
+        });
+
+        Assert.DoesNotContain("create", result.Calls);
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 42);
+        Assert.Equal("open", canonical.State);
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:12345 -->", StringComparison.Ordinal));
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 84);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.Contains(duplicate.Comments, comment => comment.Contains("#42", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotManageAnotherWorkflowsAutomationBrokenIssue()
     {
         // Both pipelines and the scanner/specialized reporter carry automation-broken,
@@ -305,5 +332,5 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
 
     private sealed record RunnerResult(bool Threw, string[] Calls, RunnerIssue[] Issues);
 
-    private sealed record RunnerIssue(int Number, string? Title, string State, string Body, string[] Labels, string[] Comments);
+    private sealed record RunnerIssue(int Number, string? Title, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 }

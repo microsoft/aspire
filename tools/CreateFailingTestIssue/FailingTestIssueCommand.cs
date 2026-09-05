@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.IO.Hashing;
@@ -14,6 +15,9 @@ namespace CreateFailingTestIssue;
 
 internal static class FailingTestIssueCommand
 {
+    private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan s_issueReconciliationTimeout = TimeSpan.FromMinutes(5);
+
     private static readonly HashSet<string> s_failedOutcomes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Failed",
@@ -197,50 +201,58 @@ internal static class FailingTestIssueCommand
             ExistingIssueInfo? existingIssue = null;
             if (input.Create)
             {
-                if (!input.ForceNew)
+                var result = await ReconcileIssueAsync(
+                    input.Repository,
+                    issueArtifacts,
+                    resolutionSection.RunId,
+                    input.ForceNew,
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var message in result.Logs)
                 {
-                    Log("--create flag set. Searching for existing issue...");
-                    var existing = await GitHubCli.SearchExistingIssueAsync(
-                        input.Repository,
-                        issueArtifacts.MetadataMarker,
-                        cancellationToken).ConfigureAwait(false);
-
-                    if (existing is not null)
-                    {
-                        var (existingNumber, existingUrl, existingState) = existing.Value;
-                        existingIssue = new ExistingIssueInfo(existingNumber, existingUrl);
-
-                        if (existingState is "closed")
-                        {
-                            Log($"Found closed issue #{existingNumber}. Reopening...");
-                            await GitHubCli.ReopenIssueAsync(input.Repository, existingNumber, cancellationToken).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            Log($"Found open issue #{existingNumber}. Adding comment...");
-                        }
-
-                        await GitHubCli.AddIssueCommentAsync(
-                            input.Repository,
-                            existingNumber,
-                            issueArtifacts.CommentBody,
-                            cancellationToken).ConfigureAwait(false);
-
-                        Log($"Updated existing issue #{existingNumber}: {existingUrl}");
-                    }
+                    Log(message);
                 }
 
-                if (existingIssue is null)
+                if (result.Created)
                 {
                     Log(input.ForceNew ? "--force-new flag set. Creating new issue on GitHub..." : "No existing issue found. Creating new issue on GitHub...");
-                    var (issueNumber, issueUrl) = await GitHubCli.CreateIssueAsync(
-                        input.Repository,
-                        issueArtifacts.Title,
-                        issueArtifacts.Body,
-                        issueArtifacts.Labels,
-                        cancellationToken).ConfigureAwait(false);
-                    createdIssue = new CreatedIssueInfo(issueNumber, issueUrl);
-                    Log($"Created issue #{issueNumber}: {issueUrl}");
+                    createdIssue = new CreatedIssueInfo(result.Number, result.Url);
+                }
+                else
+                {
+                    existingIssue = new ExistingIssueInfo(result.Number, result.Url);
+                    if (result.Reopened)
+                    {
+                        Log($"Found closed issue #{result.Number}. Reopening...");
+                    }
+                    else if (!result.Skipped)
+                    {
+                        Log($"Found open issue #{result.Number}. Adding comment...");
+                    }
+                }
+                foreach (var duplicateNumber in result.DuplicatesClosed)
+                {
+                    Log($"Closing newer duplicate issue #{duplicateNumber} in favor of #{result.Number}...");
+                }
+                if (result.Skipped)
+                {
+                    Log($"Run {resolutionSection.RunId} is already recorded on issue #{result.Number}; skipping duplicate comment.");
+                }
+                else if (!input.ForceNew)
+                {
+                    Log($"Recorded run {resolutionSection.RunId} on issue #{result.Number}.");
+                }
+                if (result.Created)
+                {
+                    Log($"Created issue #{result.Number}: {result.Url}");
+                }
+                else if (!result.Skipped || result.Reopened || result.DuplicatesClosed.Count > 0)
+                {
+                    Log($"Updated existing issue #{result.Number}: {result.Url}");
+                }
+                else
+                {
+                    Log($"Found existing issue #{result.Number}: {result.Url}");
                 }
             }
 
@@ -347,6 +359,79 @@ internal static class FailingTestIssueCommand
                 Warnings: warnings.ToArray(),
                 AvailableFailedTests: availableFailedTests)
         };
+    }
+
+    private static async Task<IssueReconciliationResult> ReconcileIssueAsync(
+        string repository,
+        IssueArtifacts issue,
+        long runId,
+        bool forceNew,
+        CancellationToken cancellationToken)
+    {
+        using var reconciliationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        reconciliationCts.CancelAfter(s_issueReconciliationTimeout);
+
+        var adapterPath = Path.Combine(AppContext.BaseDirectory, "create-failing-test-issue-tracking.js");
+        ProcessStartInfo processStartInfo = new()
+        {
+            FileName = "node",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        processStartInfo.ArgumentList.Add(adapterPath);
+
+        using var process = new Process { StartInfo = processStartInfo };
+        process.Start();
+
+        var request = JsonSerializer.Serialize(new
+        {
+            repository,
+            runId,
+            forceNew,
+            issue
+        }, s_jsonOptions);
+
+        try
+        {
+            await process.StandardInput.WriteAsync(request.AsMemory(), reconciliationCts.Token).ConfigureAwait(false);
+            process.StandardInput.Close();
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(reconciliationCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(reconciliationCts.Token);
+            await process.WaitForExitAsync(reconciliationCts.Token).ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failing-test issue reconciliation failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            return JsonSerializer.Deserialize<IssueReconciliationResult>(stdout, s_jsonOptions)
+                ?? throw new InvalidOperationException("Failing-test issue reconciliation returned an empty response.");
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException) when (process.HasExited)
+                {
+                    // The adapter exited after the HasExited check, so there is no process tree left to terminate.
+                }
+            }
+
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("Failing-test issue reconciliation timed out after five minutes.", ex);
+        }
     }
 
     private static CreateFailingTestIssueResult CreateFailureResult(
@@ -1049,6 +1134,16 @@ internal static class FailingTestIssueCommand
         GitHubActionsJob Job,
         HashSet<string> FailedTests,
         IReadOnlyList<FailedTestOccurrence> Occurrences);
+
+    private sealed record IssueReconciliationResult(
+        int Number,
+        string Url,
+        bool Created,
+        bool Reopened,
+        bool Skipped,
+        IReadOnlyList<int> DuplicatesClosed,
+        string? PreviousState,
+        IReadOnlyList<string> Logs);
 
     private static void ValidateZipEntries(string zipPath, string extractDirectory)
     {

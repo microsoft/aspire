@@ -18,7 +18,9 @@ instead of per branch.
 
 Runs every 2 hours (`cron: '0 */2 * * *'`) and on `workflow_dispatch`. The
 manual dispatch accepts a `dry_run` boolean that logs the issue actions it
-*would* take without mutating anything on GitHub.
+*would* take without mutating anything on GitHub. Dry run executes the same shared
+reconciliation plan against an in-memory transport, rather than maintaining a
+second issue-selection implementation.
 
 Each run fetches recent completed scheduled runs and processes the runs updated
 in a three-hour polling window, oldest to newest. That prevents an hourly
@@ -123,14 +125,17 @@ plus any per-entry `labels`, and are stamped `autoClose:true`.
 When the newest completed scheduled run in the polling window concludes
 `success`, any open `automation-broken` issue for that workflow gets a "latest
 run succeeded" comment and is closed with `state_reason: completed`.
+Live success handling re-lists issues immediately before evaluating the trusted
+`autoclose:true` stamp so intervening user edits or closures are preserved.
 
 ## Dedup
 
-Issue lookup uses `GET /issues?labels=automation-broken&state=open` (strongly
+Issue lookup uses `GET /issues?labels=automation-broken&state=all` (strongly
 consistent) plus a local body-marker filter — the Search API is avoided because
 its eventual-consistency window could let near-simultaneous runs each see
-"0 hits". If two open issues ever carry the same marker, the oldest (lowest
-number) is treated as canonical.
+"0 hits". If multiple issues carry the same exact marker, the oldest (lowest
+number) is canonical. Newer open matches are linked and closed with
+`state_reason: not_planned`; their discussion remains intact.
 
 ## Permissions and auth
 
@@ -146,8 +151,9 @@ warning and is skipped rather than failing the whole watchdog run.
 
 ## Logic and tests
 
-The reusable issue mechanics (marker dedup, the comment-recording loop with
-per-run dedup, octokit primitives) live in the generic, repo-agnostic engine
+The reusable issue mechanics (exact-marker reconciliation, duplicate closure, the
+per-run comment loop, trusted close mutations, dry-run transport, and octokit
+primitives) live in the generic, repo-agnostic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), shared with the
 [specialized-test failure reporter](specialized-test-failure-issues.md), the
 [nightly-pipeline failure reporter](pipeline-failure-issues.md), the

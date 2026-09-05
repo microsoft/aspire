@@ -14,6 +14,9 @@
 
   <ItemGroup>
     <Compile Include="..\Aspire.TestTools\*.cs" LinkBase="Aspire.TestTools" />
+    <Content Include="..\..\.github\workflows\create-failing-test-issue-tracking.js" Link="create-failing-test-issue-tracking.js" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\.github\workflows\tracking-issue-gh-api.js" Link="tracking-issue-gh-api.js" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\.github\workflows\tracking-issue.js" Link="tracking-issue.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -106,6 +106,31 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReportFailureClosesNewerExactMarkerDuplicates()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "reportFailure",
+            env = new { REF = "main" },
+            issues = new[]
+            {
+                new { number = 5, body = "<!-- ci-failure:ci.yml:push:main -->", state = "open" },
+                new { number = 8, body = "<!-- ci-failure:ci.yml:push:main -->", state = "open" },
+            },
+        });
+
+        var canonicalIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal("open", canonicalIssue.State);
+        Assert.Contains(canonicalIssue.Comments, comment => comment.Contains("<!-- run:12345 -->", StringComparison.Ordinal));
+
+        var duplicateIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicateIssue.State);
+        Assert.Equal("not_planned", duplicateIssue.StateReason);
+        Assert.Contains(duplicateIssue.Comments, comment => comment.Contains("Duplicate of #5", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReportFailureCommentFailureLeavesRunUnrecorded()
     {
         var result = await InvokeAsync(new
@@ -142,6 +167,37 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
         var comment = Assert.Single(issue.Comments);
         Assert.Contains("green again", comment);
         Assert.Equal(["update", "createComment"], result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResolveSuccessClosesNewerDuplicateWhenCanonicalIsAlreadyClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "resolveSuccess",
+            env = new { REF = "main" },
+            issues = new[]
+            {
+                new
+                {
+                    number = 5,
+                    body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->",
+                    state = "closed",
+                },
+                new
+                {
+                    number = 8,
+                    body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->",
+                    state = "open",
+                },
+            },
+        });
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("green again", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -201,6 +257,9 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
         Assert.Empty(result.Issues);
         Assert.DoesNotContain("update", result.Calls);
         Assert.DoesNotContain("createComment", result.Calls);
+        Assert.Contains("No matching tracking issue to reconcile.", result.Logs);
+        Assert.Contains("No open CI-failure issue for main; nothing to close.", result.Logs);
+        Assert.DoesNotContain(result.Logs, log => log.Contains("#undefined", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -297,7 +356,7 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(RunnerResult Result);
 
-    private sealed record RunnerResult(bool Threw, string[] Calls, RunnerIssue[] Issues);
+    private sealed record RunnerResult(bool Threw, string[] Calls, string[] Logs, RunnerIssue[] Issues);
 
     private sealed record RunnerIssue(int Number, string? Title, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 }

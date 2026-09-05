@@ -150,6 +150,7 @@ async function dispatch(operation, payload) {
                 title: payload.title ?? 'Tracking issue',
                 buildBody: () => payload.body ?? `${payload.marker}\n\nbody`,
                 closeDuplicates: payload.closeDuplicates,
+                forceCreate: payload.forceCreate,
                 reopen: 'when-changing',
                 actionsForCanonical: issue => {
                     const actions = [];
@@ -192,6 +193,7 @@ async function dispatch(operation, payload) {
                 calls: github.calls,
                 issues: snapshotIssues(store.issues),
                 issuesAfterFailure,
+                duplicatesClosed: execution.duplicatesClosed,
             };
         }
 

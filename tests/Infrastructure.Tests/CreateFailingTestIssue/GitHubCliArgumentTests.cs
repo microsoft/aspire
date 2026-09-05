@@ -44,7 +44,7 @@ public class GitHubCliArgumentTests
             arguments);
     }
 
-    private static async Task<IReadOnlyList<string>> CaptureArgumentsAsync(Func<Task<string>> call)
+    private static async Task<IReadOnlyList<string>> CaptureArgumentsAsync<T>(Func<Task<T>> call, string response = "{}")
     {
         IReadOnlyList<string> captured = [];
 
@@ -56,7 +56,7 @@ public class GitHubCliArgumentTests
         GitHubCli.GhInvokerOverride = (arguments, _) =>
         {
             captured = arguments;
-            return Task.FromResult("{}");
+            return Task.FromResult(response);
         };
 
         try

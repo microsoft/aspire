@@ -21,17 +21,29 @@ const path = require('node:path');
 
 const monitor = require('../../../.github/workflows/monitor-scheduled-workflows.js');
 
-function makeGithub(store, runsByFile, { failUpdate }) {
+function makeGithub(store, runsByFile, { failUpdate, issuesAfterInitialList }) {
     const calls = [];
     const listRunRequests = [];
+    let listIssuesCount = 0;
     return {
         calls,
         listRunRequests,
+        get listIssuesCount() {
+            return listIssuesCount;
+        },
         paginate: async (fn, params) => (await fn(params)).data,
         rest: {
             issues: {
                 createLabel: async () => { calls.push('createLabel'); },
                 listForRepo: async ({ labels, state }) => {
+                    listIssuesCount++;
+                    if (listIssuesCount === 2 && issuesAfterInitialList) {
+                        store.issues = issuesAfterInitialList.map(issue => ({
+                            comments: [],
+                            state: 'open',
+                            ...issue,
+                        }));
+                    }
                     // Production narrows by the lookup label before the marker filter
                     // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
                     // narrowing is ever dropped so the regression is caught here
@@ -41,7 +53,16 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     }
                     const requestedState = state ?? 'open';
                     return {
-                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                        // Octokit responses are snapshots, not live references to
+                        // GitHub state. Clone them so an update call cannot silently
+                        // mutate the runner's cached issue list in the test.
+                        data: store.issues
+                            .filter(issue => requestedState === 'all' || issue.state === requestedState)
+                            .map(issue => ({
+                                ...issue,
+                                labels: [...(issue.labels ?? [])],
+                                comments: issue.comments?.length ?? 0,
+                            })),
                     };
                 },
                 create: async ({ title, body, labels }) => {
@@ -50,7 +71,7 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     store.issues.push(issue);
                     return { data: issue };
                 },
-                update: async ({ issue_number, body, state }) => {
+                update: async ({ issue_number, body, state, state_reason: stateReason }) => {
                     calls.push('update');
                     if (failUpdate) {
                         throw new Error('transient update failure');
@@ -58,6 +79,7 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (body !== undefined) { issue.body = body; }
                     if (state) { issue.state = state; }
+                    if (stateReason) { issue.stateReason = stateReason; }
                 },
                 listComments: async ({ issue_number }) => {
                     const issue = store.issues.find(i => i.number === issue_number);
@@ -101,7 +123,10 @@ async function main() {
         issues: (input.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
         next: input.nextNumber ?? 1000,
     };
-    const github = makeGithub(store, input.runsByFile ?? {}, { failUpdate: input.failUpdate === true });
+    const github = makeGithub(store, input.runsByFile ?? {}, {
+        failUpdate: input.failUpdate === true,
+        issuesAfterInitialList: input.issuesAfterInitialList,
+    });
     const logs = [];
     const warnings = [];
     const core = {
@@ -130,9 +155,11 @@ async function main() {
             logs,
             warnings,
             listRunRequests: github.listRunRequests,
+            listIssuesCount: github.listIssuesCount,
             issues: store.issues.map(issue => ({
                 number: issue.number,
                 state: issue.state,
+                stateReason: issue.stateReason ?? null,
                 body: issue.body,
                 labels: issue.labels ?? [],
                 comments: issue.comments ?? [],

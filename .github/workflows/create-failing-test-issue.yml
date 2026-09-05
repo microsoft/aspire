@@ -30,31 +30,18 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: >-
-    create-failing-test-issue-${{
-      github.event_name == 'workflow_dispatch'
-      && format('dispatch-{0}', github.run_id)
-      || format('{0}-{1}',
-          github.event.issue.pull_request && 'pr' || 'issue',
-          github.event.issue.number)
-    }}
-  cancel-in-progress: false
-
 jobs:
-  create_failing_test_issue:
-    name: Create failing-test issue
+  authorize_failing_test_issue:
+    name: Authorize failing-test issue
     if: >-
       github.repository == 'microsoft/aspire' &&
       (github.event_name == 'workflow_dispatch' ||
        startsWith(github.event.comment.body, '/create-issue'))
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
-      contents: read # checkout repository
-      issues: write # create/reopen/comment on issues
-      pull-requests: write # comment on PRs
-      actions: read # list workflow runs and download artifacts
+      contents: read
+      issues: write
     steps:
     - name: Verify user has write access
       if: github.event_name == 'issue_comment'
@@ -83,6 +70,22 @@ jobs:
             return;
           }
 
+  create_failing_test_issue:
+    name: Create failing-test issue
+    needs: authorize_failing_test_issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout repository
+      issues: write # create/reopen/comment on issues
+      pull-requests: write # comment on PRs
+      actions: read # list workflow runs and download artifacts
+    concurrency:
+      # Issue comments cannot atomically reserve occurrence markers, so serialize writers.
+      group: create-failing-test-issue
+      cancel-in-progress: false
+      queue: max
+    steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       if: success()
       with:
@@ -192,6 +195,8 @@ jobs:
         script: |
           const fs = require('fs');
           const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
+          const tracking = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/tracking-issue.js`);
+          const failingTestTracking = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue-tracking.js`);
           const prNumber = process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null;
           const resolverFailed = process.env.RESOLVE_OUTCOME === 'failure';
           const hasResultFile = fs.existsSync(process.env.RESULT_PATH) && fs.statSync(process.env.RESULT_PATH).size > 0;
@@ -269,64 +274,16 @@ jobs:
             return;
           }
 
-          let targetIssue = null;
-          if (process.env.FORCE_NEW !== 'true') {
-            const query = helper.buildIssueSearchQuery(context.repo.owner, context.repo.repo, result.issue.metadataMarker);
-            const { data: search } = await github.rest.search.issuesAndPullRequests({
-              q: query,
-              per_page: 20
-            });
-
-            const issues = search.items.filter(item => !item.pull_request);
-            targetIssue = issues.find(item => item.state === 'open') ?? issues.find(item => item.state === 'closed') ?? null;
-          }
-
-          let action;
-          let issueNumber;
-          let issueUrl;
-
-          if (targetIssue && targetIssue.state === 'open') {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              body: result.issue.commentBody
-            });
-
-            action = 'updated';
-            issueNumber = targetIssue.number;
-            issueUrl = targetIssue.html_url;
-          } else if (targetIssue && targetIssue.state === 'closed') {
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              state: 'open'
-            });
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              body: result.issue.commentBody
-            });
-
-            action = 'reopened';
-            issueNumber = targetIssue.number;
-            issueUrl = targetIssue.html_url;
-          } else {
-            const { data: issue } = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: result.issue.title,
-              body: result.issue.body,
-              labels: result.issue.labels
-            });
-
-            action = 'created';
-            issueNumber = issue.number;
-            issueUrl = issue.html_url;
-          }
+          const reconciliation = await failingTestTracking.reconcile({
+            transport: tracking.createOctokitIssueTransport(github, context),
+            core,
+            issue: result.issue,
+            runId: result.resolution.runId,
+            forceNew: process.env.FORCE_NEW === 'true',
+          });
+          const action = reconciliation.action;
+          const issueNumber = reconciliation.number;
+          const issueUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
 
           const testName = result.match?.canonicalTestName ?? result.match?.displayTestName ?? '';
           let disableHint = '';
@@ -346,7 +303,7 @@ jobs:
           }
 
     - name: Post failure comment on unexpected error
-      if: failure() && steps.extract-command.outcome == 'success' && (steps.verify-permission.outcome == 'success' || steps.verify-permission.outcome == 'skipped')
+      if: failure() && steps.extract-command.outcome == 'success'
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         PR_NUMBER: ${{ steps.extract-command.outputs.pr_number }}

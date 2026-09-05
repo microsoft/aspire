@@ -5531,7 +5531,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             .Replace("$repo", "\"microsoft/aspire\"", StringComparison.Ordinal);
     }
 
-    private static string ExtractTopLevelMapping(string workflow, string key)
+    internal static string ExtractTopLevelMapping(string workflow, string key)
     {
         var lines = workflow.ReplaceLineEndings("\n").Split('\n');
         var mappingStart = Array.IndexOf(lines, $"{key}:");

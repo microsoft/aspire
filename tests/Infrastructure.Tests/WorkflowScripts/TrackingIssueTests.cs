@@ -93,6 +93,28 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ForceCreatePlansAnIndependentIssueEvenWhenCanonicalExists()
+    {
+        var marker = "<!-- m -->";
+        var result = await InvokeHarnessAsync<PlanExecutionResult>(
+            "planAndExecute",
+            new
+            {
+                marker,
+                forceCreate = true,
+                body = $"{marker}\n{DuplicateExemptMarker}",
+                issues = new object[]
+                {
+                    new { number = 5, body = marker, state = "open" },
+                }
+            });
+
+        Assert.Equal("create", Assert.Single(result.Plan.Actions).Type);
+        Assert.Equal("create", Assert.Single(result.AppliedActions).Type);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RecordRunCommentsOnExistingIssueForNewRun()
     {
         var result = await InvokeHarnessAsync<RecordRunResult>(
@@ -535,6 +557,27 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ExecutorReportsOnlyNonCanonicalIssuesAsDuplicatesClosed()
+    {
+        var result = await InvokeHarnessAsync<PlanExecutionResult>(
+            "planAndExecute",
+            new
+            {
+                marker = "<!-- m -->",
+                closeDuplicates = true,
+                closeCanonical = true,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->", state = "open" },
+                    new { number = 8, body = "<!-- m -->", state = "open" },
+                }
+            });
+
+        Assert.Equal([8], result.DuplicatesClosed);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task BuildBodyEmbedsAutoCloseStampWhenTrue()
     {
         var body = await InvokeHarnessAsync<string>(
@@ -631,6 +674,8 @@ public sealed class TrackingIssueTests : IDisposable
 
     private sealed record FindIssueResult(int? Number);
 
+    private const string DuplicateExemptMarker = "<!-- tracking-issue-duplicate-exempt -->";
+
     private sealed record ReadAutoCloseResult(bool? Value);
 
     private sealed record RecordRunResult(RecordResult Result, string[] Calls, IssueState[] Issues);
@@ -646,7 +691,8 @@ public sealed class TrackingIssueTests : IDisposable
         string[] Calls,
         IssueState[] Issues,
         IssueState[] IssuesAfterFailure,
-        ReconciliationAction[] ResumedAppliedActions);
+        ReconciliationAction[] ResumedAppliedActions,
+        int[] DuplicatesClosed);
 
     private sealed record ReconciliationPlan(int? CanonicalIssueNumber, ReconciliationAction[] Actions);
 

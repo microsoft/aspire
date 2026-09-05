@@ -142,11 +142,6 @@ function formatListResponse(resolverOutcome, resultJson) {
     return { error: false, message: 'No test failures were found. Use `--url` to point to a specific workflow run.\n\n' };
 }
 
-function buildIssueSearchQuery(owner, repo, metadataMarker) {
-    const escapedMarker = String(metadataMarker ?? '').replaceAll('"', '\\"');
-    return `repo:${owner}/${repo} is:issue label:failing-test in:body "${escapedMarker}"`;
-}
-
 function isSupportedSourceUrl(value) {
     if (typeof value !== 'string') {
         return false;
@@ -158,7 +153,6 @@ function isSupportedSourceUrl(value) {
 }
 
 module.exports = {
-    buildIssueSearchQuery,
     formatListResponse,
     isSupportedSourceUrl,
     parseCommand,
