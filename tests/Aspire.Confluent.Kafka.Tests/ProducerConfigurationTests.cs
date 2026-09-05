@@ -250,5 +250,55 @@ public class ProducerConfigurationTests
         Assert.Equal(SecurityProtocol.Plaintext, config.SecurityProtocol);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReadsSaslCredentialsFromConnectionString(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:messaging", CommonHelpers.TestingSaslConnectionString)
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedKafkaProducer<string, string>("messaging");
+        }
+        else
+        {
+            builder.AddKafkaProducer<string, string>("messaging");
+        }
+
+        using var host = builder.Build();
+        var connectionFactory = useKeyed ?
+            host.Services.GetRequiredKeyedService(ReflectionHelpers.ProducerConnectionFactoryStringKeyStringValueType.Value, "messaging") :
+            host.Services.GetRequiredService(ReflectionHelpers.ProducerConnectionFactoryStringKeyStringValueType.Value);
+
+        var config = GetProducerConfig(connectionFactory)!;
+
+        Assert.Equal(CommonHelpers.TestingEndpoint, config.BootstrapServers);
+        Assert.Equal(SecurityProtocol.SaslPlaintext, config.SecurityProtocol);
+        Assert.Equal(SaslMechanism.Plain, config.SaslMechanism);
+        Assert.Equal("kafka", config.SaslUsername);
+        Assert.Equal(CommonHelpers.TestingPassword, config.SaslPassword);
+    }
+
+    [Fact]
+    public void ConnectionStringWithQuotedPasswordPreservesSeparators()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:messaging", $"BootstrapServers={CommonHelpers.TestingEndpoint};SaslUsername=kafka;SaslPassword=\"a;b=c\"")
+        ]);
+
+        builder.AddKafkaProducer<string, string>("messaging");
+
+        using var host = builder.Build();
+        var config = GetProducerConfig(host.Services.GetRequiredService(ReflectionHelpers.ProducerConnectionFactoryStringKeyStringValueType.Value))!;
+
+        Assert.Equal(CommonHelpers.TestingEndpoint, config.BootstrapServers);
+        Assert.Equal("a;b=c", config.SaslPassword);
+    }
+
     private static ProducerConfig? GetProducerConfig(object o) => ReflectionHelpers.ProducerConnectionFactoryStringKeyStringValueType.Value.GetProperty("Config")!.GetValue(o) as ProducerConfig;
 }
