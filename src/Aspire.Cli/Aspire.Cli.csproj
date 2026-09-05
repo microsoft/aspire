@@ -95,6 +95,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <RuntimeHostConfigurationOption Include="NuGet.UseSystemTextJsonDeserialization"
+                                    Value="true"
+                                    Trim="true" />
+  </ItemGroup>
+
+  <!-- NuGet's Linux signature verification probes trustedroots under the SDK root.
+       The NativeAOT CLI extracts these embedded SDK roots only while initializing NuGet's trust store. -->
+  <PropertyGroup>
+    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
+    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Markdig" />
@@ -110,9 +126,17 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- System.Security.Cryptography.Pkcs ships a real lib/net10.0 assembly that binds to
+         Microsoft.Bcl.Cryptography, but its net10.0 dependency group is empty. Reference
+         the matching implementation explicitly so Native AOT can resolve signature verification. -->
+    <PackageReference Include="Microsoft.Bcl.Cryptography" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="7.10.0-dev.1" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="7.10.0-dev.1" />
   </ItemGroup>
 
   <ItemGroup>
