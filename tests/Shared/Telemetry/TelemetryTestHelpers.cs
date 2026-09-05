@@ -300,6 +300,10 @@ internal static class TelemetryTestHelpers
             DateTimeOffset.Now,
             DateTimeOffset.Now.AddYears(1));
 
+    #if NET9_0_OR_GREATER
         return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null);
+    #else
+        return new X509Certificate2(certificate.Export(X509ContentType.Pfx));
+    #endif
     }
 }

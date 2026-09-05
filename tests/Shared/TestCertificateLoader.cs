@@ -33,7 +33,11 @@ public static class TestCertificateLoader
 
         try
         {
+#if NET9_0_OR_GREATER
             return X509CertificateLoader.LoadPkcs12FromFile(GetCertPath(certName), password);
+#else
+            return new X509Certificate2(GetCertPath(certName), password);
+#endif
         }
         finally
         {

@@ -266,13 +266,13 @@ fluent-tab[aria-selected="false"]:hover {
 
 .property-grid-container th {
     padding: 4px 1px 4px 0 !important;
-    border-bottom: 1px solid light-dark(#e5e5e5, #363241) !important;
+    border-bottom: 1px solid var(--datagrid-border-color) !important;
     text-align: left !important;
 }
 
 .property-grid-container td {
     padding: 4px 16px 4px 0 !important;
-    border-bottom: 1px solid light-dark(#e5e5e5, #363241) !important;
+    border-bottom: 1px solid var(--datagrid-border-color) !important;
 }
 
 .property-grid-container tbody tr:last-child td {
@@ -325,9 +325,7 @@ fluent-badge.property-details-accordion-badge {
     border-radius: var(--borderRadiusCircular);
     outline: none;
     box-shadow: none;
-    background-color: light-dark(
-        var(--colorNeutralBackground3),
-        color-mix(in srgb, var(--colorNeutralBackground3) 40%, var(--aspire-page-background)));
+    background-color: var(--property-grid-badge-background-color);
     color: var(--colorNeutralForeground1);
     font-weight: 400;
 }
@@ -543,8 +541,22 @@ fluent-badge.property-details-accordion-badge {
     overflow: auto;
 }
 
+.fluent-data-grid:has(tr[row-state="empty-content"]) {
+    /* Override Fluent's inline full-height empty layout to keep the message below the header. */
+    height: auto !important;
+}
+
 .fluent-data-grid tr[row-state="empty-content"] > td {
-    height: 100% !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: auto !important;
+    padding: 20px;
+    border-bottom-color: var(--datagrid-border-color) !important;
+}
+
+.property-grid-container .fluent-data-grid tr[row-state="empty-content"] > td {
+    padding: 20px 20px 20px 0 !important;
 }
 
 .body-content {

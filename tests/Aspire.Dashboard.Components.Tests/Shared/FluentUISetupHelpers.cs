@@ -147,6 +147,7 @@ internal static class FluentUISetupHelpers
     public static void SetupFluentCombobox(TestContext context)
     {
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.UpdateValue", _ => true);
     }
 
     public static async Task ConfigureTelemetryRepository(

@@ -30,6 +30,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -231,6 +232,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Add services to the container.
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+    #if !NET9_0_OR_GREATER
+        // Fluent uses constructor injection, which Blazor's default activator only supports in .NET 9+.
+        builder.Services.Replace(ServiceDescriptor.Scoped<IComponentActivator, DashboardComponentActivator>());
+    #endif
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -1092,4 +1097,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    private sealed class DashboardComponentActivator(IServiceProvider serviceProvider) : IComponentActivator
+    {
+        public IComponent CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
+        {
+            return (IComponent)ActivatorUtilities.CreateInstance(serviceProvider, componentType);
+        }
+    }
 }
