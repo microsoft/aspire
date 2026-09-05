@@ -46,6 +46,15 @@ internal interface INpmRunner
     Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the version currently pointed at by a package's <c>latest</c> dist-tag using
+    /// the configuration npm applies to global commands.
+    /// </summary>
+    /// <param name="packageName">The npm package name (e.g., "@microsoft/aspire-cli").</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The version that <c>&lt;packageName&gt;@latest</c> currently resolves to.</returns>
+    Task<SemVersion> GetLatestVersionAsync(string packageName, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Downloads a package tarball to a temporary directory using npm pack.
     /// </summary>
     /// <param name="packageName">The npm package name (e.g., "@playwright/cli").</param>

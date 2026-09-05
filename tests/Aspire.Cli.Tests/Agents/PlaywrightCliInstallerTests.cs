@@ -1010,6 +1010,9 @@ public class PlaywrightCliInstallerTests
         public bool InstallGlobalCalled { get; private set; }
         public string? ResolvedVersionRange { get; private set; }
 
+        public Task<SemVersion> GetLatestVersionAsync(string packageName, CancellationToken cancellationToken)
+            => Task.FromResult(new SemVersion(0, 0, 0));
+
         public Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
         {
             ResolvedVersionRange = versionRange;

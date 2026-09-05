@@ -6,6 +6,18 @@ The Aspire CLI is distributed through npm using the same signed native binary ar
 
 The published package is `@microsoft/aspire-cli`. It supports global installation (`npm install -g @microsoft/aspire-cli`) on Windows, macOS, and Linux (glibc and musl). The CLI detects npm installs at runtime and routes `aspire update --self` and update notifications through the npm package manager rather than the GitHub-binary downloader.
 
+The CLI checks how it was installed before selecting an update source. NuGet-installed or standalone launches retain the existing NuGet package lookup. npm-installed launches skip NuGet entirely and ask npm which version the `latest` dist-tag currently resolves to:
+
+```bash
+npm view @microsoft/aspire-cli@latest version --global --json=false --color=false --loglevel=error
+```
+
+The `--global` flag makes npm use the same registry, proxy, certificate, and authentication configuration as the advertised `npm install -g @microsoft/aspire-cli@latest` command while excluding project-level configuration. The command runs from an isolated temporary directory, and the explicit output flags prevent ambient npm settings from changing the version format.
+
+The lookup has a ten-second timeout and bounded process cleanup. Missing npm, a failed command, or malformed output is non-fatal for routine commands and is reported as an update-check warning by `aspire doctor`. Caller cancellation still propagates. Aspire does not parse npm configuration or log npm's output, so registry credentials remain owned by npm.
+
+When the `latest` version is newer than the running CLI by semantic-version precedence, the notification shows `npm install -g @microsoft/aspire-cli@latest`. If `latest` is equal to or older than the running CLI, no update is reported. Failed lookups are not cached, so `aspire doctor` retries after a transient failure during a background check. Routine commands suppress lookup failures, while `aspire doctor` reports a specific update-check warning. Explicit `aspire update --self` behavior is unchanged.
+
 ## Research and prior art
 
 This design follows the native npm package pattern used by established packages rather than introducing a custom installer.
