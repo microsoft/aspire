@@ -3594,6 +3594,157 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         AssertId("1-1", result.PagedResult.Items[0].SpanId);
     }
 
+    [Theory]
+    [InlineData("replica-2", "service-replica-2")]
+    [InlineData("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "service-eeeeeeee")]
+    public async Task GetSpans_FilterByTextFragments_MatchesResourceDisplayName(string instanceId, string displayName)
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service", instanceId: "replica-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service", instanceId: instanceId),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TextFragments = [displayName]
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-2", Assert.Single(result.PagedResult.Items).SpanId);
+    }
+
+    [Fact]
+    public async Task GetSpans_FilterByTextFragments_MatchesPeerResourceDisplayName()
+    {
+        var peerResource = ModelTestHelpers.CreateResource(resourceName: "service-replica-3", displayName: "service");
+        using var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => (peerResource.Name, peerResource));
+        using var repositoryContext = await CreateRepositoryAsync(outgoingPeerResolvers: [outgoingPeerResolver]);
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service", instanceId: "replica-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "2",
+                                spanId: "2-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service", instanceId: "replica-2"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "3",
+                                spanId: "3-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "caller"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "peer")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var persistedPeer = Assert.Single(
+            repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true),
+            resource => resource.ResourceKey == new ResourceKey("service", "replica-3"));
+        Assert.True(persistedPeer.UninstrumentedPeer);
+
+        var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TraceId = GetHexId("1"),
+            TextFragments = ["service-replica-3"]
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", Assert.Single(result.PagedResult.Items).SpanId);
+    }
+
     [Fact]
     public async Task GetSpans_FilterByTextFragments_MatchesDisplaySummaries()
     {

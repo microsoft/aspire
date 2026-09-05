@@ -5,6 +5,7 @@ using System.Text;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -979,6 +980,102 @@ public partial class TraceDetailsTests : DashboardTestContext
                 Assert.True(container.ClassList.Contains("main-grid-expanded"));
             }
         });
+    }
+
+    [Fact]
+    public async Task FilterQuery_OlderResultDoesNotReplaceCurrentMatches()
+    {
+        SetupTraceDetailsServices();
+
+        var restrictiveQueryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueRestrictiveQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var currentQueryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueCurrentQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<ITelemetryRepository>(services =>
+        {
+            var inner = services.GetRequiredService<SqliteTelemetryRepository>();
+            return new TestTelemetryRepository(inner)
+            {
+                GetSpansAsyncHandler = async (request, cancellationToken) =>
+                {
+                    if (request.TextFragments is ["missing"])
+                    {
+                        restrictiveQueryStarted.SetResult();
+                        await continueRestrictiveQuery.Task.WaitAsync(cancellationToken);
+                    }
+                    else if (request.TextFragments is not null)
+                    {
+                        currentQueryStarted.SetResult();
+                        await continueCurrentQuery.Task.WaitAsync(cancellationToken);
+                    }
+
+                    return await inner.GetSpansAsync(request, cancellationToken);
+                }
+            };
+        });
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
+
+        var selectedSpan = Assert.Single(Assert.IsType<List<SpanWaterfallViewModel>>(cut.Instance.PageViewModel.SpanWaterfallViewModels));
+        cut.Instance.PageViewModel.ContextFilterMatches = [];
+        cut.Instance.PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
+        {
+            SpanViewModel = SpanDetailsViewModel.Create(
+                selectedSpan.Span,
+                Services.GetRequiredService<ITelemetryRepository>(),
+                repository.GetResources())
+        };
+
+        cut.Instance.PageViewModel.Filter = "missing";
+        var olderRefresh = cut.Instance.RefreshAfterFilterChangeAsync();
+        await restrictiveQueryStarted.Task.DefaultTimeout();
+
+        cut.Instance.PageViewModel.Filter = selectedSpan.Span.Name;
+        var currentQuery = cut.Instance.UpdateFilterMatchesAsync();
+        await currentQueryStarted.Task.DefaultTimeout();
+
+        continueRestrictiveQuery.SetResult();
+        Assert.False(await olderRefresh);
+        Assert.NotNull(cut.Instance.PageViewModel.SelectedData);
+
+        continueCurrentQuery.SetResult();
+        Assert.True(await currentQuery);
+        Assert.Collection(
+            cut.Instance.PageViewModel.ContextFilterMatches!,
+            match => Assert.Equal(selectedSpan.Span.SpanId, match));
     }
 
     private static async Task<HashSet<string>> GetMatchingSpanIdsAsync(

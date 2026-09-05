@@ -322,6 +322,82 @@ public partial class StructuredLogsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, messageCount));
     }
 
+    [Fact]
+    public async Task FilterQuery_StaleResultDoesNotClearCurrentSelection()
+    {
+        SetupStructureLogsServices();
+
+        var restrictiveQueryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueRestrictiveQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Services.AddSingleton<ITelemetryRepository>(services =>
+        {
+            var inner = services.GetRequiredService<SqliteTelemetryRepository>();
+            return new TestTelemetryRepository(inner)
+            {
+                GetLogsAsyncHandler = async (context, cancellationToken) =>
+                {
+                    var textFilter = context.Filters
+                        .OfType<FieldTelemetryFilter>()
+                        .Single(filter => filter.Field == nameof(OtlpLogEntry.Message))
+                        .Value;
+                    if (textFilter == "missing")
+                    {
+                        restrictiveQueryStarted.SetResult();
+                        await continueRestrictiveQuery.Task.WaitAsync(cancellationToken);
+                    }
+
+                    return await inner.GetLogsAsync(context, cancellationToken);
+                }
+            };
+        });
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(),
+        [
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "First log"),
+                            CreateLogRecord(message: "Second log")
+                        }
+                    }
+                }
+            }
+        ]);
+        var logs = (await repository.GetLogsAsync(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 2,
+            Filters = []
+        }, CancellationToken.None)).Items;
+        var firstLog = Assert.Single(logs, log => log.Message == "First log");
+        var secondLog = Assert.Single(logs, log => log.Message == "Second log");
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        cut.Instance.PageViewModel.SelectedLogEntry = new StructureLogsDetailsViewModel { LogEntry = firstLog };
+
+        var olderQuery = cut.InvokeAsync(() => cut.Instance.ClearSelectedLogEntryIfExcludedAsync("missing", []));
+        await restrictiveQueryStarted.Task.WaitAsync(DefaultWaitTimeout);
+
+        cut.Instance.PageViewModel.SelectedLogEntry = new StructureLogsDetailsViewModel { LogEntry = secondLog };
+        await cut.InvokeAsync(() => cut.Instance.ClearSelectedLogEntryIfExcludedAsync("Second", []));
+
+        continueRestrictiveQuery.SetResult();
+        await olderQuery;
+
+        Assert.Equal(secondLog.InternalId, cut.Instance.PageViewModel.SelectedLogEntry?.LogEntry.InternalId);
+    }
+
     private void SetupStructureLogsServices()
     {
         FluentUISetupHelpers.SetupFluentDivider(this);
