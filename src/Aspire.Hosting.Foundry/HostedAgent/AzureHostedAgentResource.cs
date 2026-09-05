@@ -25,10 +25,10 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
+    // The "Foundry User" built-in role (data-plane access to Foundry agents/inference). Granted to
     // the agent's own instance identity below, and to consumers that reference the agent (see
     // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
-    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    internal const string FoundryUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
     internal const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
@@ -258,7 +258,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
         var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
         var roleDefinitionId = new ResourceIdentifier(
-            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{FoundryUserRoleDefinitionId}");
 
         var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
 
