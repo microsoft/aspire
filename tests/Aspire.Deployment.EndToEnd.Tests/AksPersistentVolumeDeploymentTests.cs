@@ -139,6 +139,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 "PASSED: wrote aks-pv-marker-42 revision first");
             await StopPortForwardAsync(auto, counter);
 
+            await RetainPersistentVolumeForStaticBindingAsync(auto, counter);
+
             UpdateDeploymentRevision(appHostPath);
 
             await DeployAsync(auto, counter, waitForPipelineSuccess: false);
@@ -151,13 +153,14 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 "kubectl wait --for=condition=Ready pod/apiservice-statefulset-0 --namespace \"$NS\" --timeout=5m",
                 counter,
                 TimeSpan.FromMinutes(6));
+            await VerifyStaticPersistentVolumeBindingAsync(auto, counter);
             await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 3000);
             await auto.RunCommandAsync(
                 "PVC_UID_AFTER=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_AFTER=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
-                "test \"$PVC_UID_AFTER\" = \"$PVC_UID_BEFORE\" && " +
+                "test \"$PVC_UID_AFTER\" != \"$PVC_UID_BEFORE\" && " +
                 "test \"$POD_UID_AFTER\" != \"$POD_UID_BEFORE\" && " +
-                "echo \"Redeploy reused PVC $PVC_UID_AFTER and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
+                "echo \"Redeploy recreated PVC $PVC_UID_BEFORE as $PVC_UID_AFTER and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
                 counter);
 
             apiPort = GetAvailablePort();
@@ -229,6 +232,16 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             // which dynamically provisions an Azure Managed Disk.
             var data = aks.AddPersistentVolume("data")
                 .WithCapacity("1Gi");
+
+            // The test sets these only after retaining the disk-backed PV from the first
+            // deployment. The second deployment must statically bind the generated PVC to
+            // that exact PV instead of dynamically provisioning a replacement.
+            if (Environment.GetEnvironmentVariable("EXISTING_PV_NAME") is { Length: > 0 } persistentVolumeName &&
+                Environment.GetEnvironmentVariable("EXISTING_PV_STORAGE_CLASS") is { Length: > 0 } storageClassName)
+            {
+                data.WithPersistentVolumeName(persistentVolumeName)
+                    .WithStorageClass(storageClassName);
+            }
             """,
             appHostPath);
 
@@ -369,6 +382,41 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             $"test \"$VOLUME_GROUP\" = \"{expectedFsGroup}\" && " +
             $"echo \"StatefulSet uses fsGroup {expectedFsGroup}; pod UID is $PROCESS_UID with groups $PROCESS_GROUPS; /srv/data group is $VOLUME_GROUP\"",
             counter);
+    }
+
+    private static async Task RetainPersistentVolumeForStaticBindingAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            "export EXISTING_PV_NAME=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.spec.volumeName}') && " +
+            "export EXISTING_PV_STORAGE_CLASS=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.spec.storageClassName}') && " +
+            "test -n \"$EXISTING_PV_NAME\" && test -n \"$EXISTING_PV_STORAGE_CLASS\" && " +
+            "kubectl patch persistentvolume \"$EXISTING_PV_NAME\" --type merge -p '{\"spec\":{\"persistentVolumeReclaimPolicy\":\"Retain\"}}' && " +
+            "kubectl delete statefulset apiservice-statefulset --namespace \"$NS\" --cascade=foreground --wait=true && " +
+            "kubectl delete persistentvolumeclaim data --namespace \"$NS\" --wait=true && " +
+            "phase=''; for i in $(seq 1 60); do " +
+            "phase=$(kubectl get persistentvolume \"$EXISTING_PV_NAME\" -o jsonpath='{.status.phase}' 2>/dev/null || true); " +
+            "if [ \"$phase\" = \"Released\" ]; then break; fi; sleep 2; done; " +
+            "test \"$phase\" = \"Released\" && " +
+            "kubectl patch persistentvolume \"$EXISTING_PV_NAME\" --type json -p '[{\"op\":\"remove\",\"path\":\"/spec/claimRef\"}]' && " +
+            "echo \"Retained persistent volume $EXISTING_PV_NAME with storage class $EXISTING_PV_STORAGE_CLASS\"",
+            counter,
+            TimeSpan.FromMinutes(3));
+    }
+
+    private static async Task VerifyStaticPersistentVolumeBindingAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            "PVC_PHASE=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.status.phase}') && " +
+            "PVC_VOLUME=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.spec.volumeName}') && " +
+            "test \"$PVC_PHASE\" = \"Bound\" && " +
+            "test \"$PVC_VOLUME\" = \"$EXISTING_PV_NAME\" && " +
+            "echo \"PVC data is Bound to retained persistent volume $PVC_VOLUME\"",
+            counter,
+            TimeSpan.FromMinutes(2));
     }
 
     private static async Task DeployAsync(

@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
+using Aspire.Hosting.Kubernetes.Resources;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
@@ -66,9 +67,8 @@ public static class KubernetesPersistentVolumeExtensions
     /// <summary>
     /// Sets the Kubernetes storage class name on the PVC's
     /// <c>spec.storageClassName</c>. When unset, the cluster's default storage class
-    /// is used.
+    /// is used. An empty string explicitly disables storage class assignment.
     /// </summary>
-    /// <ats-summary>Sets the storage class for a persistent volume</ats-summary>
     /// <param name="builder">The persistent volume resource builder.</param>
     /// <param name="storageClassName">The storage class name (e.g.
     /// <c>"managed-csi"</c>, <c>"gp3"</c>).</param>
@@ -79,8 +79,13 @@ public static class KubernetesPersistentVolumeExtensions
         string storageClassName)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(storageClassName);
+        ArgumentNullException.ThrowIfNull(storageClassName);
+        if (storageClassName.Length > 0)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageClassName);   
+        }
 
+        builder.Resource.ShouldRequestStorageClassName = true;
         builder.Resource.StorageClassName = ReferenceExpression.Create($"{storageClassName}");
         return builder;
     }
@@ -102,7 +107,26 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(storageClassName);
 
+        builder.Resource.ShouldRequestStorageClassName = true;
         builder.Resource.StorageClassName = ReferenceExpression.Create($"{storageClassName.Resource}");
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Omits <c>spec.storageClassName</c> from the generated PVC so Kubernetes can assign the cluster's default StorageClass.
+    /// To request a classless volume, call <see cref="WithStorageClass(IResourceBuilder{KubernetesPersistentVolumeResource}, string)"/> with an empty string.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <returns>The same builder for chaining.</returns>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithoutStorageClass(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.ShouldRequestStorageClassName = false;
+        builder.Resource.StorageClassName = null;
         return builder;
     }
 
@@ -144,6 +168,29 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(capacity);
 
         builder.Resource.Capacity = ReferenceExpression.Create($"{capacity.Resource}");
+        return builder;
+    }
+
+    /// <summary>
+    /// Sets the name of the existing PersistentVolume to bind to in the generated PVC's
+    /// <c>spec.volumeName</c>.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <param name="persistentVolumeName">The name of the existing PersistentVolume.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// The named PersistentVolume must satisfy the claim's storage class, access modes, and requested capacity; otherwise, the claim remains unbound.
+    /// Configure these values to match the existing volume.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithPersistentVolumeName(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
+        string persistentVolumeName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(persistentVolumeName);
+
+        builder.Resource.PersistentVolumeName = ReferenceExpression.Create($"{persistentVolumeName}");
         return builder;
     }
 
@@ -219,6 +266,40 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(value);
 
         builder.Resource.VolumeAnnotations[key] = ReferenceExpression.Create($"{value.Resource}");
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Kubernetes PersistentVolumeClaim generated for the persistent volume.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <param name="configure">The action used to configure the generated persistent volume claim.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// This callback runs when the Kubernetes manifest is generated and can be used to set
+    /// properties that are not exposed by the other persistent volume configuration methods.
+    /// Changing <c>claim.Metadata.Name</c> changes the identity of the generated PVC; if you
+    /// do so, ensure that any workload references are updated accordingly.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var data = k8s.AddPersistentVolume("data")
+    ///     .WithConfiguration(claim =>
+    ///     {
+    ///         claim.Metadata.Labels["example.com/retention"] = "retain";
+    ///         claim.Spec.VolumeMode = "Block";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The callback exposes C#-only Kubernetes manifest types; use With* for polyglot configuration.")]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithConfiguration(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
+        Action<PersistentVolumeClaim> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.WithAnnotation(new KubernetesPersistentVolumeCustomizationAnnotation(configure));
         return builder;
     }
 
