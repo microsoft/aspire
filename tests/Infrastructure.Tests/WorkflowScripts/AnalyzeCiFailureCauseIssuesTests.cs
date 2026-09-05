@@ -470,6 +470,172 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReplayingOccurrenceDoesNotInferPublicationFromEmptyManagedHistory()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 0 most recent of 3 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.Contains("update", result.Calls);
+        Assert.Contains("[991](", Assert.Single(result.Issues).Body, StringComparison.Ordinal);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingOccurrenceDoesNotInferPublicationFromDuplicateManagedHistory()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 3 most recent of 3 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.DoesNotContain("update", result.Calls);
+        Assert.DoesNotContain("[991](", Assert.Single(result.Issues).Body, StringComparison.Ordinal);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.False(occurrence.TryGetProperty("issue_published", out _));
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains(
+                "occurrence total is smaller than the rendered history",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingOccurrenceDoesNotInferPublicationFromMismatchedVisibleCount()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 3 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.Contains("update", result.Calls);
+        Assert.Contains("[991](", Assert.Single(result.Issues).Body, StringComparison.Ordinal);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReplayingPersistedOccurrenceRetriesWhenPriorIssueUpdateDidNotComplete()
     {
         var result = await InvokeHarnessAsync<PublishResult>(

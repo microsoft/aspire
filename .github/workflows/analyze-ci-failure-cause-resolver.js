@@ -16,6 +16,7 @@ function resolveCauses({
     priorCauses = [],
     retryPatterns = {},
     trustedFailedJobs = analysis?.failed_jobs,
+    trustedJobLogs = {},
 }) {
     validateInputs(analysis, causes, priorCauses);
     validateRetryPatternCauseIds(retryPatterns);
@@ -41,6 +42,12 @@ function resolveCauses({
     for (const cause of causes) {
         const jobIds = resolveCauseJobIds(cause, analysis, failedJobsById, trustedFailedJobsById);
         const jobNames = jobIds.map(jobId => trustedFailedJobsById.get(jobId).name);
+        const jobEvidence = jobIds.map(jobId => ({
+            name: trustedFailedJobsById.get(jobId).name,
+            output: typeof trustedJobLogs?.[jobId] === 'string'
+                ? trustedJobLogs[jobId]
+                : undefined,
+        }));
         const evidence = buildEvidence(cause, analysis, jobNames);
 
         const proposedPriorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
@@ -68,8 +75,7 @@ function resolveCauses({
         if (!proposedAlias) {
             retryPatternMatch = cause.type === 'infra-failure'
                 ? findPriorCauseByRetryPattern(
-                    evidence,
-                    jobNames,
+                    jobEvidence,
                     retryPatterns,
                     priorById,
                     priorByNormalizedId)
@@ -619,8 +625,7 @@ function findPriorCausesByTestName(cause, priorCauses, priorById) {
 }
 
 function findPriorCauseByRetryPattern(
-    evidence,
-    jobNames,
+    jobEvidence,
     retryPatterns,
     priorById,
     priorByNormalizedId) {
@@ -628,8 +633,11 @@ function findPriorCauseByRetryPattern(
         .filter(pattern => pattern.enabled !== false)
         .filter(pattern => pattern.causeId)
         .filter(pattern => pattern.output || pattern.jobName)
-        .filter(pattern => !pattern.output || matchesConfiguredPattern(pattern.output, evidence))
-        .filter(pattern => !pattern.jobName || jobNames.some(jobName => matchesConfiguredPattern(pattern.jobName, jobName)))
+        .filter(pattern => jobEvidence.some(job =>
+            (!pattern.jobName || matchesConfiguredPattern(pattern.jobName, job.name)) &&
+            (!pattern.output ||
+                (typeof job.output === 'string' &&
+                    matchesConfiguredPattern(pattern.output, job.output)))))
         .map(pattern => pattern.causeId));
 
     if (matchingCauseIds.length > 1) {
@@ -928,6 +936,19 @@ function readJsonFiles(directory) {
         });
 }
 
+function readTrustedJobLogs(directory, trustedFailedJobs) {
+    if (!directory || !fs.existsSync(directory)) {
+        return {};
+    }
+
+    return Object.fromEntries(trustedFailedJobs.flatMap(job => {
+        const logPath = path.join(directory, `job-${job.id}.log`);
+        return fs.existsSync(logPath)
+            ? [[job.id, fs.readFileSync(logPath, 'utf8')]]
+            : [];
+    }));
+}
+
 function migratePriorCauseFiles(directory, migrations) {
     if (!fs.existsSync(directory) || migrations.length === 0) {
         return;
@@ -1000,9 +1021,9 @@ function writePriorCauseAliases(directory, aliases) {
 }
 
 function runCli(args) {
-    if (args.length < 4 || args.length > 5) {
+    if (args.length < 4 || args.length > 6) {
         throw new Error(
-            'Usage: node analyze-ci-failure-cause-resolver.js <analysis-file> <causes-directory> <prior-causes-directory> <retry-patterns-file> [trusted-failed-jobs-file]');
+            'Usage: node analyze-ci-failure-cause-resolver.js <analysis-file> <causes-directory> <prior-causes-directory> <retry-patterns-file> [trusted-failed-jobs-file] [trusted-job-logs-directory]');
     }
 
     const [
@@ -1011,16 +1032,19 @@ function runCli(args) {
         priorCausesDirectory,
         retryPatternsFile,
         trustedFailedJobsFile,
+        trustedJobLogsDirectory,
     ] = args;
     const analysis = JSON.parse(fs.readFileSync(analysisFile, 'utf8'));
+    const trustedFailedJobs = trustedFailedJobsFile
+        ? JSON.parse(fs.readFileSync(trustedFailedJobsFile, 'utf8'))
+        : analysis.failed_jobs;
     const result = resolveCauses({
         analysis,
         causes: readJsonFiles(causesDirectory),
         priorCauses: readJsonFiles(priorCausesDirectory),
         retryPatterns: JSON.parse(fs.readFileSync(retryPatternsFile, 'utf8')),
-        trustedFailedJobs: trustedFailedJobsFile
-            ? JSON.parse(fs.readFileSync(trustedFailedJobsFile, 'utf8'))
-            : analysis.failed_jobs,
+        trustedFailedJobs,
+        trustedJobLogs: readTrustedJobLogs(trustedJobLogsDirectory, trustedFailedJobs),
     });
 
     migratePriorCauseFiles(priorCausesDirectory, result.priorCauseMigrations);

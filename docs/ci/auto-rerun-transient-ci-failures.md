@@ -147,6 +147,8 @@ For job-level log matching (e.g., a Windows-specific process init failure):
 
 Add `causeId` only when the job pattern identifies one specific underlying cause. CI failure analysis uses the value as the canonical identity even when the agent proposes a different ID, so every matching occurrence updates the same memory record and GitHub issue. The field does not change whether the auto-rerun workflow retries the job.
 
+CI failure analysis preserves the final 256KB of each failed job log and requires one referenced job to satisfy every configured `jobName` and `output` field before applying `causeId`. If trusted log evidence is unavailable, patterns with `output` do not canonicalize the cause.
+
 Do not assign a `causeId` to a broad symptom such as `Could not resolve host` when the same text can represent unrelated failures. An incorrect mapping would combine those failures into one recurring-cause issue.
 
 Before adding a mapping, search the CI failure memory branch for an existing record:

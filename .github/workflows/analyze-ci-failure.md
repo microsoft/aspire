@@ -279,11 +279,24 @@ jobs:
           # Fetch logs for each failed job and extract only error-relevant lines.
           # Raw logs are huge (64KB+). Instead of blindly taking the last N lines,
           # we grep for error indicators with context to produce a focused extract.
+          mkdir -p ci-failure-data/retry-job-logs
           jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
             JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json)
             echo "Fetching logs for job: ${JOB_NAME} (${JOB_ID})"
-            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null || \
-              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}-raw.log"
+            RAW_LOG_PATH="ci-failure-data/job-${JOB_ID}-raw.log"
+            RETRY_LOG_PATH="ci-failure-data/retry-job-logs/job-${JOB_ID}.log"
+            if gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "$RAW_LOG_PATH" 2>/dev/null; then
+              # Match auto-rerun's trailing 256K-character window exactly. Keeping this
+              # evidence separate prevents the agent-focused excerpt from being treated as
+              # the trusted full-log input for retry-pattern cause canonicalization.
+              node -e '
+                const fs = require("node:fs");
+                const input = fs.readFileSync(process.argv[1], "utf8");
+                fs.writeFileSync(process.argv[2], input.slice(-(256 * 1024)));
+              ' "$RAW_LOG_PATH" "$RETRY_LOG_PATH"
+            else
+              echo "(Failed to fetch logs for job ${JOB_ID})" > "$RAW_LOG_PATH"
+            fi
 
             # Extract error-relevant lines with 3 lines of context before and 5 after.
             # Patterns: compiler errors, build failures, test failures, runtime errors,
@@ -302,14 +315,14 @@ jobs:
               -e '403 Forbidden' \
               -e 'exit code [1-9]' \
               -e 'Process completed with exit code' \
-              "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null \
+              "$RAW_LOG_PATH" 2>/dev/null \
               | head -150 > "ci-failure-data/job-${JOB_ID}.log" || true
 
             # If grep found nothing, fall back to last 200 lines (job may have unusual errors)
             if [ ! -s "ci-failure-data/job-${JOB_ID}.log" ]; then
-              tail -200 "ci-failure-data/job-${JOB_ID}-raw.log" > "ci-failure-data/job-${JOB_ID}.log"
+              tail -200 "$RAW_LOG_PATH" > "ci-failure-data/job-${JOB_ID}.log"
             fi
-            rm -f "ci-failure-data/job-${JOB_ID}-raw.log"
+            rm -f "$RAW_LOG_PATH"
           done
 
           # Fetch annotations for each failed job
@@ -755,7 +768,8 @@ safe-outputs:
                 "$CAUSES_DIR" \
                 "memory-repo/causes" \
                 "eng/test-retry-patterns.json" \
-                "$TRUSTED_FAILED_JOBS_FILE" || RESOLVER_STATUS=$?
+                "$TRUSTED_FAILED_JOBS_FILE" \
+                "ci-failure-data/retry-job-logs" || RESOLVER_STATUS=$?
 
               if [ "$RESOLVER_STATUS" -eq 0 ]; then
                 # Store run summary under runs/ directory

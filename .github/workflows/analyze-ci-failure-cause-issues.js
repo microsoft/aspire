@@ -178,14 +178,17 @@ function parseOccurrenceSection(body) {
         throw new OccurrenceRenderError('unsupported occurrence section contents');
     }
 
-    const totalLines = lines
-        .map(line => /^Showing \d+ most recent of (\d+) occurrences\.$/.exec(line))
+    const countLines = lines
+        .map(line => /^Showing (\d+) most recent of (\d+) occurrences\.$/.exec(line))
         .filter(match => match !== null);
     return {
         prefix: prefix.replace(/\n+$/, ''),
         rows: lines.filter(line => OCCURRENCE_ROW_PATTERN.test(line)),
-        totalOccurrenceCount: totalLines.length === 1
-            ? Number.parseInt(totalLines[0][1], 10)
+        shownOccurrenceCount: countLines.length === 1
+            ? Number.parseInt(countLines[0][1], 10)
+            : undefined,
+        totalOccurrenceCount: countLines.length === 1
+            ? Number.parseInt(countLines[0][2], 10)
             : undefined,
     };
 }
@@ -442,7 +445,10 @@ function isOccurrencePublished(body, storedOccurrences, runId) {
         // Older records predate the durable publication receipt. A managed body whose
         // total already accounts for the complete stored history proves that a trimmed
         // run was published without confusing a memory-only write with publication.
-        return parsed.totalOccurrenceCount === storedRunIds.size &&
+        return renderedRunIds.length > 0 &&
+            new Set(renderedRunIds).size === renderedRunIds.length &&
+            parsed.shownOccurrenceCount === renderedRunIds.length &&
+            parsed.totalOccurrenceCount === storedRunIds.size &&
             renderedRunIds.every(renderedRunId => storedRunIds.has(renderedRunId));
     } catch (error) {
         if (error instanceof OccurrenceRenderError) {

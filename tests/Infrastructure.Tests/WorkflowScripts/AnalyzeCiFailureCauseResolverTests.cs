@@ -145,6 +145,10 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                         causeId = "windows-process-init-failure-0xc0000142"
                     }
                 }
+            },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["101"] = "Process completed with exit code -1073741502 (0xC0000142)."
             }
         });
 
@@ -2091,6 +2095,192 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AppliesRetryPatternFromTrustedJobLog()
+    {
+        const string canonicalCauseId = "stable-output-cause";
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            "agent-proposed-cause",
+            new
+            {
+                output = "Trusted retry token",
+                causeId = canonicalCauseId
+            },
+            causeEvidence: "Agent did not identify the stable output signature.",
+            trustedJobLogs: new Dictionary<string, string>
+            {
+                ["1"] = "The job failed with Trusted retry token in its log."
+            }));
+
+        Assert.Equal(canonicalCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotApplyRetryPatternFromAgentAuthoredEvidence()
+    {
+        const string currentCauseId = "agent-proposed-cause";
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            currentCauseId,
+            new
+            {
+                output = "Agent retry token",
+                causeId = "stable-output-cause"
+            },
+            causeEvidence: "Agent retry token",
+            trustedJobLogs: new Dictionary<string, string>
+            {
+                ["1"] = "The trusted job log does not contain the configured signature."
+            }));
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCombineRetryPatternFieldsAcrossJobs()
+    {
+        const string currentCauseId = "agent-proposed-cause";
+        JsonElement result = await ResolveAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { currentCauseId },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Tests / Sample (windows-latest)",
+                        classification = "transient-infra",
+                        reason = "The Windows job failed."
+                    },
+                    new
+                    {
+                        id = 2,
+                        name = "Tests / Sample (ubuntu-latest)",
+                        classification = "transient-infra",
+                        reason = "The Linux job failed with the retry signature."
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = currentCauseId,
+                    type = "infra-failure",
+                    title = "Agent-proposed infrastructure cause",
+                    error_pattern = "Cross-job retry token",
+                    job_ids = new[] { 1, 2 }
+                }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new
+            {
+                jobFailurePatterns = new[]
+                {
+                    new
+                    {
+                        jobName = new { regex = ".*windows.*" },
+                        output = "Cross-job retry token",
+                        causeId = "stable-output-cause"
+                    }
+                }
+            },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["1"] = "The Windows job log does not contain the signature.",
+                ["2"] = "The Ubuntu job log contains Cross-job retry token."
+            }
+        });
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task OutputRetryPatternFailsClosedWithoutTrustedJobLog()
+    {
+        const string currentCauseId = "agent-proposed-cause";
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            currentCauseId,
+            new
+            {
+                output = "Agent retry token",
+                causeId = "stable-output-cause"
+            },
+            causeEvidence: "Agent retry token",
+            trustedJobLogs: new Dictionary<string, string>()));
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetryPatternIgnoresTrustedLogsFromUnreferencedJobs()
+    {
+        const string currentCauseId = "agent-proposed-cause";
+        JsonElement result = await ResolveAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { currentCauseId },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Tests / Referenced (windows-latest)",
+                        classification = "transient-infra",
+                        reason = "The referenced job failed."
+                    },
+                    new
+                    {
+                        id = 2,
+                        name = "Tests / Unreferenced (windows-latest)",
+                        classification = "code-issue",
+                        reason = "The unreferenced job failed."
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = currentCauseId,
+                    type = "infra-failure",
+                    title = "Agent-proposed infrastructure cause",
+                    error_pattern = "No stable signature identified.",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new
+            {
+                jobFailurePatterns = new[]
+                {
+                    new
+                    {
+                        jobName = new { regex = ".*windows.*" },
+                        output = "Unreferenced retry token",
+                        causeId = "stable-output-cause"
+                    }
+                }
+            },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["1"] = "The referenced job log does not contain the signature.",
+                ["2"] = "The unreferenced job log contains Unreferenced retry token."
+            }
+        });
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RetryPatternMigratesNormalizedLegacyCause()
     {
         const string legacyCauseId = "Windows Process Init Failure 0xC0000142";
@@ -2203,7 +2393,11 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                 }
             },
             priorCauses = firstRun.GetProperty("causes"),
-            retryPatterns
+            retryPatterns,
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["2"] = "Process completed with exit code -1073741502 (0xC0000142)."
+            }
         });
 
         JsonElement infraCause = FindOnlyCause(secondRun);
@@ -2679,6 +2873,10 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                         causeId = "shared-canonical"
                     }
                 }
+            },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["1"] = "Shared failure"
             }
         });
 
@@ -2899,6 +3097,8 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         string priorCausesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "prior-causes")).FullName;
         string retryPatternsPath = Path.Combine(_workspace.Path, "retry-patterns.json");
         string trustedFailedJobsPath = Path.Combine(_workspace.Path, "trusted-failed-jobs.json");
+        string trustedJobLogsDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "trusted-job-logs")).FullName;
 
         await WriteJsonAsync(analysisPath, new
         {
@@ -2956,6 +3156,9 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                 }
             }
         });
+        await File.WriteAllTextAsync(
+            Path.Combine(trustedJobLogsDirectory, "job-1.log"),
+            "Process completed with exit code -1073741502 (0xC0000142).");
 
         using NodeCommand command = new(_output, label: "resolveCausesCli");
         command.WithWorkingDirectory(_repoRoot).WithTimeout(TimeSpan.FromMinutes(1));
@@ -2966,7 +3169,8 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             causesDirectory,
             priorCausesDirectory,
             retryPatternsPath,
-            trustedFailedJobsPath);
+            trustedFailedJobsPath,
+            trustedJobLogsDirectory);
 
         result.EnsureSuccessful();
         Assert.False(File.Exists(Path.Combine(causesDirectory, $"{proposedCauseId}.json")));
@@ -3390,6 +3594,23 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             StringComparison.Ordinal);
         Assert.True(memoryPushIndex < issuePublicationIndex, "Canonical cause identities must be pushed before issue side effects.");
         Assert.Contains("node .github/workflows/analyze-ci-failure-cause-resolver.js \\", workflow, StringComparison.Ordinal);
+        Assert.Contains("mkdir -p ci-failure-data/retry-job-logs", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "if gh api \"repos/${REPO}/actions/jobs/${JOB_ID}/logs\" > \"$RAW_LOG_PATH\" 2>/dev/null; then",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "fs.writeFileSync(process.argv[2], input.slice(-(256 * 1024)));",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "echo \"(Failed to fetch logs for job ${JOB_ID})\" > \"$RAW_LOG_PATH\"",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"ci-failure-data/retry-job-logs\" || RESOLVER_STATUS=$?",
+            workflow,
+            StringComparison.Ordinal);
         Assert.Contains("|| RESOLVER_STATUS=$?", workflow, StringComparison.Ordinal);
         Assert.Contains("if [ \"$RESOLVER_STATUS\" -eq 0 ]; then", workflow, StringComparison.Ordinal);
         Assert.Contains("echo \"resolver_status=${RESOLVER_STATUS}\" >> \"$GITHUB_OUTPUT\"", workflow, StringComparison.Ordinal);
@@ -3514,7 +3735,9 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
     private static object CreateRetryPatternPayload(
         string causeId,
         object retryPattern,
-        object[]? priorCauses = null)
+        object[]? priorCauses = null,
+        string causeEvidence = "Shared retry token",
+        IReadOnlyDictionary<string, string>? trustedJobLogs = null)
         => new
         {
             analysis = new
@@ -3527,7 +3750,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                         id = 1,
                         name = "Tests / Sample / Sample (ubuntu-latest)",
                         classification = "transient-infra",
-                        reason = "Shared retry token"
+                        reason = causeEvidence
                     }
                 },
                 failed_tests = Array.Empty<object>()
@@ -3539,12 +3762,16 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     id = causeId,
                     type = "infra-failure",
                     title = "Current infrastructure cause",
-                    error_pattern = "Shared retry token",
+                    error_pattern = causeEvidence,
                     job_ids = new[] { 1 }
                 }
             },
             priorCauses = priorCauses ?? [],
-            retryPatterns = new { jobFailurePatterns = new[] { retryPattern } }
+            retryPatterns = new { jobFailurePatterns = new[] { retryPattern } },
+            trustedJobLogs = trustedJobLogs ?? new Dictionary<string, string>
+            {
+                ["1"] = "Shared retry token"
+            }
         };
 
     private static object CreateAliasCanonicalCollisionPayload(string canonicalBetaId = "canonical-beta")
