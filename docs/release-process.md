@@ -33,7 +33,7 @@ The Aspire release process uses these main automation components:
    - Normally dispatched automatically by the AzDO pipeline; it can also be run manually as a fallback after the GitHub release assets are live.
 5. **GitHub Actions workflow** (`.github/workflows/homebrew-validate-release.yml`)
    - Triggered when the release manager publishes the draft (i.e. `release: [published]`).
-   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
+   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online` + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
 6. **GitHub Actions workflow** (`.github/workflows/extension-release.yml`)
    - Prepares a VS Code extension release PR.
    - Bumps `extension/package.json`.
@@ -233,7 +233,7 @@ This is a **manual** step performed by the release manager. The release is creat
 Publishing the draft fires the `release: [published]` event, which triggers:
 
 - [`release-update-support-mdx`](https://github.com/microsoft/aspire/actions/workflows/release-update-support-mdx.lock.yml): opens a draft PR on `microsoft/aspire.dev` to update the support mdx with the new release info.
-- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
+- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online` + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
 
 If either downstream workflow fails, the release itself is fine — the release is published and immutable. Investigate the failure on the workflow run, fix the underlying issue, and rerun via `workflow_dispatch` against the published tag.
 
@@ -444,7 +444,7 @@ GitHub release-update-support-mdx.lock.yml (triggered on `release: published`)
 
 GitHub homebrew-validate-release.yml (triggered on `release: published`)
   -> generates aspire.rb from the just-published aspire-cli-osx-* assets
-  -> runs `brew audit --cask --online --signing` + brew install/uninstall
+  -> runs `brew audit --cask --online` + brew install/uninstall
 ```
 
 ## Related documentation

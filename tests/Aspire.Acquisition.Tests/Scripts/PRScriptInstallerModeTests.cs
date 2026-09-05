@@ -614,6 +614,9 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
+        Assert.Contains("audit --cask --online local/aspire/aspire", brewLog);
+        Assert.DoesNotContain("--signing", brewLog);
+        Assert.DoesNotContain("--no-signing", brewLog);
         Assert.Contains("uninstall --cask local/aspire-test/aspire", brewLog);
     }
 
@@ -642,22 +645,26 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         var cask = await File.ReadAllTextAsync(Path.Combine(outputDir, "aspire.rb"));
         Assert.Contains("version \"13.3.0\"", cask);
         Assert.Contains("https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz", cask);
-        Assert.Contains("verified: \"github.com/microsoft/aspire/\"", cask);
+        Assert.DoesNotContain("verified:", cask);
+        Assert.Contains("postflight_steps do", cask);
+        Assert.Contains("write_file \".aspire-install.json\", \"{\\\"source\\\":\\\"brew\\\"}\\n\", base: :staged_path", cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-arm64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-x64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.DoesNotContain("${", cask);
         Assert.True(File.Exists(Path.Combine(outputDir, "dogfood.sh")));
 
-        // LiveArchives mode must drop `--online` and add `--no-signing` to `brew audit`,
-        // because the cask URL points at a github.com/microsoft/aspire release that does
+        // LiveArchives mode must drop `--online` from `brew audit`, because the cask URL
+        // points at a github.com/microsoft/aspire release that does
         // not exist yet at source-build time. See the `audit_args` block in
         // eng/homebrew/validate-cask-artifact.sh for the full rationale; this assertion
         // locks the contract so a regression in the mode selection surfaces here rather
         // than silently failing (or worse, silently succeeding) in the source-build
         // prepare stage.
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
-        Assert.Contains("audit --cask --no-signing local/aspire/aspire", brewLog);
+        Assert.Contains("audit --cask local/aspire/aspire", brewLog);
         Assert.DoesNotContain("audit --cask --online", brewLog);
+        Assert.DoesNotContain("--signing", brewLog);
+        Assert.DoesNotContain("--no-signing", brewLog);
     }
 
     [Fact]
