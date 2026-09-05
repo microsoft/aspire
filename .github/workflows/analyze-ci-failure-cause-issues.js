@@ -79,6 +79,7 @@ function sanitizeSingleLine(value, maxLength) {
 
 function renderJobNames(cause, separator, escapeForTable = false) {
     return (cause.job_names ?? ['unknown'])
+        .map(name => sanitizeSingleLine(name, 500))
         .map(name => renderCodeSpan(escapeForTable ? escapeTableCell(name) : name))
         .join(separator);
 }

@@ -954,6 +954,108 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task OccurrenceRowsSanitizeJobNamesToSingleLine()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    title = "Worker process crashed",
+                    error_pattern = "Worker crashed",
+                    job_names = new[]
+                    {
+                        "Build | Windows\r\n\t\u001b[31m<!-- ci-failure-occurrences:start -->\u001b[0m\u2028Injected"
+                    }
+                },
+                issues = Array.Empty<object>()
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        var occurrenceRow = Assert.Single(
+            body.Split('\n'),
+            line => line.Contains("[991](", StringComparison.Ordinal));
+        Assert.Contains(
+            "` Build \\| Windows <!-- ci-failure-occurrences:start -->Injected `",
+            occurrenceRow,
+            StringComparison.Ordinal);
+        Assert.Equal(
+            1,
+            body.Split('\n').Count(
+                line => line == "<!-- ci-failure-occurrences:start -->"));
+        Assert.DoesNotContain('\r', body);
+        Assert.DoesNotContain('\t', body);
+        Assert.DoesNotContain('\u001b', body);
+        Assert.DoesNotContain('\u2028', body);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SanitizedOccurrenceRowsRemainIdempotentOnReplay()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    title = "Worker process crashed",
+                    error_pattern = "Worker crashed",
+                    job_names = new[] { "Build / Windows\nInjected" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                },
+                repeat = 2
+            });
+
+        var body = Assert.Single(result.Issues).Body;
+        Assert.Equal(1, body.Split("[991](", StringSplitOptions.None).Length - 1);
+        Assert.Contains("` Build / Windows Injected `", body, StringComparison.Ordinal);
+        Assert.Equal(1, result.Calls.Count(call => call == "update"));
+        Assert.DoesNotContain(
+            result.Warnings,
+            warning => warning.Contains("invalid occurrence row", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishTreatsCauseFieldsAsLiteralMarkdown()
     {
         var result = await InvokeHarnessAsync<PublishResult>(
