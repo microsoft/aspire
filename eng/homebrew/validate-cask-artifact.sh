@@ -7,9 +7,9 @@ set -euo pipefail
 #
 # Validation modes:
 #   * LiveRelease  — Validates against the live GitHub release for the cask's
-#                    version. Runs the full `brew audit --cask --online
-#                    --signing` (the same gauntlet Homebrew/homebrew-cask's
-#                    per-cask CI runs for a bump PR) plus a real
+#                    version. Runs the full `brew audit --cask --online`
+#                    (the same gauntlet Homebrew/homebrew-cask's per-cask CI
+#                    runs for a bump PR) plus a real
 #                    `brew install`/`brew uninstall` cycle. Used by the
 #                    release pipeline after `PublishReleaseAssetsJob` has
 #                    uploaded the aspire-cli-osx-* archives to the GitHub
@@ -17,8 +17,8 @@ set -euo pipefail
 #   * LiveArchives — Validates against the cask file alone, without depending
 #                    on the cask URL resolving (the GitHub release for the
 #                    version-being-built doesn't exist yet at source-build
-#                    time). Runs `brew audit --cask --no-signing` — all
-#                    structural checks (style, syntax, naming, verified-vs-url
+#                    time). Runs `brew audit --cask` — all structural checks
+#                    (style, syntax, naming, verified-vs-url
 #                    consistency, version format, conflicts, depends_on
 #                    rules). Drops `--online` because several `audit_*`
 #                    methods (download, signing, rosetta, min_os) try to
@@ -160,9 +160,9 @@ echo "brew test-bot --only-tap-syntax succeeded."
 
 echo ""
 # Match the audit arg set that Homebrew/homebrew-cask CI runs for an existing
-# cask bump: `brew audit --cask --online --signing <cask>`. (`--new` is added
-# upstream only when the cask is being submitted for the first time, which is
-# a human-driven path not covered by this pipeline.)
+# cask bump: `brew audit --cask --online <cask>`. (`--new` is added upstream
+# only when the cask is being submitted for the first time, which is a
+# human-driven path not covered by this pipeline.)
 #
 # In LiveRelease mode `--online` is brew's depth flag that enables the
 # network-requiring audit methods on top of the structural ones: archive
@@ -177,9 +177,6 @@ echo ""
 # fetches the cask URL). Excluding them individually with `--except` is
 # brittle because any new `--online`-gated audit method that touches the
 # archive in a future brew release would silently start failing.
-# `--no-signing` is also used because PR-build / source-build archives are
-# unsigned/ad-hoc-signed CI artifacts, not notarized release assets — even
-# if we could fetch them, `audit_signing` would reject them.
 #
 # What we lose in LiveArchives by dropping `--online`:
 #   * github/gitlab repo probes (e.g. "is microsoft/aspire archived?")
@@ -188,9 +185,9 @@ echo ""
 # All of these run in LiveRelease in `homebrew-validate-release.yml` for every
 # released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
-audit_args=(--cask --online --signing)
+audit_args=(--cask --online)
 if [[ "$VALIDATION_MODE" == "LiveArchives" ]]; then
-  audit_args=(--cask --no-signing)
+  audit_args=(--cask)
 fi
 audit_args+=("$TAP_NAME/$CASK_NAME")
 audit_command="brew audit ${audit_args[*]}"

@@ -1,7 +1,7 @@
 # Validate the Homebrew cask against a freshly-published Aspire release.
 #
 # Runs the full upstream-equivalent cask validation (`brew audit --cask
-# --online --signing` + a real `brew install`/`brew uninstall` cycle)
+# --online` + a real `brew install`/`brew uninstall` cycle)
 # against the cask file generated from the just-published release's
 # aspire-cli-osx-* archives. This is the same validation that used to
 # run as HomebrewValidateJob inside eng/pipelines/release-publish-nuget.yml.
