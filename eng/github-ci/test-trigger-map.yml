@@ -64,6 +64,7 @@ prefilter:
     - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
+    - .github/skills/**                               # SKILL.md/evals are validated by Infrastructure.Tests, but **.md would prefilter them away
 
 # Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
 # Each is either covered precisely by Layer 1 (the graph index sees the linked/shared-file consumers)
@@ -373,8 +374,9 @@ path_rules:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
+      - .github/skills/**
     targets: [test:Infrastructure.Tests]
-    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/github-ci/test-trigger-map.yml and reads eng/github-ci/ci-skip-entirely-patterns.txt (the prefilter source), so a change to any of them must run it
+    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/github-ci/test-trigger-map.yml, reads eng/github-ci/ci-skip-entirely-patterns.txt (the prefilter source), and validates the .github/skills review-skill packaging and eval corpus, so a change to any of them must run it
   - paths:
       - .github/workflows/**
       - eng/pipelines/**

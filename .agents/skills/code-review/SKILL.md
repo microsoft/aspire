@@ -118,25 +118,12 @@ When the impact analysis is useful to explain a test finding, present it concise
 
 ### Conditional Test Selection Impact
 
-Apply the repository-wide Conditional Test Selection rules in `AGENTS.md`.
-Trace new test projects, CI jobs, workflows, scripts, and loose inputs to their
-actual consumers before deciding whether the map needs to change.
-
-Flag concrete selection gaps:
-
-- Treat files evaluated by the `Aspire.slnx` ProjectGraph as Layer 1-owned and
-  projects outside that graph as Layer 2 blind spots.
-- Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
-  explicitly outside the selector. Do not allow `ignore` or prefilter entries
-  to hide a real PR-CI consumer.
-- Require `run_*` wiring for gated `job:` targets, advisory classification for
-  targets outside the regular PR matrix or job gates, and routing from reusable
-  workflow implementations to the jobs they implement.
-
-Selector behavior changes must keep the action, workflow gates, tool, map,
-tests, and canonical documentation synchronized. Require real-map tests for
-curated routing changes and focused synthetic-map tests for engine or CLI
-behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+When the diff touches `eng/github-ci/test-trigger-map.yml`,
+`eng/github-ci/ci-skip-entirely-patterns.txt`, `tools/SelectTests/**`, CI job
+gates, reusable workflows, `run_*` outputs, loose CI/test inputs, or adds,
+removes, or renames test projects, apply the
+[`code-review-test-trigger-map`](../../../.github/skills/code-review-test-trigger-map/SKILL.md)
+skill, which carries the full review procedure for this subsystem.
 
 ### Test Coverage Review
 

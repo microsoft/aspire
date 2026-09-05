@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "skill": "code-review-test-trigger-map",
+  "cases": [
+    {
+      "id": "skip-glob-too-broad",
+      "title": "Skip pattern src/*/api/** misses nested baselines and swallows tscompat suppressions",
+      "kind": "positive",
+      "category": "skip-pattern-glob-semantics",
+      "source": "https://github.com/microsoft/aspire/pull/19939",
+      "changed_files": [
+        "eng/github-ci/ci-skip-entirely-patterns.txt"
+      ],
+      "diff_summary": "Adds `src/*/api/**` to the CI skip-entirely patterns file so that generated API baselines never trigger CI.",
+      "expected_findings": [
+        {
+          "id": "swallows-tscompat-suppression",
+          "summary": "The pattern also matches src/Aspire.Hosting.<X>/api/*.tscompat.suppression.txt and src/Aspire.Hosting*/api/*.ats.txt, which the prefilter drops before both layers, so job:typescript-api-compat (and job:polyglot for *.ats.txt) never runs for a baseline change.",
+          "evidence_required": [
+            "names eng/github-ci/ci-skip-entirely-patterns.txt as the changed path",
+            "names job:typescript-api-compat (and/or job:polyglot) as the lost consumer",
+            "cites the path_rules entries for src/**/*.tscompat.suppression.txt or src/Aspire.Hosting*/api/*.ats.txt",
+            "states that prefilter drops matches before both layers"
+          ]
+        },
+        {
+          "id": "does-not-match-nested",
+          "summary": "`*` cannot cross '/', so the pattern does not match nested component baselines such as src/Components/Aspire.Foo/api/..., meaning the stated intent is only partially achieved.",
+          "evidence_required": [
+            "cites the glob semantics from .github/actions/check-changed-files/action.yml or tools/SelectTests/ChangedFileFilter.cs",
+            "gives a concrete non-matching nested path"
+          ]
+        }
+      ],
+      "expected_non_findings": [
+        "Do not ask for a new path_rules entry for generated src/*/api/*.cs files; they are not selector-routed and the concern is the skip pattern breadth."
+      ]
+    },
+    {
+      "id": "lost-polyglot-route-weak-test",
+      "title": "Removing the ATS baseline rule drops job:polyglot, and the replacement test only asserts NotEmpty",
+      "kind": "positive",
+      "category": "route-removal-and-weak-regression-test",
+      "source": "https://github.com/microsoft/aspire/pull/19939",
+      "changed_files": [
+        "eng/github-ci/test-trigger-map.yml",
+        "tests/Infrastructure.Tests/TestTriggerMap/TestTriggerMapTests.cs"
+      ],
+      "diff_summary": "Deletes the `src/Aspire.Hosting*/api/*.ats.txt -> [job:typescript-api-compat, job:polyglot]` path rule, relying on the generic tscompat suppression rule instead. Adds a test asserting that a baseline change selects a non-empty target set.",
+      "expected_findings": [
+        {
+          "id": "polyglot-coverage-lost",
+          "summary": "An ordinary Aspire.Hosting.* exported-surface change now selects only job:typescript-api-compat; the polyglot playground that regenerates and compiles the exported surface per language no longer runs.",
+          "evidence_required": [
+            "names the deleted src/Aspire.Hosting*/api/*.ats.txt rule",
+            "names job:polyglot as the dropped target",
+            "explains that the *.ats.txt baseline is not a compiled item, so Layer 1 cannot recover the route",
+            "gives a regression scenario, e.g. a PR editing src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.ats.txt"
+          ]
+        },
+        {
+          "id": "weak-assertion",
+          "summary": "The replacement test asserts only that the selection is non-empty, so it stays green while job:polyglot coverage is lost; it must assert the exact expected target set or Assert.Contains(\"job:polyglot\", ...).",
+          "evidence_required": [
+            "names the added test method in tests/Infrastructure.Tests/TestTriggerMap/TestTriggerMapTests.cs",
+            "states the exact invariant the assertion should express"
+          ]
+        }
+      ],
+      "expected_non_findings": [
+        "Do not request coverage in SelectTestsAcceptanceTests.cs; this is curated routing in the real map, which belongs in TestTriggerMapTests.cs."
+      ]
+    },
+    {
+      "id": "layer1-owned-project-input",
+      "title": "New source file and ProjectReference in an existing integration",
+      "kind": "true-negative",
+      "category": "layer-1-ownership",
+      "changed_files": [
+        "src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs",
+        "src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj",
+        "tests/Aspire.Hosting.Redis.Tests/RedisFunctionalTests.cs"
+      ],
+      "diff_summary": "Adds a new extension method plus a ProjectReference in an integration that is already part of Aspire.slnx, and extends its existing test project.",
+      "expected_findings": [],
+      "expected_non_findings": [
+        "Do not request an eng/github-ci/test-trigger-map.yml rule: these are ordinary MSBuild-evaluated inputs in the Aspire.slnx-rooted ProjectGraph, which Layer 1 owns.",
+        "Do not request a convention entry for tests/Aspire.Hosting.Redis.Tests; the existing convention plus Layer 1 already select it."
+      ]
+    },
+    {
+      "id": "gated-job-run-output-wiring",
+      "title": "New gated job added without complete run_* wiring and without a route for its reusable workflow",
+      "kind": "positive",
+      "category": "workflow-run-gate",
+      "changed_files": [
+        ".github/workflows/tests.yml",
+        ".github/workflows/new-validation.yml",
+        "eng/github-ci/test-trigger-map.yml"
+      ],
+      "diff_summary": "Adds a selector-gated job in tests.yml that calls a new reusable workflow, adds a `job:new-validation` target to a path rule, but reuses an unrelated `run_*` output for the gate and adds no route for .github/workflows/new-validation.yml itself.",
+      "expected_findings": [
+        {
+          "id": "gate-uses-wrong-output",
+          "summary": "The new job's `if:` consumes a run_* output that belongs to another target, so the job runs (or is skipped) independently of whether job:new-validation was selected.",
+          "evidence_required": [
+            "names the job id and the run_* output it consumes in .github/workflows/tests.yml",
+            "states which selection boolean the job should consume",
+            "gives a regression scenario where selection and execution disagree"
+          ]
+        },
+        {
+          "id": "reusable-workflow-not-routed",
+          "summary": "A change to the implementing reusable workflow .github/workflows/new-validation.yml is not routed to job:new-validation, so editing the job's implementation does not run it.",
+          "evidence_required": [
+            "names .github/workflows/new-validation.yml as the unrouted path",
+            "names job:new-validation as the target it must route to"
+          ]
+        }
+      ],
+      "expected_non_findings": [
+        "Do not request an `ALL` route for the new reusable workflow; the narrowest complete target set is the job it implements."
+      ]
+    },
+    {
+      "id": "over-broad-all-route",
+      "title": "Loose script routed to ALL when it has one concrete consumer",
+      "kind": "positive",
+      "category": "over-selection",
+      "changed_files": [
+        "eng/github-ci/test-trigger-map.yml"
+      ],
+      "diff_summary": "Routes a single PowerShell script that only Infrastructure.Tests parses to `ALL`.",
+      "expected_findings": [
+        {
+          "id": "narrower-target-available",
+          "summary": "The script has one identifiable consumer, so ALL runs the full matrix for every edit; the rule should target that consumer instead.",
+          "evidence_required": [
+            "names the script path and the test project or job that consumes it",
+            "states the narrower target set"
+          ]
+        }
+      ],
+      "expected_non_findings": [
+        "Do not claim coverage is lost; this is a cost finding, not a correctness finding, and must be reported as such."
+      ]
+    }
+  ]
+}
