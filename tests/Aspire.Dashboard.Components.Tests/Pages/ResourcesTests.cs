@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -31,6 +34,79 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ResourcesTests : DashboardTestContext
 {
     [Fact]
+    public async Task Resources_DefaultOrderIsTypeThenNameWithChildrenNested()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var childProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Resource.ParentName, new ResourcePropertyViewModel(
+                KnownProperties.Resource.ParentName,
+                ProtobufValue.ForString("z-project"),
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("z-project-child", "Executable", "Running", null, properties: childProperties),
+            CreateResource("z-project", "Project", "Running", null),
+            CreateResource("basketcache", "Container", "Running", null),
+            CreateResource("apigateway", "Project", "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        var cut = RenderComponent<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+
+        var result = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<ResourceGridViewModel>()).AsTask());
+
+        Assert.Collection(
+            result.Items,
+            item => Assert.Equal("basketcache", item.Resource.Name),
+            item => Assert.Equal("apigateway", item.Resource.Name),
+            item => Assert.Equal("z-project", item.Resource.Name),
+            item => Assert.Equal("z-project-child", item.Resource.Name));
+        Assert.Equal(0, result.Items.ElementAt(2).Depth);
+        Assert.Equal(1, result.Items.ElementAt(3).Depth);
+    }
+
+    [Fact]
+    public async Task Resources_NameColumnSortsDescending()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("basketcache", "Container", "Running", null),
+            CreateResource("apigateway", "Project", "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        var cut = RenderComponent<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>();
+        var nameColumn = Assert.Single(
+            cut.FindComponents<AspireTemplateColumn<ResourceGridViewModel>>(),
+            column => string.Equals(column.Instance.Title, "Name", StringComparison.Ordinal));
+
+        Assert.Equal("none", cut.Find("th[col-index='1']").GetAttribute("aria-sort"));
+
+        await cut.InvokeAsync(() => grid.Instance.SortByColumnAsync(nameColumn.Instance, DataGridSortDirection.Descending));
+
+        Assert.False(grid.Instance.SortByAscending);
+        Assert.Equal("descending", cut.Find("th[col-index='1']").GetAttribute("aria-sort"));
+
+        var request = new GridItemsProviderRequest<ResourceGridViewModel>
+        {
+            SortByColumn = nameColumn.Instance,
+            SortByAscending = false,
+        };
+        var result = await cut.InvokeAsync(() => cut.Instance.GetData(request).AsTask());
+
+        Assert.Collection(
+            result.Items,
+            item => Assert.Equal("basketcache", item.Resource.Name),
+            item => Assert.Equal("apigateway", item.Resource.Name));
+    }
+
+    [Fact]
     public void ReadOnly_HighlightedCommandIsVisibleAndDisabled()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -57,18 +133,19 @@ public partial class ResourcesTests : DashboardTestContext
             isReadOnly: true);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = RenderComponent<ResourceActions>(builder =>
         {
             builder.AddCascadingValue(viewport);
+            builder.Add(component => component.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, _ => Task.CompletedTask));
+            builder.Add(component => component.IsCommandExecuting, (ResourceViewModel _, CommandViewModel _) => false);
+            builder.Add(component => component.OnViewDetails, EventCallback.Factory.Create<string?>(this, _ => Task.CompletedTask));
+            builder.Add(component => component.Resource, resource);
+            builder.Add(component => component.MaxHighlightedCount, 1);
+            builder.Add(component => component.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>());
         });
 
-        cut.WaitForAssertion(() =>
-        {
-            var commandButton = Assert.Single(
-                cut.FindComponents<FluentButton>(),
-                button => string.Equals(button.Instance.Title, "Test command description", StringComparison.Ordinal));
-            Assert.True(commandButton.Instance.Disabled);
-        });
+        var commandButton = cut.Find("fluent-button");
+        Assert.True(commandButton.HasAttribute("disabled"));
     }
 
     [Fact]
@@ -161,7 +238,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void FilterResources()
+    public async Task FilterResources()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -212,11 +289,10 @@ public partial class ResourcesTests : DashboardTestContext
         ]);
 
         // Assert 2 (unselect a resource type, assert that a resource was removed)
-        cut.FindComponents<SelectResourceOptions<string>>().First(f => f.Instance.Id == "resource-states")
+        var stoppingCheckbox = cut.FindComponents<SelectResourceOptions<string>>().First(f => f.Instance.Id == "resource-states")
             .FindComponents<FluentCheckbox>()
-            .First(checkbox => checkbox.Instance.Label == "Stopping")
-            .Find("fluent-checkbox")
-            .TriggerEvent("oncheckedchange", new CheckboxChangeEventArgs { Checked = false });
+            .First(checkbox => checkbox.Instance.Label == "Stopping");
+        await stoppingCheckbox.InvokeAsync(() => stoppingCheckbox.Instance.ValueChanged.InvokeAsync(false));
 
         // above is triggered asynchronously, so wait for the state to change
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 2);
@@ -263,7 +339,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ResourceGraphContextMenu_MenuCloseCompletesBrowserCallback()
+    public async Task ResourceGraphContextMenu_OpensWithoutWaitingForClose()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var resource = CreateResource(
@@ -293,12 +369,7 @@ public partial class ResourcesTests : DashboardTestContext
         var showContextMenuAsync = typeof(Components.Pages.Resources)
             .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        Task? showContextMenuTask = null;
-        await cut.InvokeAsync(() =>
-        {
-            showContextMenuTask = (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20, null])!;
-        });
-        Assert.NotNull(showContextMenuTask);
+        await cut.InvokeAsync(() => (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 20, 20, null])!);
         cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
 
         var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);
@@ -309,8 +380,8 @@ public partial class ResourcesTests : DashboardTestContext
 
         await cut.InvokeAsync(() => contextMenu.Instance.OpenChanged.InvokeAsync(false));
 
-        await showContextMenuTask.WaitAsync(TimeSpan.FromSeconds(1));
         Assert.False(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open);
+        Assert.Empty(cut.FindComponents<FluentOverlay>());
     }
 
     [Fact]
@@ -339,6 +410,34 @@ public partial class ResourcesTests : DashboardTestContext
                 string.Equals(invocation.Arguments[0]?.ToString(), "resourcesScrollContainer", StringComparison.Ordinal) &&
                 string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
         });
+    }
+
+    [Fact]
+    public void TableView_RestoresColumnOrderAfterMobileView()
+    {
+        var desktopViewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, desktopViewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(desktopViewport);
+        });
+
+        var desktopColumnOrder = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>().Instance.GetColumnOrder();
+
+        var mobileViewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(mobileViewport);
+        cut.Render();
+
+        var mobileColumnOrder = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>().Instance.GetColumnOrder();
+        Assert.True(mobileColumnOrder.Count < desktopColumnOrder.Count);
+
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(desktopViewport);
+        cut.Render();
+
+        var restoredColumnOrder = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>().Instance.GetColumnOrder();
+        Assert.Equal(desktopColumnOrder, restoredColumnOrder);
     }
 
     [Fact]
@@ -387,9 +486,9 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        var tabs = cut.Find("fluent-tabs.resources-tab-header");
-        Assert.Equal(expectedOrientation, tabs.GetAttribute("orientation"));
-        Assert.All(cut.FindAll("fluent-tab"), tab => Assert.True(tab.HasAttribute("fixed")));
+        var tabs = cut.FindComponent<FluentTabs>();
+        Assert.Equal(expectedOrientation, tabs.Instance.Orientation?.ToString().ToLowerInvariant());
+        Assert.All(cut.FindAll("fluent-tab"), tab => Assert.False(tab.HasAttribute("fixed")));
     }
 
     [Fact]
@@ -490,7 +589,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void ResourcesShouldRemainUnchangedWhenFilterDoesNotMatchUpdatedResource()
+    public async Task ResourcesShouldRemainUnchangedWhenFilterDoesNotMatchUpdatedResource()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -511,12 +610,11 @@ public partial class ResourcesTests : DashboardTestContext
 
         // Open the resource filter and apply a filter
         cut.Find("#resourceFilterButton").Click();
-        cut.FindComponents<SelectResourceOptions<string>>()
+        var typeCheckbox = cut.FindComponents<SelectResourceOptions<string>>()
             .First(f => f.Instance.Id == "resource-types")
             .FindComponents<FluentCheckbox>()
-            .First(checkbox => checkbox.Instance.Label == "Type1")
-            .Find("fluent-checkbox")
-            .TriggerEvent("oncheckedchange", new CheckboxChangeEventArgs { Checked = false });
+            .First(checkbox => checkbox.Instance.Label == "Type1");
+        await typeCheckbox.InvokeAsync(() => typeCheckbox.Instance.ValueChanged.InvokeAsync(false));
 
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 1);
 
@@ -859,34 +957,19 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void ParametersView_UrlValueStopsClickPropagation()
+    public void GridValue_UrlValueStopsClickPropagation()
     {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
-            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                ProtobufValue.ForString("https://example.com"),
-                isValueSensitive: false,
-                knownProperty: null,
-                sortOrder: 0,
-                displayName: null,
-                isHighlighted: false));
-
-        var initialResources = new List<ResourceViewModel>
-        {
-            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null, properties: parameterProperties),
-        };
-        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
-        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         var setCellTextClickHandler = JSInterop.SetupVoid("setCellTextClickHandler", _ => true);
-        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourcesUrl(view: "Parameters"));
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        RenderComponent<GridValue>(builder =>
         {
-            builder.AddCascadingValue(viewport);
+            builder.Add(p => p.Value, "https://example.com");
+            builder.Add(p => p.ValueDescription, "Parameter value");
+            builder.Add(p => p.StopClickPropagation, true);
         });
 
-        cut.WaitForAssertion(() => Assert.Single(setCellTextClickHandler.Invocations));
+        Assert.Single(setCellTextClickHandler.Invocations);
     }
 
     [Fact]

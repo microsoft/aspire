@@ -1,16 +1,13 @@
-﻿@using Aspire.Dashboard.Resources
-
-<FluentDialogHeader ShowDismiss="true">
-    <div class="dialog-title-grid">
-        <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Style="grid-area: dialog-icon; align-self: center;" />
-        <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
-            @Loc[nameof(Dialogs.AIAgentsDialogTitle)]
-        </FluentLabel>
-    </div>
-</FluentDialogHeader>
-
-<FluentDialogBody Style="overflow-x: hidden">
-    <div class="markdown-content">
-        <MarkdownRenderer Markdown="@Description" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
-    </div>
+﻿<FluentDialogBody Class="page-dialog-body ai-agents-dialog-body" Style="overflow-x: hidden; width: 100%; max-height: calc(100dvh - 48px);">
+    <TitleTemplate>
+        <span class="ai-agents-dialog-title">
+            <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Primary" />
+            <span>@Loc[nameof(Resources.Dialogs.AIAgentsDialogTitle)]</span>
+        </span>
+    </TitleTemplate>
+    <ChildContent>
+        <div class="markdown-content">
+            <MarkdownRenderer Markdown="@Description" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
+        </div>
+    </ChildContent>
 </FluentDialogBody>

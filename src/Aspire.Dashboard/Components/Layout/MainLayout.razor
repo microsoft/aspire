@@ -1,4 +1,4 @@
-﻿@using Aspire.Dashboard.Components.CustomIcons
+@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
@@ -11,15 +11,17 @@
            title form a single brand lockup pinned to the top-left. Because the header spans both grid
            columns (it is no longer confined to the column beside the rail), the lockup keeps a fixed
            left edge when the nav rail below collapses/expands instead of shifting with the rail width. *@
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo brand-logo"
-                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
-                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-                <AspireLogo />
-            </FluentAnchor>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+        <header>
+            <div class="brand-logo-container">
+                <a href="/" class="logo"
+                              title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                              aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                    <AspireLogo />
+                </a>
+            </div>
+            <a href="/" class="application-name">
                 <ApplicationName/>
-            </FluentAnchor>
+            </a>
             <div class="page-title-slot">
                 <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
             </div>
@@ -32,35 +34,34 @@
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
-            <FluentAnchor Class="header-button"
-                          Appearance="Appearance.Stealth"
-                          Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
-                <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
-            </FluentAnchor>
+            <a class="header-button"
+                          href="https://aka.ms/aspire/repo" target="_blank" rel="noreferrer noopener"
+                          title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
+                <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Default"/>
+            </a>
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
-                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
+                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
+                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
             </FluentButton>
             @if (Options.CurrentValue.UI.DisableAgentHelp != true)
             {
                 <FluentButton Class="header-button"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAIAgentsAsync"
+                              Appearance="ButtonAppearance.Default" OnClick="@LaunchAIAgentsAsync"
                               Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
+                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
                 </FluentButton>
             }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
-                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
+                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Neutral"/>
+                <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Default"/>
             </FluentButton>
             <UserProfile/>
-        </FluentHeader>
+        </header>
 
         @* The nav rail is a flex column so DesktopNavMenu fills the available space while the collapse/expand
            toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
@@ -68,7 +69,7 @@
         <div class="desktop-nav-rail">
             <DesktopNavMenu/>
             <FluentButton Class="nav-toggle-button nav-toggle-bottom"
-                          Appearance="Appearance.Stealth" OnClick="@ToggleNavMenuExpandedAsync"
+                          Appearance="ButtonAppearance.Default" OnClick="@ToggleNavMenuExpandedAsync"
                           Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
                           aria-label="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])">
                 <span class="nav-toggle-content">
@@ -80,7 +81,7 @@
                        written "Collapse sidebar" beside it read as redundant chrome (review feedback). *@
                     <FluentIcon Value="@(_isNavMenuExpanded
                         ? new Icons.Regular.Size24.PanelLeftContract()
-                        : (Icon)new Icons.Regular.Size24.PanelLeftExpand())" Color="Color.Neutral"/>
+                        : (Icon)new Icons.Regular.Size24.PanelLeftExpand())" Color="Color.Default"/>
                 </span>
             </FluentButton>
         </div>
@@ -88,16 +89,16 @@
     else
     {
         <div class="aspire-icon">
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+            <a href="/" class="logo"
                           title="@Loc[nameof(Layout.MainLayoutAspire)]"
                           aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                 <AspireLogo />
-            </FluentAnchor>
+            </a>
         </div>
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+        <header>
+            <a href="/" class="application-name">
                 <ApplicationName/>
-            </FluentAnchor>
+            </a>
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection)
             {
@@ -112,11 +113,11 @@
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
                 Id="@NavigationButtonId"
                 Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
-                Appearance="Appearance.Stealth"
+                Appearance="ButtonAppearance.Default"
                 BackgroundColor="transparent"
                 OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
                 Class="navigation-button"/>
-        </FluentHeader>
+        </header>
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
@@ -132,8 +133,8 @@
         <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
     </div>
     <div class="layout-body-container">
-        <FluentBodyContent Class="custom-body-content body-content">
-            <FluentToastProvider MaxToastCount="3" Timeout="5000" />
+        <main class="custom-body-content body-content">
+            <FluentToastProvider MaxToastCount="3" Timeout="5000" data-update-version="@_toastProviderUpdateVersion" />
             @if (!_isSwitchingRuns)
             {
                 var selectedRun = RunSelection.SelectedRun;
@@ -141,12 +142,11 @@
                     @Body
                 </CascadingValue>
             }
-        </FluentBodyContent>
+        </main>
     </div>
 
     <FluentDialogProvider/>
     <FluentTooltipProvider />
-    <FluentMenuProvider />
     <InteractionsProvider />
     <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">

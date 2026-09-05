@@ -14,7 +14,7 @@
 }
 
 ::deep .trace-id {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;
@@ -49,7 +49,7 @@
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
-    background: var(--fill-color);
+    background: var(--colorNeutralBackground1);
 }
 
 /*
@@ -58,14 +58,15 @@
     cells' padding (see the `td` rule below). Without matching the two, every header
     label sits inset from its column - most visibly the "Resource" label and the
     time-tick labels, which then no longer line up with the waterfall gridlines in
-    the rows below. Zero the header cells' inline padding so each label is flush
-    with its column like the body (this also drops a stray 5px nudge that used to be
-    on the first cell). `padding-inline` (the logical property) plus a
-    higher-specificity selector and !important are all required to override
-    FluentUI's own `padding-inline-start` rule on the cell.
+    the rows below. The v5 grid also omits the `column-header` class, so FluentUI's
+    40px minimum height and block padding otherwise leave a gap between the header
+    and body ticks. Reset the complete cell geometry to the 32px tick height.
 */
 ::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'] th {
-    padding-inline: 0 !important;
+    padding: 0 !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    border-bottom: 0;
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row {
@@ -75,13 +76,8 @@
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row td:not(.empty-content-cell) {
-    /* Re-zero the cell padding + border that two global app.css grid rules (compact row padding and
-       row separators, both !important) otherwise force onto every data-grid cell. The waterfall relies
-       on each row being exactly the tick height (32px) with no padding or border so (a) the per-row
-       vertical time ticks stack edge-to-edge into continuous lines instead of dashes, and (b) horizontal
-       row separators don't appear (this grid intentionally has none). This selector is (0,4,1) — one
-       class more specific than the (0,3,1) global padding rule — and uses !important so it wins the
-       cascade against those globals. */
+     /* The waterfall relies on each row being exactly the tick height with no padding or border so
+         vertical time ticks stack edge-to-edge and horizontal separators do not appear. */
     padding: 0 !important;
     border: 0 !important;
     border-radius: 0;
@@ -90,7 +86,7 @@
 
 ::deep .empty-content-cell {
     margin-top: 8px;
-    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
 ::deep .trace-view-grid .column-header {
@@ -151,7 +147,7 @@
 
 ::deep .span-container .span-bar-label {
     font-size: 12px;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     padding: 0 0.5em;
     height: min-content;
 }
@@ -173,7 +169,7 @@
 
 ::deep .uninstrumented-peer {
     padding-left: 0.25rem;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -192,7 +188,7 @@
 ::deep .selected-row .span-container .span-bar-label,
 ::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label,
 ::deep .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label {
-    color: var(--neutral-foreground-rest);
+    color: var(--colorNeutralForeground1);
 }
 
 ::deep .pane-details-title {
@@ -220,12 +216,10 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "details filters";
     align-items: center;
-    column-gap: var(--aspire-space-sm);
+    column-gap: 8px;
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
-    /* This toolbar stays inside the summary pane so the details pane can extend to the page top.
-       Match the shared FluentToolbar gutter explicitly because this host is a responsive grid. */
     padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
 }
 
@@ -243,11 +237,17 @@
 }
 
 ::deep .trace-header-details .fluent-overflow-item strong {
-    margin-left: var(--aspire-space-xs);
+    margin-left: 4px;
 }
 
 ::deep .trace-header-details .fluent-overflow-more {
     align-content: center;
+}
+
+::deep .trace-header-overflow-badge {
+    background-color: var(--colorNeutralBackground3);
+    border-radius: 6px;
+    color: var(--colorNeutralForeground1);
 }
 
 ::deep .trace-header-tooltip {
@@ -256,18 +256,7 @@
 
 ::deep .trace-header-filters {
     grid-area: filters;
-    display: flex;
-    align-items: center;
     min-width: 0;
-    /*
-        These controls live in a plain flex row (not a FluentToolbar), so the
-        `slot="end"` DesktopToolbarDividers between them collapse to a zero-size box
-        and contribute no spacing, leaving the filter, span-type select, "no
-        filters" text and the two buttons butted together. Match the 8px
-        inter-control gap that FluentToolbar applies via its shadow `::part(end)` so
-        this toolbar is spaced like every other one.
-    */
-    gap: var(--aspire-space-sm);
 }
 
 @container (max-width: 900px) {
@@ -276,26 +265,9 @@
         grid-template-areas:
             "details"
             "filters";
-        row-gap: var(--aspire-space-sm);
+        row-gap: 8px;
     }
 
-    ::deep .trace-header-filters {
-        flex-wrap: wrap;
-    }
-
-    ::deep .trace-header-filters fluent-search {
-        flex: 1 1 180px;
-        min-width: 0;
-        max-width: 100%;
-    }
-}
-
-/* Once the pane is too narrow for a balanced single row, give search its own row rather than
-   orphaning the final action button on a third visual group. */
-@container (max-width: 560px) {
-    ::deep .trace-header-filters fluent-search {
-        flex: 1 0 100%;
-    }
 }
 
 ::deep .span-button-container {
@@ -317,7 +289,7 @@
     opacity: 0.8;
     transform: translateX(-50%);
     background: color-mix(in srgb, var(--button-color), white 30%);
-    border-color: color-mix(in srgb, var(--button-color), black 50%);
+    border: var(--strokeWidthThin) solid color-mix(in srgb, var(--button-color), black 50%);
 }
 
 ::deep .span-log-entry-button:hover {
@@ -348,13 +320,18 @@
     background: color-mix(in srgb, var(--button-color), white 30%);
 }
 
+::deep .log-tooltip {
+    max-width: 350px;
+    flex-direction: column;
+}
+
 ::deep .log-tooltip-title {
     font-weight: bold;
     font-size: 15px;
 }
 
 ::deep .log-tooltip-subtitle {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
     padding-left: 0.5rem;
 }
@@ -375,18 +352,18 @@
 
 ::deep.log-tooltip-table td.label-column {
     white-space: nowrap;
-    padding-right: calc(var(--design-unit)* 4px);
+    padding-right: var(--spacingHorizontalL);
     width: 20%;
 }
 
 ::deep.log-tooltip-table td {
-    padding: calc((var(--design-unit) + var(--focus-stroke-width) - var(--stroke-width))* 0.7px) 0;
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    padding: 3.5px 0;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
     align-content: start;
     word-break: break-word;
 }
 
 ::deep.log-tooltip-table tr:last-child td {
     border-bottom: none;
-    padding-bottom: calc(var(--design-unit) * 0.5px);
+    padding-bottom: var(--spacingVerticalXXS);
 }

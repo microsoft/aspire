@@ -11,13 +11,32 @@
     align-items: center;
     justify-content: center;
     padding: 40px 16px;
-    color: var(--neutral-foreground-hint);
+    color: var(--colorNeutralForeground3);
     gap: 8px;
 }
 
 .notifications-dismiss {
     display: flex;
     justify-content: flex-end;
+}
+
+::deep .notifications-dismiss-all {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 2px;
+    border-radius: 6px;
+    color: var(--colorBrandForeground1);
+    font-size: 14px;
+    font-weight: var(--fontWeightRegular);
+    line-height: 20px;
+}
+
+::deep .notifications-dismiss-all:hover {
+    color: var(--colorBrandForegroundLinkHover);
+}
+
+::deep .notifications-dismiss-all:active {
+    color: var(--colorBrandForegroundLinkPressed);
 }
 
 .notifications-scroll {
@@ -27,5 +46,5 @@
 }
 
 .notifications-scroll ::deep > :last-child {
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }

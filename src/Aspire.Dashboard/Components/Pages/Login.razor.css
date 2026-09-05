@@ -1,5 +1,5 @@
 .token-backdrop {
-    background-color: var(--neutral-layer-4);
+    background-color: var(--colorNeutralBackground4);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -8,16 +8,15 @@
 }
 
 [data-theme="dark"] .token-backdrop {
-    background-color: var(--neutral-layer-3);
+    background-color: #151220;
 }
 
 .token-form-container {
-    --error: #FF8181;
-    background-color: var(--neutral-layer-1);
-    padding: calc((var(--design-unit) * 5px));
-    border-radius: calc(var(--design-unit) * 2.5px);
+    background-color: var(--colorNeutralBackground1);
+    padding: var(--spacingHorizontalXL);
+    border-radius: 10px;
     display: grid;
-    grid-column-gap: calc(var(--design-unit) * 5px);
+    grid-column-gap: var(--spacingHorizontalXL);
     grid-template-columns: auto 25em;
     grid-template-rows: auto;
     grid-template-areas:
@@ -37,27 +36,35 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: calc(var(--design-unit) * 1px);
+    gap: var(--spacingHorizontalXS);
 
 }
 
 .token-entry-header {
-    color: var(--accent-foreground-rest);
+    color: var(--colorBrandForeground1);
 }
 
 .token-entry-header h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     text-wrap: nowrap;
-    margin-bottom: 1rem;
+    margin-top: 4px;
+    margin-bottom: 0.5rem;
+    font-family: var(--aspire-font-display);
+    font-size: var(--fontSizeBase400);
+    font-weight: var(--fontWeightSemibold);
+    line-height: var(--lineHeightBase400);
 }
 
 .token-entry {
     grid-area: entry;
 }
 
-::deep .token-entry-text {
+.token-entry ::deep fluent-field {
     width: 100%;
+    min-height: 55px;
+    row-gap: 0;
+    align-content: start;
 }
 
 .token-entry-footer {
@@ -66,27 +73,14 @@
     justify-content: space-between;
 }
 
-.token-validation {
-    min-height: var(--type-ramp-base-line-height);
-}
-
-/* For the validation failed message that is not inside the FluentValidationMessage component */
-.token-validation > .validation-message {
-    color: var(--error);
-    font-size: var(--type-ramp-minus-1-font-size);
-    display: flex;
-    align-items: center;
-    column-gap: 4px;
-}
-
 .token-help-container {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--design-unit) * 2px);
-    margin: calc(var(--design-unit) * 2px);
+    gap: var(--spacingHorizontalS);
+    margin: var(--spacingHorizontalS);
 }
 
-.token-help-container fluent-anchor {
+.token-help-container a {
     width: fit-content;
 }
 
@@ -97,6 +91,6 @@
 
 .version-info {
     position: fixed;
-    right: calc(var(--design-unit) * 4px);
-    bottom: calc(var(--design-unit) * 3px);
+    right: var(--spacingHorizontalL);
+    bottom: var(--spacingVerticalM);
 }

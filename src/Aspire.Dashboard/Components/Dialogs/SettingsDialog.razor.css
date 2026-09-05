@@ -1,0 +1,87 @@
+.input-container > ::deep fluent-field {
+	display: grid;
+	grid-template-rows: auto auto 0 !important;
+	margin: 0 !important;
+	row-gap: 0 !important;
+}
+
+.input-container > ::deep fluent-field::part(message),
+::deep fluent-radio-group > fluent-field::part(message) {
+	display: none;
+}
+
+.input-container > ::deep fluent-field > label[slot="label"],
+.setting-title {
+	font-size: 13.5px;
+	font-weight: 500;
+	line-height: 20px;
+}
+
+.input-container > ::deep fluent-field > label[slot="label"] {
+	margin-bottom: 4px;
+}
+
+::deep fluent-radio-group {
+	gap: 0;
+	margin: 0;
+}
+
+::deep fluent-radio-group > fluent-field {
+	margin: 4px 0 !important;
+}
+
+::deep fluent-radio-group > fluent-field > label[slot="label"] {
+	color: var(--colorNeutralForeground1);
+	font-size: var(--fontSizeBase300);
+	font-weight: var(--fontWeightRegular);
+	line-height: var(--lineHeightBase300);
+}
+
+.input-container > ::deep fluent-field.language-select {
+	min-width: 235px;
+	margin-bottom: 2px !important;
+}
+
+::deep .language-select fluent-dropdown {
+	width: 100%;
+	min-width: 235px;
+	--spacingVerticalSNudge: 3.2px;
+}
+
+.setting-subtext {
+	color: var(--foreground-settings-text);
+	font-size: 12px;
+	line-height: 20px;
+	margin: 0;
+}
+
+.setting-title {
+	display: inline-block;
+	margin-bottom: 4px;
+}
+
+::deep .setting-title + div fluent-button,
+::deep .setting-title + div fluent-button::part(control) {
+	--colorNeutralBackground1: var(--aspire-page-background);
+	height: 28px;
+	min-height: 28px;
+	padding-inline: 14px;
+	font-weight: var(--fontWeightRegular);
+}
+
+::deep .setting-title + div fluent-button > svg[slot="start"] {
+	margin-inline-end: 11px;
+}
+
+.version {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	row-gap: 4px;
+	margin-top: auto;
+	color: var(--foreground-subtext-rest);
+	font-size: 13px;
+	line-height: 20px;
+	text-align: end;
+}

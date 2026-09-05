@@ -31,7 +31,6 @@ class ResourceGraph {
     constructor(resourcesInterop, graphIcons) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
-        this.openContextMenu = false;
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
@@ -48,7 +47,7 @@ class ResourceGraph {
         this.zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (event) => {
             this.baseGroup.attr('transform', event.transform);
         });
-        this.svg.call(this.zoom);
+        this.svg.call(this.zoom).on('dblclick.zoom', null);
 
         // simulation setup with all forces
         this.linkForce = d3
@@ -122,7 +121,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("width", "17.5")
             .attr("height", "17.5")
-            .attr("fill", "var(--fill-color)");
+            .attr("fill", "var(--aspire-page-background)");
 
         highlightedPattern
             .append("line")
@@ -130,7 +129,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("x2", "0")
             .attr("y2", "17.5")
-            .attr("stroke", "var(--neutral-fill-secondary-hover)")
+            .attr("stroke", "var(--resource-graph-secondary-hover-background)")
             .attr("stroke-width", "15");
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
@@ -639,8 +638,8 @@ class ResourceGraph {
         trigger?.setAttribute("aria-expanded", "true");
 
         try {
-            // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, window.innerWidth, window.innerHeight, clientX, clientY, focusElementId);
+            // Wait until Blazor has opened the menu before resetting transient graph state.
+            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId);
         } finally {
             this.openContextMenu = false;
             trigger?.setAttribute("aria-expanded", "false");
@@ -695,11 +694,7 @@ class ResourceGraph {
     }
 
     unHoverNode = (event) => {
-        // Don't unhover the selected node when the context menu is open.
-        // This is done to keep the node selected until the context menu is closed.
-        if (!this.openContextMenu) {
-            this.updateNodeHighlights(null);
-        }
+        this.updateNodeHighlights(null);
     };
 
     nodeEquals(resource1, resource2) {

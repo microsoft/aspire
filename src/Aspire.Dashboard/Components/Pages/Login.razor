@@ -21,17 +21,21 @@
                     * AutoComplete value of one-time-code prevents the browser asking to save the value.
                     * Immediate value of true ensures the value is set to the server token with every key press in textbox.
                     *@
-                    <FluentTextField @ref="_tokenTextField" Id="token-text-field" @bind-Value="_formModel.Token"
-                                     Placeholder="@Loc[nameof(Dashboard.Resources.Login.TextFieldPlaceholder)]"
-                                     TextFieldType="TextFieldType.Password" AutoComplete="one-time-code" Class="token-entry-text" Immediate="true" />
-                </div>
-                <div class="token-validation">
-                    <FluentValidationMessage For="() => _formModel.Token" />
+                    <FluentField Id="token-field"
+                                 ForId="token-text-field"
+                                 ValueExpression="@(() => _formModel.Token)"
+                                 IncludeInputSlot="false">
+                        <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
+                            <FluentTextInput @ref="_tokenTextField" Id="token-text-field" @bind-Value="_formModel.Token"
+                                             Placeholder="@Loc[nameof(Dashboard.Resources.Login.TextFieldPlaceholder)]"
+                                             TextInputType="TextInputType.Password" AutoComplete="one-time-code" Class="aspire-input token-entry-text" Immediate="true" />
+                        </CascadingValue>
+                    </FluentField>
                 </div>
                 <div class="token-entry-footer">
                     <a href="@NavigationManager.Uri" id="helpLink">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
-                    <FluentButton Appearance="Appearance.Accent" Name="submit-token" Type="ButtonType.Submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</FluentButton>
-                    <FluentTooltip Anchor="helpLink" MaxWidth="650px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
+                    <FluentButton Appearance="ButtonAppearance.Primary" Name="submit-token" Type="ButtonType.Submit" Class="aspire-button">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</FluentButton>
+                    <FluentTooltip Anchor="helpLink" MaxWidth="650px" Positioning="Positioning.Below" SpacingVertical="8px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
                         <div class="token-help-container">
                             <div>
                                 <a href="/img/TokenExample.png" target="_blank">
@@ -43,10 +47,9 @@
                                 <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
                                 <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
                             </div>
-                            <FluentAnchor Href="https://go.microsoft.com/fwlink/?linkid=2265718" Target="_blank"
-                                          Appearance="Appearance.Hypertext">
+                            <a href="https://go.microsoft.com/fwlink/?linkid=2265718" target="_blank">
                                 @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
-                            </FluentAnchor>
+                            </a>
                         </div>
                     </FluentTooltip>
                 </div>

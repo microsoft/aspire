@@ -44,7 +44,7 @@
 
                             if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
                             {
-                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
                             }
                         }
                     </TemplateColumn>
@@ -71,7 +71,7 @@
                         <span style="margin-right: 4px;">@metricValueView.Value</span>
                         if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, title))
                         {
-                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
                         }
                     }
                 </TemplateColumn>
@@ -82,7 +82,7 @@
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
-                        <FluentButton Appearance="Appearance.Accent"
+                        <FluentButton Appearance="ButtonAppearance.Primary"
                                       aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
                                       @onclick="() => OpenExemplarsDialogAsync(context)"
                                       Style="min-width: 45px">@context.Exemplars.Count</FluentButton>
@@ -97,7 +97,7 @@
         <EmptyContent>
             @if (_hasUpdated)
             {
-                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" />@:&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />@:&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
             }
             else
             {

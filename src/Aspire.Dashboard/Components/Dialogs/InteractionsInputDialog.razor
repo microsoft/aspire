@@ -5,32 +5,24 @@
 @using Aspire.DashboardService.Proto.V1
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
-@implements IDialogContentComponent<InteractionsInputsDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-    <FluentStack VerticalAlignment="VerticalAlignment.Center">
-        <FluentLabel Typo="Typography.PaneHeader">
-            @Dialog.Instance.Parameters.Title
-        </FluentLabel>
-    </FluentStack>
-</FluentDialogHeader>
+<FluentDialogBody Class="page-dialog-body interaction-input-dialog">
+    <ChildContent>
+        @if (!string.IsNullOrEmpty(Content.Message))
+        {
+            <div class="interaction-message">
+                @((MarkupString)Content.Message)
+            </div>
+        }
 
-<FluentDialogBody Class="interaction-input-dialog">
-    @if (!string.IsNullOrEmpty(Content.Message))
-    {
-        <div class="interaction-message">
-            @((MarkupString)Content.Message)
-        </div>
-    }
-
-    <EditForm EditContext="@_editContext" OnValidSubmit="@SubmitAsync">
-        <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
-            @foreach (var vm in _inputDialogInputViewModels)
-            {
-                var localItem = vm;
-                <div class="interaction-input input-container">
-                    @switch (vm.Input.InputType)
-                    {
+        <EditForm EditContext="@_editContext" OnValidSubmit="@SubmitAsync">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+                @foreach (var vm in _inputDialogInputViewModels)
+                {
+                    var localItem = vm;
+                    <div class="interaction-input input-container">
+                        @switch (vm.Input.InputType)
+                        {
                         case InputType.Text:
                             <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
                                                    InputViewModel="@localItem"
@@ -39,7 +31,8 @@
                                 @*
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
+                                <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
+                                                 Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
@@ -59,24 +52,27 @@
                                 * AutoComplete value of one-time-code on password input prevents the browser asking to save the value.
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
+                                <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
+                                                 Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
-                                                 TextFieldType="TextFieldType.Password"
+                                                 TextInputType="TextInputType.Password"
                                                  AutoComplete="one-time-code"
                                                  Immediate="true"
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
-                                    <FluentButton Appearance="Appearance.Stealth"
-                                                  Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
-                                                  OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
-                                                  class="secret-text-toggle-button"
-                                                  slot="end">
-                                        <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
-                                    </FluentButton>
-                                </FluentTextField>
+                                    <EndTemplate>
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                      IconOnly="true"
+                                                      Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                                      OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
+                                                      Class="aspire-icon-button secret-text-toggle-button">
+                                            <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" Color="Color.Primary" />
+                                        </FluentButton>
+                                    </EndTemplate>
+                                </FluentTextInput>
                             </InteractionInputField>
                             break;
                         case InputType.Choice:
@@ -91,15 +87,16 @@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
                                     <FluentSelect @key="input.ViewModel.InputKey"
-                                                  TOption="SelectViewModel<string>"
+                                                  TOption="SelectViewModel<string>" TValue="string"
+                                                  Class="aspire-input"
                                                   @ref="@_elementRefs[input.ViewModel]"
                                                   @bind-Value="input.ViewModel.Value"
                                                   Placeholder="@input.ViewModel.Input.Placeholder"
                                                   Required="input.ViewModel.Input.Required"
                                                   Items="input.ViewModel.SelectOptions"
-                                                  OptionValue="@(vm => vm.Id)"
-                                                  OptionText="@(vm => vm.Name)"
-                                                  OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
+                                                  OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
+                                                  OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
+                                                  OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                   Height="250px"
                                                   Position="SelectPosition.Below"
                                                   Disabled="input.ViewModel.InputDisabled"
@@ -108,21 +105,22 @@
                                 }
                                 else
                                 {
+                                    @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                     <FluentCombobox @key="input.ViewModel.InputKey"
-                                                    TOption="SelectViewModel<string>"
+                                                    TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                                    Class="aspire-input"
                                                     @ref="@_elementRefs[input.ViewModel]"
-                                                    @bind-Value="input.ViewModel.Value"
+                                                    @bind-Value="input.ViewModel.SelectedOption"
+                                                    @bind-Value:after="@(() => OnChoiceSelected(input.ViewModel))"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
                                                     Required="input.ViewModel.Input.Required"
                                                     Items="@input.ViewModel.FilteredOptions()"
-                                                    OptionValue="@(vm => vm.Id)"
-                                                    OptionText="@(vm => vm.Name)"
-                                                    OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
+                                                    OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
+                                                    OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                     Height="250px"
                                                     Position="SelectPosition.Below"
                                                     Disabled="input.ViewModel.InputDisabled"
-                                                    Immediate="true"
-                                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                                    @oninput="@(e => OnChoiceInput(input.ViewModel, e))"
                                                     aria-describedby="@input.DescriptionId">
                                         <OptionTemplate Context="optionContext">
                                             <FluentHighlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
@@ -137,6 +135,7 @@
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
                                 <FluentCheckbox @ref="@_elementRefs[input.ViewModel]"
+                                                Class="aspire-checkbox"
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
                                                 Placeholder="@input.ViewModel.Input.Placeholder"
@@ -150,8 +149,9 @@
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentNumberField TValue="int?"
+                                <FluentNumberInput TValue="int?"
                                                    @ref="@_elementRefs[input.ViewModel]"
+                                                   Class="aspire-input"
                                                    @bind-Value="input.ViewModel.NumberValue"
                                                    Placeholder="@input.ViewModel.Input.Placeholder"
                                                    AriaLabel="@input.ViewModel.Input.Description"
@@ -181,7 +181,7 @@
                                         @foreach (var fileRef in input.ViewModel.FileReferences.Where(f => f.Id is not null))
                                         {
                                             <div class="uploaded-file-container">
-                                                <FluentIcon Icon="Icons.Filled.Size16.Document" Style="vertical-align: text-bottom;" Color="Color.Accent" />
+                                                <FluentIcon Icon="Icons.Filled.Size16.Document" Style="vertical-align: text-bottom;" Color="Color.Primary" />
                                                 <span>@fileRef.Name</span>
                                             </div>
                                         }
@@ -189,7 +189,7 @@
                                 }
                                 else
                                 {
-                                    <FluentButton Id="@inputId" Appearance="Appearance.Accent"
+                                    <FluentButton Id="@inputId" Appearance="ButtonAppearance.Primary" Class="aspire-button"
                                                   IconStart="@(new Icons.Regular.Size16.FolderOpen())"
                                                   aria-label="@input.ViewModel.Input.Label">
                                         @GetFileButtonText(input.ViewModel)
@@ -200,24 +200,27 @@
                         default:
                             @* Ignore unexpected InputTypes *@
                             break;
-                    }
-                </div>
+                        }
+                    </div>
+                }
+            </FluentStack>
+
+            @* Hidden submit is so the form is submitted when the user presses enter. *@
+            <button type="submit" style="display:none"></button>
+        </EditForm>
+    </ChildContent>
+
+    <ActionTemplate>
+        <footer class="interaction-dialog-actions">
+            <FluentButton Appearance="ButtonAppearance.Primary" Class="aspire-button" OnClick="@SubmitAsync">
+                @Dialog.Options.Footer.PrimaryAction.Label
+            </FluentButton>
+            @if (!string.IsNullOrEmpty(Dialog.Options.Footer.SecondaryAction.Label))
+            {
+                <FluentButton Appearance="ButtonAppearance.Default" Class="aspire-button" OnClick="@CancelAsync">
+                    @Dialog.Options.Footer.SecondaryAction.Label
+                </FluentButton>
             }
-        </FluentStack>
-
-        @* Hidden submit is so the form is submitted when the user presses enter. *@
-        <button type="submit" style="display:none"></button>
-    </EditForm>
+        </footer>
+    </ActionTemplate>
 </FluentDialogBody>
-
-<FluentDialogFooter>
-    <FluentButton Appearance="Appearance.Accent" OnClick="@SubmitAsync">
-        @Dialog.Instance.Parameters.PrimaryAction
-    </FluentButton>
-    @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.SecondaryAction))
-    {
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
-            @Dialog.Instance.Parameters.SecondaryAction
-        </FluentButton>
-    }
-</FluentDialogFooter>

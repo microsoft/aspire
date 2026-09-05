@@ -18,18 +18,36 @@
     </ParameterGroup>
     <Task>
       <Using Namespace="System.IO" />
+      <Using Namespace="System.Threading" />
       <Code Type="Fragment" Language="cs">
 <![CDATA[
-foreach (var filePath in FilePaths)
+  using var mutex = new Mutex(initiallyOwned: false, "Aspire.Dashboard.BlazorWebJs");
+  try
 {
-    var sourceText = File.ReadAllText(filePath.ItemSpec);
-    var updatedText = sourceText.Replace(",isComposing:t.isComposing", string.Empty);
-
-    if (updatedText != sourceText)
+    try
     {
+      mutex.WaitOne();
+    }
+    catch (AbandonedMutexException)
+    {
+      // The abandoned mutex is now owned by this process, so the shared files can still be repaired.
+    }
+
+    foreach (var filePath in FilePaths)
+    {
+      var sourceText = File.ReadAllText(filePath.ItemSpec);
+      var updatedText = sourceText.Replace(",isComposing:t.isComposing", string.Empty);
+
+      if (updatedText != sourceText)
+      {
         File.WriteAllText(filePath.ItemSpec, updatedText);
+      }
     }
 }
+  finally
+  {
+    mutex.ReleaseMutex();
+  }
 ]]>
       </Code>
     </Task>

@@ -2,6 +2,41 @@
     padding: 4px 0;
 }
 
+/* Fluent v5 hides vertical overflow, which makes visible horizontal overflow compute to auto. */
+::deep .url-overflow {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+}
+
+::deep .url-overflow > [behavior="fixed"]:not(.fluent-overflow-more) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: fit-content;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .url-overflow .fluent-overflow-more {
+    min-width: max-content;
+    max-width: none;
+}
+
+::deep .url-overflow .fluent-overflow-more fluent-button {
+    vertical-align: middle;
+}
+
+::deep .url-button {
+    height: auto;
+    min-width: 28px;
+    min-height: 0;
+    padding: 1px 14px;
+    border-radius: var(--borderRadiusLarge);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+    font-weight: var(--fontWeightRegular);
+}
+
 ::deep.url-list {
     margin: 0;
     padding: 0;
@@ -18,18 +53,10 @@
     text-overflow: ellipsis;
 }
 
-::deep .fluent-popover-content {
-    overflow-wrap: normal;
-    word-break: normal;
-    max-height: 300px;
-    overflow-y: auto;
-    max-width: 400px;
-    overflow-x: hidden;
-    cursor: default;
-}
-
-::deep .fluent-popover-content div[part="header"] {
-    font-size: 16px;
-    line-height: normal;
-    margin-bottom: 8px;
+/* Fluent positions the dialog below the anchor's left edge using an inline inset. Use the generated
+   overflow anchor name so the dialog remains right-aligned for any +N button width. */
+::deep .url-overflow-popover::part(dialog) {
+    left: anchor(var(--url-overflow-anchor) right) !important;
+    right: auto !important;
+    transform: translateX(-100%);
 }

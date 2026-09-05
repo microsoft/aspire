@@ -1,0 +1,1054 @@
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+:root {
+    --inline-icon-margin: 5px;
+}
+
+body {
+    overflow: hidden;
+}
+
+.aspire-menu-container {
+    --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
+}
+
+.aspire-menu-container fluent-menu-list {
+    gap: 0;
+    padding: 3px 0;
+    border-radius: 10px;
+    background-color: var(--aspire-popup-background);
+    box-shadow: var(--aspire-popup-shadow);
+}
+
+.aspire-menu-container fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
+    min-width: 180px;
+}
+
+.aspire-menu-container fluent-menu-list[slot="submenu"] {
+    margin-inline: 8px;
+}
+
+.aspire-menu-container fluent-menu-item {
+    gap: 0;
+    grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
+    height: 28px;
+    min-height: 28px;
+    margin-inline: 4px;
+    padding: 0;
+    border-radius: 6px;
+    background-color: var(--aspire-popup-background);
+    color: var(--aspire-dropdown-option-foreground);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase300);
+}
+
+.aspire-menu-container fluent-menu-item:state(submenu) {
+    grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto) 24px;
+    height: 32px;
+    min-height: 32px;
+    padding-inline-end: 8px;
+}
+
+.aspire-menu-container fluent-menu-item > [slot="start"],
+.aspire-menu-container fluent-menu-item > [slot="indicator"] {
+    position: relative;
+    inset-inline-start: 8px;
+}
+
+.aspire-menu-container fluent-menu-item:hover,
+.aspire-menu-container fluent-menu-item:state(active),
+.aspire-menu-container fluent-menu-item:focus-visible {
+    background-color: var(--aspire-menu-item-hover-background);
+}
+
+.aspire-menu-container fluent-divider {
+    margin-block: 4px;
+}
+
+/* Fluent v5 separates the indicator and start slots. Collapse the unused indicator track so the
+   icon and content align with v4's 32px start track while retaining the end slot for secondary actions. */
+.aspire-menu-container fluent-menu-item:not(:state(submenu))::part(content) {
+    grid-column: 2 / span 2;
+    min-width: 0;
+    overflow: hidden;
+    padding-inline: 0;
+    text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu-item:state(submenu)::part(content) {
+    grid-column: 3;
+    padding-inline: 0;
+}
+
+fluent-menu-item:state(disabled) {
+    background-color: transparent;
+    color: var(--colorNeutralForeground1);
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* Fluent renders each bar between two sibling panes. Match a collapsed pane immediately before
+   the bar with the adjacent-sibling selector, or immediately after it via :has(). */
+.fluent-multi-splitter > .fluent-multi-splitter-pane[status="collapsed"] + .fluent-multi-splitter-bar,
+.fluent-multi-splitter > .fluent-multi-splitter-bar:has(+ .fluent-multi-splitter-pane[status="collapsed"]) {
+    display: none;
+}
+
+body .fluent-multi-splitter > .fluent-multi-splitter-bar {
+    background-color: transparent;
+    z-index: 99;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
+    display: none;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--fluent-multi-splitter-background-color);
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar::before {
+    inset-block: 0;
+    width: 1px;
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-inline: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar::before {
+    inset-inline: 0;
+    height: 1px;
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-block: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+fluent-button {
+    min-width: 32px;
+    font-weight: var(--fontWeightRegular);
+}
+
+fluent-text-input[type="search"] [slot="start"] svg {
+    fill: var(--colorNeutralForeground1) !important;
+}
+
+.content-list-popover::part(dialog) {
+    max-width: 400px;
+    max-height: 300px;
+    padding: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overflow-wrap: normal;
+    cursor: default;
+    word-break: normal;
+}
+
+.content-list-popover > strong {
+    display: block;
+    margin-bottom: 8px;
+    font-family: var(--aspire-font-display);
+    font-size: 16px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: normal;
+}
+
+.content-list-popover-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.content-list-popover-items > fluent-field {
+    margin-block: 0;
+}
+
+.fluent-tabs {
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 40px;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+}
+
+.fluent-tab-panel:empty {
+    display: none;
+}
+
+fluent-tab {
+    height: 32px;
+    padding: 0 12px;
+    gap: 4px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+fluent-tab.tab-label svg {
+    color: var(--colorBrandForeground1);
+}
+
+fluent-tab.tab-label > span {
+    align-items: center;
+}
+
+fluent-tab[aria-selected="true"] {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground3);
+    border-color: var(--colorNeutralStroke1);
+    font-weight: var(--fontWeightRegular);
+}
+
+/* Fluent v5 renders hover/selection indicators on the tab and tablist. The v4 design represents
+    these states with the tab's background, foreground, and border instead. */
+fluent-tab::before,
+fluent-tab::after,
+fluent-tablist::after {
+    display: none;
+}
+
+fluent-tab[aria-selected="false"] {
+    color: var(--colorNeutralForeground3);
+}
+
+fluent-tab[aria-selected="false"]:hover {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground2);
+}
+
+.fluent-data-grid th, .fluent-data-grid td {
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3) !important;
+}
+
+.fluent-data-grid > thead > tr > th,
+.fluent-data-grid > thead > tr > th fluent-button,
+.fluent-data-grid > thead > tr > th [col-title-text] {
+    color: var(--colorNeutralForeground3);
+    font-weight: 400 !important;
+}
+
+.fluent-data-grid > thead > tr > th [col-title-text] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fluent-data-grid > thead > tr > th fluent-button::part(content) {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.property-grid-container th {
+    padding: 4px 1px 4px 0 !important;
+    border-bottom: 1px solid var(--datagrid-border-color) !important;
+    text-align: left !important;
+}
+
+.property-grid-container td {
+    padding: 4px 16px 4px 0 !important;
+    border-bottom: 1px solid var(--datagrid-border-color) !important;
+}
+
+.property-grid-container tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+.empty-data::before {
+    content: "-";
+}
+
+fluent-accordion-item.property-details-accordion-item {
+    margin-bottom: var(--spacingVerticalS);
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 10px;
+    background-color: var(--property-grid-background-color);
+    overflow: hidden;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading),
+fluent-accordion-item.property-details-accordion-item::part(content) {
+    background-color: var(--property-grid-background-color);
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading) {
+    --accordion-marker-background: transparent;
+    min-height: 40px;
+    padding-inline: var(--spacingHorizontalM);
+    direction: rtl;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(heading):hover {
+    --accordion-marker-background: color-mix(in srgb, var(--property-grid-background-color) 93.5%, var(--colorNeutralForeground1));
+}
+
+fluent-accordion-item.property-details-accordion-item::part(content) {
+    padding-inline: 0;
+}
+
+fluent-accordion-item.property-details-accordion-item::part(button) {
+    direction: ltr;
+    text-align: left;
+    font-family: var(--aspire-font-display);
+    font-weight: 600;
+}
+
+fluent-badge.property-details-accordion-badge {
+    min-width: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--borderRadiusCircular);
+    outline: none;
+    box-shadow: none;
+    background-color: var(--property-grid-badge-background-color);
+    color: var(--colorNeutralForeground1);
+    font-weight: 400;
+}
+
+.fluent-data-grid > thead > tr[row-type="sticky-header"] > th {
+    background-color: var(--colorNeutralBackground2);
+}
+
+.fluent-data-grid > thead > tr > th {
+    --fluent-data-grid-header-opacity: 0;
+}
+
+.fluent-data-grid > thead > tr > th:hover {
+    --fluent-data-grid-header-opacity: 1;
+}
+
+.main-grid > thead > tr > th.expand-col:not(.select-all) {
+    padding: 4px 1px 4px 16px;
+}
+
+.main-grid > thead > tr > th:not(.select-all):not(.expand-col) {
+    padding: 4px 1px 4px 8px;
+}
+
+.fluent-data-grid > thead > tr > th fluent-button {
+    --colorSubtleBackground: var(--aspire-page-background);
+    --colorSubtleBackgroundHover: var(--colorNeutralBackground3);
+    --colorSubtleBackgroundPressed: var(--colorNeutralBackground3);
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 2px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+/* Fluent buttons and anchors paint their own neutral surface. Match that surface to the row while
+   ShowHover is active so embedded actions don't appear as opaque patches in the hovered row. */
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-anchor[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-anchor[appearance="stealth"]:not(:hover),
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-button[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr[hover]:not([row-type="header"], [row-type="sticky-header"]):hover fluent-button[appearance="stealth"]:not(:hover) {
+    background-color: var(--datagrid-hover-color) !important;
+    transition-property: border, color;
+}
+
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) > td {
+    background-color: var(--datagrid-selected-color);
+}
+
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-anchor[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-anchor[appearance="stealth"]:not(:hover),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-button[appearance="lightweight"]:not(:hover),
+.fluent-data-grid tr.selected-row:not([row-type="header"], [row-type="sticky-header"]) fluent-button[appearance="stealth"]:not(:hover) {
+    background-color: var(--datagrid-selected-color) !important;
+    transition-property: border, color;
+}
+
+.button-hyperlink,
+.button-hyperlink-no-icon,
+.button-hyperlink::part(control),
+.button-hyperlink-no-icon::part(control) {
+    width: auto;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background-color: var(--property-grid-background-color);
+    color: var(--colorBrandForeground1);
+    font-weight: var(--fontWeightRegular);
+}
+
+.button-hyperlink:hover,
+.button-hyperlink-no-icon:hover,
+.button-hyperlink:hover::part(control),
+.button-hyperlink-no-icon:hover::part(control) {
+    background-color: var(--property-grid-background-color);
+    color: var(--colorNeutralForeground2BrandHover);
+}
+
+.button-hyperlink:active,
+.button-hyperlink-no-icon:active,
+.button-hyperlink:active::part(control),
+.button-hyperlink-no-icon:active::part(control) {
+    background-color: var(--property-grid-background-color);
+    color: var(--colorBrandForeground1);
+}
+
+.button-hyperlink > [slot="start"] {
+    margin-inline-end: var(--inline-icon-margin);
+}
+
+.resource-icon,
+.severity-icon {
+    vertical-align: text-bottom;
+    margin-inline-end: var(--inline-icon-margin);
+}
+
+.persistent-container-icon {
+    vertical-align: text-bottom;
+    margin-inline-start: var(--inline-icon-margin);
+}
+
+.log-overflow {
+    width: 100%;
+    overflow: auto;
+}
+
+.console-overflow {
+    background-color: var(--console-background-color);
+    height: 100%;
+}
+
+.log-container {
+    font-family: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 20px;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.wrap-log-container .log-line-row-container {
+    overflow: visible;
+}
+
+.wrap-log-container .log-content {
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+
+.log-line-row-container {
+    width: 100%;
+    overflow: hidden;
+}
+
+.log-line-row {
+    cursor: text;
+    padding: 0 12px 0 0;
+    white-space: pre-wrap;
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.log-line-area {
+    flex-grow: 1;
+    justify-content: flex-start;
+    display: flex;
+    flex-direction: row;
+}
+
+.log-line-number {
+    min-width: 53px;
+    text-align: right;
+    align-self: flex-start;
+    flex-shrink: 0;
+    color: var(--line-number-color);
+    user-select: none;
+    cursor: default;
+    height: 100%;
+    margin-right: 20px;
+}
+
+.log-content {
+    word-break: break-all;
+    position: relative;
+    margin-right: 6px;
+    user-select: text;
+    cursor: text;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.main-grid-expand-container {
+    display: inline-block;
+    width: 18px;
+}
+
+.main-grid-expand-container svg {
+    height: 12px;
+    transition: transform 0.1s linear;
+    pointer-events: none;
+}
+
+.main-grid-collapsed svg {
+    transform: rotate(0deg);
+}
+
+.main-grid-expanded svg {
+    transform: rotate(90deg);
+}
+
+.main-grid-expand-button {
+    width: 18px;
+    height: 24px;
+    min-width: 18px;
+    max-width: 18px;
+    min-height: 24px;
+    padding: 0;
+    vertical-align: middle;
+}
+
+.datagrid-overflow-area,
+.parent-details-container {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.fluent-data-grid:has(tr[row-state="empty-content"]) {
+    /* Override Fluent's inline full-height empty layout to keep the message below the header. */
+    height: auto !important;
+}
+
+.fluent-data-grid tr[row-state="empty-content"] > td {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: auto !important;
+    padding: 20px;
+    border-bottom-color: var(--datagrid-border-color) !important;
+}
+
+.property-grid-container .fluent-data-grid tr[row-state="empty-content"] > td {
+    padding: 20px 20px 20px 0 !important;
+}
+
+.body-content {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.page-content-container {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.items-footer {
+    display: flex;
+    align-items: center;
+    min-height: 46px;
+    column-gap: 20px;
+}
+
+.items-footer .result-count {
+    padding-inline-start: var(--layout-left-padding);
+}
+
+.dialog-title-grid {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "dialog-icon dialog-title dialog-format";
+    align-items: center;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+}
+
+.pane-details-subtext {
+    color: var(--foreground-subtext-rest);
+    padding-left: 0.5rem;
+    font-size: 12px;
+}
+
+fluent-dialog-body > [slot="title"],
+fluent-drawer-body > [slot="title"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+fluent-dialog::part(dialog),
+fluent-dialog-body {
+    background-color: var(--dialog-background-color);
+}
+
+fluent-dialog::part(dialog) {
+    border: 1px solid var(--dialog-border-color);
+    border-radius: 10px;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.2), 0 64px 128px rgba(0, 0, 0, 0.24);
+}
+
+fluent-dialog-body.page-dialog-body::part(title),
+fluent-dialog-body.page-dialog-body::part(actions) {
+    margin: 0;
+    background-color: transparent;
+}
+
+fluent-dialog-body.page-dialog-body::part(title) {
+    padding: 0 0 var(--spacingVerticalL);
+}
+
+fluent-dialog-body.page-dialog-body::part(actions) {
+    padding: var(--spacingVerticalL) 0 0;
+}
+
+fluent-dialog-body.page-dialog-body > [slot="title"] {
+    font-family: var(--aspire-font-display);
+    font-size: var(--fontSizeBase600);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase600);
+}
+
+fluent-dialog-body.page-dialog-body > [slot="title-action"] fluent-button[icon-only] {
+    box-sizing: border-box;
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    color: var(--colorNeutralForeground1);
+}
+
+fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button,
+fluent-dialog-body.page-dialog-body > [slot="action"] fluent-button::part(control) {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 14px;
+    font-weight: var(--fontWeightRegular);
+}
+
+.interaction-dialog-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+fluent-dialog-body.help-dialog-body > div:not([slot]) > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+}
+
+fluent-dialog-body.help-dialog-body h5,
+fluent-dialog-body.help-dialog-body h6,
+fluent-dialog-body.ai-agents-dialog-body .markdown-container h4 {
+    font-family: var(--aspire-font-display);
+    font-weight: var(--fontWeightMedium);
+}
+
+fluent-dialog-body.help-dialog-body h5 {
+    font-size: var(--fontSizeBase400);
+    line-height: var(--lineHeightBase400);
+}
+
+fluent-dialog-body.help-dialog-body h6 {
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+}
+
+fluent-dialog-body.help-dialog-body kbd {
+    padding: 3px 6px;
+    border: 1px solid var(--colorNeutralStroke2);
+    background-color: color-mix(in srgb, var(--colorNeutralBackground3) 60%, var(--colorNeutralStroke2));
+    color: var(--colorNeutralForeground1);
+    font-size: 0.875em;
+}
+
+fluent-dialog-body.ai-agents-dialog-body .markdown-container h4 {
+    line-height: 26px;
+}
+
+fluent-dialog-body.ai-agents-dialog-body .ai-agents-dialog-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+}
+
+fluent-drawer::part(dialog) {
+    background-color: var(--dialog-background-color);
+}
+
+fluent-drawer fluent-drawer-body > div:not([slot]) {
+    height: 100%;
+}
+
+fluent-drawer fluent-drawer-body > [slot="title"] {
+    font-family: var(--aspire-font-display);
+    position: relative;
+    top: 3px;
+    left: 3px;
+    font-size: var(--fontSizeBase600);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase600);
+}
+
+fluent-drawer fluent-drawer-body > [slot="close"] fluent-button,
+fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    color: var(--colorNeutralForeground1);
+}
+
+fluent-drawer fluent-drawer-body > [slot="close"] {
+    display: flex;
+}
+
+fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button,
+fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 14px;
+    font-weight: var(--fontWeightRegular);
+}
+
+.dialog-format {
+    grid-area: dialog-format;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    gap: 8px;
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase300);
+}
+
+.dialog-format fluent-dropdown {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.filter-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px;
+}
+
+.main-toolbar.filter-toolbar {
+    padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
+    gap: 8px;
+}
+
+.content-header {
+    container-type: inline-size;
+    container-name: page-toolbar;
+}
+
+.filter-toolbar > * {
+    flex: 0 0 auto;
+}
+
+.toolbar-end {
+    display: contents;
+}
+
+.filter-toolbar > .toolbar-end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    margin-inline-start: auto;
+    gap: inherit;
+}
+
+.filter-toolbar > .toolbar-end > * {
+    flex: 0 0 auto;
+}
+
+.filter-toolbar > fluent-button,
+.filter-toolbar > .toolbar-end > fluent-button {
+    width: auto;
+}
+
+.filter-toolbar > fluent-button:not(.clear-button),
+.filter-toolbar > .toolbar-end > fluent-button:not(.clear-button) {
+    width: 32px;
+}
+
+.main-toolbar.filter-toolbar > .pause-incoming-data-button {
+    width: 44px;
+}
+
+.main-toolbar.filter-toolbar .clear-button {
+    width: 67px;
+}
+
+/* v4 used Stealth colors for inactive toolbar buttons while retaining accent icons. */
+.toolbar-button:not([appearance]) {
+    --colorNeutralBackground1: var(--colorNeutralBackground2);
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralForeground1: var(--colorBrandForeground1);
+    --colorNeutralForeground1Hover: var(--colorBrandForeground1);
+    --colorNeutralStroke1Hover: var(--colorNeutralStroke1);
+}
+
+.details-toolbar-button,
+.details-toolbar-button::part(control) {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+}
+
+.filter-toolbar fluent-divider {
+    display: none;
+}
+
+.filter-toolbar .toolbar-search {
+    flex: 0 1 15rem;
+    width: 15rem;
+    min-width: 10rem;
+    max-width: 15rem;
+}
+
+.main-toolbar .resource-list {
+    width: 250px;
+}
+
+.main-toolbar .resource-list,
+.main-toolbar .toolbar-search,
+.main-toolbar .toolbar-select {
+    height: 32px;
+    row-gap: 0;
+}
+
+.main-toolbar .toolbar-select {
+    width: auto;
+}
+
+.main-toolbar .resource-list > fluent-dropdown,
+.main-toolbar .toolbar-search > fluent-text-input,
+.main-toolbar .toolbar-select > fluent-dropdown {
+    height: 32px;
+}
+
+.main-toolbar .toolbar-select > fluent-dropdown {
+    width: auto;
+}
+
+.main-toolbar .resource-list::part(message),
+.main-toolbar .toolbar-search::part(message),
+.main-toolbar .toolbar-select::part(message) {
+    display: none;
+}
+
+.main-toolbar > .toolbar-end > fluent-label {
+    margin-inline-end: 15px;
+}
+
+.details-layout {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "toolbar"
+        "main";
+    overflow: auto;
+    gap: var(--spacingHorizontalXS);
+}
+
+.details-layout > .details-toolbar {
+    grid-area: toolbar;
+    row-gap: calc(var(--spacingVerticalXS) + var(--spacingVerticalXXS));
+    padding-block: var(--spacingVerticalXS);
+    padding-left: var(--spacingHorizontalM);
+    background-color: var(--aspire-page-background);
+}
+
+.details-layout > .details-toolbar > .toolbar-end > fluent-field,
+.details-layout > .details-toolbar > .toolbar-end > fluent-field > fluent-text-input,
+.details-layout > .details-toolbar > .toolbar-end > fluent-field > fluent-text-input::part(root) {
+    height: 28px;
+    min-height: 28px;
+}
+
+.details-layout > .details-toolbar > .toolbar-end > fluent-field {
+    row-gap: 0;
+}
+
+.details-layout > .details-toolbar strong {
+    font-weight: var(--fontWeightSemibold);
+}
+
+.details-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px;
+}
+
+.details-toolbar > .toolbar-end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+    margin-inline-start: auto;
+    gap: inherit;
+}
+
+.details-toolbar fluent-divider[orientation="vertical"] {
+    align-self: center;
+    flex: 0 0 1px;
+    width: 1px;
+    height: 20px;
+    min-height: 20px;
+    max-height: 20px;
+}
+
+.details-toolbar > .toolbar-end > fluent-field {
+    flex: 0 1 17rem;
+    width: 17rem;
+    min-width: 10rem;
+    max-width: 17rem;
+}
+
+.details-toolbar > .toolbar-end > fluent-button {
+    width: 32px;
+}
+
+/* Floating scroll-to-bottom button for overflowing live-data regions. Position and visibility
+   classes are managed by app.js so the control can follow Blazor-owned scroll containers. */
+.scroll-buttons {
+    position: fixed;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.scroll-buttons:not(.is-active) {
+    display: none;
+}
+
+.scroll-button {
+    pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 50%;
+    background-color: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(0.25rem);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease, background-color 0.15s ease;
+}
+
+.scroll-button.is-visible {
+    opacity: 0.85;
+    visibility: visible;
+    transform: none;
+}
+
+.scroll-button:hover {
+    opacity: 1;
+    background-color: var(--colorNeutralBackground1Hover);
+}
+
+.scroll-button:focus-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+}
+
+.scroll-button.scroll-to-bottom svg {
+    transform: translateY(1px);
+}
+
+.grid-action-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.col-long-content {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blazor-error-ui {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: none;
+}
+
+#blazor-error-ui .dismiss {
+    position: absolute;
+    inset-inline-end: 0.75rem;
+}

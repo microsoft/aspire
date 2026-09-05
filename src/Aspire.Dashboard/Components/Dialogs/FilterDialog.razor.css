@@ -2,17 +2,105 @@
     content: attr(data-filtercount);
 }
 
+.filter-dialog-form {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 3px 0;
+}
+
+::deep fluent-badge {
+    box-sizing: border-box;
+    min-width: 20px;
+    height: 20px;
+    padding: 1px 3px;
+    border-color: transparent;
+    background-color: var(--aspire-menu-item-hover-background);
+    color: var(--aspire-dropdown-option-foreground);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase200);
+}
+
+.filter-input-container {
+    width: 100%;
+}
+
+.filter-input-container:not(.filter-button-container) {
+    min-height: 52px;
+}
+
 .input-line-container {
     display: flex;
     column-gap: 12px;
     align-items: center;
 }
 
+.filter-input-container ::deep fluent-field {
+    width: 100%;
+    margin-block: 0;
+    row-gap: 0;
+}
+
+.filter-input-container ::deep fluent-field label {
+    font-size: 13.5px;
+    font-weight: var(--fontWeightMedium);
+}
+
 .input-line-container > div,
-.input-line-container ::deep fluent-select,
-.input-line-container ::deep fluent-number-field,
-.input-line-container ::deep fluent-text-field,
-.input-line-container ::deep fluent-combobox {
+.input-line-container ::deep fluent-text-input,
+.input-line-container ::deep fluent-dropdown {
     flex: 1;
     min-width: 0;
+}
+
+.filter-input-container ::deep fluent-text-input,
+.filter-input-container ::deep fluent-dropdown {
+    position: relative;
+    top: 3px;
+    height: 28px;
+    min-height: 28px;
+}
+
+.filter-input-container ::deep fluent-dropdown > fluent-listbox {
+    box-sizing: border-box;
+    width: anchor-size(width);
+    min-width: anchor-size(width);
+    max-width: anchor-size(width);
+}
+
+.filter-input-container ::deep fluent-dropdown fluent-option {
+    grid-template-columns: 0 0 minmax(0, 1fr) auto;
+    column-gap: 2px;
+    overflow: hidden;
+    padding-inline: 10px 8px;
+}
+
+.filter-input-container ::deep fluent-dropdown fluent-option::part(content) {
+    grid-column: 3;
+    grid-row: 1;
+    width: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: none;
+    white-space: nowrap;
+}
+
+.filter-input-container ::deep fluent-dropdown fluent-option::part(description) {
+    display: flex;
+    grid-column: 4;
+    grid-row: 1;
+    align-items: center;
+    margin-left: 6px;
+}
+
+.filter-button-container ::deep .fluent-stack-horizontal {
+    column-gap: 10px;
+}
+
+.filter-button-container ::deep fluent-button {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 14px;
+    border-radius: 6px;
 }

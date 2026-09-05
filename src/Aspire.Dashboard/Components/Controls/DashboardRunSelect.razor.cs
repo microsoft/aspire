@@ -61,7 +61,7 @@ public partial class DashboardRunSelect : ComponentBase
             var menuItem = new MenuButtonItem
             {
                 Text = FormatRunOption(run),
-                Role = MenuItemRole.MenuItemRadio,
+                Role = MenuItemRole.Radio,
                 Checked = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal),
                 Icon = s_checkmarkIcon,
                 SecondaryActionIcon = run.IsPinned ? s_pinnedIcon : s_pinIcon,

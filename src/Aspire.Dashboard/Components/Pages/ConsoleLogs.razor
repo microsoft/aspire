@@ -44,18 +44,19 @@
 
                 @foreach (var command in _highlightedCommands)
                 {
-                    <FluentButton Appearance="Appearance.Lightweight"
+                    <FluentButton Appearance="ButtonAppearance.Default"
                                   Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
                                   Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
-                                  Class="highlighted-command">
-                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" />
+                                  Class="highlighted-command toolbar-button">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" Color="Color.Primary" />
                     </FluentButton>
                 }
 
                 if (_resourceMenuItems.Count > 0)
                 {
-                    <AspireMenuButton ButtonAppearance="@(ViewportInformation.IsDesktop ? Appearance.Lightweight : Appearance.Neutral)"
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                      ButtonClass="@(ViewportInformation.IsDesktop ? "toolbar-button" : null)"
                                       Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
                                       ItemsProvider="@(() => _resourceMenuItems)"
                                       Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]"
@@ -65,54 +66,63 @@
 
             @if (ViewportInformation.IsDesktop)
             {
-                // This takes up too much horizontal space on mobile, so show on a new line on mobile
-                @if (_activeView == ConsoleLogsView.Console)
-                {
-                    <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
-                }
-
-                @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
-                {
+                <div class="toolbar-end">
+                    @* This takes up too much horizontal space on mobile, so show on a new line on mobile. *@
                     @if (_activeView == ConsoleLogsView.Console)
                     {
-                        <FluentSearch @bind-Value="_logFilter"
+                        <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">@PageViewModel.Status</FluentLabel>
+                    }
+
+                    @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
+                    {
+                        @if (_activeView == ConsoleLogsView.Console)
+                        {
+                        <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
+                                      Class="toolbar-search"
                                       Name="console-logs-search"
                                       AutoComplete="off"
                                       Immediate="true"
                                       ImmediateDelay="@FluentUIExtensions.InputDelay"
                                       Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
-                                      slot="end" />
-                    }
+                                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                            <StartTemplate>
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                            </StartTemplate>
+                        </FluentTextInput>
+                        }
 
-                    <AspireMenuButton
-                        ButtonAppearance="Appearance.Lightweight"
-                        Icon="@(new Icons.Regular.Size20.Options())"
-                        ItemsProvider="@(() => _logsMenuItems)"
-                        Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
-                        slot="end"/>
-                }
+                        <AspireMenuButton
+                            ButtonAppearance="ButtonAppearance.Default"
+                            ButtonClass="toolbar-button"
+                            Icon="@(new Icons.Regular.Size20.Options())"
+                            ItemsProvider="@(() => _logsMenuItems)"
+                            Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+                    }
+                </div>
             }
             else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
             {
                 @if (_activeView == ConsoleLogsView.Console)
                 {
-                    <FluentSearch @bind-Value="_logFilter"
+                    <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
+                                  Class="toolbar-search"
                                   Name="console-logs-search"
                                   AutoComplete="off"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                                   Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
-                                  title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
-                                  slot="end" />
+                                  title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                        <StartTemplate>
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                        </StartTemplate>
+                    </FluentTextInput>
                 }
 
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
                     ItemsProvider="@(() => _logsMenuItems)"
-                    Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
-                    slot="end"/>
+                    Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
             }
 
         </ToolbarSection>
@@ -181,7 +191,9 @@
         <FooterSection>
             @if (PauseText is not null)
             {
-                <PauseWarning PauseText="@PauseText" />
+                <div class="items-footer">
+                    <PauseWarning PauseText="@PauseText" />
+                </div>
             }
         </FooterSection>
     </AspirePageContentLayout>

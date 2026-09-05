@@ -2,21 +2,25 @@
 @using System.Collections.Immutable
 @inherits FluentComponentBase
 
+@if (!Anchored)
+{
+    <span id="@Anchor" aria-hidden="true" style="@CursorAnchorStyle"></span>
+}
+
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
 <FluentMenu Class="aspire-menu-container"
             @ref="_menu"
-            Anchor="@Anchor"
-            Anchored="@Anchored"
-            Open="@Open"
-            OpenChanged="OnOpenChanged"
+            Trigger="@Anchor"
+            OpenedChanged="OnOpenChanged"
             Style="@Style"
-            VerticalThreshold="@CalculatedVerticalThreshold"
-            HorizontalThreshold="200"
+            PersistOnItemClick="true"
             aria-labelledby="@HeaderId">
-    @foreach (var item in Items)
-    {
-        @RenderMenuItem(item)
-    }
+    <FluentMenuList>
+        @foreach (var item in Items)
+        {
+            @RenderMenuItem(item)
+        }
+    </FluentMenuList>
 </FluentMenu>
 
 @code {
@@ -35,7 +39,7 @@
             return @<div id="@item.Id" class="aspire-menu-header" role="presentation">
                 @if (item.Icon is not null)
                 {
-                    <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" />
+                    <FluentIcon Value="@item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
                 }
                 <span class="aspire-menu-header-text" title="@item.Text">@item.Text</span>
             </div>;
@@ -47,21 +51,23 @@
                 { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
             };
 
-            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" Role="@item.Role" Checked="@item.Checked" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
+            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" CheckedChanged="isChecked => HandleItemCheckedChanged(item, isChecked)" Disabled="@item.IsDisabled" Role="@item.Role" Checked="@item.Checked" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
                 @if (item.Icon != null)
                 {
-                    <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" Slot="@GetIconSlot(item.Role)" />
+                    <span slot="@GetIconSlot(item.Role)">
+                        <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" Color="Color.Primary" />
+                    </span>
                 }
                 @if (item.SecondaryActionIcon is not null)
                 {
-                    <span slot="end" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                    <span class="aspire-menu-secondary-action-container" slot="end">
                         <FluentButton Class="@($"aspire-menu-secondary-action{(item.IsSecondaryActionSelected ? " selected" : null)}")"
-                                      Appearance="Appearance.Stealth"
+                                      Appearance="ButtonAppearance.Transparent"
                                       Title="@item.SecondaryActionAriaLabel"
                                       AriaLabel="@item.SecondaryActionAriaLabel"
                                       aria-pressed="@(item.IsSecondaryActionSelected ? "true" : "false")"
                                       @onclick="() => HandleSecondaryActionClicked(item)">
-                            <FluentIcon Value="@item.SecondaryActionIcon" Width="16px" />
+                            <FluentIcon Value="@item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
                         </FluentButton>
                     </span>
                 }
@@ -71,8 +77,7 @@
 
     private static string GetIconSlot(MenuItemRole? role) => role switch
     {
-        MenuItemRole.MenuItemCheckbox => "checkbox-indicator",
-        MenuItemRole.MenuItemRadio => "radio-indicator",
+        MenuItemRole.Checkbox or MenuItemRole.Radio => "indicator",
         _ => "start"
     };
 
@@ -83,12 +88,11 @@
             return null;
         }
 
-        // div is required because a single element has to be returned.
-        return @<div>
+        return @<text>
             @foreach (var nestedItem in item.NestedMenuItems)
             {
                 @RenderMenuItem(nestedItem)
             }
-        </div>;
+        </text>;
     }
 }

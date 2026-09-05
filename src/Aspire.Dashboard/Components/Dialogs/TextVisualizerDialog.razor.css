@@ -2,25 +2,29 @@
     min-width: 33px;
 }
 
+.dialog-title-grid ::deep .text-visualizer-dialog-title {
+    font: inherit;
+}
+
 ::deep .highlight-line {
     width: 100%;
     background: transparent;
 }
 
-.text-visualizer-container ::deep.button-container {
+.button-container {
     display: flex;
     width: 100%;
-    margin-top: auto;
 }
 
-.text-visualizer-container ::deep.text-visualizer-unmask-content {
-    margin-left: 0;
-}
-
-.text-visualizer-container ::deep.button-container-right {
+.button-container-right {
     display: flex;
     gap: 8px;
     margin-left: auto;
+}
+
+.copy-button-icon {
+    margin-right: 11px;
+    display: flex;
 }
 
 .text-visualizer-container {

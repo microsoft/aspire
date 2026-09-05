@@ -1,6 +1,16 @@
 ::deep .unread-logs-errors-link {
-    vertical-align: super;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    text-decoration: none;
     --unread-logs-badge-color: #ffffff;
+}
+
+::deep .unread-logs-errors-link:hover {
+    background-color: var(--colorNeutralBackground2);
 }
 
 ::deep .value-not-set-link {
@@ -8,21 +18,14 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent-fill-rest);
+    color: var(--colorBrandBackground);
     text-decoration: underline;
     cursor: pointer;
     font: inherit;
 }
 
 ::deep .value-not-set-link:hover {
-    color: var(--accent-fill-hover);
-}
-
-::deep .unread-logs-errors-link::part(control) {
-    margin-left: 5px;
-    padding: 0;
-    flex-grow: 0;
-    color: #ffffff;
+    color: var(--colorBrandBackgroundHover);
 }
 
 ::deep .error-counter-badge {
@@ -80,6 +83,7 @@
 }
 
 ::deep .resources-tab-header {
+    width: max-content;
     max-width: 100%;
     min-width: 0;
 }
@@ -91,16 +95,15 @@
     overflow-y: hidden;
 }
 
-/* On desktop the tabs row also hosts the filter controls on the right, so the toolbar shares a
-   single row with the tabs instead of taking its own band above the grid. The row wraps (controls
-   drop below the tabs) when horizontal space is tight, keeping it responsive. */
+/* On desktop the tabs row also hosts the filter controls on the right. The filter toolbar wraps
+    its controls when its share of the row becomes too narrow. */
 ::deep .resource-tabs-header-row {
     grid-area: resources-tab-header;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: calc(var(--design-unit) * 1.5px);
+    gap: var(--spacingHorizontalSNudge);
     min-width: 0;
     padding-top: 0.5rem;
     padding-left: var(--layout-left-padding);
@@ -115,30 +118,46 @@
 }
 
 ::deep .resource-tabs-toolbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    /* Match the control/icon-button spacing used on every other page toolbar (Structured, Console,
-       Traces, Metrics). Those render a Fluent FluentToolbar, which spaces adjacent items with a 4px
-       margin on each side = 8px (2 design units) between controls. Resources merges its controls into
-       the tabs row with a plain flex gap, so pin that gap to the same 2-design-unit rhythm instead of
-       the previous 1 unit (4px) so the filter / view-option icon buttons sit the same distance apart
-       as the icon buttons on the log/trace/metric pages. */
-    gap: calc(var(--design-unit) * 2px);
+    flex: 1 1 auto;
+    justify-content: flex-end;
+}
+
+::deep .resources-filter-popup::part(dialog) {
+    transform: translateX(calc(-100% + 32px));
+    box-sizing: border-box;
+    max-height: 400px;
+    padding: 0;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: var(--aspire-popup-background);
+    box-shadow: rgba(0, 0, 0, 0.2) 0 0 2px, rgba(0, 0, 0, 0.24) 0 16px 32px;
+}
+
+::deep .resources-filter-popup > .fluent-stack-vertical {
+    padding: 14px;
+}
+
+::deep .resources-filter-popup .filter-group > legend {
+    font-family: var(--aspire-font-display);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 27px;
+}
+
+::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
+    row-gap: 10px;
+}
+
+::deep .resources-filter-popup .filter-group fluent-field {
+    height: 20px;
+    margin: 0;
 }
 
 @container (max-width: 500px) {
     ::deep .resource-tabs-toolbar {
-        flex: 1 0 100%;
-        justify-content: flex-end;
-        box-sizing: border-box;
-        padding-left: var(--layout-left-padding);
+        min-width: 0;
     }
-}
-
-/* Keep the search box usable but compact so the tabs stay on the same row at typical widths. */
-::deep .resource-tabs-toolbar fluent-search {
-    min-width: 160px;
 }
 
 ::deep .resources-grid-container {
@@ -163,6 +182,25 @@
     column-gap: 10px;
 }
 
+::deep .resource-graph-controls fluent-button {
+    border: var(--strokeWidthThin) solid transparent;
+    background-color: var(--aspire-page-background);
+}
+
+::deep .resource-graph-controls fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .resource-graph-controls fluent-button:active,
+::deep .resource-graph-controls fluent-button:hover:active {
+    background-color: var(--resource-graph-secondary-hover-background);
+}
+
+::deep .resource-graph-controls fluent-button > svg {
+    width: 24px;
+    height: 24px;
+}
+
 ::deep .resource-graph .texts {
     cursor: pointer;
 }
@@ -172,8 +210,8 @@
 }
 
 ::deep .resource-name {
-    fill: var(--neutral-foreground-rest);
-    stroke: var(--fill-color);
+    fill: var(--colorNeutralForeground1);
+    stroke: var(--aspire-page-background);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -182,12 +220,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--fill-color);
-    fill: var(--fill-color);
+    stroke: var(--aspire-page-background);
+    fill: var(--aspire-page-background);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--neutral-fill-hover) !important;
+    fill: var(--resource-graph-hover-background) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -195,11 +233,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--neutral-fill-secondary-rest) !important;
+    fill: var(--colorNeutralBackground3) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -207,15 +245,15 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-node-border {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     fill: transparent;
 }
@@ -227,7 +265,7 @@
 }
 
 ::deep .resource-status-circle {
-    fill: var(--fill-color);
+    fill: var(--aspire-page-background);
 }
 
 /* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
@@ -254,19 +292,19 @@
 }
 
 ::deep .resource-menu-cog-background {
-    fill: var(--fill-color);
-    stroke: var(--neutral-stroke-rest);
-    stroke-width: 1;
+    fill: var(--aspire-page-background);
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: var(--strokeWidthThin);
 }
 
 ::deep .resource-menu-cog:hover .resource-menu-cog-background {
-    fill: var(--neutral-fill-secondary-hover);
-    stroke: var(--neutral-stroke-hover);
+    fill: var(--resource-graph-secondary-hover-background);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
-    stroke: var(--focus-stroke-outer);
-    stroke-width: calc(var(--focus-stroke-width) * 1px);
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
 }
 
 ::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
@@ -282,42 +320,46 @@
 }
 
 ::deep .resource-menu-cog-icon {
-    fill: var(--accent-fill-rest);
+    fill: var(--colorBrandForeground1);
     pointer-events: none;
 }
 
 ::deep .resource-link {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     marker-end: url(#arrow-normal);
 }
 
 ::deep .arrow-normal {
-    fill: var(--neutral-stroke-rest);
+    fill: var(--colorNeutralStroke1);
 }
 
 ::deep .arrow-highlight {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-link-highlight {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);
 }
 
-::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+::deep .tab-label svg {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    max-width: 18px;
+    margin-right: var(--spacingHorizontalXS);
 }

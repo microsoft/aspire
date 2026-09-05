@@ -5,25 +5,28 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 @{
-    var id = $"typeFilterButton-{Filter.SanitizedHtmlId}-{Guid.NewGuid()}";
+    var id = $"typeFilterButton-{Filter.SanitizedHtmlId}-{_idSuffix}";
 }
 <span class="chart-filter-button-container">
     <FluentButton id="@id"
                   Class="chart-filter-button"
-                  IconEnd="@(new Icons.Regular.Size20.Filter())"
-                  Appearance="@(Filter.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
+                  IconOnly="true"
+                  Appearance="ButtonAppearance.Transparent"
                   @onclick="() => Filter.PopupVisible = !Filter.PopupVisible"
-                  aria-label="@(Filter.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
+                  aria-label="@(Filter.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])">
+        <FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" />
+    </FluentButton>
 </span>
 @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
-<FluentPopover AnchorId="@id" @bind-Open="Filter.PopupVisible" VerticalThreshold="@(Math.Min((Filter.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
-    <Header>@Filter.Name</Header>
-    <Body>
-        <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+<FluentPopover AnchorId="@id" @bind-Opened="Filter.PopupVisible" Class="content-list-popover chart-filter-popover">
+    <strong>@Filter.Name</strong>
+    <div>
+        <FluentStack Orientation="Orientation.Vertical" Class="content-list-popover-items dimension-popup">
             <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
                             ThreeState="true"
                             ShowIndeterminate="false"
                             ThreeStateOrderUncheckToIntermediate="true"
+                            Value="@(Filter.AreAllValuesSelected is true)"
                             @bind-CheckState:get="Filter.AreAllValuesSelected"
                             @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
             @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
@@ -36,5 +39,5 @@
                                 @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
             }
         </FluentStack>
-    </Body>
+    </div>
 </FluentPopover>

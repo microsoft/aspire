@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -28,10 +29,11 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Single(cut.FindComponents<FluentNumberField<double?>>());
+        Assert.Single(cut.FindComponents<FluentDialogBody>());
+        Assert.Single(cut.FindComponents<FluentNumberInput<double?>>());
         Assert.DoesNotContain("fluent-combobox", cut.Markup);
 
-        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>>>());
+        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>, SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,
             item => Assert.Equal(FilterCondition.Equals, item.Id),
             item => Assert.Equal(FilterCondition.NotEqual, item.Id),
@@ -56,12 +58,26 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Empty(cut.FindComponents<FluentNumberField<double?>>());
-        Assert.Contains("fluent-combobox", cut.Markup);
-        Assert.Equal(3, cut.FindAll(".filter-input-container > label").Count);
-        Assert.Empty(cut.FindAll(".input-line-container label"));
+        Assert.Empty(cut.FindComponents<FluentNumberInput<double?>>());
+        Assert.Contains("fluent-dropdown", cut.Markup);
+        Assert.DoesNotContain("TODO: Restore Immediate/ImmediateDelay", cut.Markup);
 
-        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>>>());
+        var valueOption = cut.Find("fluent-option[text='request']");
+        var countBadge = Assert.Single(valueOption.QuerySelectorAll(":scope > fluent-badge[slot='description']"));
+        Assert.Same(countBadge, valueOption.LastElementChild);
+        Assert.Single(countBadge.QuerySelectorAll("[data-filtercount='1']"));
+
+        Assert.Contains(JSInterop.Invocations, invocation =>
+            invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Select.Initialize" &&
+            invocation.Arguments.Count == 2 &&
+            Equals(invocation.Arguments[1], "request"));
+
+        var parameterSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
+        Assert.Null(parameterSelect.Instance.OptionText!(null));
+        Assert.False(parameterSelect.Instance.OptionDisabled!(null));
+
+        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>, SelectViewModel<FilterCondition>>>());
+        Assert.Null(conditionSelect.Instance.OptionText!(null));
         Assert.Collection(conditionSelect.Instance.Items!,
             item => Assert.Equal(FilterCondition.Equals, item.Id),
             item => Assert.Equal(FilterCondition.Contains, item.Id),
@@ -96,17 +112,17 @@ public class FilterDialogTests : DashboardTestContext
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
 
-        Assert.True(cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.Disabled);
-        Assert.Single(cut.FindComponents<FluentProgressRing>());
+        Assert.True(cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>().Instance.Disabled);
+        Assert.Single(cut.FindComponents<FluentSpinner>());
         Assert.NotNull(cut.Find(".input-line-container .input-progress"));
 
         propertyKeys.SetResult(["custom.attribute"]);
 
         cut.WaitForAssertion(() =>
         {
-            var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>>>();
+            var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
             Assert.False(parameterSelect.Instance.Disabled);
-            Assert.Empty(cut.FindComponents<FluentProgressRing>());
+            Assert.Empty(cut.FindComponents<FluentSpinner>());
             Assert.Contains(parameterSelect.Instance.Items!, item => item.Id == "custom.attribute");
         });
     }
@@ -138,15 +154,17 @@ public class FilterDialogTests : DashboardTestContext
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
 
-        Assert.True(cut.Find("fluent-combobox").HasAttribute("disabled"));
-        Assert.Single(cut.FindAll("fluent-combobox + fluent-progress-ring"));
+        var valueCombobox = cut.Find("fluent-dropdown[type='combobox']");
+        Assert.True(valueCombobox.HasAttribute("disabled"));
+        Assert.NotEmpty(cut.FindComponents<FluentSpinner>());
 
         fieldValues.SetResult(new Dictionary<string, int> { ["request"] = 1 });
 
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.Find("fluent-combobox").HasAttribute("disabled"));
-            Assert.Empty(cut.FindAll("fluent-combobox + fluent-progress-ring"));
+            var updatedValueCombobox = cut.Find("fluent-dropdown[type='combobox']");
+            Assert.False(updatedValueCombobox.HasAttribute("disabled"));
+            Assert.Empty(cut.FindComponents<FluentSpinner>());
         });
     }
 
@@ -173,15 +191,15 @@ public class FilterDialogTests : DashboardTestContext
         };
 
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
-        var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>>>();
+        var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
         var traceIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.TraceIdField);
 
-        await parameterSelect.InvokeAsync(() => parameterSelect.Instance.SelectedOptionChanged.InvokeAsync(traceIdOption));
+        await parameterSelect.InvokeAsync(() => parameterSelect.Instance.ValueChanged.InvokeAsync(traceIdOption));
 
         Assert.Collection(loadedFields,
             field => Assert.Equal(KnownTraceFields.NameField, field),
             field => Assert.Equal(KnownTraceFields.TraceIdField, field));
-        Assert.False(cut.Find("fluent-combobox").HasAttribute("disabled"));
+        Assert.False(cut.Find("fluent-dropdown[type='combobox']").HasAttribute("disabled"));
     }
 
     [Fact]
@@ -212,13 +230,13 @@ public class FilterDialogTests : DashboardTestContext
         };
 
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
-        var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>>>();
+        var parameterSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
         var traceIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.TraceIdField);
         var spanIdOption = parameterSelect.Instance.Items!.Single(item => item.Id == KnownTraceFields.SpanIdField);
 
-        var firstChangeTask = parameterSelect.InvokeAsync(() => parameterSelect.Instance.SelectedOptionChanged.InvokeAsync(traceIdOption));
+        var firstChangeTask = parameterSelect.InvokeAsync(() => parameterSelect.Instance.ValueChanged.InvokeAsync(traceIdOption));
         await firstLoadStarted.Task.WaitAsync(DefaultWaitTimeout);
-        var secondChangeTask = parameterSelect.InvokeAsync(() => parameterSelect.Instance.SelectedOptionChanged.InvokeAsync(spanIdOption));
+        var secondChangeTask = parameterSelect.InvokeAsync(() => parameterSelect.Instance.ValueChanged.InvokeAsync(spanIdOption));
         await secondLoadStarted.Task.WaitAsync(DefaultWaitTimeout);
 
         secondFieldValues.SetResult(new Dictionary<string, int> { ["latest-value"] = 1 });
@@ -228,7 +246,7 @@ public class FilterDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var options = cut.Find("fluent-combobox").QuerySelectorAll("fluent-option");
+            var options = cut.Find("fluent-dropdown[type='combobox']").QuerySelectorAll("fluent-option");
             var option = Assert.Single(options);
             Assert.Contains("latest-value", option.TextContent, StringComparison.Ordinal);
         });
@@ -268,7 +286,7 @@ public class FilterDialogTests : DashboardTestContext
 
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
-        Assert.Single(cut.FindComponents<FluentProgressRing>());
+        Assert.Single(cut.FindComponents<FluentSpinner>());
 
         propertyKeys.SetException(new InvalidOperationException("Database read failed."));
 
@@ -276,8 +294,8 @@ public class FilterDialogTests : DashboardTestContext
         // spinner for the life of the dialog and the user cannot pick a different field.
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.Disabled);
-            Assert.Empty(cut.FindComponents<FluentProgressRing>());
+            Assert.False(cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>().Instance.Disabled);
+            Assert.Empty(cut.FindComponents<FluentSpinner>());
         });
     }
 
@@ -307,14 +325,14 @@ public class FilterDialogTests : DashboardTestContext
 
         var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
         await loadingStarted.Task.WaitAsync(DefaultWaitTimeout);
-        Assert.True(cut.Find("fluent-combobox").HasAttribute("disabled"));
+        Assert.True(cut.Find("fluent-dropdown[type='combobox']").HasAttribute("disabled"));
 
         fieldValues.SetException(new InvalidOperationException("Database read failed."));
 
         cut.WaitForAssertion(() =>
         {
-            Assert.False(cut.Find("fluent-combobox").HasAttribute("disabled"));
-            Assert.Empty(cut.FindAll("fluent-combobox + fluent-progress-ring"));
+            Assert.False(cut.Find("fluent-dropdown[type='combobox']").HasAttribute("disabled"));
+            Assert.Empty(cut.FindAll("fluent-dropdown[type='combobox'] + fluent-spinner"));
         });
     }
 
@@ -357,6 +375,77 @@ public class FilterDialogTests : DashboardTestContext
         propertyKeys.SetResult([]);
     }
 
+    [Fact]
+    public async Task Render_StringFilter_TypingFiltersAndHighlightsOptions()
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.NameField,
+                Condition = FilterCondition.Contains,
+                Value = ""
+            }));
+        });
+
+        await cut.Find("fluent-dropdown[type='combobox']").InputAsync(new ChangeEventArgs { Value = "response" });
+
+        var valueCombobox = cut.Find("fluent-dropdown[type='combobox']");
+        var valueOption = Assert.Single(valueCombobox.QuerySelectorAll("fluent-option"));
+        Assert.Equal("response", valueOption.GetAttribute("text"));
+        Assert.Equal("response", Assert.Single(valueOption.QuerySelectorAll("mark")).TextContent);
+    }
+
+    [Fact]
+    public void Render_StringFilterWithoutValue_MarksValueFieldInvalid()
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.NameField,
+                Condition = FilterCondition.Contains,
+                Value = ""
+            }));
+        });
+
+        cut.Find("form").Submit();
+
+        var validationMessage = Assert.Single(cut.FindAll(".fluent-validation-message"));
+        Assert.Equal("A value is required.", validationMessage.TextContent.Trim());
+        var valueField = Assert.Single(cut.FindAll("#filter-dialog-text-value-field"));
+        Assert.Contains("invalid", valueField.ClassList);
+        Assert.Equal("filter-dialog-text-value", valueField.QuerySelector(":scope > [slot='input']")?.Id);
+    }
+
+    [Fact]
+    public async Task Render_StringFilterWithValidationError_TypingValueClearsError()
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder =>
+        {
+            builder.Add(p => p.Content, CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.NameField,
+                Condition = FilterCondition.Contains,
+                Value = ""
+            }));
+        });
+
+        cut.Find("form").Submit();
+        Assert.Single(cut.FindAll(".fluent-validation-message"));
+
+        await cut.Find("#filter-dialog-text-value").InputAsync(new ChangeEventArgs { Value = "response" });
+
+        Assert.Empty(cut.FindAll(".fluent-validation-message"));
+        Assert.Equal("my-3-o", Assert.Single(cut.FindAll("#filter-dialog-text-value-field")).ClassName);
+    }
+
     private void SetupFilterDialogServices()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
@@ -366,6 +455,7 @@ public class FilterDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentCombobox(this);
+        JSInterop.SetupModule("./Components/Dialogs/FilterDialog.razor.js").SetupVoid("ensureComboboxControl", _ => true);
     }
 
     private static FilterDialogViewModel CreateContent(FieldTelemetryFilter filter)
@@ -376,7 +466,7 @@ public class FilterDialogTests : DashboardTestContext
             KnownKeys = [KnownTraceFields.NameField, KnownTraceFields.DurationField],
             GetPropertyKeysAsync = static _ => Task.FromResult<List<string>>([]),
             GetFieldValuesAsync = static (field, _) => Task.FromResult(field == KnownTraceFields.NameField
-                ? new Dictionary<string, int> { ["request"] = 1 }
+                ? new Dictionary<string, int> { ["request"] = 1, ["response"] = 2 }
                 : [])
         };
     }

@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -89,6 +90,39 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.DoesNotContain("(None)", cut.Markup);
         Assert.Single(cut.FindAll(".chart-filter-button-container"));
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
+    }
+
+    [Fact]
+    public void Render_PartiallySelectedValues_ShowsIndeterminateAllCheckbox()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[0]]);
+
+        var cut = RenderChartFilters(dimensionFilter);
+        var allCheckbox = cut.FindComponents<FluentCheckbox>()[0].Instance;
+
+        Assert.False(allCheckbox.Value);
+        Assert.Null(allCheckbox.CheckState);
+    }
+
+    [Fact]
+    public void Click_FilterButton_KeepsStableAnchorAndOpensPopover()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        var cut = RenderChartFilters(dimensionFilter);
+        var button = cut.Find(".chart-filter-button");
+        var buttonId = button.Id;
+
+        button.Click();
+
+        Assert.True(dimensionFilter.PopupVisible);
+        Assert.Equal(buttonId, cut.Find(".chart-filter-button").Id);
+        var popover = cut.Find("fluent-popover-b");
+        Assert.Equal(buttonId, popover.GetAttribute("anchor-id"));
+        Assert.Equal("true", popover.GetAttribute("opened"));
+        Assert.Contains("chart-filter-popover", popover.ClassList);
     }
 
     [Fact]
