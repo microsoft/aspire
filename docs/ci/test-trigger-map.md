@@ -187,12 +187,13 @@ Highlights:
   `src/Aspire.Hosting.Integration.Analyzers/**` →
   `test:Aspire.Hosting.Analyzers.Tests`.
 - **non-.NET job loose triggers** — only the paths the project graph cannot
-  attribute, such as `tests/PolyglotAppHosts/**`, checked-in `*.ats.txt` /
+  attribute, such as `tests/PolyglotAppHosts/**`, checked-in
   `*.tscompat.suppression.txt` baselines, `tools/TypeScriptApiCompat/**`, and
-  `extension/**`. A `src/Aspire.Hosting*/api/*.ats.txt` baseline fans out to
-  **both** `job:typescript-api-compat` (baseline diff) and `job:polyglot`,
-  because the polyglot playground regenerates and compiles that exported surface
-  in every language.
+ `extension/**`. Checked-in `*.ats.txt` baselines under the project `api/`
+ directories are
+ generated artifacts dropped by the prefilter (see below) when they are the
+ only changed files, so no dedicated rule routes them here. Hosting integration
+ projects with polyglot fixtures are listed in `affected_project_rules`.
 - **loose-file deps** — `eng/clipack/**`, `eng/dashboardpack/**`,
   `eng/dcppack/**`, `eng/winget/**`, `eng/homebrew/**`,
   `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,

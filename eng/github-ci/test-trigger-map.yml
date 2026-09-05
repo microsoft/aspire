@@ -199,17 +199,12 @@ path_rules:
       - .github/workflows/typescript-api-compat.yml
     targets: [job:typescript-api-compat]
     reason: checked-in suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
-  # A checked-in *.ats.txt baseline changes EXACTLY when an integration's [AspireExport] surface
-  # changes -- the same surface the per-language polyglot playground scripts regenerate and compile
-  # (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). So an exported-surface
-  # change must run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate+compile in every
-  # language), even when the author has not also touched the tests/PolyglotAppHosts fixtures. Layer 1 can
-  # attribute the baseline by project-directory containment, but this explicit rule preserves both jobs
-  # when Layer 1 is skipped and records the runtime polyglot dependency.
-  - paths:
-      - src/Aspire.Hosting*/api/*.ats.txt
-    targets: [job:typescript-api-compat, job:polyglot]
-    reason: an integration's *.ats.txt baseline tracks its exported ATS surface; the polyglot playground regenerates+compiles that surface per language, so a baseline change must run polyglot too
+  # Checked-in API/ATS baselines under src/*/api/ (both *.cs and *.ats.txt) are generated
+  # release artifacts. They are dropped by the prefilter (ci-skip-entirely-patterns.txt) when
+  # they are the only changed files, so a baseline-only PR skips CI entirely. When an *.ats.txt
+  # baseline changes alongside real source (e.g. the integration whose [AspireExport] surface it
+  # tracks), the source change is not blind to Layer 1/the project rules above and routes normally
+  # -- no dedicated rule is needed here for the mixed-change case.
   - paths:
       - extension/**
       - .vscode/launch.json
@@ -442,8 +437,59 @@ affected_project_rules:
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Python
       - Aspire.Hosting.Rust
+      - Aspire.Hosting
+      - Aspire.Hosting.Azure
+      - Aspire.Hosting.Azure.AppConfiguration
+      - Aspire.Hosting.Azure.AppContainers
+      - Aspire.Hosting.Azure.AppService
+      - Aspire.Hosting.Azure.ApplicationInsights
+      - Aspire.Hosting.Azure.CognitiveServices
+      - Aspire.Hosting.Azure.ContainerRegistry
+      - Aspire.Hosting.Azure.CosmosDB
+      - Aspire.Hosting.Azure.EventHubs
+      - Aspire.Hosting.Azure.Functions
+      - Aspire.Hosting.Azure.KeyVault
+      - Aspire.Hosting.Azure.Kusto
+      - Aspire.Hosting.Azure.Network
+      - Aspire.Hosting.Azure.OperationalInsights
+      - Aspire.Hosting.Azure.PostgreSQL
+      - Aspire.Hosting.Azure.Redis
+      - Aspire.Hosting.Azure.Sandboxes
+      - Aspire.Hosting.Azure.Search
+      - Aspire.Hosting.Azure.ServiceBus
+      - Aspire.Hosting.Azure.SignalR
+      - Aspire.Hosting.Azure.Sql
+      - Aspire.Hosting.Azure.Storage
+      - Aspire.Hosting.Azure.WebPubSub
+      - Aspire.Hosting.Blazor
+      - Aspire.Hosting.DevTunnels
+      - Aspire.Hosting.Docker
+      - Aspire.Hosting.Dotnet
+      - Aspire.Hosting.EntityFrameworkCore
+      - Aspire.Hosting.Foundry
+      - Aspire.Hosting.Garnet
+      - Aspire.Hosting.GitHub.Models
+      - Aspire.Hosting.Kafka
+      - Aspire.Hosting.Keycloak
+      - Aspire.Hosting.Kubernetes
+      - Aspire.Hosting.Maui
+      - Aspire.Hosting.Milvus
+      - Aspire.Hosting.MongoDB
+      - Aspire.Hosting.MySql
+      - Aspire.Hosting.Nats
+      - Aspire.Hosting.OpenAI
+      - Aspire.Hosting.Oracle
+      - Aspire.Hosting.Orleans
+      - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.Qdrant
+      - Aspire.Hosting.RabbitMQ
+      - Aspire.Hosting.Redis
+      - Aspire.Hosting.Seq
+      - Aspire.Hosting.SqlServer
+      - Aspire.Hosting.Valkey
+      - Aspire.Hosting.Yarp
     targets: [job:polyglot]
-    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+    reason: ATS typesystem and hosting integrations feed the per-language SDK generators and AppHost fixtures
   - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
     targets: [job:typescript-sdk]
     reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
