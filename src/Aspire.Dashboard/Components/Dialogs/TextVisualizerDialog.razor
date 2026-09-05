@@ -5,11 +5,11 @@
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 
-<FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
+<FluentDialogBody Class="page-dialog-body text-visualizer-dialog-body" Style="width: 100%; max-height: calc(100dvh - 48px);">
     <TitleTemplate>
         <div class="dialog-title-grid">
             <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Color="Color.Primary" Style="grid-area: dialog-icon; align-self: center;" />
-            <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
+            <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content text-visualizer-dialog-title" Style="grid-area: dialog-title;">
                 @Content.Description
             </FluentLabel>
 
@@ -26,6 +26,7 @@
                                   @bind-Value="@_selectedFormat"
                                   @bind-Value:after="OnSelectedFormatChanged"
                                   AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  Class="aspire-input text-visualizer-format"
                                   Style="width: clamp(7rem, 20vw, 12rem); max-width: 100%;" />
                 </div>
             }
@@ -71,7 +72,7 @@
                 <div class="button-container-right">
                     @if (ShowSecretsWarning is true)
                     {
-                        <FluentButton Class="text-visualizer-unmask-content"
+                        <FluentButton Class="aspire-button text-visualizer-unmask-content"
                                       OnClick="@UnmaskContentAsync">
                             @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
                         </FluentButton>
@@ -79,7 +80,8 @@
 
                     @if (Content.DownloadFileName is not null)
                     {
-                        <FluentButton OnClick="@DownloadAsync"
+                        <FluentButton Class="aspire-button"
+                                      OnClick="@DownloadAsync"
                                       Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
                                       aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
                                       IconStart="new Icons.Regular.Size16.ArrowDownload()">
@@ -88,11 +90,17 @@
                     }
 
                     <FluentButton Id="@_copyButtonId"
+                                  Class="aspire-button"
                                   Appearance="ButtonAppearance.Primary"
                                   AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                        <span slot="start">
-                            <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
-                            <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
+                        <span class="copy-button-icon" slot="start">
+                            @* Trim significant whitespace so the icon slot has the same width as its visible icon. *@
+                            @{
+                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                            }
+                            @{
+                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
+                            }
                         </span>
                         @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
                     </FluentButton>

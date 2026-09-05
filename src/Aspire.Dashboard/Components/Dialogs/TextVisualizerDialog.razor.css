@@ -2,6 +2,10 @@
     min-width: 33px;
 }
 
+.dialog-title-grid ::deep .text-visualizer-dialog-title {
+    font: inherit;
+}
+
 ::deep .highlight-line {
     width: 100%;
     background: transparent;
@@ -16,6 +20,11 @@
     display: flex;
     gap: 8px;
     margin-left: auto;
+}
+
+.copy-button-icon {
+    margin-right: 11px;
+    display: flex;
 }
 
 .text-visualizer-container {

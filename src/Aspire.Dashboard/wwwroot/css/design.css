@@ -247,6 +247,10 @@ fluent-dropdown {
     --colorNeutralForeground3: var(--colorNeutralForeground2);
 }
 
+fluent-dropdown > [slot="control"] {
+    align-self: center;
+}
+
 .aspire-input {
     width: 100%;
     --borderRadiusMedium: 6px;
