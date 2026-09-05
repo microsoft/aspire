@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Maui;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 
 namespace Aspire.Hosting;
@@ -223,12 +224,13 @@ public static class MauiAndroidExtensions
     /// The resource name will default to "{projectName}-android-emulator".
     /// </para>
     /// <para>
-    /// This will run the application on an Android emulator. Make sure you have created an Android
-    /// Virtual Device (AVD) using Android Studio or <c>avdmanager</c>. The emulator should be running
-    /// and visible via <c>adb devices</c>.
+    /// This will run the application on an Android emulator. Make sure you have created one or more
+    /// Android Virtual Devices (AVDs) using Android Studio or <c>avdmanager</c>. If no emulator ID is
+    /// provided, Aspire selects from the available AVDs when the resource starts.
     /// </para>
     /// <para>
-    /// To target a specific emulator, use the overload that accepts an emulatorId parameter.
+    /// To target a specific running emulator by adb serial, use the overload that accepts an
+    /// <c>emulatorId</c> parameter.
     /// </para>
     /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidEmulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
@@ -241,8 +243,8 @@ public static class MauiAndroidExtensions
     ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     ///
-    /// // Uses default/running emulator
-    /// var defaultEmulator = maui.AddAndroidEmulator();
+    /// // Selects an Android Virtual Device when the resource starts.
+    /// var selectedEmulator = maui.AddAndroidEmulator();
     ///
     /// builder.Build().Run();
     /// </code>
@@ -272,12 +274,13 @@ public static class MauiAndroidExtensions
     /// a unique name.
     /// </para>
     /// <para>
-    /// This will run the application on an Android emulator. Make sure you have created an Android
-    /// Virtual Device (AVD) using Android Studio or <c>avdmanager</c>. The emulator should be running
-    /// and visible via <c>adb devices</c>.
+    /// This will run the application on an Android emulator. Make sure you have created one or more
+    /// Android Virtual Devices (AVDs) using Android Studio or <c>avdmanager</c>. If no emulator ID is
+    /// provided, Aspire selects from the available AVDs when the resource starts.
     /// </para>
     /// <para>
-    /// To target a specific emulator, use the overload that accepts an emulatorId parameter.
+    /// To target a specific running emulator by adb serial, use the overload that accepts an
+    /// <c>emulatorId</c> parameter.
     /// </para>
     /// <para>
     /// This overload is not available in polyglot app hosts. Use <see cref="AddAndroidEmulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
@@ -308,7 +311,7 @@ public static class MauiAndroidExtensions
     /// </summary>
     /// <param name="builder">The MAUI project resource builder.</param>
     /// <param name="name">The name of the Android emulator resource.</param>
-    /// <param name="emulatorId">Optional emulator ID to target a specific Android emulator. If not specified, uses the currently running emulator or starts the default emulator.</param>
+    /// <param name="emulatorId">Optional adb serial to target a specific running Android emulator. If not specified, Aspire selects from the available Android Virtual Devices (AVDs) when the resource starts.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -320,13 +323,13 @@ public static class MauiAndroidExtensions
     /// a unique name.
     /// </para>
     /// <para>
-    /// This will run the application on an Android emulator. Make sure you have created an Android
-    /// Virtual Device (AVD) using Android Studio or <c>avdmanager</c>. The emulator should be running
-    /// and visible via <c>adb devices</c>.
+    /// This will run the application on an Android emulator. Make sure you have created one or more
+    /// Android Virtual Devices (AVDs) using Android Studio or <c>avdmanager</c>. If no emulator ID is
+    /// provided, Aspire selects from the available AVDs when the resource starts.
     /// </para>
     /// <para>
-    /// To target a specific emulator, provide the emulator ID (e.g., "Pixel_5_API_33" or "emulator-5554").
-    /// Use <c>adb devices</c> to list available emulator IDs.
+    /// To target a specific running emulator, provide the adb serial (for example, <c>emulator-5554</c>).
+    /// Use <c>adb devices</c> to list running emulator serials.
     /// </para>
     /// </remarks>
     /// <example>
@@ -336,14 +339,11 @@ public static class MauiAndroidExtensions
     ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     ///
-    /// // Default emulator
+    /// // Select an Android Virtual Device when the resource starts
     /// var emulator1 = maui.AddAndroidEmulator("android-emulator-default");
     ///
-    /// // Specific Pixel 5 emulator
-    /// var emulator2 = maui.AddAndroidEmulator("android-emulator-pixel5", "Pixel_5_API_33");
-    ///
     /// // Specific emulator by serial
-    /// var emulator3 = maui.AddAndroidEmulator("android-emulator-5554", "emulator-5554");
+    /// var emulator2 = maui.AddAndroidEmulator("android-emulator-5554", "emulator-5554");
     ///
     /// builder.Build().Run();
     /// </code>
@@ -383,13 +383,14 @@ public static class MauiAndroidExtensions
         {
             // Specific emulator - use -s prefix with the emulator serial (no quotes around the value)
             msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = $"-s {emulatorId}";
+            additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
         }
         else
         {
-            // No specific emulator ID - use -e to target the only running emulator
-            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = "-e";
+            resourceBuilder.WithAnnotation(
+                new SelectedEmulatorAnnotation(MauiTargetSelectionKind.AndroidEmulator),
+                ResourceAnnotationMutationBehavior.Replace);
         }
-        additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex
@@ -410,7 +411,7 @@ public static class MauiAndroidExtensions
             "android",
             "emulator",
             emulatorId,
-            msBuildProperties: msBuildProperties);
+            msBuildProperties: msBuildProperties.Count > 0 ? msBuildProperties : null);
 
         return resourceBuilder;
     }

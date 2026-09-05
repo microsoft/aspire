@@ -36,9 +36,9 @@ internal static class MauiPlatformHelper
             TargetFramework = targetFramework,
             Platform = platform,
             TargetKind = targetKind,
-            Device = device,
+            Device = GetSelectedTargetDevice(resourceBuilder.Resource) ?? device,
             RuntimeIdentifier = runtimeIdentifier,
-            MsBuildProperties = msBuildProperties
+            MsBuildProperties = GetLaunchMsBuildProperties(resourceBuilder.Resource, msBuildProperties)
         }, MauiLaunchConfigurationType);
 #pragma warning restore ASPIREEXTENSION001
     }
@@ -122,6 +122,11 @@ internal static class MauiPlatformHelper
             {
                 context.Args.Add(arg);
             }
+
+            if (GetSelectedTargetMsBuildArgument(resourceBuilder.Resource) is { } selectedTargetArgument)
+            {
+                context.Args.Add(selectedTargetArgument);
+            }
         });
 
         // Configure OTLP exporter with custom endpoint support
@@ -160,6 +165,59 @@ internal static class MauiPlatformHelper
         }
 
         return platformTfm ?? string.Empty;
+    }
+
+    internal static string? GetSelectedTargetMsBuildArgument(IResource resource)
+    {
+        var selectedProperty = GetSelectedTargetMsBuildProperty(resource);
+        if (selectedProperty is null)
+        {
+            return null;
+        }
+
+        var (name, value) = selectedProperty.Value;
+        return $"-p:{name}={value}";
+    }
+
+    private static string? GetSelectedTargetDevice(IResource resource)
+    {
+        return resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection) &&
+            !string.IsNullOrWhiteSpace(selection.SelectedId)
+            ? selection.SelectedId
+            : null;
+    }
+
+    private static Dictionary<string, string>? GetLaunchMsBuildProperties(IResource resource, Dictionary<string, string>? msBuildProperties)
+    {
+        var selectedProperty = GetSelectedTargetMsBuildProperty(resource);
+        if (selectedProperty is null)
+        {
+            return msBuildProperties;
+        }
+
+        var properties = msBuildProperties is not null
+            ? new Dictionary<string, string>(msBuildProperties)
+            : [];
+        var (name, value) = selectedProperty.Value;
+        properties[name] = value;
+
+        return properties;
+    }
+
+    private static (string Name, string Value)? GetSelectedTargetMsBuildProperty(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection) ||
+            string.IsNullOrWhiteSpace(selection.SelectedId))
+        {
+            return null;
+        }
+
+        return selection.TargetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => (KnownMauiMSBuildProperties.AdbTarget, $"-s {selection.SelectedId}"),
+            MauiTargetSelectionKind.IOSSimulator => (KnownMauiMSBuildProperties.DeviceName, $":v2:udid={selection.SelectedId}"),
+            _ => null
+        };
     }
 
     /// <summary>

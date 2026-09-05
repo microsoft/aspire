@@ -49,8 +49,11 @@ mauiApp.AddiOSSimulator("iphone-15-sim", "E25BBE37-69BA-4720-B6FD-D54C97791E79")
 // iOS with specific device UDID (requires device provisioning)
 mauiApp.AddiOSDevice("my-iphone", "00008030-001234567890123A");
 
-// Android with specific emulator
-mauiApp.AddAndroidEmulator("pixel-7-emulator", "Pixel_7_API_33");
+// Android emulator selected from available Android Virtual Devices when the resource starts
+mauiApp.AddAndroidEmulator("android-emulator");
+
+// Android with specific running emulator serial from adb devices
+mauiApp.AddAndroidEmulator("pixel-7-emulator", "emulator-5554");
 
 // Android with specific device serial
 mauiApp.AddAndroidDevice("my-pixel", "abc12345");
