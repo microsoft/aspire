@@ -20,7 +20,7 @@ namespace Aspire.Hosting.Terminals;
 /// <para>
 /// Two experiences share this service: terminals belonging to an <see cref="InputType.Terminal"/> interaction
 /// input, and terminals shown as tabs in the dashboard's terminal dock. They differ only in
-/// <see cref="TerminalSurface"/>; the lifetime, transport, and automation machinery is identical.
+/// <see cref="TerminalPlacement"/>; the lifetime, transport, and automation machinery is identical.
 /// </para>
 /// <para>
 /// This is distinct from the terminal host, which exists solely to surface terminals for DCP-owned processes.
@@ -62,7 +62,7 @@ public sealed class TerminalService : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.Command);
 
-        return CreateTerminal(options.Title, options.Surface, CreateBuilder(options.Command));
+        return CreateTerminal(options.Title, options.Placement, CreateBuilder(options.Command));
     }
 
     /// <summary>
@@ -101,7 +101,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// <see cref="TerminalCommand"/> cannot describe — notably the dock's built-in terminal, which runs an
     /// in-process Hex1b app rather than a child process.
     /// </remarks>
-    internal IAspireTerminal CreateTerminal(string title, TerminalSurface surface, Hex1bTerminalBuilder builder)
+    internal IAspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(builder);
@@ -110,12 +110,12 @@ public sealed class TerminalService : IAsyncDisposable
         // Terminal ids are opaque to the dashboard and appear in websocket query strings, so use a
         // non-guessable value rather than a sequence number.
         var id = Guid.NewGuid().ToString("n");
-        var terminal = new Hex1bAspireTerminal(this, id, title, surface, builder, _logger);
+        var terminal = new Hex1bAspireTerminal(this, id, title, placement, builder, _logger);
 
         _terminals[id] = terminal;
-        _logger.LogDebug("Created {Surface} terminal {TerminalId} ({Title}).", surface, id, title);
+        _logger.LogDebug("Created {Placement} terminal {TerminalId} ({Title}).", placement, id, title);
 
-        if (terminal.Surface == TerminalSurface.Dock)
+        if (terminal.Placement == TerminalPlacement.Dock)
         {
             Publish(new TerminalChange(TerminalChangeType.Added, terminal.Descriptor));
         }
@@ -175,7 +175,7 @@ public sealed class TerminalService : IAsyncDisposable
             ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Add(c), channel);
 
             var initial = _terminals.Values
-                .Where(t => t.Surface == TerminalSurface.Dock)
+                .Where(t => t.Placement == TerminalPlacement.Dock)
                 .Select(t => t.Descriptor)
                 .ToImmutableArray();
 
@@ -252,7 +252,7 @@ public sealed class TerminalService : IAsyncDisposable
 
         _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
 
-        if (terminal.Surface == TerminalSurface.Dock)
+        if (terminal.Placement == TerminalPlacement.Dock)
         {
             Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
         }

@@ -471,7 +471,7 @@ public sealed class InteractionInput
     /// <remarks>
     /// <para>
     /// The terminal is created and owned by the caller, not by the interaction. Create it with
-    /// <c>TerminalService.CreateTerminal</c> passing <see cref="TerminalSurface.Interaction"/>, hand it to the input,
+    /// <c>TerminalService.CreateTerminal</c> passing <see cref="TerminalPlacement.Dialog"/>, hand it to the input,
     /// and dispose it when the caller is finished with it. The dialog is a view onto the terminal; closing the dialog
     /// stops showing it but does not stop the workload.
     /// </para>
@@ -486,7 +486,7 @@ public sealed class InteractionInput
     /// {
     ///     Title = "Setup",
     ///     Command = new TerminalCommand("./setup.sh"),
-    ///     Surface = TerminalSurface.Interaction
+    ///     Placement = TerminalPlacement.Dialog
     /// });
     ///
     /// var dialog = interactionService.PromptInputsAsync(
@@ -503,7 +503,7 @@ public sealed class InteractionInput
     /// </code>
     /// </example>
     /// <para>
-    /// The terminal's <see cref="IAspireTerminal.Surface"/> must be <see cref="TerminalSurface.Interaction"/>. A dock
+    /// The terminal's <see cref="IAspireTerminal.Placement"/> must be <see cref="TerminalPlacement.Dialog"/>. A dock
     /// terminal is presented as a dock tab that outlives the code which created it, so showing one in a dialog would
     /// render the same terminal through two competing presentations.
     /// </para>

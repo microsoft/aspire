@@ -23,7 +23,7 @@ public sealed class TerminalLaunchOptions
     public required TerminalCommand Command { get; set; }
 
     /// <summary>
-    /// Gets or sets the surface the terminal is displayed on. Defaults to <see cref="TerminalSurface.Dock"/>.
+    /// Gets or sets where the terminal is displayed. Defaults to <see cref="TerminalPlacement.Dock"/>.
     /// </summary>
-    public TerminalSurface Surface { get; set; } = TerminalSurface.Dock;
+    public TerminalPlacement Placement { get; set; } = TerminalPlacement.Dock;
 }

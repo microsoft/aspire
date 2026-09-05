@@ -62,7 +62,7 @@ internal static class TerminalInteractionCommands
                 {
                     Title = "Shell",
                     Command = command,
-                    Surface = TerminalSurface.Interaction
+                    Placement = TerminalPlacement.Dialog
                 });
 
                 terminal.Start();
@@ -151,7 +151,7 @@ internal static class TerminalInteractionCommands
             {
                 Arguments = ["exec", "-it", containerName, .. command]
             },
-            Surface = TerminalSurface.Interaction
+            Placement = TerminalPlacement.Dialog
         });
 
         terminal.Start();
@@ -288,7 +288,7 @@ internal static class TerminalInteractionCommands
                 {
                     Title = "Number guess",
                     Command = BuildNumberGuessCommand(limit),
-                    Surface = TerminalSurface.Interaction
+                    Placement = TerminalPlacement.Dialog
                 });
 
                 // Start before the dialog rather than letting the first attach do it, so `dotnet run --file` is

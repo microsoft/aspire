@@ -48,7 +48,7 @@ public class TerminalServiceTests
         var terminal = CreateInteractionTerminal(service, "Shell");
 
         Assert.Equal("Shell", terminal.Title);
-        Assert.Equal(TerminalSurface.Interaction, terminal.Surface);
+        Assert.Equal(TerminalPlacement.Dialog, terminal.Placement);
 
         // Ids appear in websocket query strings, so they must not be a sequence number a caller could walk.
         Assert.Equal(32, terminal.Id.Length);
@@ -235,7 +235,7 @@ public class TerminalServiceTests
         {
             Title = title,
             Command = new TerminalCommand("bash"),
-            Surface = TerminalSurface.Interaction
+            Placement = TerminalPlacement.Dialog
         });
 
     private static IAspireTerminal CreateDockTerminal(TerminalService service, string title)
@@ -243,7 +243,7 @@ public class TerminalServiceTests
         {
             Title = title,
             Command = new TerminalCommand("bash"),
-            Surface = TerminalSurface.Dock
+            Placement = TerminalPlacement.Dock
         });
 
     /// <summary>

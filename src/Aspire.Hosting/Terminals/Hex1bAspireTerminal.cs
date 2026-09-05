@@ -46,21 +46,23 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     private Task? _runTask;
     private bool _stopped;
 
-    public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalSurface surface, Hex1bTerminalBuilder builder, ILogger logger)
+    public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, ILogger logger)
     {
         _owner = owner;
         _builder = builder;
         _logger = logger;
         Id = id;
         Title = title;
-        Surface = surface;
+        Placement = placement;
     }
 
     public string Id { get; }
 
     public string Title { get; private set; }
 
-    public TerminalSurface Surface { get; }
+    public TerminalOwner Owner => TerminalOwner.AppHost;
+
+    public TerminalPlacement Placement { get; }
 
     public TerminalDescriptor Descriptor => new(Id, Title);
 
@@ -68,9 +70,10 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
 
     public void Show()
     {
-        if (Surface != TerminalSurface.Dock)
+        if (Placement != TerminalPlacement.Dock)
         {
-            // Interaction terminals are revealed by their own dialog, so there is no dock tab to switch to.
+            // A terminal in a dialog is revealed by that dialog, and one with no placement is not displayed
+            // at all, so in neither case is there a dock tab to switch to.
             return;
         }
 

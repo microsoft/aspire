@@ -178,9 +178,9 @@ internal class InteractionService : IInteractionService
 
                 // A dock terminal is presented as a dock tab that outlives the code which created it. Showing one in a
                 // dialog as well would render the same terminal through two competing presentations.
-                if (input.Terminal.Surface != TerminalSurface.Interaction)
+                if (input.Terminal.Placement != TerminalPlacement.Dialog)
                 {
-                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(IAspireTerminal.Surface)} is {input.Terminal.Surface}. Terminals shown by an interaction must be created with {nameof(TerminalSurface)}.{nameof(TerminalSurface.Interaction)}.");
+                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(IAspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
                 }
             }
 

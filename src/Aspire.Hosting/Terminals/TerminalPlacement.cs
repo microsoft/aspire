@@ -8,8 +8,13 @@ namespace Aspire.Hosting.Terminals;
 /// <summary>
 /// Identifies where a terminal is displayed in the dashboard.
 /// </summary>
+/// <remarks>
+/// Placement is a property of the view, not of the workload: terminals with different
+/// <see cref="TerminalOwner"/> values can share a placement, and a terminal can in principle move between
+/// placements without its workload being affected.
+/// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
-public enum TerminalSurface
+public enum TerminalPlacement
 {
     /// <summary>
     /// The terminal is a tab in the dashboard's terminal dock, and is listed by the terminal watch stream.
@@ -21,19 +26,20 @@ public enum TerminalSurface
     /// that interaction's dialog. These are addressed directly by the dialog and are deliberately excluded
     /// from the dock's tab list.
     /// </summary>
-    Interaction,
+    Dialog,
 
     /// <summary>
-    /// The terminal is attached to a resource in the application model and is displayed on that resource's
-    /// own terminal view rather than in the dock.
+    /// The terminal is displayed on the terminal view of the resource it belongs to.
+    /// </summary>
+    ResourceView,
+
+    /// <summary>
+    /// The terminal is not displayed anywhere.
     /// </summary>
     /// <remarks>
-    /// Nothing produces this value yet. It exists so that resource terminals — which today are owned by the
-    /// DCP terminal host rather than by <see cref="TerminalService"/> — can be adopted into the same registry
-    /// and exposed through <see cref="IAspireTerminal"/> for automation. Every surface check in
-    /// <see cref="TerminalService"/> is written as an explicit test for <see cref="Dock"/>, so a resource
-    /// terminal already behaves correctly by default: it stays out of the dock's tab list and
-    /// <see cref="IAspireTerminal.Show"/> is a no-op for it.
+    /// Terminals driven purely through the automation members of <see cref="IAspireTerminal"/> never need a
+    /// viewer. Giving that case its own value keeps it out of the dock's tab list without having to pretend it
+    /// belongs to a dialog or a resource.
     /// </remarks>
-    Resource
+    None
 }

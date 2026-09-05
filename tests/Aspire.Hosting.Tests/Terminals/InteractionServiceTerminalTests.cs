@@ -41,7 +41,7 @@ public class InteractionServiceTerminalTests
 
         // A dock terminal is already presented as a dock tab, so showing it in a dialog as well would render one
         // terminal through two competing presentations.
-        await using var dockTerminal = CreateTerminal(terminalService, TerminalSurface.Dock);
+        await using var dockTerminal = CreateTerminal(terminalService, TerminalPlacement.Dock);
         var input = new InteractionInput
         {
             Name = "shell",
@@ -52,7 +52,7 @@ public class InteractionServiceTerminalTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptInputsAsync("Title", "Message", [input])).DefaultTimeout();
 
-        Assert.Contains(nameof(TerminalSurface.Dock), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(TerminalPlacement.Dock), ex.Message, StringComparison.Ordinal);
 
         // The rejected prompt must not take the caller's dock tab with it.
         Assert.True(terminalService.TryGetTerminal(dockTerminal.Id, out _));
@@ -63,7 +63,7 @@ public class InteractionServiceTerminalTests
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
-        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
         var input = new InteractionInput
         {
             Name = "shell",
@@ -89,7 +89,7 @@ public class InteractionServiceTerminalTests
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
-        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
         var input = new InteractionInput
         {
             Name = "shell",
@@ -116,7 +116,7 @@ public class InteractionServiceTerminalTests
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
-        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
         var terminalInput = new InteractionInput
         {
             Name = "shell",
@@ -145,7 +145,7 @@ public class InteractionServiceTerminalTests
 
         // Caller-owned lifetime is what makes this legal: the terminal survives the first dialog, so the same
         // session can be surfaced again rather than the caller having to start a second workload.
-        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
 
         for (var i = 0; i < 2; i++)
         {
@@ -190,12 +190,12 @@ public class InteractionServiceTerminalTests
             (_, _, _) => new InteractionCompletionState { Complete = true },
             CancellationToken.None);
 
-    private static IAspireTerminal CreateTerminal(TerminalService service, TerminalSurface surface)
+    private static IAspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement)
         => service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Terminal",
             Command = new TerminalCommand("bash"),
-            Surface = surface
+            Placement = placement
         });
 
     private static (InteractionService InteractionService, TerminalService TerminalService) CreateInteractionService()

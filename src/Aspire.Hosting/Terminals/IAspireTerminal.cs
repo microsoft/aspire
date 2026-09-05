@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// A terminal owned by the AppHost process, surfaced in the dashboard and driveable from AppHost code.
+/// A terminal surfaced in the dashboard and driveable from AppHost code.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,9 +21,12 @@ namespace Aspire.Hosting.Terminals;
 /// surface can grow later if real usage demands it.
 /// </para>
 /// <para>
-/// Disposing the terminal cancels its workload and removes it from the dashboard. Whoever creates a
-/// terminal owns it and must dispose it; showing one in an interaction does not transfer that ownership,
-/// so a terminal survives the dialog it was displayed in.
+/// What disposal means depends on <see cref="Owner"/>. For <see cref="TerminalOwner.AppHost"/> the workload
+/// runs in the AppHost, so disposing cancels it and removes the terminal from the dashboard; whoever creates
+/// such a terminal owns it and must dispose it, and showing one in an interaction does not transfer that
+/// ownership, so the terminal survives the dialog it was displayed in. For
+/// <see cref="TerminalOwner.Resource"/> the workload belongs to the resource, so disposing only releases
+/// Aspire's handle and leaves the workload running.
 /// </para>
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
@@ -40,9 +43,14 @@ public interface IAspireTerminal : IAsyncDisposable
     string Title { get; }
 
     /// <summary>
-    /// Gets the surface this terminal is displayed on.
+    /// Gets the process that owns this terminal's workload.
     /// </summary>
-    TerminalSurface Surface { get; }
+    TerminalOwner Owner { get; }
+
+    /// <summary>
+    /// Gets where this terminal is displayed in the dashboard.
+    /// </summary>
+    TerminalPlacement Placement { get; }
 
     /// <summary>
     /// Starts the terminal's workload if it is not already running.
@@ -56,7 +64,8 @@ public interface IAspireTerminal : IAsyncDisposable
     /// </para>
     /// <para>
     /// This is idempotent and does not block: it schedules the workload rather than waiting for it to produce
-    /// output. Use <see cref="WaitForTextAsync"/> to wait for the workload to reach a known state.
+    /// output. Use <see cref="WaitForTextAsync"/> to wait for the workload to reach a known state. It is also
+    /// a no-op for <see cref="TerminalOwner.Resource"/> terminals, whose workload is started by the resource.
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">The terminal has already stopped.</exception>
@@ -66,8 +75,8 @@ public interface IAspireTerminal : IAsyncDisposable
     /// Reveals the terminal dock in every connected dashboard and switches to this terminal's tab.
     /// </summary>
     /// <remarks>
-    /// Only meaningful for <see cref="TerminalSurface.Dock"/> terminals. Interaction terminals are
-    /// revealed by their dialog, so this is a no-op for them.
+    /// Only meaningful for <see cref="TerminalPlacement.Dock"/> terminals. Terminals in a dialog are revealed
+    /// by that dialog, so this is a no-op for them.
     /// </remarks>
     void Show();
 
