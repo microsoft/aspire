@@ -27,7 +27,10 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
     .WithAppHostShellCommand()
     // Drives an interactive console program from AppHost code: the terminal is shown in a dialog, but the guesses
     // are typed by the AppHost, which reads each reply back off the screen and bisects until it wins.
-    .WithNumberGuessCommand();
+    .WithNumberGuessCommand()
+    // Automates a terminal the AppHost does NOT own: it joins `shell`'s existing terminal as an extra viewer and
+    // types into it, which is what shelling into a resource from AppHost code looks like.
+    .WithAutomateResourceTerminalCommand("shell");
 
 // Long-running container that the "Shell into container" interaction command execs into. Aspire is not orchestrating
 // the exec — the AppHost shells out to `docker exec` — so the container needs a stable, predictable name.

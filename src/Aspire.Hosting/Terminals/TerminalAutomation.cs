@@ -67,11 +67,35 @@ internal static class TerminalAutomation
         {
             await wait.ConfigureAwait(false);
         }
-        catch (WaitUntilTimeoutException ex)
+        catch (Exception ex) when (FindWaitTimeout(ex) is { } timedOut)
         {
             // Translate so callers never have to reference Hex1b to handle a timeout.
-            throw new TimeoutException($"Terminal '{terminalId}' did not display the expected text within the timeout.", ex);
+            throw new TimeoutException($"Terminal '{terminalId}' did not display the expected text within the timeout.", timedOut);
         }
+    }
+
+    /// <summary>
+    /// Finds the wait timeout inside an automation failure, or <see langword="null"/> when the failure was
+    /// caused by something else.
+    /// </summary>
+    /// <remarks>
+    /// The automator reports a failed step by wrapping the step's own exception in a
+    /// <see cref="Hex1bAutomationException"/> carrying the step history, so a timeout does not arrive as a bare
+    /// <see cref="WaitUntilTimeoutException"/>. The chain is walked rather than unwrapped one level because the
+    /// nesting depth is an implementation detail of the automator. Only a timeout is translated: any other
+    /// automation failure is a real fault and keeps its original type.
+    /// </remarks>
+    private static WaitUntilTimeoutException? FindWaitTimeout(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is WaitUntilTimeoutException timedOut)
+            {
+                return timedOut;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

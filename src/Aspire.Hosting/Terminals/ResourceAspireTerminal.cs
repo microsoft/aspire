@@ -141,9 +141,23 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
         await Task.Yield();
 
         var connected = new TaskCompletionSource<(int Width, int Height)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // The handshake can be failed after the connect timeout has already given up on it — by the pump
+        // ending, or by a disconnect callback. Nothing would await it by then, and an unobserved faulted task
+        // surfaces on TaskScheduler.UnobservedTaskException, which is a process-wide event an AppHost may
+        // treat as fatal. Observing it here is harmless: an awaiter still sees the exception.
+        _ = connected.Task.ContinueWith(
+            static t => _ = t.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
         Hex1bTerminal? terminal = null;
 
         terminal = Hex1bTerminal.CreateBuilder()
+            // The AppHost has no controlling terminal, so the client must not try to drive one. Headless
+            // discards output at the adapter and supplies no input; the screen buffer automation reads is
+            // still maintained, because it is built from the remote's output before presentation.
+            .WithHeadless()
             // An arbitrary opener. The handshake reports the producer's real grid and the terminal is resized
             // to match before the automator is handed out, so nothing ever reads this size.
             .WithDimensions(80, 24)
@@ -182,7 +196,7 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
 
         _logger.LogDebug("Connecting AppHost automation to resource terminal {TerminalId} at '{ConsumerPath}'.", Id, _consumerUdsPath);
 
-        _runTask = RunClientAsync(terminal);
+        _runTask = RunClientAsync(terminal, connected);
 
         try
         {
@@ -217,11 +231,17 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
             => target?.Resize(Math.Max(1, width), Math.Max(1, height));
     }
 
-    private async Task RunClientAsync(Hex1bTerminal terminal)
+    private async Task RunClientAsync(Hex1bTerminal terminal, TaskCompletionSource<(int Width, int Height)> connected)
     {
         try
         {
             await terminal.RunAsync(_clientCts.Token).ConfigureAwait(false);
+
+            // The pump returning without the handshake having completed means the transport closed before the
+            // terminal was usable. Nothing else would fail the handshake in that case, so it would otherwise
+            // sit until the connect timeout.
+            connected.TrySetException(new InvalidOperationException(
+                $"The connection to the terminal host for terminal '{Id}' closed before the terminal was ready."));
         }
         catch (OperationCanceledException)
         {
@@ -230,6 +250,15 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
         }
         catch (Exception ex)
         {
+            // Surface the real transport error to a handshake still in flight. A replica that is not running
+            // leaves no socket to dial, which fails here immediately, and reporting it now is both faster and
+            // more specific than letting the connect timeout elapse.
+            if (connected.TrySetException(ex))
+            {
+                _logger.LogDebug(ex, "Connecting the AppHost automation peer to resource terminal {TerminalId} failed.", Id);
+                return;
+            }
+
             // Unexpected. The workload itself is unaffected — only this process's view of it is lost — so this
             // is a warning rather than an error, but it does mean subsequent automation calls read a dead screen.
             _logger.LogWarning(ex, "AppHost automation peer for resource terminal {TerminalId} ended unexpectedly.", Id);

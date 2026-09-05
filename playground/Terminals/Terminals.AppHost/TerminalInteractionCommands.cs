@@ -364,6 +364,65 @@ internal static class TerminalInteractionCommands
     }
 
     /// <summary>
+    /// Adds a command that automates a <b>resource</b> terminal — one attached to a resource by
+    /// <c>WithTerminal()</c>, whose PTY lives in a separate Aspire.TerminalHost process.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the counterpart to <see cref="WithNumberGuessCommand"/>, which automates a terminal the AppHost owns.
+    /// Here the AppHost is not the owner: it joins the resource's existing terminal as an additional viewer, types
+    /// into it, and reads the result back off the shared screen. Whatever a human has open in the dashboard stays
+    /// open and sees the same output, because the AppHost joins as a secondary and so never resizes the grid out
+    /// from under them.
+    /// </para>
+    /// <para>
+    /// The terminal is addressed by the resource name and replica index rather than by an opaque id, which is what
+    /// makes it nameable across the resource's terminal host being recycled.
+    /// </para>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Uses TerminalService and command handlers that are not ATS-compatible.")]
+    public static IResourceBuilder<T> WithAutomateResourceTerminalCommand<T>(this IResourceBuilder<T> resource, string targetResourceName) where T : IResource
+    {
+        return resource.WithCommand(
+            "terminal-automate-resource",
+            "Type into this resource's terminal",
+            executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
+
+                var terminalId = $"resource:{targetResourceName}:0";
+
+                if (!terminalService.TryGetTerminal(terminalId, out var terminal))
+                {
+                    return CommandResults.Failure($"No terminal is registered for '{terminalId}'.");
+                }
+
+                // A marker rather than a fixed string: the shell echoes the command line before it echoes the
+                // output, so a fixed string would match the echo of the command itself and the wait would succeed
+                // before anything had actually run.
+                var marker = Guid.NewGuid().ToString("N")[..8];
+
+                try
+                {
+                    await terminal.SendTextAsync($"echo apphost-was-here-{marker}\n", commandContext.CancellationToken);
+                    await terminal.WaitForTextAsync($"apphost-was-here-{marker}\r\n", TimeSpan.FromSeconds(15), commandContext.CancellationToken);
+                }
+                catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+                {
+                    return CommandResults.Failure(ex.Message);
+                }
+
+                await interactionService.PromptMessageBoxAsync(
+                    "Resource terminal automation",
+                    $"Typed into `{terminalId}` from the AppHost and read the reply back off the screen. Open that resource's terminal to see the line.",
+                    cancellationToken: commandContext.CancellationToken);
+
+                return CommandResults.Success();
+            });
+    }
+
+    /// <summary>
     /// Plays <c>numberguess.cs</c> to completion by bisecting, and returns the number found and how many guesses it took.
     /// </summary>
     /// <remarks>
