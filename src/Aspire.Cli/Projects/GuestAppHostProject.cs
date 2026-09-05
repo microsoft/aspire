@@ -451,12 +451,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            // Store output collector in context for exception handling by RunCommand
-            // This must be set BEFORE signaling build completion to avoid a race condition
+            // Store output collector in context for exception handling by RunCommand.
+            // This must be set before the guest launch callback signals build completion.
             context.OutputCollector = buildResult.Output;
-
-            // Signal that build/preparation is complete
-            context.BuildCompletionSource?.TrySetResult(true);
 
             // Step 3: Configure launch environment for the AppHost server
             // Read launch settings once and reuse them for both the temporary server and guest AppHost.
@@ -536,6 +533,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // If the helper server exits while we are connecting or making setup RPC calls,
                     // its captured output is the only place the real startup failure may be recorded.
                     // serverSession is in an `await using` scope, so returning here disposes it.
+                    context.BuildCompletionSource?.TrySetResult(false);
                     _interactionService.DisplayLines(serverSession.Output!.GetLines());
                     _interactionService.DisplayError("App host exited unexpectedly.");
                     return CliExitCodes.FailedToDotnetRunAppHost;
@@ -597,6 +595,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             int guestExitCode;
             OutputCollector? guestOutput;
             IGuestProcessLauncher? launcher = null;
+            var guestAppHostLaunched = false;
             using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
                 // Pass the launch profile and certificate environment variables to both dependency
@@ -618,9 +617,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     cancellationToken);
                 if (installResult != 0)
                 {
-                    context.BackchannelCompletionSource?.TrySetException(
-                        new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
-
+                    context.BuildCompletionSource?.TrySetResult(false);
                     // `await using serverSession` runs the per-process shutdown ladder as we unwind.
                     return installResult;
                 }
@@ -634,6 +631,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 if (_guestRuntime is null)
                 {
+                    context.BuildCompletionSource?.TrySetResult(false);
                     _interactionService.DisplayError("GuestRuntime not initialized.");
                     return CliExitCodes.FailedToDotnetRunAppHost;
                 }
@@ -676,13 +674,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 Task StartBackchannelConnectionAfterGuestAppHostLaunchesAsync()
                 {
                     // Guest runtimes can fail during dependency installation or pre-execute checks before
-                    // the AppHost is invoked. Defer polling the server backchannel until the launcher has
-                    // started or delegated the AppHost so those early failures don't leave the CLI waiting
-                    // on an unused stream.
+                    // the AppHost is invoked. Signal build completion only after that preparation and the
+                    // launch itself succeed, then begin polling the server backchannel. This keeps all
+                    // pre-launch work outside ASPIRE_CLI_START_TIMEOUT.
                     //
                     // Use the AppHost system token so that a guest-side failure (which faults the
                     // backchannel completion source and cancels appHostSystemCts) stops the polling loop
                     // promptly.
+                    guestAppHostLaunched = true;
+                    context.BuildCompletionSource?.TrySetResult(true);
                     _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
                     return Task.CompletedTask;
                 }
@@ -738,16 +738,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
-                // Signal failure to RunCommand so it doesn't hang waiting for the backchannel.
-                // RunCommand's startup catch path wraps the message with the localized
-                // InteractionServiceStrings.UnexpectedErrorOccurred template before surfacing
-                // it to the user, matching the pre-PR behavior where this exception fell
-                // through to RunCommand's generic exception handler.
-                var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
-                context.BackchannelCompletionSource?.TrySetException(error);
+                if (guestAppHostLaunched)
+                {
+                    // Once launch succeeds, fail the backchannel wait so RunCommand surfaces the
+                    // AppHost failure instead of waiting for startup to complete.
+                    var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
+                    context.BackchannelCompletionSource?.TrySetException(error);
+                }
+                else
+                {
+                    // Dependency installation and pre-execute checks are preparation work. Their
+                    // detailed output was displayed above; complete the build signal so RunCommand
+                    // reports the standard project build failure without starting the startup budget.
+                    context.BuildCompletionSource?.TrySetResult(false);
+                }
 
-                // The backchannel exception above causes RunCommand's startup wait to throw,
-                // tearing down the run via `await using serverSession`/launcher disposal.
+                // A pre-launch failure completes the build signal with false. Once launch has
+                // succeeded, the backchannel exception instead ends RunCommand's startup wait.
                 return guestExitCode;
             }
 
