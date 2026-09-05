@@ -1628,6 +1628,35 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ConvergesLegacyNormalizedTestRootToExistingCompatibleCanonical()
+    {
+        JsonElement forward = await ResolveAsync(CreateLegacyNormalizedSameTestPayload(reverse: false));
+        JsonElement reversed = await ResolveAsync(CreateLegacyNormalizedSameTestPayload(reverse: true));
+
+        Assert.Equal(forward.GetRawText(), reversed.GetRawText());
+
+        JsonElement cause = FindOnlyCause(forward);
+        Assert.Equal("legacy-sample", cause.GetProperty("id").GetString());
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/10",
+            cause.GetProperty("issue_url").GetString());
+        Assert.Equal(
+            ["Legacy.Sample", "legacy-root-alias", "legacy-root-marker", "safe-root-marker"],
+            ReadStrings(cause, "aliases"));
+        Assert.Empty(forward.GetProperty("priorCauseMigrations").EnumerateArray());
+        Assert.Equal(
+            [
+                "legacy-root-alias:legacy-sample",
+                "Legacy.Sample:legacy-sample"
+            ],
+            forward.GetProperty("priorCauseAliases")
+                .EnumerateArray()
+                .Select(alias =>
+                    $"{alias.GetProperty("legacy_id").GetString()}:{alias.GetProperty("canonical_id").GetString()}"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ConvergesProposedHistoricalAliasToTheOldestSameTestRoot()
     {
         JsonElement result = await ResolveAsync(
@@ -3011,6 +3040,129 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task CommandLineConvergesLegacyNormalizedTestRootWithoutOverwritingCanonical()
+    {
+        const string legacyCauseId = "Legacy.Sample";
+        const string canonicalCauseId = "legacy-sample";
+        const string aliasCauseId = "legacy-root-alias";
+        const string testMethod = "Aspire.Sample.Tests.SampleTests.FlakyTest";
+        string analysisPath = Path.Combine(_workspace.Path, "legacy-test-analysis.json");
+        string causesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "legacy-test-causes")).FullName;
+        string priorCausesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "legacy-test-prior-causes")).FullName;
+        string retryPatternsPath = Path.Combine(_workspace.Path, "legacy-test-retry-patterns.json");
+        object payload = CreateLegacyNormalizedSameTestPayload(reverse: false, parameterized: true);
+        using JsonDocument payloadDocument = JsonDocument.Parse(
+            JsonSerializer.Serialize(payload, s_jsonOptions));
+        JsonElement root = payloadDocument.RootElement;
+
+        await WriteJsonAsync(analysisPath, root.GetProperty("analysis"));
+        foreach (JsonElement cause in root.GetProperty("causes").EnumerateArray())
+        {
+            string causeId = cause.GetProperty("id").GetString()!;
+            await WriteJsonAsync(Path.Combine(causesDirectory, $"{causeId}.json"), cause);
+        }
+        foreach (JsonElement priorCause in root.GetProperty("priorCauses").EnumerateArray())
+        {
+            string priorCauseId = priorCause.GetProperty("id").GetString()!;
+            await WriteJsonAsync(
+                Path.Combine(priorCausesDirectory, $"{priorCauseId}.json"),
+                priorCause);
+        }
+        await WriteJsonAsync(retryPatternsPath, root.GetProperty("retryPatterns"));
+
+        using NodeCommand command = new(_output, label: "convergeLegacyNormalizedTestRoot");
+        command.WithWorkingDirectory(_repoRoot).WithTimeout(TimeSpan.FromMinutes(1));
+
+        CommandResult firstResult = await command.ExecuteScriptAsync(
+            _resolverPath,
+            analysisPath,
+            causesDirectory,
+            priorCausesDirectory,
+            retryPatternsPath);
+        firstResult.EnsureSuccessful();
+
+        string canonicalPriorPath = Path.Combine(priorCausesDirectory, $"{canonicalCauseId}.json");
+        string legacyPriorPath = Path.Combine(priorCausesDirectory, $"{legacyCauseId}.json");
+        string aliasPriorPath = Path.Combine(priorCausesDirectory, $"{aliasCauseId}.json");
+        using JsonDocument canonicalPrior = JsonDocument.Parse(await File.ReadAllTextAsync(canonicalPriorPath));
+        Assert.False(canonicalPrior.RootElement.TryGetProperty("canonical_id", out _));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/20",
+            canonicalPrior.RootElement.GetProperty("issue_url").GetString());
+        Assert.Equal(200, canonicalPrior.RootElement.GetProperty("occurrences")[0].GetProperty("run_id").GetInt32());
+
+        using JsonDocument legacyPrior = JsonDocument.Parse(await File.ReadAllTextAsync(legacyPriorPath));
+        Assert.Equal(canonicalCauseId, legacyPrior.RootElement.GetProperty("canonical_id").GetString());
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/10",
+            legacyPrior.RootElement.GetProperty("issue_url").GetString());
+        Assert.Equal(100, legacyPrior.RootElement.GetProperty("occurrences")[0].GetProperty("run_id").GetInt32());
+
+        using JsonDocument aliasPrior = JsonDocument.Parse(await File.ReadAllTextAsync(aliasPriorPath));
+        Assert.Equal(canonicalCauseId, aliasPrior.RootElement.GetProperty("canonical_id").GetString());
+        Assert.Equal(150, aliasPrior.RootElement.GetProperty("occurrences")[0].GetProperty("run_id").GetInt32());
+
+        string normalizedCausePath = Path.Combine(causesDirectory, $"{canonicalCauseId}.json");
+        string firstNormalizedCause = await File.ReadAllTextAsync(normalizedCausePath);
+        using (JsonDocument normalizedCause = JsonDocument.Parse(firstNormalizedCause))
+        {
+            Assert.Equal($"{testMethod}(value: 2)", normalizedCause.RootElement.GetProperty("test_name").GetString());
+            Assert.Equal(
+                [
+                    $"{testMethod}(value: 1)",
+                    $"{testMethod}(value: 2)",
+                    $"{testMethod}(value: 3)"
+                ],
+                ReadStrings(normalizedCause.RootElement, "test_names"));
+            Assert.Equal(
+                ["Legacy.Sample", "legacy-root-alias", "legacy-root-marker", "safe-root-marker"],
+                ReadStrings(normalizedCause.RootElement, "aliases"));
+            Assert.Equal(
+                "https://github.com/microsoft/aspire/issues/10",
+                normalizedCause.RootElement.GetProperty("issue_url").GetString());
+        }
+
+        // The workflow persists the normalized cause by merging it into the existing physical
+        // canonical record before a later run invokes the resolver again.
+        await WriteJsonAsync(canonicalPriorPath, new
+        {
+            id = canonicalCauseId,
+            type = "flaky-test",
+            title = "Safe sample root",
+            test_name = $"{testMethod}(value: 2)",
+            test_names = new[]
+            {
+                $"{testMethod}(value: 1)",
+                $"{testMethod}(value: 2)",
+                $"{testMethod}(value: 3)"
+            },
+            error_pattern = "The safe sample root failed.",
+            issue_url = "https://github.com/microsoft/aspire/issues/20",
+            aliases = new[] { "Legacy.Sample", "legacy-root-alias", "legacy-root-marker", "safe-root-marker" },
+            occurrences = new[] { new { run_id = 200, observed_at = "2026-08-02T00:00:00Z" } }
+        });
+        string canonicalPriorAfterFirstRun = await File.ReadAllTextAsync(canonicalPriorPath);
+        string legacyPriorAfterFirstRun = await File.ReadAllTextAsync(legacyPriorPath);
+        string aliasPriorAfterFirstRun = await File.ReadAllTextAsync(aliasPriorPath);
+        CommandResult secondResult = await command.ExecuteScriptAsync(
+            _resolverPath,
+            analysisPath,
+            causesDirectory,
+            priorCausesDirectory,
+            retryPatternsPath);
+        secondResult.EnsureSuccessful();
+
+        Assert.Equal(firstNormalizedCause, await File.ReadAllTextAsync(normalizedCausePath));
+        Assert.Equal(canonicalPriorAfterFirstRun, await File.ReadAllTextAsync(canonicalPriorPath));
+        Assert.Equal(legacyPriorAfterFirstRun, await File.ReadAllTextAsync(legacyPriorPath));
+        Assert.Equal(aliasPriorAfterFirstRun, await File.ReadAllTextAsync(aliasPriorPath));
+        Assert.DoesNotContain("Migrated legacy cause", secondResult.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task CommandLineMigratesLegacyCauseFiles()
     {
         const string legacyCauseId = "processguest-signalerThrows_treekill-timeout";
@@ -3634,6 +3786,94 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     type = "flaky-test",
                     title = "Current sample test",
                     test_name = testName,
+                    error_pattern = "The current sample test failed.",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses,
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        };
+    }
+
+    private static object CreateLegacyNormalizedSameTestPayload(
+        bool reverse,
+        bool parameterized = false)
+    {
+        const string testMethod = "Aspire.Sample.Tests.SampleTests.FlakyTest";
+        string legacyTestName = parameterized ? $"{testMethod}(value: 1)" : testMethod;
+        string canonicalTestName = parameterized ? $"{testMethod}(value: 2)" : testMethod;
+        string currentTestName = parameterized ? $"{testMethod}(value: 3)" : testMethod;
+        object[] priorCauses =
+        [
+            new
+            {
+                id = "legacy-root-alias",
+                canonical_id = "Legacy.Sample",
+                type = "flaky-test",
+                occurrences = new[] { new { run_id = 150, observed_at = "2026-08-01T12:00:00Z" } }
+            },
+            new
+            {
+                id = "legacy-sample",
+                type = "flaky-test",
+                title = "Safe sample root",
+                test_name = canonicalTestName,
+                error_pattern = "The safe sample root failed.",
+                issue_url = "https://github.com/microsoft/aspire/issues/20",
+                aliases = new[] { "safe-root-marker" },
+                occurrences = new[] { new { run_id = 200, observed_at = "2026-08-02T00:00:00Z" } }
+            },
+            new
+            {
+                id = "Legacy.Sample",
+                type = "flaky-test",
+                title = "Legacy sample root",
+                test_name = legacyTestName,
+                error_pattern = "The legacy sample root failed.",
+                issue_url = "https://github.com/microsoft/aspire/issues/10",
+                aliases = new[] { "legacy-root-marker" },
+                occurrences = new[] { new { run_id = 100, observed_at = "2026-08-01T00:00:00Z" } }
+            }
+        ];
+        if (reverse)
+        {
+            Array.Reverse(priorCauses);
+        }
+
+        return new
+        {
+            analysis = new
+            {
+                causes = new[] { "current-sample-test" },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Tests / Sample",
+                        classification = "flaky-test",
+                        reason = "The current sample test failed."
+                    }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = currentTestName,
+                        job = "Tests / Sample",
+                        error = "The current sample test failed.",
+                        stack_trace = string.Empty
+                    }
+                }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "current-sample-test",
+                    type = "flaky-test",
+                    title = "Current sample test",
+                    test_name = currentTestName,
                     error_pattern = "The current sample test failed.",
                     job_ids = new[] { 1 }
                 }

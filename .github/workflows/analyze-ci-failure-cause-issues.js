@@ -16,7 +16,7 @@ const LEGACY_CAUSE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const MAX_ISSUE_BODY_BYTES = 65_000;
 const OCCURRENCES_START = '<!-- ci-failure-occurrences:start -->';
 const OCCURRENCES_END = '<!-- ci-failure-occurrences:end -->';
-const OCCURRENCE_ROW_PATTERN = /^\| \d{4}-\d{2}-\d{2} \| \[\d+\]\(https:\/\/github\.com\/[^\n]+\) \| .* \| (main|unavailable|#\d+) \|$/;
+const OCCURRENCE_ROW_PATTERN = /^\| \d{4}-\d{2}-\d{2} \| \[(?<runId>\d+)\]\(https:\/\/github\.com\/[^\n]+\) \| .* \| (main|unavailable|#\d+) \|$/;
 
 class OccurrenceRenderError extends Error {}
 
@@ -105,7 +105,10 @@ function occurrenceRow(cause, run) {
 }
 
 function hasOccurrence(body, runId) {
-    return (body ?? '').includes(`[${runId}](`);
+    return normalizedBodyLines(body).some(line => {
+        const match = OCCURRENCE_ROW_PATTERN.exec(line);
+        return match?.groups?.runId === String(runId);
+    });
 }
 
 function occurrenceSection(rows, totalOccurrenceCount) {

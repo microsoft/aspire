@@ -35,6 +35,7 @@ function resolveCauses({
     const proposedToCanonical = new Map();
     const priorCauseMigrations = new Map();
     const priorCauseAliases = new Map();
+    const compatibleNormalizedPriorAliases = new Set();
     const hasPriorMatchByCanonicalId = new Map();
 
     for (const cause of causes) {
@@ -102,6 +103,35 @@ function resolveCauses({
 
         const priorCauseId = canonicalPriorCause?.id;
         const canonicalId = getCanonicalCauseId(cause.id, priorCauseId);
+        // A legacy root can normalize to an ID already occupied by a compatible newer root.
+        // Keep that safe file as the physical canonical and rewrite the legacy family as aliases
+        // instead of asking the migration step to overwrite the existing destination.
+        const normalizedDestinationPriorCause =
+            priorCauseId && priorCauseId !== canonicalId
+                ? sameTestCanonicalExtras.find(extra => extra.id === canonicalId)
+                : undefined;
+        const canonicalPriorRecords = canonicalPriorCause
+            ? findPriorRecordsForCanonicalCause(canonicalPriorCause.id, priorCauses)
+            : [];
+        const normalizedCanonicalAliasRecord = canonicalPriorRecords.find(record =>
+            record.id !== canonicalId &&
+            record.canonical_id === canonicalId &&
+            normalizeCauseId(record.id) === canonicalId &&
+            record.type === cause.type &&
+            allTestNames(record).some(testName =>
+                normalizeTestName(testName) === normalizeTestName(cause.test_name)));
+        const usesCompatibleNormalizedDestination =
+            normalizedDestinationPriorCause !== undefined ||
+            normalizedCanonicalAliasRecord !== undefined;
+        const normalizedLegacyRecords = normalizedDestinationPriorCause
+            ? findPriorRecordsForCanonicalCause(priorCauseId, priorCauses)
+            : [];
+        for (const record of normalizedLegacyRecords) {
+            addPriorCauseAlias(priorCauseAliases, record.id, canonicalId);
+        }
+        if (normalizedDestinationPriorCause) {
+            compatibleNormalizedPriorAliases.add(priorCauseId);
+        }
         const supersededPriorCause =
             proposedCanonicalCause?.id !== priorCauseId &&
             proposedCanonicalCause?.id !== canonicalId
@@ -136,6 +166,31 @@ function resolveCauses({
                 .filter(record => record.id !== extra.id)
                 .map(record => record.id),
         ])).sort();
+        const compatibleNormalizedRecords = usesCompatibleNormalizedDestination
+            ? uniqueById([...canonicalPriorRecords, ...sameTestExtraRecords])
+            : [];
+        for (const record of compatibleNormalizedRecords) {
+            validateCauseType(record);
+            if (record.type !== cause.type) {
+                throw new Error(
+                    `Cause '${cause.id}' of type '${cause.type}' cannot alias prior cause type ` +
+                    `'${record.type}'.`);
+            }
+        }
+        const normalizationPriorCause = usesCompatibleNormalizedDestination
+            ? {
+                ...(normalizedDestinationPriorCause ?? canonicalPriorCause),
+                test_names: unique(
+                    compatibleNormalizedRecords.flatMap(record => allTestNames(record))).sort(),
+            }
+            : canonicalPriorCause;
+        const compatibleNormalizedIssueUrl = [...compatibleNormalizedRecords]
+            .sort((left, right) => {
+                const dateComparison = firstObservedAt(left).localeCompare(firstObservedAt(right));
+                return dateComparison !== 0 ? dateComparison : left.id.localeCompare(right.id);
+            })
+            .find(record => record.issue_url)
+            ?.issue_url;
         const aliases = unique([
             ...(canonicalPriorCause?.aliases ?? []),
             ...(proposedAlias && proposedPriorCause.id !== canonicalId ? [proposedPriorCause.id] : []),
@@ -143,28 +198,38 @@ function resolveCauses({
             ...(supersededPriorCause
                 ? [supersededPriorCause.id, ...(supersededPriorCause.aliases ?? [])]
                 : []),
+            ...normalizedLegacyRecords.map(record => record.id),
+            ...compatibleNormalizedRecords.flatMap(record => [
+                record.id,
+                ...(record.aliases ?? []),
+            ]),
             ...sameTestExtraAliases,
-        ]);
+        ]).filter(alias => alias !== canonicalId);
         if (sameTestCanonicalExtras.length > 0) {
             aliases.sort();
         }
         const normalizedCause = normalizeCause(
             cause,
-            canonicalPriorCause,
+            normalizationPriorCause,
             canonicalId,
             jobIds,
             jobNames,
             aliases,
-            canonicalPriorCause?.issue_url ??
+            compatibleNormalizedIssueUrl ??
+                canonicalPriorCause?.issue_url ??
                 sameTestCanonicalExtras.find(extra => extra.issue_url)?.issue_url ??
                 supersededPriorCause?.issue_url);
+        if (usesCompatibleNormalizedDestination) {
+            normalizedCause.test_names?.sort();
+            normalizedCause.aliases?.sort();
+        }
         validateCauseType(normalizedCause);
         proposedToCanonical.set(cause.id, canonicalId);
         hasPriorMatchByCanonicalId.set(
             canonicalId,
             hasPriorMatchByCanonicalId.get(canonicalId) === true || canonicalPriorCause !== undefined);
 
-        if (priorCauseId && priorCauseId !== canonicalId) {
+        if (priorCauseId && priorCauseId !== canonicalId && !normalizedDestinationPriorCause) {
             priorCauseMigrations.set(priorCauseId, canonicalId);
         }
 
@@ -194,7 +259,10 @@ function resolveCauses({
 
     for (const [legacyId, canonicalId] of priorCauseAliases) {
         const normalizedLegacyId = normalizeCauseId(legacyId);
-        if (normalizedById.has(normalizedLegacyId)) {
+        const isCompatibleNormalizedAlias =
+            compatibleNormalizedPriorAliases.has(legacyId) &&
+            canonicalId === normalizedLegacyId;
+        if (normalizedById.has(normalizedLegacyId) && !isCompatibleNormalizedAlias) {
             const collision = legacyId === normalizedLegacyId
                 ? 'also resolves to it'
                 : `also resolves to '${normalizedLegacyId}'`;

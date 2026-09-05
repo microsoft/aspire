@@ -259,6 +259,137 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DiagnosticOccurrenceLinkDoesNotPreventPublishingOccurrenceRow()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            ## Error Message
+
+                                Diagnostic text referenced [991](https://example.test/not-an-occurrence).
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                },
+                repeat = 2
+            });
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Contains(
+            "| 2026-08-29 | [991](https://github.com/microsoft/aspire/actions/runs/991) |",
+            issue.Body,
+            StringComparison.Ordinal);
+        Assert.Equal(1, result.Calls.Count(call => call == "update"));
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(true, false, 991, false)]
+    [InlineData(false, true, 991, false)]
+    [InlineData(false, false, 9910, true)]
+    [RequiresTools(["node"])]
+    public async Task OccurrenceDeduplicationUsesExactSupportedRows(
+        bool useCrLf,
+        bool useLegacyHeader,
+        long existingRunId,
+        bool expectsUpdate)
+    {
+        var occurrenceSection = $"""
+            {(useLegacyHeader ? string.Empty : "<!-- ci-failure-occurrences:start -->\n")}## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | {(useLegacyHeader ? "PR" : "Context")} |
+            |------|-------|-----|----|
+            | 2026-08-28 | [{existingRunId}](https://github.com/microsoft/aspire/actions/runs/{existingRunId}) | ` Build / Windows ` | #19804 |
+            {(useLegacyHeader ? string.Empty : "<!-- ci-failure-occurrences:end -->")}
+            """;
+        if (useCrLf)
+        {
+            occurrenceSection = occurrenceSection.ReplaceLineEndings("\r\n");
+        }
+
+        var storedOccurrences = existingRunId == 991
+            ? new object[] { new { run_id = 991L, observed_at = "2026-08-29T18:30:00Z" } }
+            : new object[]
+            {
+                new { run_id = existingRunId, observed_at = "2026-08-28T00:00:00Z" },
+                new { run_id = 991L, observed_at = "2026-08-29T18:30:00Z" },
+            };
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = storedOccurrences
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = $"""
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            {occurrenceSection}
+                            """
+                    }
+                }
+            });
+
+        Assert.Equal(expectsUpdate, result.Calls.Contains("update"));
+        Assert.Equal(!expectsUpdate, result.Publish.Skipped);
+        Assert.Equal(
+            expectsUpdate ? 1 : 0,
+            Assert.Single(result.Issues).Body.Split(
+                "| 2026-08-29 | [991](https://github.com/microsoft/aspire/actions/runs/991) |",
+                StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReplayingTrimmedOccurrenceDoesNotReopenClosedIssue()
     {
         var result = await InvokeHarnessAsync<PublishResult>(
