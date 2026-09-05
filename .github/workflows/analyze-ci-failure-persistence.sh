@@ -691,10 +691,11 @@ migrate_main_issue_body()
           else
             {
               prefix: $start_parts[0],
-              occurrences:
+              occurrences: (
                 "<!-- ci-failure-occurrences:start -->" +
                 $end_parts[0] +
                 "<!-- ci-failure-occurrences:end -->\n"
+              )
             }
           end
         end;
@@ -703,7 +704,7 @@ migrate_main_issue_body()
         if ($parts | length) != 2 then
           error("unsupported legacy occurrence section")
         else
-          {prefix: $parts[0], occurrences: "## Occurrences\n" + $parts[1]}
+          {prefix: $parts[0], occurrences: ("## Occurrences\n" + $parts[1])}
         end;
       def parts:
         if (normalized | contains("<!-- ci-failure-occurrences:start -->")) or
