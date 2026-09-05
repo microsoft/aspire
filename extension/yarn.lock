@@ -1581,10 +1581,10 @@ base64-js@^1.3.1:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/base64-js/-/base64-js-1.5.1.tgz"
   integrity sha1-GxtEAWClv3rUC2UPCVljSBkDkwo=
 
-baseline-browser-mapping@^2.10.12:
-  version "2.10.13"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/baseline-browser-mapping/-/baseline-browser-mapping-2.10.13.tgz"
-  integrity sha1-WhVMxFiRkwFaJ049GDGbDXa5Ik4=
+baseline-browser-mapping@^2.11.12:
+  version "2.11.19"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/baseline-browser-mapping/-/baseline-browser-mapping-2.11.19.tgz#4711abac48b88ccb56b5817e86f1b3a9a0764276"
+  integrity sha1-RxGrrEi4jMtWtYF+hvGzqaB2QnY=
 
 binary-extensions@^2.0.0:
   version "2.3.0"
@@ -1681,15 +1681,15 @@ browser-stdout@^1.3.1:
   integrity sha1-uqVZ7hTO1zRSIputcyZGfGH6vWA=
 
 browserslist@^4.28.1:
-  version "4.28.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/browserslist/-/browserslist-4.28.2.tgz"
-  integrity sha1-9QtlNi70iXTKn1CzaAVm14a4EdI=
+  version "4.28.8"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/browserslist/-/browserslist-4.28.8.tgz#a3c79ceb70028527e5da7dafc887f3200b5168c0"
+  integrity sha1-o8ec63AChSfl2n2vyIfzIAtRaMA=
   dependencies:
-    baseline-browser-mapping "^2.10.12"
-    caniuse-lite "^1.0.30001782"
-    electron-to-chromium "^1.5.328"
-    node-releases "^2.0.36"
-    update-browserslist-db "^1.2.3"
+    baseline-browser-mapping "^2.11.12"
+    caniuse-lite "^1.0.30001809"
+    electron-to-chromium "^1.5.402"
+    node-releases "^2.0.53"
+    update-browserslist-db "^1.3.0"
 
 buffer-alloc-unsafe@^1.1.0:
   version "1.1.0"
@@ -1860,10 +1860,10 @@ camelcase@^6.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/camelcase/-/camelcase-6.3.0.tgz"
   integrity sha1-VoW5XrIJrJwMF3Rnd4ychN9Yupo=
 
-caniuse-lite@^1.0.30001782:
-  version "1.0.30001784"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/caniuse-lite/-/caniuse-lite-1.0.30001784.tgz"
-  integrity sha1-vflzOggTzPtatNAvISfmLuTGtxg=
+caniuse-lite@^1.0.30001809:
+  version "1.0.30001810"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/caniuse-lite/-/caniuse-lite-1.0.30001810.tgz#4970b477dea3278374de9bc43aa8f5d39fc3cda2"
+  integrity sha1-SXC0d96jJ4N03pvEOqj105/DzaI=
 
 chalk@^4.0.0, chalk@^4.1.0, chalk@^4.1.2:
   version "4.1.2"
@@ -2426,10 +2426,10 @@ ee-first@1.1.1:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ee-first/-/ee-first-1.1.1.tgz"
   integrity sha1-WQxhFWsK4vTwJVcyoViyZrxWsh0=
 
-electron-to-chromium@^1.5.328:
-  version "1.5.331"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/electron-to-chromium/-/electron-to-chromium-1.5.331.tgz"
-  integrity sha1-Pk6EUELVF8aLPAC+X8MyBPE7IFg=
+electron-to-chromium@^1.5.402:
+  version "1.5.414"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/electron-to-chromium/-/electron-to-chromium-1.5.414.tgz#4d38036562ddd192214aaade4124bdbbf2297291"
+  integrity sha1-TTgDZWLd0ZIhSqreQSS9u/IpcpE=
 
 emoji-regex@^10.3.0:
   version "10.6.0"
@@ -4597,10 +4597,10 @@ node-int64@^0.4.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-int64/-/node-int64-0.4.0.tgz#87a9065cdb355d3182d8f94ce11188b825c68a3b"
   integrity sha1-h6kGXNs1XTGC2PlM4RGIuCXGijs=
 
-node-releases@^2.0.36:
-  version "2.0.37"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-releases/-/node-releases-2.0.37.tgz"
-  integrity sha1-m9TxC3e6OcK5QC1Og5nEgqeX9nE=
+node-releases@^2.0.53:
+  version "2.0.53"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-releases/-/node-releases-2.0.53.tgz#0fe5ad8a7935e075172f574e56f0c20f07fa41af"
+  integrity sha1-D+Wtink14HUXL1dOVvDCDwf6Qa8=
 
 node-sarif-builder@^3.2.0:
   version "3.4.0"
@@ -6427,10 +6427,10 @@ unzipper@^0.12.3:
     graceful-fs "^4.2.2"
     node-int64 "^0.4.0"
 
-update-browserslist-db@^1.2.3:
-  version "1.2.3"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/update-browserslist-db/-/update-browserslist-db-1.2.3.tgz"
-  integrity sha1-ZNdttYcTE2rL60xJEUNmzGzC6A0=
+update-browserslist-db@^1.3.0:
+  version "1.3.1"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/update-browserslist-db/-/update-browserslist-db-1.3.1.tgz#a71c28dd22f505481dbc4689087b18d933e90afd"
+  integrity sha1-pxwo3SL1BUgdvEaJCHsY2TPpCv0=
   dependencies:
     escalade "^3.2.0"
     picocolors "^1.1.1"
