@@ -758,6 +758,70 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task PublishUpdatesExistingIssueWhenFreshBodyExceedsPublicationBudget()
+    {
+        var cause = new
+        {
+            id = "worker-crash",
+            type = "infra-failure",
+            title = "Worker process crashed",
+            error_pattern = new string('x', 65_000),
+            job_names = new[] { "Build / Windows" }
+        };
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause,
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            Preserve this issue description.
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 0 most recent of 0 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.Equal(10, result.Publish.Number);
+        var body = Assert.Single(result.Issues).Body;
+        Assert.Contains("Preserve this issue description.", body, StringComparison.Ordinal);
+        Assert.Contains("[991](", body, StringComparison.Ordinal);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(body) <= 65_000);
+        Assert.Contains("update", result.Calls);
+        Assert.DoesNotContain("create", result.Calls);
+        Assert.DoesNotContain(
+            result.Warnings,
+            warning => warning.Contains("Skipping issue creation.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishSkipsNewIssueWhenRenderedBodyExceedsPublicationBudget()
     {
         var cause = new

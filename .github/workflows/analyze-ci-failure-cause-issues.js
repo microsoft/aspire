@@ -440,20 +440,27 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
     } = await readStoredCauseFamily(memoryCausesDirectory, cause);
     const totalOccurrenceCount = storedOccurrenceCount(storedOccurrences);
     const initialBody = buildIssueBody(cause, run, totalOccurrenceCount ?? 1);
-    if (!isWithinIssueBodyBudget(initialBody)) {
+    const marker = causeMarker(cause);
+    const alternateMarkers = (cause.aliases ?? [])
+        .filter(causeId => LEGACY_CAUSE_ID_PATTERN.test(causeId))
+        .map(causeMarker);
+    const transport = tracking.createOctokitIssueTransport(github, context);
+    const issues = await transport.listIssues(CAUSE_LABEL);
+    const matchingIssues = tracking.findIssuesForMarkers(
+        issues,
+        [marker, ...alternateMarkers],
+        issue => matchesCauseIssue(issue, cause))
+        .filter(issue => !tracking.isDuplicateExempt(issue));
+    if (matchingIssues.length === 0 && !isWithinIssueBodyBudget(initialBody)) {
         core.warning(
             `Cause issue body exceeds the ${MAX_ISSUE_BODY_BYTES}-byte publication budget. Skipping issue creation.`);
         return undefined;
     }
 
     await ensureCauseLabels(github, context, cause);
-    const marker = causeMarker(cause);
-    const alternateMarkers = (cause.aliases ?? [])
-        .filter(causeId => LEGACY_CAUSE_ID_PATTERN.test(causeId))
-        .map(causeMarker);
-    const transport = tracking.createOctokitIssueTransport(github, context);
     let occurrenceAlreadyPublished = false;
     const result = await tracking.executeIssueReconciliation(transport, core, {
+        issues,
         label: CAUSE_LABEL,
         labels: labelsForCause(cause),
         marker,
