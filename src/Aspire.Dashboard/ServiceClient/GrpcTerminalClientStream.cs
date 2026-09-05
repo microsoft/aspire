@@ -154,7 +154,8 @@ internal sealed class GrpcTerminalClientStream : Stream
             }
             catch
             {
-                // Nothing useful to do; the connection is going away regardless.
+                // Expected on a call that is already faulted or cancelled, which is the common case here. There is
+                // nothing to report: the connection is going away regardless, and the caller is disposing.
             }
 
             _writeLock.Dispose();

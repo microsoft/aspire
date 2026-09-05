@@ -164,11 +164,14 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         }
         catch (OperationCanceledException)
         {
-            // Expected when the terminal is disposed while the workload is still running.
+            // Expected when the terminal is disposed while the workload is still running. Logged so the lifecycle
+            // reads end-to-end alongside the "Starting terminal" entry above -- otherwise a cancelled workload is
+            // indistinguishable from one that is still running.
+            _logger.LogDebug("Terminal {TerminalId} ({Title}) workload was cancelled because the terminal is being disposed.", Id, Title);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Terminal {TerminalId} ({Title}) failed.", Id, Title);
+            _logger.LogError(ex, "Terminal {TerminalId} ({Title}) failed unexpectedly and its session has ended.", Id, Title);
         }
         finally
         {

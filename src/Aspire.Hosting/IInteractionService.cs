@@ -472,7 +472,7 @@ public sealed class InteractionInput
     /// <remarks>
     /// <para>
     /// Describes the process the terminal runs — for example
-    /// <c>new TerminalCommand("docker", "exec", "-it", id, "/bin/sh")</c>. The AppHost owns the terminal: it
+    /// <c>new TerminalCommand("docker") { Arguments = ["exec", "-it", id, "/bin/sh"] }</c>. The AppHost owns the terminal: it
     /// attaches the transport, runs the workload, and tears it down.
     /// </para>
     /// <para>

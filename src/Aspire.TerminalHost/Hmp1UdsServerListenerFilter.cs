@@ -97,14 +97,11 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
             {
                 await _listenerTask.ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
             {
-            }
-            catch (ObjectDisposedException) when (_listenerCts.IsCancellationRequested)
-            {
-            }
-            catch (SocketException) when (_listenerCts.IsCancellationRequested)
-            {
+                // Expected. The listener was cancelled and disposed immediately above, and an accept already in
+                // flight surfaces that teardown as any of these three depending on how far it had progressed.
+                _logger.LogDebug(ex, "The HMP1 consumer listener ended during session teardown.");
             }
         }
 
@@ -135,18 +132,15 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
                 _ = ObserveClientTaskAsync(clientTask);
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (Exception ex) when ((ex is OperationCanceledException or ObjectDisposedException or SocketException) && ct.IsCancellationRequested)
         {
-        }
-        catch (ObjectDisposedException) when (ct.IsCancellationRequested)
-        {
-        }
-        catch (SocketException) when (ct.IsCancellationRequested)
-        {
+            // Expected. The session is ending: a pending AcceptAsync surfaces the cancel-and-dispose as any of these
+            // three depending on whether cancellation or the socket disposal won the race.
+            _logger.LogDebug(ex, "The HMP1 consumer listener stopped accepting because the session is ending.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "The HMP1 consumer listener failed.");
+            _logger.LogError(ex, "The HMP1 consumer listener failed unexpectedly. No further terminal consumers can attach to this session.");
             _listenerFaulted(ex);
         }
     }
@@ -156,6 +150,13 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         try
         {
             await clientTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Unexpected: AddClientAsync is written to handle its own failures, so reaching here means its cleanup
+            // path itself threw. This task is fire-and-forget, so without this catch the exception would be
+            // unobserved and invisible.
+            _logger.LogError(ex, "Unexpected error while observing an HMP1 consumer.");
         }
         finally
         {
@@ -175,6 +176,9 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         catch (Exception ex) when (
             ex is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
         {
+            // Expected. The consumer hung up, or the session ended, between accepting the socket and handing it to
+            // the presentation adapter.
+            _logger.LogDebug(ex, "An HMP1 consumer disconnected before it could be attached.");
             await DisposeFailedClientStreamAsync(stream).ConfigureAwait(false);
         }
         catch (Exception ex)

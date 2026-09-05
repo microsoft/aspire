@@ -191,7 +191,15 @@ public sealed class TerminalService : IAsyncDisposable
                 .Select(t => t.Descriptor)
                 .ToImmutableArray();
 
-            return new TerminalSubscription(initial, StreamChanges());
+            return new TerminalSubscription(initial, StreamChanges())
+            {
+                // The channel is registered above, before the caller has a chance to enumerate. StreamChanges is an
+                // async iterator, so its finally only runs once someone calls MoveNextAsync -- a caller that faults
+                // before it starts enumerating would otherwise leave the channel registered forever, and because it
+                // is unbounded every later change would accumulate in it. Unsubscribe gives callers a deterministic
+                // way to release the registration on that path. Removing twice is harmless.
+                Unsubscribe = () => ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Remove(c), channel)
+            };
 
             async IAsyncEnumerable<TerminalChange> StreamChanges([EnumeratorCancellation] CancellationToken cancellationToken = default)
             {
@@ -301,6 +309,19 @@ public sealed class TerminalService : IAsyncDisposable
 /// <summary>
 /// The current set of dock terminals plus a stream of subsequent changes.
 /// </summary>
+/// <remarks>
+/// Dispose when the subscription is no longer needed. Enumerating <see cref="Subscription"/> to completion also
+/// releases the registration, so disposing only matters on paths that abandon the subscription without ever
+/// starting to enumerate it.
+/// </remarks>
 internal sealed record TerminalSubscription(
     ImmutableArray<TerminalDescriptor> InitialState,
-    IAsyncEnumerable<TerminalChange> Subscription);
+    IAsyncEnumerable<TerminalChange> Subscription) : IDisposable
+{
+    /// <summary>
+    /// Releases the change-stream registration held by this subscription. Safe to call more than once.
+    /// </summary>
+    public required Action Unsubscribe { get; init; }
+
+    public void Dispose() => Unsubscribe();
+}

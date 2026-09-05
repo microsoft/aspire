@@ -166,6 +166,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
+                // Expected. We cancelled _cts immediately above, so the watch task ends by design.
             }
         }
 

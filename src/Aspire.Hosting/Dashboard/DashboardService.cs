@@ -639,19 +639,34 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         try
         {
+            logger.LogDebug("Attaching terminal {TerminalId} to a dashboard viewer.", selector.TerminalId);
+
             // Returns once the terminal ends or the caller disconnects. Holding the call open for that whole time is
             // what keeps the tunnel alive, so this must not be fire-and-forget.
             await terminalService.AttachAsync(selector.TerminalId, stream, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
         {
-            // The terminal was disposed, or never existed; the dashboard may still be holding a stale dialog or dock
-            // tab open, so report it as a precondition failure rather than faulting the whole connection.
+            // Expected. The terminal was disposed, or never existed; the dashboard may still be holding a stale dialog
+            // or dock tab open, so report it as a precondition failure rather than faulting the whole connection.
+            // Debug rather than Warning because a stale tab reattaching is routine and the client already receives the
+            // reason in the status -- anything louder would be noise an operator cannot act on.
+            logger.LogDebug(ex, "Terminal {TerminalId} is not available to attach. The dashboard is likely holding a view of a terminal that has already ended.", selector.TerminalId);
+
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The dashboard closed the tunnel, typically because the browser tab or dialog went away.
+            // Expected. The dashboard closed the tunnel, typically because the browser tab or dialog went away.
+            logger.LogDebug("Terminal {TerminalId} tunnel closed by the dashboard.", selector.TerminalId);
+        }
+        catch (Exception ex)
+        {
+            // Unexpected. Nothing else logs this call: AttachTerminal deliberately does not route through
+            // ExecuteAsync, because that would log the expected FailedPrecondition above as an error.
+            logger.LogError(ex, "Unexpected error while tunnelling terminal {TerminalId} to the dashboard.", selector.TerminalId);
+
+            throw;
         }
     }
 
@@ -665,15 +680,17 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         // Subscribe before writing the snapshot. SubscribeDockTerminals captures both under one lock, so a terminal
         // created concurrently lands in exactly one of them.
-        var (initial, changes) = terminalService.SubscribeDockTerminals();
-
-        var snapshot = new TerminalDescriptorList();
-        snapshot.Terminals.AddRange(initial.Select(ToProtoDescriptor));
-        await responseStream.WriteAsync(new WatchTerminalsUpdate { Snapshot = snapshot }, cancellationToken).ConfigureAwait(false);
+        using var subscription = terminalService.SubscribeDockTerminals();
 
         try
         {
-            await foreach (var change in changes.WithCancellation(cancellationToken).ConfigureAwait(false))
+            // The snapshot write belongs inside the try: if the dashboard disconnects in the window between
+            // subscribing and the first write, this throws, and letting it escape would skip the disposal above.
+            var snapshot = new TerminalDescriptorList();
+            snapshot.Terminals.AddRange(subscription.InitialState.Select(ToProtoDescriptor));
+            await responseStream.WriteAsync(new WatchTerminalsUpdate { Snapshot = snapshot }, cancellationToken).ConfigureAwait(false);
+
+            await foreach (var change in subscription.Subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 await responseStream.WriteAsync(
                     new WatchTerminalsUpdate
@@ -689,7 +706,16 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The dashboard disconnected or the AppHost is shutting down.
+            // Expected. The dashboard disconnected or the AppHost is shutting down.
+            logger.LogDebug("Terminal dock watch stream closed.");
+        }
+        catch (Exception ex)
+        {
+            // Unexpected. Without this the dock silently stops updating, because WatchTerminals does not route
+            // through ExecuteAsync and so has no ambient error logging.
+            logger.LogError(ex, "Unexpected error while watching dock terminals. The dashboard terminal dock will stop receiving updates.");
+
+            throw;
         }
     }
 

@@ -4,6 +4,7 @@
 using System.Globalization;
 using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 // InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
 #pragma warning disable ASPIREINTERACTION001
@@ -55,7 +56,7 @@ internal static class TerminalInteractionCommands
                 // transport that carries the session over gRPC, then runs and tears down the process.
                 var terminal = OperatingSystem.IsWindows()
                     ? new TerminalCommand("cmd.exe")
-                    : new TerminalCommand("/bin/bash", "-i", "-l");
+                    : new TerminalCommand("/bin/bash") { Arguments = ["-i", "-l"] };
 
                 var result = await interactionService.PromptInputsAsync(
                     "AppHost shell",
@@ -132,7 +133,10 @@ internal static class TerminalInteractionCommands
     {
         var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
-        var terminal = new TerminalCommand("docker", ["exec", "-it", containerName, .. command]);
+        var terminal = new TerminalCommand("docker")
+        {
+            Arguments = ["exec", "-it", containerName, .. command]
+        };
 
         var result = await interactionService.PromptInputsAsync(
             title,
@@ -178,7 +182,10 @@ internal static class TerminalInteractionCommands
                 var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = container.Resource.Name,
-                    Command = new TerminalCommand("docker", "exec", "-it", containerName, "/bin/sh")
+                    Command = new TerminalCommand("docker")
+                    {
+                        Arguments = ["exec", "-it", containerName, "/bin/sh"]
+                    }
                 });
 
                 // Reveals the dock in every connected browser and switches it to this tab.
@@ -304,6 +311,13 @@ internal static class TerminalInteractionCommands
                 }
                 catch (Exception ex)
                 {
+                    // Unexpected. Surface the message in the dialog, but log the full exception too: the failure is
+                    // otherwise reduced to a one-line string with no stack trace, which is the hardest kind of
+                    // demo failure to diagnose.
+                    commandContext.Services.GetRequiredService<ILoggerFactory>()
+                        .CreateLogger(nameof(TerminalInteractionCommands))
+                        .LogError(ex, "The number guess automation failed unexpectedly.");
+
                     await gameCts.CancelAsync();
                     return CommandResults.Failure(ex.Message);
                 }
@@ -423,7 +437,10 @@ internal static class TerminalInteractionCommands
         var scriptPath = Path.Combine(AppContext.BaseDirectory, "Scripts", "numberguess.cs");
         var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } hostPath ? hostPath : "dotnet";
 
-        return new TerminalCommand(dotnet, "run", "--file", scriptPath, "--", limit.ToString(CultureInfo.InvariantCulture));
+        return new TerminalCommand(dotnet)
+        {
+            Arguments = ["run", "--file", scriptPath, "--", limit.ToString(CultureInfo.InvariantCulture)]
+        };
     }
 
     /// <summary>

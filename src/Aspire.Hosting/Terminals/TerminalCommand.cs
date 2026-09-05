@@ -23,7 +23,10 @@ namespace Aspire.Hosting.Terminals;
 /// <example>
 /// Shell into a running container:
 /// <code>
-/// var command = new TerminalCommand("docker", "exec", "-it", containerName, "/bin/sh");
+/// var command = new TerminalCommand("docker")
+/// {
+///     Arguments = ["exec", "-it", containerName, "/bin/sh"]
+/// };
 /// </code>
 /// </example>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
@@ -43,14 +46,11 @@ public sealed class TerminalCommand
     /// Initializes a new instance of the <see cref="TerminalCommand"/> class.
     /// </summary>
     /// <param name="executable">The executable to run. Resolved against <c>PATH</c> when not fully qualified.</param>
-    /// <param name="arguments">The arguments passed to <paramref name="executable"/>.</param>
-    public TerminalCommand(string executable, params string[] arguments)
+    public TerminalCommand(string executable)
     {
         ArgumentException.ThrowIfNullOrEmpty(executable);
-        ArgumentNullException.ThrowIfNull(arguments);
 
         Executable = executable;
-        Arguments = [.. arguments];
     }
 
     /// <summary>
@@ -59,9 +59,9 @@ public sealed class TerminalCommand
     public string Executable { get; }
 
     /// <summary>
-    /// Gets the arguments passed to <see cref="Executable"/>.
+    /// Gets or sets the arguments passed to <see cref="Executable"/>.
     /// </summary>
-    public IList<string> Arguments { get; }
+    public IList<string> Arguments { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the working directory the process starts in. Defaults to the AppHost's working directory.
