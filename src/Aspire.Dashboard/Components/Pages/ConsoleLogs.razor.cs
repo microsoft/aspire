@@ -73,6 +73,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [Inject]
     public required IOptions<DashboardOptions> Options { get; init; }
 
+    /// <summary>
+    /// Used to authenticate detached terminal windows. Monitored rather than snapshotted so the token handed to a
+    /// new window is always the one the login middleware will validate it against.
+    /// </summary>
+    [Inject]
+    public required IOptionsMonitor<DashboardOptions> OptionsMonitor { get; init; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -1373,7 +1380,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // Resource terminals never reattach, so the close callback has nothing to do: the inline view was live the
     // whole time the window was open.
     private TerminalWindowLauncher TerminalWindowLauncher
-        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, _ => Task.CompletedTask);
+        => _terminalWindowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, OptionsMonitor, _ => Task.CompletedTask);
 
     /// <summary>
     /// Opens the selected resource's terminal in its own resizable window.
@@ -1395,7 +1402,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var path = $"/terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{_terminalReplicaIndex}";
             var result = await TerminalWindowLauncher.OpenAsync(
                 key: $"resource:{resourceName}:{_terminalReplicaIndex}",
-                url: NavigationManager.ToAbsoluteUri(path).ToString()).ConfigureAwait(true);
+                path: path).ConfigureAwait(true);
 
             if (result is TerminalWindowOpenResult.Blocked)
             {
