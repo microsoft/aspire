@@ -56,7 +56,7 @@ resource env_1_ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('env-1')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take('${toLower('env-1')}-${toLower('aspiredashboard')}', 46)}-${uniqueString(toLower('env-1'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_1_asplan.id
@@ -150,8 +150,6 @@ output name string = env_1_asplan.name
 
 output planId string = env_1_asplan.id
 
-output webSiteSuffix string = uniqueString(resourceGroup().id)
-
 output AZURE_CONTAINER_REGISTRY_NAME string = env_1_acr.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = env_1_acr.properties.loginServer
@@ -164,7 +162,7 @@ output AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID string = env_1_contributor_
 
 output AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID string = env_1_contributor_mi.properties.principalId
 
-output AZURE_APP_SERVICE_DASHBOARD_URI string = 'https://${take('${toLower('env-1')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+output AZURE_APP_SERVICE_DASHBOARD_URI string = 'https://${'${take('${toLower('env-1')}-${toLower('aspiredashboard')}', 46)}-${uniqueString(toLower('env-1'), resourceGroup().id)}'}.azurewebsites.net'
 
 output AZURE_APPLICATION_INSIGHTS_INSTRUMENTATIONKEY string = env_1_ai.properties.InstrumentationKey
 
