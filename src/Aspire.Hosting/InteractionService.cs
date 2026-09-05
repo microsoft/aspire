@@ -31,16 +31,14 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
-    private readonly TerminalService _terminalService;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, TerminalService terminalService)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
-        _terminalService = terminalService;
     }
 
     public bool IsAvailable
@@ -173,16 +171,16 @@ internal class InteractionService : IInteractionService
             var input = inputs[i];
             if (input.InputType == InputType.Terminal)
             {
-                if (input.Terminal is null == input.TerminalSession is null)
+                if (input.Terminal is null)
                 {
-                    throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so exactly one of {nameof(InteractionInput.Terminal)} and {nameof(InteractionInput.TerminalSession)} must be set.");
+                    throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so {nameof(InteractionInput.Terminal)} must be set to a terminal created by the caller.");
                 }
 
-                // A dock terminal is listed as a tab and is expected to outlive whatever created it, but the dialog
-                // disposes its terminal on close. Showing one here would rip it out from under the dock.
-                if (input.TerminalSession is { } session && session.Surface != TerminalSurface.Interaction)
+                // A dock terminal is presented as a dock tab that outlives the code which created it. Showing one in a
+                // dialog as well would render the same terminal through two competing presentations.
+                if (input.Terminal.Surface != TerminalSurface.Interaction)
                 {
-                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.TerminalSession)} to a terminal whose {nameof(IAspireTerminal.Surface)} is {session.Surface}. Terminals shown by an interaction must be created with {nameof(TerminalSurface)}.{nameof(TerminalSurface.Interaction)}.");
+                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(IAspireTerminal.Surface)} is {input.Terminal.Surface}. Terminals shown by an interaction must be created with {nameof(TerminalSurface)}.{nameof(TerminalSurface.Interaction)}.");
                 }
             }
 
@@ -224,21 +222,13 @@ internal class InteractionService : IInteractionService
             }
             if (hasTerminalInputs)
             {
-                // Terminals are created eagerly so the dialog carries a terminal id, but the underlying workload
-                // does not start until a client actually attaches. A dialog dismissed without opening the terminal
-                // therefore never spawns a process.
+                // The dashboard addresses a terminal by id, so carry the caller's terminal id on the input. The
+                // terminal is neither created nor disposed here: the caller owns it.
                 foreach (var input in inputs)
                 {
                     if (input.InputType == InputType.Terminal)
                     {
-                        // A caller-supplied session is already created — the caller needed the handle so it could
-                        // drive the terminal. Either way the interaction owns teardown from here on.
-                        input.TerminalId = input.TerminalSession?.Id ?? _terminalService.CreateTerminal(new TerminalLaunchOptions
-                        {
-                            Title = string.IsNullOrEmpty(input.Label) ? input.Name : input.Label,
-                            Command = input.Terminal!,
-                            Surface = TerminalSurface.Interaction
-                        }).Id;
+                        input.TerminalId = input.Terminal!.Id;
                     }
                 }
             }
@@ -297,22 +287,6 @@ internal class InteractionService : IInteractionService
         }
         finally
         {
-            // Terminals are created before the interaction is tracked, so any escape between creation and
-            // CompleteInteractionCore — a throw from AddInteractionUpdate, or dynamic input loading — would
-            // otherwise leave them registered with TerminalService for the lifetime of the AppHost. The normal
-            // path has already nulled TerminalId, which makes this a no-op rather than a double teardown.
-            if (hasTerminalInputs)
-            {
-                foreach (var input in inputs)
-                {
-                    if (input.InputType == InputType.Terminal && input.TerminalId is { } orphanedTerminalId)
-                    {
-                        _terminalService.RemoveAndDisposeInBackground(orphanedTerminalId);
-                        input.TerminalId = null;
-                    }
-                }
-            }
-
             interactionCts.Cancel();
         }
     }
@@ -581,21 +555,6 @@ internal class InteractionService : IInteractionService
             else
             {
                 _fileUploadStore.CancelInteraction(interactionState.InteractionId);
-            }
-        }
-
-        // Terminal sessions are torn down on both paths — unlike uploaded files, nothing survives the interaction
-        // for the caller to consume, so a completed dialog must still stop the workload.
-        if (interactionState.InteractionInfo is Interaction.InputsInteractionInfo terminalInputsInfo &&
-            terminalInputsInfo.Inputs.Any(input => input.InputType == InputType.Terminal))
-        {
-            foreach (var input in terminalInputsInfo.Inputs)
-            {
-                if (input.InputType == InputType.Terminal && input.TerminalId is { } terminalId)
-                {
-                    _terminalService.RemoveAndDisposeInBackground(terminalId);
-                    input.TerminalId = null;
-                }
             }
         }
 

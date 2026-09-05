@@ -51,12 +51,20 @@ internal static class TerminalInteractionCommands
             executeCommand: async commandContext =>
             {
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
 
-                // The input describes the workload only. Aspire owns the terminal: it attaches the HMP1 server
-                // transport that carries the session over gRPC, then runs and tears down the process.
-                var terminal = OperatingSystem.IsWindows()
+                var command = OperatingSystem.IsWindows()
                     ? new TerminalCommand("cmd.exe")
                     : new TerminalCommand("/bin/bash") { Arguments = ["-i", "-l"] };
+
+                // The caller owns the terminal, so it is disposed here rather than by the dialog. The workload does
+                // not start until the dialog is opened, so dismissing it without looking never spawns a shell.
+                await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = "Shell",
+                    Command = command,
+                    Surface = TerminalSurface.Interaction
+                });
 
                 var result = await interactionService.PromptInputsAsync(
                     "AppHost shell",
@@ -132,11 +140,18 @@ internal static class TerminalInteractionCommands
         string message)
     {
         var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+        var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
 
-        var terminal = new TerminalCommand("docker")
+        // The caller owns the terminal, so it is disposed here rather than by the dialog.
+        await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
         {
-            Arguments = ["exec", "-it", containerName, .. command]
-        };
+            Title = title,
+            Command = new TerminalCommand("docker")
+            {
+                Arguments = ["exec", "-it", containerName, .. command]
+            },
+            Surface = TerminalSurface.Interaction
+        });
 
         var result = await interactionService.PromptInputsAsync(
             title,
@@ -263,9 +278,9 @@ internal static class TerminalInteractionCommands
                 }
                 limit = Math.Clamp(limit, 2, 1_000_000);
 
-                // Created here rather than by the interaction service, because this command needs the handle in order
-                // to drive the game. The interaction still owns teardown once the dialog is raised.
-                var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+                // The command owns the terminal for its whole life: it drives the game through the handle, and
+                // disposes it once the answer has been shown.
+                await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = "Number guess",
                     Command = BuildNumberGuessCommand(limit),
@@ -285,7 +300,7 @@ internal static class TerminalInteractionCommands
                             Name = "game",
                             Label = "Number guess",
                             InputType = InputType.Terminal,
-                            TerminalSession = terminal
+                            Terminal = terminal
                         }
                     ],
                     cancellationToken: gameCts.Token);
@@ -325,8 +340,9 @@ internal static class TerminalInteractionCommands
                 // Leave the winning line on screen long enough to read before the dialog disappears.
                 await Task.Delay(TimeSpan.FromSeconds(2), commandContext.CancellationToken);
 
-                // Cancelling the token the prompt was started with is how code dismisses its own dialog. That also
-                // disposes the terminal, so the result replaces the terminal rather than stacking on top of it.
+                // Cancelling the token the prompt was started with is how code dismisses its own dialog, so the
+                // result replaces the terminal rather than stacking on top of it. The terminal itself is disposed by
+                // the `await using` above, once the answer has been shown.
                 await gameCts.CancelAsync();
                 await dialogTask;
 

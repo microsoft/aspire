@@ -14,15 +14,15 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Hosting.Tests.Terminals;
 
 /// <summary>
-/// Guards how <see cref="InteractionService"/> validates and owns terminal-typed inputs. The interaction owns
-/// teardown for every terminal it shows, so the tests here are as much about the terminal not outliving the
-/// dialog as they are about the validation messages.
+/// Guards how <see cref="InteractionService"/> validates terminal-typed inputs and, above all, that it keeps its
+/// hands off the terminal's lifetime. The caller creates the terminal and the caller disposes it, so the dialog is
+/// only ever a view onto a terminal that already exists.
 /// </summary>
 [Trait("Partition", "2")]
 public class InteractionServiceTerminalTests
 {
     [Fact]
-    public async Task PromptInputsAsync_TerminalInputWithNeitherCommandNorSession_Throws()
+    public async Task PromptInputsAsync_TerminalInputWithoutATerminal_Throws()
     {
         var (interactionService, _) = CreateInteractionService();
 
@@ -31,42 +31,22 @@ public class InteractionServiceTerminalTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptInputsAsync("Title", "Message", [input])).DefaultTimeout();
 
-        Assert.Contains("exactly one of", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(InteractionInput.Terminal), ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task PromptInputsAsync_TerminalInputWithBothCommandAndSession_Throws()
+    public async Task PromptInputsAsync_TerminalOnTheDockSurface_Throws()
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
-        var session = CreateTerminal(terminalService, TerminalSurface.Interaction);
+        // A dock terminal is already presented as a dock tab, so showing it in a dialog as well would render one
+        // terminal through two competing presentations.
+        await using var dockTerminal = CreateTerminal(terminalService, TerminalSurface.Dock);
         var input = new InteractionInput
         {
             Name = "shell",
             InputType = InputType.Terminal,
-            Terminal = new TerminalCommand("bash"),
-            TerminalSession = session
-        };
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => interactionService.PromptInputsAsync("Title", "Message", [input])).DefaultTimeout();
-
-        Assert.Contains("exactly one of", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task PromptInputsAsync_TerminalSessionOnTheDockSurface_Throws()
-    {
-        var (interactionService, terminalService) = CreateInteractionService();
-
-        // A dock terminal is listed as a tab and outlives whatever created it. The dialog disposes the terminal it
-        // shows, so accepting one here would rip a tab out from under the dock when the dialog closed.
-        var dockTerminal = CreateTerminal(terminalService, TerminalSurface.Dock);
-        var input = new InteractionInput
-        {
-            Name = "shell",
-            InputType = InputType.Terminal,
-            TerminalSession = dockTerminal
+            Terminal = dockTerminal
         };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -74,30 +54,29 @@ public class InteractionServiceTerminalTests
 
         Assert.Contains(nameof(TerminalSurface.Dock), ex.Message, StringComparison.Ordinal);
 
-        // The dock tab must survive the rejected prompt.
+        // The rejected prompt must not take the caller's dock tab with it.
         Assert.True(terminalService.TryGetTerminal(dockTerminal.Id, out _));
     }
 
     [Fact]
-    public async Task PromptInputsAsync_TerminalInputWithCommand_CreatesTerminalBeforeTheDialogIsShown()
+    public async Task PromptInputsAsync_TerminalInput_CarriesTheCallersTerminalIdIntoTheDialog()
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
+        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
         var input = new InteractionInput
         {
             Name = "shell",
             Label = "Shell",
             InputType = InputType.Terminal,
-            Terminal = new TerminalCommand("bash")
+            Terminal = terminal
         };
 
         var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
 
-        // The dialog carries a terminal id, so the terminal has to exist by the time the interaction is published.
-        Assert.NotNull(input.TerminalId);
-        Assert.True(terminalService.TryGetTerminal(input.TerminalId, out var terminal));
-        Assert.Equal("Shell", terminal.Title);
-        Assert.Equal(TerminalSurface.Interaction, terminal.Surface);
+        // The dashboard addresses terminals by id, so the id of the caller's terminal is what the dialog has to
+        // carry -- the interaction does not stand up a terminal of its own.
+        Assert.Equal(terminal.Id, input.TerminalId);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
         await CancelInteractionAsync(interactionService, interaction.InteractionId);
@@ -106,62 +85,88 @@ public class InteractionServiceTerminalTests
     }
 
     [Fact]
-    public async Task PromptInputsAsync_Cancelled_DisposesTheTerminalItCreated()
+    public async Task PromptInputsAsync_Cancelled_LeavesTheCallersTerminalAlone()
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
+        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
         var input = new InteractionInput
         {
             Name = "shell",
             InputType = InputType.Terminal,
-            Terminal = new TerminalCommand("bash")
+            Terminal = terminal
         };
 
         var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
-        var terminalId = input.TerminalId;
-        Assert.NotNull(terminalId);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
         await CancelInteractionAsync(interactionService, interaction.InteractionId);
 
         var result = await resultTask.DefaultTimeout();
 
-        // Unlike an uploaded file, nothing about a terminal survives the dialog for the caller to consume, so a
-        // dismissed dialog must still stop the workload rather than leaving it registered for the AppHost's life.
+        // The terminal outlives the dialog. A caller may show the same terminal in a second prompt, or keep
+        // driving it through the automation API after the user dismisses this one, so a dismissed dialog must not
+        // stop the workload.
         Assert.True(result.Canceled);
-        Assert.False(terminalService.TryGetTerminal(terminalId, out _));
-        Assert.Null(input.TerminalId);
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
     }
 
     [Fact]
-    public async Task PromptInputsAsync_CallerTokenCancelled_DisposesTheTerminalItCreated()
+    public async Task PromptInputsAsync_CallerTokenCancelled_LeavesTheCallersTerminalAlone()
     {
         var (interactionService, terminalService) = CreateInteractionService();
 
+        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
         var terminalInput = new InteractionInput
         {
             Name = "shell",
             InputType = InputType.Terminal,
-            Terminal = new TerminalCommand("bash")
+            Terminal = terminal
         };
 
         using var cts = new CancellationTokenSource();
         var resultTask = interactionService.PromptInputsAsync("Title", "Message", [terminalInput], cancellationToken: cts.Token);
 
-        var terminalId = terminalInput.TerminalId;
-        Assert.NotNull(terminalId);
-
         // Cancelling the caller's token unwinds the prompt through OnInteractionCancellation rather than through a
-        // dashboard-driven completion. Both routes end in CompleteInteractionCore, and the finally in
-        // PromptInputsAsync then runs over inputs whose TerminalId has already been cleared -- so this also covers
-        // the backstop being idempotent rather than tearing a terminal down twice.
+        // dashboard-driven completion. Both routes end in CompleteInteractionCore, so this covers the second of the
+        // two paths that used to tear the terminal down.
         cts.Cancel();
 
         var result = await resultTask.DefaultTimeout();
 
         Assert.True(result.Canceled);
-        Assert.False(terminalService.TryGetTerminal(terminalId, out _));
-        Assert.Null(terminalInput.TerminalId);
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_TerminalShownTwice_Succeeds()
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+
+        // Caller-owned lifetime is what makes this legal: the terminal survives the first dialog, so the same
+        // session can be surfaced again rather than the caller having to start a second workload.
+        await using var terminal = CreateTerminal(terminalService, TerminalSurface.Interaction);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var input = new InteractionInput
+            {
+                Name = "shell",
+                InputType = InputType.Terminal,
+                Terminal = terminal
+            };
+
+            var resultTask = interactionService.PromptInputsAsync("Title", "Message", [input]);
+
+            Assert.Equal(terminal.Id, input.TerminalId);
+
+            var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+            await CancelInteractionAsync(interactionService, interaction.InteractionId);
+
+            await resultTask.DefaultTimeout();
+        }
+
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
     }
 
     /// <summary>
@@ -176,8 +181,7 @@ public class InteractionServiceTerminalTests
     /// <para>
     /// The callback returns the state directly instead of routing through
     /// <c>DashboardServiceData.ProcessInputs</c>. These tests are about the terminal's lifetime rather than
-    /// input marshalling, and the terminal teardown they assert on happens in <c>CompleteInteractionCore</c>
-    /// regardless of how the input values were produced.
+    /// input marshalling.
     /// </para>
     /// </remarks>
     private static Task CancelInteractionAsync(InteractionService interactionService, int interactionId)
@@ -202,8 +206,7 @@ public class InteractionServiceTerminalTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore(),
-            terminalService);
+            new TestInteractionFileUploadStore());
 
         return (interactionService, terminalService);
     }

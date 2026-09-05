@@ -21,8 +21,9 @@ namespace Aspire.Hosting.Terminals;
 /// surface can grow later if real usage demands it.
 /// </para>
 /// <para>
-/// Disposing the terminal cancels its workload and removes it from the dashboard. Terminals attached to
-/// an interaction are disposed automatically when the interaction completes or is cancelled.
+/// Disposing the terminal cancels its workload and removes it from the dashboard. Whoever creates a
+/// terminal owns it and must dispose it; showing one in an interaction does not transfer that ownership,
+/// so a terminal survives the dialog it was displayed in.
 /// </para>
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]

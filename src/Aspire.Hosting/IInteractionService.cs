@@ -466,43 +466,23 @@ public sealed class InteractionInput
     public InteractionFileCollection GetFiles() => _files;
 
     /// <summary>
-    /// Gets the terminal session to run for an <see cref="InputType.Terminal"/> input. Ignored by every other input
-    /// type.
+    /// Gets the terminal to display for an <see cref="InputType.Terminal"/> input. Ignored by every other input type.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Describes the process the terminal runs — for example
-    /// <c>new TerminalCommand("docker") { Arguments = ["exec", "-it", id, "/bin/sh"] }</c>. The AppHost owns the terminal: it
-    /// attaches the transport, runs the workload, and tears it down.
+    /// The terminal is created and owned by the caller, not by the interaction. Create it with
+    /// <c>TerminalService.CreateTerminal</c> passing <see cref="TerminalSurface.Interaction"/>, hand it to the input,
+    /// and dispose it when the caller is finished with it. The dialog is a view onto the terminal; closing the dialog
+    /// stops showing it but does not stop the workload.
     /// </para>
     /// <para>
-    /// The session starts lazily when a client first attaches, so a dialog that is dismissed without opening the
-    /// terminal never starts the underlying process. The session is torn down when the interaction completes.
-    /// </para>
-    /// <para>
-    /// Exactly one of this property and <see cref="TerminalSession"/> must be set on a terminal input. Set this one
-    /// when the dialog simply needs to show a process; set <see cref="TerminalSession"/> when the AppHost also needs
-    /// to drive that process.
-    /// </para>
-    /// </remarks>
-    [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
-    [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
-    public TerminalCommand? Terminal { get; init; }
-
-    /// <summary>
-    /// Gets an already-created terminal to display for an <see cref="InputType.Terminal"/> input. Ignored by every
-    /// other input type.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Use this instead of <see cref="Terminal"/> when the AppHost needs a handle on the terminal — typically to
-    /// script it through <see cref="IAspireTerminal"/>'s automation members while the dialog is open. Create the
-    /// terminal with <c>TerminalService.CreateTerminal</c>, passing
-    /// <see cref="TerminalSurface.Interaction"/>, then hand it to the input:
+    /// Owning the terminal outside the interaction is what lets the AppHost script it through
+    /// <see cref="IAspireTerminal"/>'s automation members — before the dialog is raised, while it is open, and after
+    /// it closes — and lets the same terminal be shown by more than one dialog over its life.
     /// </para>
     /// <example>
     /// <code language="csharp">
-    /// var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+    /// await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
     /// {
     ///     Title = "Setup",
     ///     Command = new TerminalCommand("./setup.sh"),
@@ -512,26 +492,29 @@ public sealed class InteractionInput
     /// var dialog = interactionService.PromptInputsAsync(
     ///     "Setup",
     ///     "Running setup.",
-    ///     [new InteractionInput { Name = "setup", InputType = InputType.Terminal, TerminalSession = terminal }],
+    ///     [new InteractionInput { Name = "setup", InputType = InputType.Terminal, Terminal = terminal }],
     ///     cancellationToken: cts.Token);
     ///
     /// await terminal.WaitForTextAsync("Continue? ");
     /// await terminal.SendTextAsync("y\r");
+    ///
+    /// // Dismiss the dialog from code once the automation is done.
+    /// await cts.CancelAsync();
     /// </code>
     /// </example>
     /// <para>
-    /// The terminal's <see cref="IAspireTerminal.Surface"/> must be <see cref="TerminalSurface.Interaction"/>; a dock
-    /// terminal would also appear as a tab, and the dialog would tear it out from under the dock when it closes.
+    /// The terminal's <see cref="IAspireTerminal.Surface"/> must be <see cref="TerminalSurface.Interaction"/>. A dock
+    /// terminal is presented as a dock tab that outlives the code which created it, so showing one in a dialog would
+    /// render the same terminal through two competing presentations.
     /// </para>
     /// <para>
-    /// The interaction still owns teardown: the terminal is disposed when the dialog completes or is cancelled, so
-    /// the caller does not dispose it. Cancelling the token passed to the prompt is therefore how automation code
-    /// closes the dialog and ends the session once it is done.
+    /// The workload starts lazily on the first attach or the first automation call, so a terminal created for a dialog
+    /// that is dismissed without ever being opened never spawns a process.
     /// </para>
     /// </remarks>
     [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
     [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
-    public IAspireTerminal? TerminalSession { get; init; }
+    public IAspireTerminal? Terminal { get; init; }
 
     /// <summary>
     /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the
@@ -886,8 +869,8 @@ public enum InputType
     /// An interactive terminal. Renders a terminal that is attached to a session owned by the AppHost.
     /// </summary>
     /// <remarks>
-    /// This input type is experimental. The terminal session is configured through
-    /// <see cref="InteractionInput.Terminal"/>.
+    /// This input type is experimental. The terminal is created and owned by the caller and supplied through
+    /// <see cref="InteractionInput.Terminal"/>; the dialog is only a view onto it.
     /// </remarks>
     Terminal
 }
