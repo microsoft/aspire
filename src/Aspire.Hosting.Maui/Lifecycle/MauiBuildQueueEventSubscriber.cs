@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Annotations;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Maui.Lifecycle;
@@ -25,17 +28,29 @@ namespace Aspire.Hosting.Maui.Lifecycle;
 /// </remarks>
 internal class MauiBuildQueueEventSubscriber(
     ResourceNotificationService notificationService,
-    ResourceLoggerService loggerService) : IDistributedApplicationEventingSubscriber
+    ResourceLoggerService loggerService,
+    ResourceCommandService resourceCommandService) : IDistributedApplicationEventingSubscriber
 {
+    private const string DcpTerminatedState = "Terminated";
+
     private static readonly ResourceStateSnapshot s_queuedState = new("Queued", KnownResourceStateStyles.Info);
     private static readonly ResourceStateSnapshot s_buildingState = new("Building", KnownResourceStateStyles.Info);
     private static readonly ResourceStateSnapshot s_cancelledState = new(KnownResourceStates.Exited, KnownResourceStateStyles.Warn);
+
+    private readonly AsyncLocal<bool> _isLaunchTimeoutStop = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource> _nextStartSignals = new(StringComparers.ResourceName);
 
     /// <summary>
     /// Maximum time to wait for a <c>dotnet build</c> process before cancelling.
     /// Prevents a hung build from blocking the queue indefinitely.
     /// </summary>
     internal TimeSpan BuildTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Maximum time to wait for DCP's launch process to reach a queue handoff state after the build succeeds.
+    /// Prevents a hung deploy or runtime upload from blocking the queue indefinitely.
+    /// </summary>
+    internal TimeSpan LaunchHandoffTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
@@ -58,6 +73,14 @@ internal class MauiBuildQueueEventSubscriber(
         if (!parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var queueAnnotation))
         {
             return;
+        }
+
+        // DCP deletes an executable before publishing BeforeResourceStartedEvent for its replacement.
+        // Signal an older handoff now so it can release the project lock without trying to stop through
+        // DCP while this new start already owns DCP's serialized-operation lock.
+        if (_nextStartSignals.TryGetValue(resource.Name, out var nextStartSignal))
+        {
+            nextStartSignal.TrySetResult();
         }
 
         // Replace the default stop command with one that can cancel queued/building resources.
@@ -102,12 +125,19 @@ internal class MauiBuildQueueEventSubscriber(
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
             // Build succeeded. Keep the semaphore held until DCP starts the launch process.
-            // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run -p:NoBuild=true`
-            // with the same configuration used here. The no-build/no-restore flags are important:
-            // DCP may report Running as soon as the process starts, so the launch path must not perform
-            // additional restore/build work after the next queued resource is allowed to build.
+            // Non-Android platforms launch without rebuilding and can release when DCP reports Running.
+            // Android Run still performs fast-deploy/runtime upload work, so it must retain the lock
+            // until the short-lived Run process reaches a terminal state.
+            var releaseBuildLockOnResourceRunning = !resource.TryGetLastAnnotation<MauiBuildInfoAnnotation>(out var buildInfo)
+                || buildInfo.ReleaseBuildLockOnResourceRunning;
             releaseInFinally = false;
-            _ = ReleaseSemaphoreAfterLaunchAsync(resource, semaphore, s_buildingState.Text, logger, cancellationToken);
+            _ = ReleaseSemaphoreAfterLaunchAsync(
+                resource,
+                semaphore,
+                s_buildingState.Text,
+                releaseBuildLockOnResourceRunning,
+                logger,
+                @event.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
         }
         catch (OperationCanceledException) when (resourceCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -142,8 +172,8 @@ internal class MauiBuildQueueEventSubscriber(
                 "Cannot proceed with build — the semaphore would be held indefinitely.");
         }
 
-        // Match DCP's launch configuration so the no-build Run target starts the exact outputs
-        // produced by this serialized build.
+        // Match DCP's launch configuration so the Run target starts the exact outputs produced
+        // by this serialized build.
         var args = new List<string> { "build", buildInfo.ProjectPath };
 
         if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
@@ -262,7 +292,7 @@ internal class MauiBuildQueueEventSubscriber(
     }
 
     /// <summary>
-    /// Releases the build semaphore after DCP starts the no-build/no-restore app launch process.
+    /// Releases the build semaphore after DCP starts or completes the app launch process.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -272,38 +302,74 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// Including "Running" in the predicate is intentional: the pre-build step already compiled
-    /// the project for the same configuration that DCP will pass to the launch command, and DCP's
-    /// <c>dotnet build --no-restore /t:Run -p:NoBuild=true</c> launch command is configured not to
-    /// restore or build. Waiting for a terminal state would hold the semaphore for the entire app
-    /// lifetime, blocking other platforms from starting.
+    /// Including "Running" in the predicate is intentional when <paramref name="releaseOnRunning"/>
+    /// is <see langword="true"/>: the pre-build step already compiled the project for the same
+    /// configuration that DCP will pass to the launch command. Waiting for a terminal state on
+    /// those platforms would hold the semaphore for the entire app lifetime. Android does not
+    /// release on Running because its Run target performs required deploy/runtime upload work
+    /// after Build.
     /// </para>
     /// </remarks>
     internal virtual async Task ReleaseSemaphoreAfterLaunchAsync(
         IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime,
+        bool releaseOnRunning,
         ILogger logger, CancellationToken cancellationToken)
     {
+        var releaseSemaphore = true;
+        var nextStartSignal = _nextStartSignals.GetOrAdd(
+            resource.Name,
+            static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(5));
+            cts.CancelAfter(LaunchHandoffTimeout);
             await notificationService.WaitForResourceAsync(
                 resource.Name,
-                e =>
-                {
-                    var text = e.Snapshot.State?.Text;
-                    // Skip the replayed snapshot that matches the state when we were called.
-                    if (string.Equals(text, stateAtCallTime, StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-
-                    return text == KnownResourceStates.Running
-                        || text == KnownResourceStates.FailedToStart
-                        || text == KnownResourceStates.Exited
-                        || text == KnownResourceStates.Finished;
-                },
+                e => ShouldReleaseBuildLockForLaunchState(e.Snapshot.State?.Text, stateAtCallTime, releaseOnRunning),
                 cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            if (releaseOnRunning)
+            {
+                logger.LogWarning(ex, "Timed out waiting for resource '{ResourceName}' to reach a launch handoff state after {Timeout}; releasing build lock.", resource.Name, LaunchHandoffTimeout);
+            }
+            else
+            {
+                // Android's Run target can still be writing shared build outputs after DCP reports Running.
+                // Stop it before releasing the queue so another platform build cannot overlap that work.
+                releaseSemaphore = false;
+                logger.LogWarning(ex, "Timed out waiting for Android resource '{ResourceName}' to finish its launch work after {Timeout}; stopping the resource before releasing the build lock.", resource.Name, LaunchHandoffTimeout);
+
+                try
+                {
+                    releaseSemaphore = await StopResourceAfterLaunchTimeoutAsync(resource, nextStartSignal.Task, cancellationToken).ConfigureAwait(false);
+                    if (!releaseSemaphore)
+                    {
+                        logger.LogError("Failed to stop Android resource '{ResourceName}' after its launch handoff timed out. Holding the build lock until the launch terminates, a replacement start takes over, or the application stops.", resource.Name);
+                        await WaitForSafeReleaseAfterFailedStopAsync(
+                            resource,
+                            stateAtCallTime,
+                            nextStartSignal.Task,
+                            cancellationToken).ConfigureAwait(false);
+                        releaseSemaphore = true;
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Application shutdown terminates DCP's resources, so it is safe to release the in-process lock.
+                    releaseSemaphore = true;
+                }
+                catch (Exception stopException)
+                {
+                    logger.LogError(stopException, "Failed to stop Android resource '{ResourceName}' after its launch handoff timed out. The build lock will remain held until the application stops.", resource.Name);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug("Application stopping while waiting for MAUI resource '{ResourceName}' to reach a launch handoff state; releasing build lock.", resource.Name);
         }
         catch (Exception ex)
         {
@@ -311,9 +377,96 @@ internal class MauiBuildQueueEventSubscriber(
         }
         finally
         {
-            ReleaseSemaphoreSafely(semaphore);
-            logger.LogDebug("Released build lock (resource '{ResourceName}').", resource.Name);
+            _ = ((ICollection<KeyValuePair<string, TaskCompletionSource>>)_nextStartSignals)
+                .Remove(new(resource.Name, nextStartSignal));
+
+            if (releaseSemaphore)
+            {
+                ReleaseSemaphoreSafely(semaphore);
+                logger.LogDebug("Released build lock (resource '{ResourceName}').", resource.Name);
+            }
         }
+    }
+
+    private async Task WaitForSafeReleaseAfterFailedStopAsync(
+        IResource resource,
+        string? stateAtCallTime,
+        Task nextStartObserved,
+        CancellationToken cancellationToken)
+    {
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var terminalStateTask = notificationService.WaitForResourceAsync(
+            resource.Name,
+            e => ShouldReleaseBuildLockForLaunchState(e.Snapshot.State?.Text, stateAtCallTime, releaseOnRunning: false),
+            waitCts.Token);
+
+        if (await Task.WhenAny(terminalStateTask, nextStartObserved).ConfigureAwait(false) == nextStartObserved)
+        {
+            await waitCts.CancelAsync().ConfigureAwait(false);
+        }
+
+        try
+        {
+            await terminalStateTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (nextStartObserved.IsCompleted || cancellationToken.IsCancellationRequested)
+        {
+            // A replacement start is raised after DCP removes the prior executable. Application
+            // shutdown also terminates DCP resources, so either condition makes release safe.
+        }
+    }
+
+    internal virtual async Task<bool> StopResourceAfterLaunchTimeoutAsync(IResource resource, Task nextStartObserved, CancellationToken cancellationToken)
+    {
+        // The queue-aware stop command delegates to DCP after the pre-build completes. DCP does not
+        // report success until the executable is terminal, making command completion the handoff barrier.
+        // Bypass its queued-build cancellation branch because a newer start may already be waiting on
+        // the semaphore; timeout recovery must stop the older DCP launch without cancelling that attempt.
+        if (nextStartObserved.IsCompleted)
+        {
+            return true;
+        }
+
+        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var stopTask = ExecuteStopCommandAsync(stopCts.Token);
+        if (await Task.WhenAny(stopTask, nextStartObserved).ConfigureAwait(false) == nextStartObserved)
+        {
+            await stopCts.CancelAsync().ConfigureAwait(false);
+            await stopTask.ConfigureAwait(false);
+            return true;
+        }
+
+        return await stopTask.ConfigureAwait(false);
+
+        async Task<bool> ExecuteStopCommandAsync(CancellationToken stopCancellationToken)
+        {
+            var wasLaunchTimeoutStop = _isLaunchTimeoutStop.Value;
+            _isLaunchTimeoutStop.Value = true;
+            try
+            {
+                var result = await resourceCommandService.ExecuteCommandAsync(resource, KnownResourceCommands.StopCommand, stopCancellationToken).ConfigureAwait(false);
+                return result.Success || (result.Canceled && cancellationToken.IsCancellationRequested);
+            }
+            finally
+            {
+                _isLaunchTimeoutStop.Value = wasLaunchTimeoutStop;
+            }
+        }
+    }
+
+    internal static bool ShouldReleaseBuildLockForLaunchState(string? state, string? stateAtCallTime, bool releaseOnRunning)
+    {
+        // WatchAsync first replays the current snapshot, which is still the Building state published above.
+        if (string.Equals(state, stateAtCallTime, StringComparisons.ResourceState))
+        {
+            return false;
+        }
+
+        return (releaseOnRunning && string.Equals(state, KnownResourceStates.Running, StringComparisons.ResourceState))
+            || string.Equals(state, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState)
+            || KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState)
+            // Executables can expose the raw DCP state before it is mapped to a public terminal state.
+            || string.Equals(state, DcpTerminatedState, StringComparisons.ResourceState);
     }
 
     /// <summary>
@@ -381,7 +534,7 @@ internal class MauiBuildQueueEventSubscriber(
                 // Use resource.Name (the model name) because the CTS dictionary is keyed
                 // by model name, while context.ResourceName is the DCP-resolved name
                 // (e.g., "mauiapp-maccatalyst-vqfdyejk" vs "mauiapp-maccatalyst").
-                var wasCancelled = queueAnnotation.CancelResource(resource.Name);
+                var wasCancelled = !_isLaunchTimeoutStop.Value && queueAnnotation.CancelResource(resource.Name);
 
                 if (wasCancelled)
                 {
@@ -399,7 +552,7 @@ internal class MauiBuildQueueEventSubscriber(
                                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                                 await notificationService.WaitForResourceAsync(
                                     resource.Name,
-                                    e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.FailedToStart, StringComparison.Ordinal),
+                                    e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.FailedToStart, StringComparisons.ResourceState),
                                     cts.Token).ConfigureAwait(false);
                             }
                             catch (OperationCanceledException)
@@ -419,7 +572,8 @@ internal class MauiBuildQueueEventSubscriber(
 
                             await notificationService.PublishUpdateAsync(resource, s =>
                             {
-                                if (s.State?.Text is not null && s.State.Text != KnownResourceStates.FailedToStart)
+                                if (s.State?.Text is not null &&
+                                    !string.Equals(s.State.Text, KnownResourceStates.FailedToStart, StringComparisons.ResourceState))
                                 {
                                     return s;
                                 }

@@ -209,18 +209,18 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.NotNull(buildInfo);
         Assert.Equal(config.RequiredTfm, buildInfo.TargetFramework);
         Assert.Equal(GetTestAssemblyConfiguration(), buildInfo.Configuration);
+        Assert.Equal(config.PlatformIdentifier != "android", buildInfo.ReleaseBuildLockOnResourceRunning);
         Assert.Equal(
             config.ExpectedMsBuildProperties?.Select(property => $"-p:{property.Key}={property.Value}").ToArray() ?? [],
             buildInfo.AdditionalBuildArguments);
 
         var launchOverride = resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>().FirstOrDefault();
         Assert.NotNull(launchOverride);
-        Assert.Collection(
-            launchOverride.Arguments,
-            arg => Assert.Equal("build", arg),
-            arg => Assert.Equal("--no-restore", arg),
-            arg => Assert.Equal("/t:Run", arg),
-            arg => Assert.Equal("-p:NoBuild=true", arg));
+        var expectedLaunchArgs = config.PlatformIdentifier == "android"
+            ? new List<string> { "build", "--no-restore", "/t:Run" }
+            : new List<string> { "build", "--no-restore", "/t:Run", "-p:BuildDependsOn=", "-p:NoBuild=true" };
+
+        Assert.Equal(expectedLaunchArgs, launchOverride.Arguments);
         Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
     }
 
