@@ -138,6 +138,20 @@ The Microsoft Foundry project resource exposes the following connection properti
 | `ConnectionString` | The connection string, with the format `Endpoint=<uri>` |
 | `ApplicationInsightsConnectionString` | The Application Insights connection string for telemetry |
 
+### Microsoft Foundry Toolbox
+
+The Toolbox resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Name` | The Toolbox resource name |
+| `ProjectEndpoint` | The parent Microsoft Foundry project endpoint |
+| `Uri` | The MCP consumer endpoint, or the version-specific endpoint when `Version` is set |
+| `ApiVersion` | The Toolbox data-plane API version |
+| `FoundryFeatures` | The required `Foundry-Features` request header value |
+| `AuthorizationScope` | The Microsoft Entra authorization scope for Toolbox requests |
+| `Version` | The pinned immutable version, when configured |
+
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
 
 ## Microsoft Foundry project usage
@@ -178,6 +192,129 @@ builder.AddPythonApp("agent", "./app", "main:app")
 ```
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
+
+## Toolbox usage
+
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
+immutable Toolbox version and promotes new versions only when the configured tools, description,
+or metadata change.
+
+**C#**
+
+```csharp
+var foundry = builder.AddFoundry("foundry");
+var project = foundry.AddProject("my-project");
+var search = builder.AddAzureSearch("search");
+
+var toolbox = project.AddToolbox("field-tools")
+    .WithDescription("Tools for field technicians.")
+    .WithWebSearchTool("web-search", "Search the public web.")
+    .WithAISearchTool("knowledge-base", search, "docs", "Search the internal knowledge base.")
+    .WithMcpTool(
+        "inventory",
+        "https://inventory.example.com/mcp",
+        new FoundryToolboxMcpToolOptions
+        {
+            ServerDescription = "Inventory MCP server.",
+            ApprovalPolicy = new()
+            {
+                Global = FoundryToolboxMcpGlobalApprovalMode.Always
+            }
+        });
+
+builder.AddProject<Projects.MyService>("service")
+    .WithReference(toolbox)
+    .WaitFor(toolbox);
+```
+
+**TypeScript**
+
+```typescript
+import { FoundryToolboxMcpGlobalApprovalMode } from "./.aspire/modules/aspire.mjs";
+
+const foundry = await builder.addFoundry("foundry");
+const project = await foundry.addProject("my-project");
+const search = await builder.addAzureSearch("search");
+
+const toolbox = await project.addToolbox("field-tools");
+await toolbox.withDescription("Tools for field technicians.");
+await toolbox.withWebSearchTool({
+    name: "web-search",
+    description: "Search the public web."
+});
+await toolbox.withAISearchTool(
+    "knowledge-base",
+    search,
+    "docs",
+    "Search the internal knowledge base.");
+await toolbox.withMcpTool("inventory", "https://inventory.example.com/mcp", {
+    serverDescription: "Inventory MCP server.",
+    approvalPolicy: {
+        global: FoundryToolboxMcpGlobalApprovalMode.Always
+    }
+});
+
+const service = await builder.addNodeApp("service", "../service", "server.js");
+await service.withReference(toolbox);
+await service.waitFor(toolbox);
+```
+
+Azure AI Search tools reference an index that must already exist and contain the data the tool should
+search. `AddAzureSearch` provisions the Search service, but neither it nor `WithAISearchTool` creates
+or populates the named index.
+
+The identity running `aspire run` or `aspire deploy` must have the
+[Foundry User role](https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry) on the Foundry
+project so Aspire can manage Toolbox versions. Deployed compute resources that reference the Toolbox
+receive this role automatically on that project.
+
+MCP endpoints must be reachable from the Foundry data plane over HTTPS. For local development, use
+a development tunnel instead of a localhost endpoint. Inline credentials and headers are not
+supported. Connection-authenticated MCP servers are not currently supported by this integration.
+
+MCP approval policies are declarations returned as Toolbox discovery metadata. The Toolbox service
+does not enforce approval when a client sends `tools/call`; the consuming application must inspect
+the metadata and obtain any required approval before invocation. A custom policy can classify
+individual MCP tool names:
+
+```csharp
+new FoundryToolboxMcpApprovalPolicy
+{
+    Always = new()
+    {
+        ToolNames = ["delete-item", "update-item"],
+        ReadOnly = false
+    },
+    Never = new()
+    {
+        ToolNames = ["get-item"],
+        ReadOnly = true
+    }
+}
+```
+
+The default consumer endpoint always serves the promoted Toolbox version. Set
+`FoundryToolboxResource.Version` only when a consumer must target a specific immutable version.
+
+### Existing Toolboxes
+
+Use the existing-resource methods to validate a remote Toolbox without resolving modeled tools,
+checking Aspire ownership metadata, creating versions, or changing the default:
+
+| Method | `aspire run` | `aspire deploy` |
+|--------|--------------|-----------------|
+| `RunAsExisting()` | Validate existing | Reconcile managed |
+| `PublishAsExisting()` | Reconcile managed | Validate existing |
+| `AsExisting()` | Validate existing | Validate existing |
+
+Existing mode permits a Toolbox with no locally modeled tools. If `Version` is set, validation also
+requires that immutable version to exist; otherwise it validates the current default and exposes the
+selected value through `DeployedVersion`.
+
+Aspire ownership metadata provides best-effort coordination between deployments, not an atomic
+lease. The Toolbox API currently has no ETag or conditional update operation. Aspire re-checks the
+current default and target ownership immediately before promotion and verifies the result afterward,
+then fails rather than overwriting contradictory concurrent changes.
 
 ## Prompt agent usage
 
@@ -271,6 +408,7 @@ var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
 
 * https://aspire.dev/integrations/gallery/
 * https://aspire.dev/integrations/cloud/azure/azure-ai-foundry/azure-ai-foundry-host/
+* https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry
 * https://learn.microsoft.com/azure/ai-foundry/foundry-local/
 
