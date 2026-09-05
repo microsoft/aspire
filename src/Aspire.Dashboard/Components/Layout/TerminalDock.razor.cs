@@ -1,12 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Layout;
@@ -79,9 +77,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
-
-    [Inject]
-    public required IOptionsMonitor<DashboardOptions> DashboardOptions { get; init; }
 
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
@@ -179,7 +174,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private bool IsPaneActive(string terminalId) => !IsPanelVisible && terminalId == _activeTerminalId;
 
     private TerminalWindowLauncher WindowLauncher
-        => _windowLauncher ??= new TerminalWindowLauncher(JS, NavigationManager, DashboardOptions, OnDetachedWindowClosedAsync);
+        => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
 
     /// <summary>
     /// Pops the active terminal out into its own window.
@@ -195,8 +190,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
         try
         {
-            var path = $"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}";
-            var result = await WindowLauncher.OpenAsync(terminalId, path).ConfigureAwait(true);
+            var url = NavigationManager.ToAbsoluteUri($"/terminal-window/apphost/{Uri.EscapeDataString(terminalId)}").ToString();
+            var result = await WindowLauncher.OpenAsync(terminalId, url).ConfigureAwait(true);
 
             if (result is TerminalWindowOpenResult.Blocked)
             {
