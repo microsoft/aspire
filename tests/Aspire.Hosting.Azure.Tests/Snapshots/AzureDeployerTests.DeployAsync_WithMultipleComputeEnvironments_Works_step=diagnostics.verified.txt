@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 50
+Total steps defined: 52
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -22,10 +22,10 @@ Steps with no dependencies run first, followed by steps that depend on them.
   6. validate-azure-app-service
   7. before-start
   8. process-parameters
-  9. build-prereq
- 10. check-container-runtime
- 11. validate-build-only-container-references
- 12. deploy-prereq
+  9. validate-build-only-container-references
+ 10. deploy-prereq
+ 11. build-prereq
+ 12. check-container-runtime
  13. build-api-service
  14. build-python-app
  15. build
@@ -50,20 +50,22 @@ Steps with no dependencies run first, followed by steps that depend on them.
  34. print-dashboard-url-aas-env
  35. print-dashboard-url-aca-env
  36. print-python-app-summary
- 37. deploy
- 38. deploy-api-service
- 39. deploy-cache
- 40. deploy-python-app
- 41. destroy-prereq
- 42. destroy-azure-azure-environment
- 43. destroy
- 44. diagnostics
- 45. publish-prereq
- 46. publish-azure-environment
- 47. validate-appservice-config-aas-env
- 48. publish
- 49. publish-manifest
- 50. push
+ 37. deploy-finalize
+ 38. deploy
+ 39. deploy-api-service
+ 40. deploy-cache
+ 41. deploy-python-app
+ 42. destroy-prereq
+ 43. destroy-azure-azure-environment
+ 44. destroy
+ 45. diagnostics
+ 46. publish-prereq
+ 47. publish-azure-environment
+ 48. validate-appservice-config-aas-env
+ 49. publish-finalize
+ 50. publish
+ 51. publish-manifest
+ 52. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -85,22 +87,22 @@ Step: build
 
 Step: build-api-service
     Description: Builds the container image for the api-service project.
-    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq
     Resource: api-service (ProjectResource)
     Tags: build-compute
 
 Step: build-prereq
     Description: Prerequisite step that runs before any build operations.
-    Dependencies: ✓ process-parameters
+    Dependencies: ✓ deploy-prereq, ✓ process-parameters
 
 Step: build-python-app
-    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq
     Resource: python-app (ContainerResource)
     Tags: build-compute
 
 Step: check-container-runtime
     Description: Checks whether the container runtime (Docker/Podman) is running.
-    Dependencies: none
+    Dependencies: ✓ deploy-prereq
 
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
@@ -108,8 +110,8 @@ Step: create-provisioning-context
     Resource: azure-environment (AzureEnvironmentResource)
 
 Step: deploy
-    Description: Aggregation step for all deploy operations. All deploy steps should be required by this step.
-    Dependencies: ✓ build-api-service, ✓ build-python-app, ✓ create-provisioning-context, ✓ print-api-service-summary, ✓ print-cache-summary, ✓ print-dashboard-url-aas-env, ✓ print-dashboard-url-aca-env, ✓ print-python-app-summary, ✓ provision-azure-bicep-resources, ✓ validate-azure-login
+    Description: Final aggregation step for deploy command completion. Post-finalize hooks should depend on deploy-finalize and be required by this step.
+    Dependencies: ✓ deploy-finalize
 
 Step: deploy-api-service
     Description: Aggregation step for deploying api-service to Azure App Service.
@@ -122,6 +124,10 @@ Step: deploy-cache
     Dependencies: ✓ print-cache-summary
     Resource: cache-containerapp (AzureContainerAppResource)
     Tags: deploy-compute
+
+Step: deploy-finalize
+    Description: Synchronization step that runs after all normal deploy operations.
+    Dependencies: ✓ build-api-service, ✓ build-python-app, ✓ create-provisioning-context, ✓ deploy-prereq, ✓ print-api-service-summary, ✓ print-cache-summary, ✓ print-dashboard-url-aas-env, ✓ print-dashboard-url-aca-env, ✓ print-python-app-summary, ✓ provision-azure-bicep-resources, ✓ validate-azure-login
 
 Step: deploy-prereq
     Description: Prerequisite step that runs before any deploy operations. Initializes deployment environment and manages deployment state.
@@ -151,12 +157,12 @@ Step: diagnostics
     Dependencies: none
 
 Step: login-to-acr-aas-env-acr
-    Dependencies: ✓ provision-aas-env-acr
+    Dependencies: ✓ deploy-prereq, ✓ provision-aas-env-acr
     Resource: aas-env-acr (AzureContainerRegistryResource)
     Tags: acr-login
 
 Step: login-to-acr-aca-env-acr
-    Dependencies: ✓ provision-aca-env-acr
+    Dependencies: ✓ deploy-prereq, ✓ provision-aca-env-acr
     Resource: aca-env-acr (AzureContainerRegistryResource)
     Tags: acr-login
 
@@ -172,31 +178,31 @@ Step: prepare-azure-container-apps-aca-env
 
 Step: print-api-service-summary
     Description: Prints the deployment summary and URL for api-service.
-    Dependencies: ✓ provision-api-service-website
+    Dependencies: ✓ deploy-prereq, ✓ provision-api-service-website
     Resource: api-service-website (AzureAppServiceWebSiteResource)
     Tags: print-summary
 
 Step: print-cache-summary
     Description: Prints the deployment summary and URL for cache.
-    Dependencies: ✓ provision-cache-containerapp
+    Dependencies: ✓ deploy-prereq, ✓ provision-cache-containerapp
     Resource: cache-containerapp (AzureContainerAppResource)
     Tags: print-summary
 
 Step: print-dashboard-url-aas-env
     Description: Prints the deployment summary and dashboard URL for aas-env.
-    Dependencies: ✓ provision-aas-env, ✓ provision-azure-bicep-resources
+    Dependencies: ✓ deploy-prereq, ✓ provision-aas-env, ✓ provision-azure-bicep-resources
     Resource: aas-env (AzureAppServiceEnvironmentResource)
     Tags: print-summary
 
 Step: print-dashboard-url-aca-env
     Description: Prints the deployment summary and dashboard URL for aca-env.
-    Dependencies: ✓ provision-aca-env, ✓ provision-azure-bicep-resources
+    Dependencies: ✓ deploy-prereq, ✓ provision-aca-env, ✓ provision-azure-bicep-resources
     Resource: aca-env (AzureContainerAppEnvironmentResource)
     Tags: print-summary
 
 Step: print-python-app-summary
     Description: Prints the deployment summary and URL for python-app.
-    Dependencies: ✓ provision-python-app-containerapp
+    Dependencies: ✓ deploy-prereq, ✓ provision-python-app-containerapp
     Resource: python-app-containerapp (AzureContainerAppResource)
     Tags: print-summary
 
@@ -206,31 +212,31 @@ Step: process-parameters
 
 Step: provision-aas-env
     Description: Provisions the Azure Bicep resource aas-env using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aas-env-acr
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aas-env-acr
     Resource: aas-env (AzureAppServiceEnvironmentResource)
     Tags: provision-infra
 
 Step: provision-aas-env-acr
     Description: Provisions the Azure Bicep resource aas-env-acr using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq
     Resource: aas-env-acr (AzureContainerRegistryResource)
     Tags: provision-infra
 
 Step: provision-aca-env
     Description: Provisions the Azure Bicep resource aca-env using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env-acr
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env-acr
     Resource: aca-env (AzureContainerAppEnvironmentResource)
     Tags: provision-infra
 
 Step: provision-aca-env-acr
     Description: Provisions the Azure Bicep resource aca-env-acr using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq
     Resource: aca-env-acr (AzureContainerRegistryResource)
     Tags: provision-infra
 
 Step: provision-api-service-website
     Description: Provisions the Azure Bicep resource api-service-website using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aas-env, ✓ push-api-service
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aas-env, ✓ push-api-service
     Resource: api-service-website (AzureAppServiceWebSiteResource)
     Tags: provision-infra
 
@@ -242,30 +248,34 @@ Step: provision-azure-bicep-resources
 
 Step: provision-cache-containerapp
     Description: Provisions the Azure Bicep resource cache-containerapp using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env
     Resource: cache-containerapp (AzureContainerAppResource)
     Tags: provision-infra
 
 Step: provision-python-app-containerapp
     Description: Provisions the Azure Bicep resource python-app-containerapp using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env, ✓ push-python-app
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env, ✓ push-python-app
     Resource: python-app-containerapp (AzureContainerAppResource)
     Tags: provision-infra
 
 Step: provision-storage
     Description: Provisions the Azure Bicep resource storage using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq
     Resource: storage (AzureStorageResource)
     Tags: provision-infra
 
 Step: publish
-    Description: Aggregation step for all publish operations. All publish steps should be required by this step.
-    Dependencies: ✓ publish-azure-environment, ✓ validate-appservice-config-aas-env
+    Description: Final aggregation step for publish command completion. Post-finalize hooks should depend on publish-finalize and be required by this step.
+    Dependencies: ✓ publish-finalize
 
 Step: publish-azure-environment
     Description: Publishes the Azure environment configuration for azure-environment.
     Dependencies: ✓ publish-prereq
     Resource: azure-environment (AzureEnvironmentResource)
+
+Step: publish-finalize
+    Description: Synchronization step that runs after all normal publish operations.
+    Dependencies: ✓ publish-azure-environment, ✓ publish-prereq, ✓ validate-appservice-config-aas-env
 
 Step: publish-manifest
     Description: Publishes the Aspire application model as a JSON manifest file.
@@ -280,16 +290,16 @@ Step: push
     Dependencies: ✓ push-api-service, ✓ push-prereq, ✓ push-python-app
 
 Step: push-api-service
-    Dependencies: ✓ build-api-service, ✓ push-prereq
+    Dependencies: ✓ build-api-service, ✓ deploy-prereq, ✓ push-prereq
     Resource: api-service (ProjectResource)
     Tags: push-container-image
 
 Step: push-prereq
     Description: Prerequisite step that runs before any push operations.
-    Dependencies: ✓ login-to-acr-aas-env-acr, ✓ login-to-acr-aca-env-acr
+    Dependencies: ✓ deploy-prereq, ✓ login-to-acr-aas-env-acr, ✓ login-to-acr-aca-env-acr
 
 Step: push-python-app
-    Dependencies: ✓ build-python-app, ✓ push-prereq
+    Dependencies: ✓ build-python-app, ✓ deploy-prereq, ✓ push-prereq
     Resource: python-app (ContainerResource)
     Tags: push-container-image
 
@@ -345,19 +355,19 @@ If targeting 'before-start':
 
 If targeting 'build':
   Direct dependencies: build-api-service, build-python-app
-  Total steps: 8
+  Total steps: 6
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
-    [1] build-prereq | deploy-prereq (parallel)
+    [0] check-container-runtime | process-parameters (parallel)
+    [1] build-prereq
     [2] build-api-service | build-python-app (parallel)
     [3] build
 
 If targeting 'build-api-service':
-  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq, deploy-prereq
-  Total steps: 6
+  Direct dependencies: build-prereq, check-container-runtime
+  Total steps: 4
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
-    [1] build-prereq | deploy-prereq (parallel)
+    [0] check-container-runtime | process-parameters (parallel)
+    [1] build-prereq
     [2] build-api-service
 
 If targeting 'build-prereq':
@@ -368,11 +378,11 @@ If targeting 'build-prereq':
     [1] build-prereq
 
 If targeting 'build-python-app':
-  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq, deploy-prereq
-  Total steps: 6
+  Direct dependencies: build-prereq, check-container-runtime
+  Total steps: 4
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
-    [1] build-prereq | deploy-prereq (parallel)
+    [0] check-container-runtime | process-parameters (parallel)
+    [1] build-prereq
     [2] build-python-app
 
 If targeting 'check-container-runtime':
@@ -391,13 +401,13 @@ If targeting 'create-provisioning-context':
     [3] create-provisioning-context
 
 If targeting 'deploy':
-  Direct dependencies: build-api-service, build-python-app, create-provisioning-context, print-api-service-summary, print-cache-summary, print-dashboard-url-aas-env, print-dashboard-url-aca-env, print-python-app-summary, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 29
+  Direct dependencies: deploy-finalize
+  Total steps: 30
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
-    [1] build-prereq | deploy-prereq (parallel)
-    [2] build-api-service | build-python-app | validate-azure-login (parallel)
-    [3] create-provisioning-context
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] build-prereq | check-container-runtime | validate-azure-login (parallel)
+    [3] build-api-service | build-python-app | create-provisioning-context (parallel)
     [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
     [6] provision-cache-containerapp | push-prereq (parallel)
@@ -405,7 +415,8 @@ If targeting 'deploy':
     [8] provision-api-service-website | provision-python-app-containerapp (parallel)
     [9] print-api-service-summary | print-python-app-summary | provision-azure-bicep-resources (parallel)
     [10] print-dashboard-url-aas-env | print-dashboard-url-aca-env (parallel)
-    [11] deploy
+    [11] deploy-finalize
+    [12] deploy
 
 If targeting 'deploy-api-service':
   Direct dependencies: print-api-service-summary
@@ -436,6 +447,23 @@ If targeting 'deploy-cache':
     [6] provision-cache-containerapp
     [7] print-cache-summary
     [8] deploy-cache
+
+If targeting 'deploy-finalize':
+  Direct dependencies: build-api-service, build-python-app, create-provisioning-context, deploy-prereq, print-api-service-summary, print-cache-summary, print-dashboard-url-aas-env, print-dashboard-url-aca-env, print-python-app-summary, provision-azure-bicep-resources, validate-azure-login
+  Total steps: 29
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] build-prereq | check-container-runtime | validate-azure-login (parallel)
+    [3] build-api-service | build-python-app | create-provisioning-context (parallel)
+    [4] provision-aas-env-acr | provision-aca-env-acr | provision-storage (parallel)
+    [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aas-env | provision-aca-env (parallel)
+    [6] provision-cache-containerapp | push-prereq (parallel)
+    [7] print-cache-summary | push-api-service | push-python-app (parallel)
+    [8] provision-api-service-website | provision-python-app-containerapp (parallel)
+    [9] print-api-service-summary | print-python-app-summary | provision-azure-bicep-resources (parallel)
+    [10] print-dashboard-url-aas-env | print-dashboard-url-aca-env (parallel)
+    [11] deploy-finalize
 
 If targeting 'deploy-prereq':
   Direct dependencies: process-parameters, validate-build-only-container-references
@@ -713,13 +741,14 @@ If targeting 'provision-storage':
     [4] provision-storage
 
 If targeting 'publish':
-  Direct dependencies: publish-azure-environment, validate-appservice-config-aas-env
-  Total steps: 6
+  Direct dependencies: publish-finalize
+  Total steps: 7
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
     [2] publish-azure-environment | validate-appservice-config-aas-env (parallel)
-    [3] publish
+    [3] publish-finalize
+    [4] publish
 
 If targeting 'publish-azure-environment':
   Direct dependencies: publish-prereq
@@ -728,6 +757,15 @@ If targeting 'publish-azure-environment':
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
     [2] publish-azure-environment
+
+If targeting 'publish-finalize':
+  Direct dependencies: publish-azure-environment, publish-prereq, validate-appservice-config-aas-env
+  Total steps: 6
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] publish-prereq
+    [2] publish-azure-environment | validate-appservice-config-aas-env (parallel)
+    [3] publish-finalize
 
 If targeting 'publish-manifest':
   Direct dependencies: none

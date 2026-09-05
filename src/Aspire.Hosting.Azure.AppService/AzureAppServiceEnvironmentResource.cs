@@ -72,7 +72,7 @@ public class AzureAppServiceEnvironmentResource :
                 Name = $"validate-appservice-config-{name}",
                 Description = $"Validates Azure App Service configuration for {name}.",
                 Action = ctx => ValidateAppServiceConfigurationAsync(ctx, model),
-                RequiredBySteps = [WellKnownPipelineSteps.Publish],
+                RequiredBySteps = [WellKnownPipelineSteps.PublishFinalize],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
             };
 
@@ -90,7 +90,7 @@ public class AzureAppServiceEnvironmentResource :
                     Action = ctx => PrintDashboardUrlAsync(ctx),
                     Tags = ["print-summary"],
                     DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                    RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
                 };
 
                 steps.Add(printDashboardUrlStep);
@@ -159,8 +159,7 @@ public class AzureAppServiceEnvironmentResource :
             foreach (var computeResource in context.Model.GetBuildResources())
             {
                 context.GetSteps(computeResource, WellKnownPipelineTags.BuildCompute)
-                        .RequiredBy(WellKnownPipelineSteps.Deploy)
-                        .DependsOn(WellKnownPipelineSteps.DeployPrereq);
+                        .RequiredBy(WellKnownPipelineSteps.DeployFinalize);
             }
 
             // Make print-summary step depend on provisioning of this environment

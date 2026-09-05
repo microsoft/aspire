@@ -73,7 +73,7 @@ public class AzureContainerAppEnvironmentResource :
                     Action = ctx => PrintDashboardUrlAsync(ctx),
                     Tags = ["print-summary"],
                     DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                    RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
                 };
 
                 steps.Add(printDashboardUrlStep);
@@ -142,8 +142,7 @@ public class AzureContainerAppEnvironmentResource :
             foreach (var computeResource in context.Model.GetBuildResources())
             {
                 context.GetSteps(computeResource, WellKnownPipelineTags.BuildCompute)
-                        .RequiredBy(WellKnownPipelineSteps.Deploy)
-                        .DependsOn(WellKnownPipelineSteps.DeployPrereq);
+                        .RequiredBy(WellKnownPipelineSteps.DeployFinalize);
             }
 
             // Make print-summary step depend on provisioning of this environment

@@ -59,7 +59,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                     Version.Set(version.Version);
                 },
                 Tags = [WellKnownPipelineTags.DeployCompute],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize],
                 Resource = this,
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq, AzureEnvironmentResource.ProvisionInfrastructureStepName]
             };

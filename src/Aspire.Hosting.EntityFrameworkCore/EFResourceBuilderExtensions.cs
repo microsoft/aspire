@@ -245,7 +245,7 @@ public static class EFResourceBuilderExtensions
                 Description = $"Generate EF Core migration SQL script for {migrationResource.Name}",
                 Resource = migrationResource,
                 DependsOnSteps = scriptDependsOn,
-                RequiredBySteps = [WellKnownPipelineSteps.Publish],
+                RequiredBySteps = [WellKnownPipelineSteps.PublishFinalize],
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration script",
                     (executor, outputDir) =>
@@ -267,8 +267,8 @@ public static class EFResourceBuilderExtensions
                 && context.PipelineContext.ExecutionContext.IsPublishMode;
 
             List<string> requiredBy = publishesContainer
-                ? [WellKnownPipelineSteps.Publish, $"build-{migrationResource.Name}"]
-                : [WellKnownPipelineSteps.Publish];
+                ? [WellKnownPipelineSteps.PublishFinalize, $"build-{migrationResource.Name}"]
+                : [WellKnownPipelineSteps.PublishFinalize];
 
             // Prefer the per-migration script step as the dependency when present (the cross-migration
             // edge is already attached to the script step in that case). Only attach the cross-migration

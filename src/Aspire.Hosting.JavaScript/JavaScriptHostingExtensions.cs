@@ -1917,7 +1917,7 @@ public static partial class JavaScriptHostingExtensions
             {
                 Name = validationStepName,
                 Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
-                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.PublishFinalize],
                 Resource = containerBuilder.Resource,
                 Action = _ =>
                 {

@@ -92,7 +92,7 @@ internal sealed class RadiusDeploymentPipelineStep
             Action = ExecuteAsync
         };
         step.DependsOn($"publish-radius-{_environment.Name}");
-        step.RequiredBy(WellKnownPipelineSteps.Deploy);
+        step.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
         step.DependsOn(WellKnownPipelineSteps.DeployPrereq);
         return step;
     }

@@ -133,7 +133,9 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData(WellKnownPipelineSteps.Publish)]
+    [InlineData(WellKnownPipelineSteps.PublishFinalize)]
     [InlineData(WellKnownPipelineSteps.Deploy)]
+    [InlineData(WellKnownPipelineSteps.DeployFinalize)]
     public async Task AddDotnetProject_InPublishMode_PipelineThrows(string step)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

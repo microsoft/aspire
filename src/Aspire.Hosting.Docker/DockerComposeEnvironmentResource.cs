@@ -80,7 +80,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Description = $"Publishes the Docker Compose environment configuration for {Name}.",
                 Action = ctx => PublishAsync(ctx)
             };
-            publishStep.RequiredBy(WellKnownPipelineSteps.Publish);
+            publishStep.RequiredBy(WellKnownPipelineSteps.PublishFinalize);
             steps.Add(publishStep);
 
             // Expand deployment target steps for all compute resources (including dashboard if enabled)
@@ -132,7 +132,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Tags = [DockerComposeUpTag],
                 DependsOnSteps = [$"prepare-{Name}"]
             };
-            dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+            dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
             steps.Add(dockerComposeUpStep);
 
             var dockerComposeDestroyStep = new PipelineStep
@@ -242,9 +242,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 var buildSteps = context.GetSteps(computeResource, WellKnownPipelineTags.BuildCompute);
 
-                buildSteps.RequiredBy(WellKnownPipelineSteps.Deploy)
-                        .RequiredBy($"docker-compose-up-{Name}")
-                        .DependsOn(WellKnownPipelineSteps.DeployPrereq);
+                buildSteps.RequiredBy(WellKnownPipelineSteps.DeployFinalize)
+                        .RequiredBy($"docker-compose-up-{Name}");
             }
 
             // This ensures that resources that have to be pushed before deployments are handled

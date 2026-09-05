@@ -1131,12 +1131,14 @@ var WellKnownPipelineSteps = struct {
 	BuildPrereq string
 	CheckContainerRuntime string
 	Deploy string
+	DeployFinalize string
 	DeployPrereq string
 	Destroy string
 	DestroyPrereq string
 	Diagnostics string
 	ProcessParameters string
 	Publish string
+	PublishFinalize string
 	PublishPrereq string
 	Push string
 	PushPrereq string
@@ -1147,12 +1149,14 @@ var WellKnownPipelineSteps = struct {
 	BuildPrereq: "build-prereq",
 	CheckContainerRuntime: "check-container-runtime",
 	Deploy: "deploy",
+	DeployFinalize: "deploy-finalize",
 	DeployPrereq: "deploy-prereq",
 	Destroy: "destroy",
 	DestroyPrereq: "destroy-prereq",
 	Diagnostics: "diagnostics",
 	ProcessParameters: "process-parameters",
 	Publish: "publish",
+	PublishFinalize: "publish-finalize",
 	PublishPrereq: "publish-prereq",
 	Push: "push",
 	PushPrereq: "push-prereq",

@@ -749,6 +749,35 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task Build_DoesNotRunDeployPrerequisiteForDockerComposeBuildSteps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            step: WellKnownPipelineSteps.Build);
+        var imageBuilder = new MockImageBuilder();
+        builder.Services.AddSingleton<IResourceContainerImageManager>(imageBuilder);
+        builder.AddDockerComposeEnvironment("env");
+        builder.AddProject<Projects.ServiceA>("api").PublishAsDockerFile();
+
+        var deployPrerequisiteRan = false;
+        builder.Pipeline.AddStep(
+            "deploy-prerequisite-observer",
+            _ =>
+            {
+                deployPrerequisiteRan = true;
+                return Task.CompletedTask;
+            },
+            requiredBy: WellKnownPipelineSteps.DeployPrereq);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.True(imageBuilder.BuildImageCalled);
+        Assert.False(deployPrerequisiteRan);
+    }
+
+    [Fact]
     public async Task DockerComposeUp_DependsOnPushSteps_WhenResourcesNeedToBePushed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

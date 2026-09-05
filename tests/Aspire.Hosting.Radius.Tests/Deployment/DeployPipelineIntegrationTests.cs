@@ -115,8 +115,8 @@ public class DeployPipelineIntegrationTests
         Assert.Contains("publish-radius-staging", pipelineStep.DependsOnSteps);
         Assert.Contains("deploy-prereq", pipelineStep.DependsOnSteps);
 
-        // And is required by the "deploy" well-known step
-        Assert.Contains("deploy", pipelineStep.RequiredBySteps);
+        // And is required by the deploy finalization step.
+        Assert.Contains(WellKnownPipelineSteps.DeployFinalize, pipelineStep.RequiredBySteps);
     }
 
     [Fact]

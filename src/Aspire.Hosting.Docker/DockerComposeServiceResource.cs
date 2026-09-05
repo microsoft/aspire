@@ -46,7 +46,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
                 Name = $"print-{_targetResource.Name}-summary",
                 Action = async ctx => await PrintEndpointsAsync(ctx, _composeEnvironmentResource).ConfigureAwait(false),
                 Tags = ["print-summary"],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
             };
 
             steps.Add(printResourceSummary);

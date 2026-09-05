@@ -102,7 +102,7 @@ public static partial class KubernetesHelmChartExtensions
             };
 
             installStep.DependsOn($"helm-deploy-{environment.Name}");
-            installStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+            installStep.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
             steps.Add(installStep);
 
             if (resource.DestroyOnUninstall)

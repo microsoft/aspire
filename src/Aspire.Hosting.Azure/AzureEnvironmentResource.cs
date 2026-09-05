@@ -95,7 +95,7 @@ public sealed class AzureEnvironmentResource : Resource
                 Name = $"publish-{Name}",
                 Description = $"Publishes the Azure environment configuration for {Name}.",
                 Action = ctx => PublishAsync(ctx),
-                RequiredBySteps = [WellKnownPipelineSteps.Publish],
+                RequiredBySteps = [WellKnownPipelineSteps.PublishFinalize],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
             };
             steps.Add(publishStep);
@@ -105,7 +105,7 @@ public sealed class AzureEnvironmentResource : Resource
                 Name = "validate-azure-login",
                 Description = "Validates Azure CLI authentication before deployment.",
                 Action = ctx => ValidateAzureLoginAsync(ctx),
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
             steps.Add(validateStep);
@@ -123,7 +123,7 @@ public sealed class AzureEnvironmentResource : Resource
                     // Add Azure deployment information to the pipeline summary
                     AddToPipelineSummary(ctx, provisioningContext);
                 },
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
             steps.Add(createContextStep);
@@ -135,7 +135,7 @@ public sealed class AzureEnvironmentResource : Resource
                 Description = "Aggregation step for all Azure infrastructure provisioning operations.",
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
             steps.Add(provisionStep);

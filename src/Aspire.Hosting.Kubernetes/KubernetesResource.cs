@@ -37,7 +37,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 Description = $"Retrieves deployment status for {resource.Name}.",
                 Action = async ctx => await HelmDeploymentEngine.PrintResourceSummaryAsync(ctx, kubernetesEnvironmentResource, resource, this).ConfigureAwait(false),
                 Tags = [HelmDeploymentEngine.PrintSummaryTag],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                RequiredBySteps = [WellKnownPipelineSteps.DeployFinalize]
             };
 
             return new List<PipelineStep> { printResourceSummary };

@@ -2417,7 +2417,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var deployStep = Assert.Single(steps, step => step.Name == "deploy-frontend-sandbox-container");
         Assert.Contains(AzureEnvironmentResource.ProvisionInfrastructureStepName, deployStep.DependsOnSteps);
         Assert.Contains(WellKnownPipelineSteps.DeployPrereq, deployStep.DependsOnSteps);
-        Assert.Contains(WellKnownPipelineSteps.Deploy, deployStep.RequiredBySteps);
+        Assert.Equal([WellKnownPipelineSteps.DeployFinalize], deployStep.RequiredBySteps);
         Assert.Contains(WellKnownPipelineTags.DeployCompute, deployStep.Tags);
 
         var pushStep = new PipelineStep

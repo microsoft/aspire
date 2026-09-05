@@ -376,7 +376,7 @@ public static class CertManagerExtensions
             // step runs). Without this dep we'd race the webhook and get
             // 'failed calling webhook "webhook.cert-manager.io": no endpoints available'.
             step.DependsOn($"helm-install-{chartName}");
-            step.RequiredBy(WellKnownPipelineSteps.Deploy);
+            step.RequiredBy(WellKnownPipelineSteps.DeployFinalize);
             steps.Add(step);
         }
 
