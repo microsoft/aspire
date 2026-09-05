@@ -48,12 +48,25 @@ query_window()
     -f page=1 \
     -f "created=${start_time}..${end_time}" > "$first_page"
 
-  total_count=$(jq -r '.total_count // 0' "$first_page")
-  if [[ ! "$total_count" =~ ^[0-9]+$ ]] ||
-     ! jq -e '(.workflow_runs | type) == "array"' "$first_page" >/dev/null; then
-    echo "::error::GitHub returned an invalid workflow-run count." >&2
+  if ! jq -e '
+      type == "object" and
+      (.total_count | type) == "number" and
+      .total_count >= 0 and
+      .total_count == (.total_count | floor) and
+      (.workflow_runs | type) == "array" and
+      all(.workflow_runs[];
+        type == "object" and
+        (.id | type) == "number" and
+        .id >= 0 and
+        .id == (.id | floor) and
+        (.created_at | type) == "string" and
+        (.head_sha | type) == "string" and
+        (.head_sha | length) > 0)
+    ' "$first_page" >/dev/null; then
+    echo "::error::GitHub returned invalid workflow-run metadata." >&2
     return 1
   fi
+  total_count=$(jq -r '.total_count' "$first_page")
 
   # GitHub caps filtered workflow-run searches at 1,000 results. Search the
   # newer half first so a dense window can be subdivided without scanning
@@ -89,8 +102,19 @@ query_window()
       -f per_page=100 \
       -f "page=${page}" \
       -f "created=${start_time}..${end_time}" > "$page_file"
-    if ! jq -e '(.workflow_runs | type) == "array"' "$page_file" >/dev/null; then
-      echo "::error::GitHub returned an invalid workflow-run page." >&2
+    if ! jq -e '
+        type == "object" and
+        (.workflow_runs | type) == "array" and
+        all(.workflow_runs[];
+          type == "object" and
+          (.id | type) == "number" and
+          .id >= 0 and
+          .id == (.id | floor) and
+          (.created_at | type) == "string" and
+          (.head_sha | type) == "string" and
+          (.head_sha | length) > 0)
+      ' "$page_file" >/dev/null; then
+      echo "::error::GitHub returned invalid workflow-run page metadata." >&2
       return 1
     fi
     jq -c '.workflow_runs[]?' "$page_file" >> "$runs_file"

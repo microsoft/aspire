@@ -34,10 +34,11 @@ successful `main` run. Candidate attribution is withheld when run history is
 incomplete or when a candidate commit does not map to exactly one PR merged
 into `main`.
 
-PR comments, locks, and pull-request reruns require an unambiguous subject PR.
-Validated transient `main` failures can be rerun without a subject PR.
-Run-scoped recurring-cause persistence can also continue without one, but its
-PR occurrence context is recorded as unavailable.
+PR comments and pull-request reruns require an unambiguous subject PR that is
+still open and unlocked immediately before the mutation. Validated transient
+`main` failures can be rerun without a subject PR. Run-scoped recurring-cause
+persistence can continue without an actionable PR, but its PR occurrence
+context is recorded as unavailable when the subject cannot be identified.
 
 ## Agent trust boundary
 
@@ -78,7 +79,8 @@ workflow, evidence is explicitly marked not applicable.
 - Only validated transient failures from the same run attempt and with available
   test evidence can request a rerun. Pull-request reruns additionally require
   the subject PR to remain open and unlocked.
-- Failures attributed to one PR are reported on that PR.
+- Failures attributed to one PR are reported on that PR only while it remains
+  open and unlocked.
 - Deterministic `main` failures are reported through `[Main CI Failure]`
   issues.
 - Shared recurring-cause and issue publication is serialized. Cause counts,
