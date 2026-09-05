@@ -146,6 +146,12 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
+    <!--
+      Radius reads internal members that have no public equivalent, such as
+      ProjectLaunchDefaultsAnnotation.DefaultHttpsEndpoint, when projecting project resources
+      into the Bicep it emits.
+    -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Radius" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />

@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Radius.ResourceMapping;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -117,5 +119,191 @@ public class RadiusDeployParametersTests
         var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
 
         Assert.Null(path);
+    }
+
+    [Fact]
+    public async Task WriteDeployParametersFile_RejectsRabbitMqGuestUserNameResolvedAtDeployTime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "guest");
+        var radius = builder.AddRadiusEnvironment("myenv");
+        var rabbit = builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        radius.Resource.Annotations.Add(new RadiusDeployParametersAnnotation(
+            new Dictionary<string, ParameterResource> { ["rabbituser"] = userName.Resource },
+            new Dictionary<ParameterResource, IReadOnlyList<IResource>> { [userName.Resource] = new[] { (IResource)rabbit.Resource } }));
+
+        var step = new RadiusDeploymentPipelineStep(radius.Resource);
+        var ex = await Assert.ThrowsAsync<RadiusBackingResourceProjectionException>(
+            () => step.WriteDeployParametersFileAsync(NullLogger.Instance, default));
+
+        Assert.Contains("ASPIRERADIUS082", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildOptions_RecordsRabbitMqUserNameForDeployValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv");
+        var rabbit = builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Same(rabbit.Resource, Assert.Single(annotation.RabbitMqUserNames[userName.Resource]));
+    }
+
+    [Fact]
+    public void BuildOptions_DropsRabbitMqUserName_WhenCallbackRemovesTheResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(infra =>
+            {
+                var rabbit = infra.ResourceTypeInstances.Single(i => i.BicepIdentifier.Contains("rabbit", StringComparison.Ordinal));
+                infra.ResourceTypeInstances.Remove(rabbit);
+            });
+        builder.AddRabbitMQ("rabbit", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Empty(annotation.RabbitMqUserNames);
+    }
+
+    /// <summary>
+    /// A user-name parameter can be shared by several brokers. Removing one of them must not drop
+    /// the deploy-time guest check for the brokers that remain, which would let a surviving broker
+    /// deploy with a user name RabbitMQ restricts to loopback connections.
+    /// </summary>
+    [Fact]
+    public void BuildOptions_KeepsRabbitMqUserName_WhenOnlyOneOfSeveralSharingBrokersIsRemoved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var userName = builder.AddParameter("rabbituser", "appuser");
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(infra =>
+            {
+                var removed = infra.ResourceTypeInstances.Single(i => i.BicepIdentifier.Contains("rabbit2", StringComparison.Ordinal));
+                infra.ResourceTypeInstances.Remove(removed);
+            });
+        var surviving = builder.AddRabbitMQ("rabbit1", userName: userName);
+        builder.AddRabbitMQ("rabbit2", userName: userName);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        Assert.Same(surviving.Resource, Assert.Single(annotation.RabbitMqUserNames[userName.Resource]));
+    }
+
+    /// <summary>
+    /// One secret parameter used by <em>both</em> a container env var and a type-scoped recipe
+    /// parameter is a valid model, but each allocator used to declare its own Bicep <c>param</c>
+    /// for it — the two spellings normalize to the same identifier, so the second allocation tripped
+    /// the identifier-collision guard (ASPIRERADIUS056) on a graph that should publish. The
+    /// allocators now reuse each other's declaration in both directions, so ordering cannot matter.
+    /// </summary>
+    [Fact]
+    public void ParameterSharedByContainerEnvironmentAndRecipeParameter_PublishesWithOneDeclaration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var shared = builder.AddParameter("sharedSecret", "TopSecretValue", secret: true);
+        builder.AddRadiusEnvironment("myenv")
+            .WithRecipeParameters(RadiusResourceTypes.SecuritySecrets, p => p["apiKey"] = shared);
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithEnvironment("API_KEY", shared);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+
+        var bicep = new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model);
+
+        // Exactly one `param sharedSecret` declaration, and it stays secure so the value is never
+        // written into the artifact or printed in deploy logs.
+        var declarations = Regex.Matches(bicep, @"^@secure\(\)\r?\n\s*param sharedSecret ", RegexOptions.Multiline);
+        Assert.Single(declarations);
+    }
+
+    /// <summary>
+    /// `radius` is reserved: a bare `param radius` collides with the `extension radius` alias, so
+    /// the identifier has to be `radiusenv`. Because the env-var and recipe-parameter allocators
+    /// reuse each other's declarations, a parameter reached through either path must produce the
+    /// same reserved-aware identifier — using two different normalizers would emit invalid Bicep
+    /// that no collision check catches.
+    /// </summary>
+    [Fact]
+    public void ParameterNamedRadius_UsesTheReservedAwareIdentifier()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var shared = builder.AddParameter("radius", "TopSecretValue", secret: true);
+        builder.AddRadiusEnvironment("myenv")
+            .WithRecipeParameters(RadiusResourceTypes.SecuritySecrets, p => p["apiKey"] = shared);
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithEnvironment("API_KEY", shared);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+
+        var bicep = new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model);
+
+        var declarations = Regex.Matches(bicep, @"^@secure\(\)\r?\n\s*param radiusenv ", RegexOptions.Multiline);
+        Assert.Single(declarations);
+    }
+
+    /// <summary>
+    /// Reaches the env allocator without a recipe parameter, so it must apply the reserved-aware
+    /// normalization itself rather than inheriting it by reusing a recipe-allocated declaration —
+    /// the env-plus-recipe test above would still pass if this branch regressed, because recipe
+    /// parameters are allocated first and the env allocator would simply reuse that result.
+    /// </summary>
+    [Fact]
+    public void ParameterNamedRadius_UsedOnlyByAContainerEnvironmentVariable_UsesTheReservedAwareIdentifier()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var reserved = builder.AddParameter("radius", "TopSecretValue", secret: true);
+        builder.AddRadiusEnvironment("myenv");
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithEnvironment("API_KEY", reserved);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+
+        var bicep = new RadiusBicepPublishingContext(radiusEnv).GenerateBicep(model);
+
+        // A bare `param radius` would collide with the `extension radius` alias, so assert on the
+        // complete set of emitted parameter names rather than only on the expected one.
+        var declared = Regex.Matches(bicep, @"^\s*param (?<name>\w+) ", RegexOptions.Multiline)
+            .Select(match => match.Groups["name"].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["radiusenv"], declared);
+
+        // The deploy step keys the generated parameter file by the emitted Bicep identifier, so the
+        // recorded key has to be that identifier, not the Aspire parameter name.
+        var annotation = Assert.Single(radiusEnv.Annotations.OfType<RadiusDeployParametersAnnotation>());
+        var binding = Assert.Single(annotation.Parameters);
+        Assert.Equal("radiusenv", binding.Key);
+        Assert.Same(reserved.Resource, binding.Value);
     }
 }
