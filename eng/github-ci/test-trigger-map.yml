@@ -84,6 +84,7 @@ ignore:
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
+  - eng/scripts/validate-mac-platform-sso.sh            # manual managed-Mac validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
   - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
   - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
