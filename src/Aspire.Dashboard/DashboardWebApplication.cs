@@ -291,6 +291,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddHostedService<DashboardDataSourceInitializer>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
+        // TryAdd, so a preConfigureBuilder callback can substitute the client. That callback runs before this method,
+        // and the last registration wins, so a plain AddScoped here would silently override the substitute. The
+        // Playwright fixture relies on this to serve a mock AppHost.
         builder.Services.TryAddScoped<IDashboardClient, SelectedDashboardClient>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
@@ -319,6 +322,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
+        // TryAdd for the same reason as IDashboardClient above: the factory decides which resource repository the
+        // dashboard reads from, so a substituted client is only actually reachable if its factory survives too.
         builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
         // OTLP ingestion and telemetry mutations always target the current dashboard run, even when a browser circuit selects a historical run.
