@@ -27,25 +27,25 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAcrPullIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identityBuilder) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> applicationInsightsLocation) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> applicationInsightsBuilder) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder) { throw null; }
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, bool enable = true) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> deploymentSlot) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string deploymentSlot) { throw null; }
 
         [AspireExport]
@@ -55,7 +55,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry
+    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource
     {
         public AzureAppServiceEnvironmentResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -66,6 +66,8 @@ namespace Aspire.Hosting.Azure
         IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry { get { throw null; } }
 
         ApplicationModel.ReferenceExpression IAzureContainerRegistry.ManagedIdentityId { get { throw null; } }
+
+        string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName { get { throw null; } }
 
         public BicepOutputReference AzureAppInsightsConnectionStringReference { get { throw null; } }
 
