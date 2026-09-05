@@ -27,10 +27,12 @@ internal class DotNetTemplateFactory(
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService,
+    IAppHostInfoResolver appHostInfoResolver,
     IEnvironment environment)
     : ITemplateFactory
 {
     private const string NoTestFramework = "None";
+    private const string IntegrationTestSourceFileName = "IntegrationTest1.cs";
 
     // Template-specific options
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
@@ -47,9 +49,17 @@ internal class DotNetTemplateFactory(
     {
         Description = TemplatingStrings.PromptForTFMOptions_Description
     };
+    private readonly Option<string?> _integrationTestFrameworkOption = new("--test-framework")
+    {
+        Description = TemplatingStrings.IntegrationTestFrameworkOptionDescription
+    };
     private readonly Option<string?> _xunitVersionOption = new("--xunit-version")
     {
         Description = TemplatingStrings.EnterXUnitVersion_Description
+    };
+    private readonly Option<FileInfo?> _appHostOption = new("--apphost")
+    {
+        Description = TemplatingStrings.AppHostProjectOptionDescription
     };
 
     public IEnumerable<ITemplate> GetTemplates()
@@ -179,9 +189,9 @@ internal class DotNetTemplateFactory(
                 );
         }
 
-        // Folded into the last yieled template.
+        // Folded into the last yielded template.
         var msTestTemplate = new CallbackTemplate(
-            "aspire-mstest",
+            KnownTemplateId.MSTest,
             TemplatingStrings.AspireMSTest_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -191,7 +201,7 @@ internal class DotNetTemplateFactory(
 
         // Folded into the last yielded template.
         var nunitTemplate = new CallbackTemplate(
-            "aspire-nunit",
+            KnownTemplateId.NUnit,
             TemplatingStrings.AspireNUnit_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -201,7 +211,7 @@ internal class DotNetTemplateFactory(
 
         // Folded into the last yielded template.
         var xunitTemplate = new CallbackTemplate(
-            "aspire-xunit",
+            KnownTemplateId.XUnit,
             TemplatingStrings.AspireXUnit_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
@@ -211,25 +221,39 @@ internal class DotNetTemplateFactory(
 
         // Prepends a test framework selection step then calls the
         // underlying test template.
-        if (showAllTemplates)
-        {
-            yield return new CallbackTemplate(
-                "aspire-test",
-                TemplatingStrings.IntegrationTestsTemplate_Description,
-                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-                _ => { },
-                async (template, inputs, parseResult, ct) =>
+        yield return new CallbackTemplate(
+            KnownTemplateId.IntegrationTest,
+            TemplatingStrings.IntegrationTestsTemplate_Description,
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+            command =>
+            {
+                AddOptionIfMissing(command, _appHostOption);
+                AddOptionIfMissing(command, _integrationTestFrameworkOption);
+                AddOptionIfMissing(command, _xunitVersionOption);
+            },
+            async (template, inputs, parseResult, ct) =>
+            {
+                var appHostProject = parseResult.GetValue(_appHostOption);
+                if (appHostProject is { Exists: false })
                 {
-                    var testTemplate = await prompter.PromptForTemplateAsync(
-                        [msTestTemplate, xunitTemplate, nunitTemplate],
-                        ct
-                    );
+                    interactionService.DisplayError(InteractionServiceStrings.ProjectOptionDoesntExist);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+                }
 
-                    var testCallbackTemplate = (CallbackTemplate)testTemplate;
-                    return await testCallbackTemplate.ApplyTemplateAsync(inputs, parseResult, ct);
-                },
-                languageId: KnownLanguageId.CSharp);
-        }
+                var testTemplate = await prompter.PromptForTemplateAsync(
+                    [msTestTemplate, xunitTemplate, nunitTemplate],
+                    ct,
+                    PromptBinding.Create(parseResult, _integrationTestFrameworkOption)
+                );
+
+                var testCallbackTemplate = (CallbackTemplate)testTemplate;
+                Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback = testCallbackTemplate.Name == KnownTemplateId.XUnit
+                    ? PromptForExtraAspireXUnitOptionsAsync
+                    : (_, _) => Task.FromResult(Array.Empty<string>());
+
+                return await ApplyTemplateAsync(testCallbackTemplate, inputs, parseResult, extraArgsCallback, ct, appHostProject);
+            },
+            languageId: KnownLanguageId.CSharp);
     }
 
     private CallbackTemplate CreateSingleFileTemplate()
@@ -436,7 +460,13 @@ internal class DotNetTemplateFactory(
         }
     }
 
-    private async Task<TemplateResult> ApplyTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback, CancellationToken cancellationToken)
+    private async Task<TemplateResult> ApplyTemplateAsync(
+        CallbackTemplate template,
+        TemplateInputs inputs,
+        ParseResult parseResult,
+        Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback,
+        CancellationToken cancellationToken,
+        FileInfo? appHostProject = null)
     {
         if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
@@ -451,10 +481,18 @@ internal class DotNetTemplateFactory(
             return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
-        return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
+        return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken, appHostProject);
     }
 
-    private async Task<TemplateResult> ApplyTemplateAsync(CallbackTemplate template, TemplateInputs inputs, string name, string outputPath, ParseResult parseResult, Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback, CancellationToken cancellationToken)
+    private async Task<TemplateResult> ApplyTemplateAsync(
+        CallbackTemplate template,
+        TemplateInputs inputs,
+        string name,
+        string outputPath,
+        ParseResult parseResult,
+        Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback,
+        CancellationToken cancellationToken,
+        FileInfo? appHostProject = null)
     {
         try
         {
@@ -472,6 +510,27 @@ internal class DotNetTemplateFactory(
             // Some templates have additional arguments that need to be applied to the `dotnet new` command
             // when it is executed. This callback will get those arguments and potentially prompt for them.
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
+            if (appHostProject is not null)
+            {
+                var appHostInfo = await appHostInfoResolver.GetAppHostInfoAsync(appHostProject, cancellationToken);
+                var appHostTargetFramework = GetAppHostTargetFramework(appHostInfo);
+
+                extraArgs =
+                [
+                    .. extraArgs,
+                    "--WithAppHostReference",
+                    "true",
+                    "--AppHostProjectPath",
+                    EscapeMSBuildItemValue(Path.GetRelativePath(outputPath, appHostProject.FullName)),
+                    "--AppHostProjectName",
+                    Path.GetFileNameWithoutExtension(appHostProject.Name)
+                ];
+
+                if (appHostTargetFramework is not null)
+                {
+                    extraArgs = [.. extraArgs, "--AppHostTargetFramework", appHostTargetFramework];
+                }
+            }
 
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
                 selectedTemplateDetails,
@@ -562,7 +621,10 @@ internal class DotNetTemplateFactory(
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(CliExitCodes.Success, outputPath);
+            return new TemplateResult(
+                CliExitCodes.Success,
+                outputPath,
+                appHostProject is null ? null : Path.Combine(outputPath, IntegrationTestSourceFileName));
         }
         catch (OperationCanceledException)
         {
@@ -587,6 +649,44 @@ internal class DotNetTemplateFactory(
             interactionService.DisplayError(ex.Message);
             return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
+    }
+
+    private static string? GetAppHostTargetFramework(AppHostProjectInfo appHostInfo)
+    {
+        if (appHostInfo.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var targetFrameworks = appHostInfo.TargetFrameworks?.Split(
+            ';',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (targetFrameworks is { Length: > 0 })
+        {
+            // Target the first declared framework so the generated single-target test project
+            // matches an AppHost inner build without guessing which SDK is preferred or installed.
+            return targetFrameworks[0];
+        }
+
+        return string.IsNullOrWhiteSpace(appHostInfo.TargetFramework)
+            ? null
+            : appHostInfo.TargetFramework.Trim();
+    }
+
+    private static string EscapeMSBuildItemValue(string value)
+    {
+        // MSBuild item Include values use %-escaped sequences. Escape existing '%' first so a literal
+        // value like "foo%3Bbar" remains literal instead of being decoded into "foo;bar".
+        return value
+            .Replace("%", "%25", StringComparison.Ordinal)
+            .Replace("$", "%24", StringComparison.Ordinal)
+            .Replace("@", "%40", StringComparison.Ordinal)
+            .Replace("'", "%27", StringComparison.Ordinal)
+            .Replace(";", "%3B", StringComparison.Ordinal)
+            .Replace("?", "%3F", StringComparison.Ordinal)
+            .Replace("*", "%2A", StringComparison.Ordinal)
+            .Replace("(", "%28", StringComparison.Ordinal)
+            .Replace(")", "%29", StringComparison.Ordinal);
     }
 
     private async Task<string> GetProjectNameAsync(TemplateInputs inputs, string templateName, ParseResult parseResult, CancellationToken cancellationToken)

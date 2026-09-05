@@ -156,6 +156,12 @@
   <data name="IntegrationTestsTemplate_Description" xml:space="preserve">
     <value>Integration tests</value>
   </data>
+  <data name="IntegrationTestFrameworkOptionDescription" xml:space="preserve">
+    <value>Selects the test framework for the integration test project: MSTest, NUnit, or xUnit.</value>
+  </data>
+  <data name="AppHostProjectOptionDescription" xml:space="preserve">
+    <value>The path to the Aspire AppHost project file</value>
+  </data>
   <data name="UseRedisCache_Prompt" xml:space="preserve">
     <value>Use Redis Cache</value>
   </data>

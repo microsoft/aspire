@@ -61,6 +61,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The path to the Aspire AppHost project file.
+        /// </summary>
+        public static string AppHostProjectOptionDescription {
+            get {
+                return ResourceManager.GetString("AppHostProjectOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
         public static string AspireAppHost_Description {
@@ -210,6 +219,15 @@ namespace Aspire.Cli.Resources {
         public static string GettingTemplates {
             get {
                 return ResourceManager.GetString("GettingTemplates", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Selects the test framework for the integration test project: MSTest, NUnit, or xUnit..
+        /// </summary>
+        public static string IntegrationTestFrameworkOptionDescription {
+            get {
+                return ResourceManager.GetString("IntegrationTestFrameworkOptionDescription", resourceCulture);
             }
         }
 
