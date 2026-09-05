@@ -180,7 +180,7 @@ internal static class TerminalWebSocketProxy
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to accept AppHost terminal WebSocket for {TerminalId}.", terminalId);
-            try { upstream.Dispose(); } catch { /* swallow */ }
+            DisposeUpstream(upstream, logger, connectionId);
             return;
         }
 
@@ -193,7 +193,7 @@ internal static class TerminalWebSocketProxy
         finally
         {
             // Disposing ends the gRPC call, which is how the AppHost learns this viewer is gone.
-            try { upstream.Dispose(); } catch { /* swallow */ }
+            DisposeUpstream(upstream, logger, connectionId);
             logger.LogInformation("AppHost terminal WS closed for {TerminalId} ({ConnectionId}).", terminalId, connectionId);
         }
 
@@ -333,7 +333,7 @@ internal static class TerminalWebSocketProxy
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to accept terminal WebSocket for {Resource}/{Replica}.", resourceName, replicaIndex);
-            try { upstream.Dispose(); } catch { /* swallow */ }
+            DisposeUpstream(upstream, logger, connectionId);
             return;
         }
 
@@ -350,7 +350,7 @@ internal static class TerminalWebSocketProxy
         }
         finally
         {
-            try { upstream.Dispose(); } catch { /* swallow */ }
+            DisposeUpstream(upstream, logger, connectionId);
             logger.LogInformation("Terminal WS closed for {Resource}/{Replica} ({ConnectionId}).",
                 resourceName, replicaIndex, connectionId);
         }
@@ -369,6 +369,28 @@ internal static class TerminalWebSocketProxy
             {
                 // best effort
             }
+        }
+    }
+
+    /// <summary>
+    /// Tears down the upstream transport, which is what tells the terminal's owner that this viewer is gone.
+    /// </summary>
+    /// <remarks>
+    /// Disposal is best effort because it runs on teardown paths that are already unwinding — the caller has
+    /// nothing left to do about a failure, and letting it propagate out of a <c>finally</c> would mask the
+    /// original error. It is logged rather than swallowed so a transport that consistently fails to shut down
+    /// is still visible when diagnosing terminals that linger after their viewer disconnects.
+    /// </remarks>
+    private static void DisposeUpstream(Stream upstream, ILogger logger, string connectionId)
+    {
+        try
+        {
+            upstream.Dispose();
+        }
+        catch (Exception ex)
+        {
+            // Unexpected, but not actionable on this path: the connection is going away regardless.
+            logger.LogDebug(ex, "Failed to dispose the upstream terminal transport for {ConnectionId}.", connectionId);
         }
     }
 

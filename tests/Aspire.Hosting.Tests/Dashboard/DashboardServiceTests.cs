@@ -10,6 +10,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
+using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf;
@@ -1278,7 +1279,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
         IInteractionFileUploadStore? fileUploadStore = null,
-        Terminals.TerminalService? terminalService = null)
+                        TerminalService? terminalService = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,

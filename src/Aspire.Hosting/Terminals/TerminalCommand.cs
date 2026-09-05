@@ -61,7 +61,19 @@ public sealed class TerminalCommand
     /// <summary>
     /// Gets or sets the arguments passed to <see cref="Executable"/>.
     /// </summary>
-    public IList<string> Arguments { get; set; } = [];
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    public IList<string> Arguments
+    {
+        get;
+        set
+        {
+            // Validate on assignment rather than when the terminal is created. The arguments are not read until
+            // TerminalService translates this command into a process, which is far enough away that a null here
+            // would otherwise surface as an unattributed NullReferenceException inside terminal creation.
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+        }
+    } = [];
 
     /// <summary>
     /// Gets or sets the working directory the process starts in. Defaults to the AppHost's working directory.
@@ -85,11 +97,31 @@ public sealed class TerminalCommand
     /// This is only the initial grid. A viewer that attaches renegotiates the size to fit the space it has,
     /// so this matters mainly for terminals driven by automation before anyone attaches.
     /// </remarks>
-    public int Columns { get; set; } = DefaultColumns;
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>
+    public int Columns
+    {
+        get;
+        set
+        {
+            // A zero or negative grid is not a terminal the emulator can render into, and the failure would
+            // otherwise appear deep inside the terminal library rather than at the assignment that caused it.
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            field = value;
+        }
+    } = DefaultColumns;
 
     /// <summary>
     /// Gets or sets the number of rows the terminal starts with.
     /// </summary>
     /// <inheritdoc cref="Columns" path="/remarks"/>
-    public int Rows { get; set; } = DefaultRows;
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>
+    public int Rows
+    {
+        get;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            field = value;
+        }
+    } = DefaultRows;
 }

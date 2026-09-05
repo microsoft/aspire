@@ -297,6 +297,22 @@ internal class InteractionService : IInteractionService
         }
         finally
         {
+            // Terminals are created before the interaction is tracked, so any escape between creation and
+            // CompleteInteractionCore — a throw from AddInteractionUpdate, or dynamic input loading — would
+            // otherwise leave them registered with TerminalService for the lifetime of the AppHost. The normal
+            // path has already nulled TerminalId, which makes this a no-op rather than a double teardown.
+            if (hasTerminalInputs)
+            {
+                foreach (var input in inputs)
+                {
+                    if (input.InputType == InputType.Terminal && input.TerminalId is { } orphanedTerminalId)
+                    {
+                        _terminalService.RemoveAndDisposeInBackground(orphanedTerminalId);
+                        input.TerminalId = null;
+                    }
+                }
+            }
+
             interactionCts.Cancel();
         }
     }

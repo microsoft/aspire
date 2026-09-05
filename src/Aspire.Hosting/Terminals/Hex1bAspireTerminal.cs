@@ -222,6 +222,15 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         var completed = await Task.WhenAny(wait, cancelled.Task).ConfigureAwait(false);
         if (completed != wait)
         {
+            // The wait is abandoned rather than awaited, so nothing would observe the WaitUntilTimeoutException it
+            // raises when its own timeout later elapses. An unobserved faulted task surfaces on
+            // TaskScheduler.UnobservedTaskException, which is a process-wide event an AppHost may treat as fatal.
+            _ = wait.ContinueWith(
+                static t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
             cancellationToken.ThrowIfCancellationRequested();
         }
 
