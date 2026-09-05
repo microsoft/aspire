@@ -2,13 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
+#pragma warning disable ASPIREFILESYSTEM001 // File arguments are copied into repository-managed temporary storage.
 
 /// <summary>
 /// A service to execute resource commands.
@@ -333,6 +337,7 @@ public class ResourceCommandService
 
         if (annotation != null)
         {
+            IReadOnlyList<InteractionFileCollection> materializedFileCollections = [];
             try
             {
                 arguments = NormalizeCommandArguments(annotation, arguments);
@@ -350,11 +355,32 @@ public class ResourceCommandService
                 }
                 else
                 {
+                    var materialization = await MaterializeFileArgumentsAsync(arguments, cancellationToken).ConfigureAwait(false);
+                    if (materialization.ErrorMessage is { } materializationError)
+                    {
+                        return new ExecuteCommandResult { Success = false, Message = materializationError };
+                    }
+
+                    materializedFileCollections = materialization.FileCollections;
                     loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(arguments, cancellationToken).ConfigureAwait(false);
+                    if (loadedDynamicArgumentNames.Count > 0)
+                    {
+                        materialization = await RefreshMaterializedFileArgumentsAsync(
+                            arguments,
+                            materializedFileCollections,
+                            cancellationToken).ConfigureAwait(false);
+                        if (materialization.ErrorMessage is { } refreshError)
+                        {
+                            return new ExecuteCommandResult { Success = false, Message = refreshError };
+                        }
+
+                        materializedFileCollections = materialization.FileCollections;
+                    }
                 }
 
                 if (!await ValidateArgumentsAsync(annotation, arguments, loadedDynamicArgumentNames, cancellationToken).ConfigureAwait(false))
                 {
+                    DisposeFileCollections(materializedFileCollections);
                     return new ExecuteCommandResult
                     {
                         Success = false,
@@ -363,6 +389,16 @@ public class ResourceCommandService
                     };
                 }
 
+                var finalMaterialization = await RefreshMaterializedFileArgumentsAsync(
+                    arguments,
+                    materializedFileCollections,
+                    cancellationToken).ConfigureAwait(false);
+                if (finalMaterialization.ErrorMessage is { } finalMaterializationError)
+                {
+                    return new ExecuteCommandResult { Success = false, Message = finalMaterializationError };
+                }
+
+                materializedFileCollections = finalMaterialization.FileCollections;
                 var context = new ExecuteCommandContext
                 {
                     ResourceName = resourceId,
@@ -396,11 +432,13 @@ public class ResourceCommandService
             }
             catch (OperationCanceledException)
             {
+                DisposeFileCollections(materializedFileCollections);
                 logger.LogDebug("Command '{CommandName}' was canceled.", commandName);
                 return CommandResults.Canceled();
             }
             catch (Exception ex)
             {
+                DisposeFileCollections(materializedFileCollections);
                 logger.LogError(ex, "Error executing command '{CommandName}'.", commandName);
                 return new ExecuteCommandResult { Success = false, Message = ex.Message };
             }
@@ -483,18 +521,42 @@ public class ResourceCommandService
         }
 
         var normalizedArguments = NormalizeCommandArguments(annotation, arguments);
-        var loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(normalizedArguments, cancellationToken).ConfigureAwait(false);
+        var materialization = await MaterializeFileArgumentsAsync(normalizedArguments, cancellationToken).ConfigureAwait(false);
+        if (materialization.ErrorMessage is { } fileArgumentError)
+        {
+            return (new ExecuteCommandResult { Success = false, Message = fileArgumentError }, normalizedArguments);
+        }
 
-        var result = await ValidateArgumentsAsync(annotation, normalizedArguments, loadedDynamicArgumentNames, cancellationToken).ConfigureAwait(false)
-            ? CommandResults.Success()
-            : new ExecuteCommandResult
+        try
+        {
+            var loadedDynamicArgumentNames = await LoadDynamicCommandArgumentsAsync(normalizedArguments, cancellationToken).ConfigureAwait(false);
+            if (loadedDynamicArgumentNames.Count > 0)
             {
-                Success = false,
-                Message = "Command argument validation failed.",
-                InvalidArguments = normalizedArguments
-            };
+                materialization = await RefreshMaterializedFileArgumentsAsync(
+                    normalizedArguments,
+                    materialization.FileCollections,
+                    cancellationToken).ConfigureAwait(false);
+                if (materialization.ErrorMessage is { } refreshError)
+                {
+                    return (new ExecuteCommandResult { Success = false, Message = refreshError }, normalizedArguments);
+                }
+            }
 
-        return (result, normalizedArguments);
+            var result = await ValidateArgumentsAsync(annotation, normalizedArguments, loadedDynamicArgumentNames, cancellationToken).ConfigureAwait(false)
+                ? CommandResults.Success()
+                : new ExecuteCommandResult
+                {
+                    Success = false,
+                    Message = "Command argument validation failed.",
+                    InvalidArguments = normalizedArguments
+                };
+
+            return (result, normalizedArguments);
+        }
+        finally
+        {
+            DisposeFileCollections(materialization.FileCollections);
+        }
     }
 
     private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, string commandName, ResourceCommandExecutionOptions options, CancellationToken cancellationToken)
@@ -641,6 +703,18 @@ public class ResourceCommandService
                     if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                     {
                         context.AddValidationError(argument, "Value must be a valid number.");
+                    }
+                    break;
+                case InputType.File:
+                    var files = argument.GetFiles();
+                    var maxFileCount = InteractionHelpers.GetMaxFileCount(argument.AllowMultipleFiles);
+                    if (argument.Required && files.Count == 0)
+                    {
+                        context.AddValidationError(argument, "Value is required.");
+                    }
+                    else if (files.Count > maxFileCount)
+                    {
+                        context.AddValidationError(argument, $"File count exceeds the maximum of {maxFileCount}.");
                     }
                     break;
                 default:
@@ -811,8 +885,190 @@ public class ResourceCommandService
             Placeholder = input.Placeholder,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
-            MaxLength = input.MaxLength
+            MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize
         };
+    }
+
+    private async Task<(string? ErrorMessage, IReadOnlyList<InteractionFileCollection> FileCollections)> MaterializeFileArgumentsAsync(
+        InteractionInputCollection arguments,
+        CancellationToken cancellationToken)
+    {
+        var materializedFileCollections = new List<InteractionFileCollection>();
+        var fileInputs = arguments.Where(static argument =>
+            argument.InputType == InputType.File &&
+            argument.GetFiles().Count == 0 &&
+            !string.IsNullOrWhiteSpace(argument.Value)).ToArray();
+        if (fileInputs.Length == 0)
+        {
+            return (null, []);
+        }
+
+        var configuration = _serviceProvider.GetRequiredService<IConfiguration>();
+        var tempFileSystem = _serviceProvider.GetRequiredService<IFileSystemService>().TempDirectory;
+
+        foreach (var input in fileInputs)
+        {
+            var filePaths = ParseFileArgumentPaths(input.Value!);
+            if (filePaths is null)
+            {
+                DisposeFileCollections(materializedFileCollections);
+                return ($"File argument '{input.Name}' has an invalid value.", []);
+            }
+
+            var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
+            if (filePaths.Length > maxFileCount)
+            {
+                DisposeFileCollections(materializedFileCollections);
+                return ($"File argument '{input.Name}' accepts at most {maxFileCount} file(s).", []);
+            }
+
+            var maxFileSize = Math.Min(
+                input.MaxFileSize ?? long.MaxValue,
+                FileUploadHelpers.GetMaxFileUploadSize(configuration));
+            var extensionFilters = input.FileFilter?
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(static filter => filter.StartsWith('.'))
+                .ToArray() ?? [];
+            var tempFiles = new List<TempFile>(filePaths.Length);
+
+            try
+            {
+                var interactionFiles = new InteractionFile[filePaths.Length];
+                for (var i = 0; i < filePaths.Length; i++)
+                {
+                    var filePath = Path.GetFullPath(filePaths[i]);
+                    if (!File.Exists(filePath))
+                    {
+                        DisposeFileCollections(materializedFileCollections);
+                        return ($"File '{filePaths[i]}' does not exist.", []);
+                    }
+
+                    var fileName = Path.GetFileName(filePath);
+                    var fileInfo = new FileInfo(filePath);
+                    if (fileInfo.Length > maxFileSize)
+                    {
+                        DisposeFileCollections(materializedFileCollections);
+                        return ($"File '{fileName}' exceeds the maximum size of {maxFileSize} bytes.", []);
+                    }
+
+                    if (extensionFilters.Length > 0 &&
+                        !extensionFilters.Any(filter => fileName.EndsWith(filter, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        DisposeFileCollections(materializedFileCollections);
+                        return ($"File '{fileName}' does not match the accepted file types ({input.FileFilter}).", []);
+                    }
+
+                    var tempFile = tempFileSystem.CreateTempFile(fileName);
+                    tempFiles.Add(tempFile);
+                    if (!await TryCopyFileAsync(filePath, tempFile.Path, maxFileSize, cancellationToken).ConfigureAwait(false))
+                    {
+                        DisposeFileCollections(materializedFileCollections);
+                        return ($"File '{fileName}' exceeds the maximum size of {maxFileSize} bytes.", []);
+                    }
+
+                    interactionFiles[i] = new InteractionFile(Guid.NewGuid().ToString("N"), fileName, tempFile.Path);
+                }
+
+                var fileCollection = new InteractionFileCollection(interactionFiles, () =>
+                {
+                    foreach (var tempFile in tempFiles)
+                    {
+                        tempFile.Dispose();
+                    }
+                });
+                input.SetFiles(fileCollection);
+                materializedFileCollections.Add(fileCollection);
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+            {
+                DisposeFileCollections(materializedFileCollections);
+                return ($"Failed to prepare file argument '{input.Name}': {ex.Message}", []);
+            }
+            catch (OperationCanceledException)
+            {
+                DisposeFileCollections(materializedFileCollections);
+                throw;
+            }
+            finally
+            {
+                if (input.GetFiles().Count == 0)
+                {
+                    foreach (var tempFile in tempFiles)
+                    {
+                        tempFile.Dispose();
+                    }
+                }
+            }
+        }
+
+        return (null, materializedFileCollections);
+    }
+
+    private async Task<(string? ErrorMessage, IReadOnlyList<InteractionFileCollection> FileCollections)> RefreshMaterializedFileArgumentsAsync(
+        InteractionInputCollection arguments,
+        IReadOnlyList<InteractionFileCollection> materializedFileCollections,
+        CancellationToken cancellationToken)
+    {
+        foreach (var input in arguments)
+        {
+            if (materializedFileCollections.Any(files => ReferenceEquals(files, input.GetFiles())))
+            {
+                input.SetFiles(new InteractionFileCollection([]));
+            }
+        }
+
+        DisposeFileCollections(materializedFileCollections);
+        return await MaterializeFileArgumentsAsync(arguments, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string[]? ParseFileArgumentPaths(string value)
+    {
+        // VS Code submits a JSON array so multiple selections remain one command option value:
+        //   ["/workspaces/app/first.json","/workspaces/app/second.json"]
+        // The extension host and AppHost run in the same local or remote workspace, so the AppHost
+        // can copy these paths into its managed temporary storage without another upload protocol.
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(value);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<bool> TryCopyFileAsync(string sourcePath, string destinationPath, long maxFileSize, CancellationToken cancellationToken)
+    {
+        const int BufferSize = 81920;
+        await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, BufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var destination = new FileStream(destinationPath, FileMode.Truncate, FileAccess.Write, FileShare.None, BufferSize, FileOptions.Asynchronous);
+        var buffer = new byte[BufferSize];
+        long totalBytes = 0;
+
+        int bytesRead;
+        while ((bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            totalBytes += bytesRead;
+            if (totalBytes > maxFileSize)
+            {
+                return false;
+            }
+
+            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+        }
+
+        return true;
+    }
+
+    private static void DisposeFileCollections(IEnumerable<InteractionFileCollection> fileCollections)
+    {
+        foreach (var fileCollection in fileCollections)
+        {
+            fileCollection.Dispose();
+        }
     }
 
     private static InteractionInputCollection CloneArguments(InteractionInputCollection arguments)
@@ -839,4 +1095,3 @@ internal sealed class ResourceCommandExecutionOptions
 
     public bool NonInteractive { get; init; }
 }
-

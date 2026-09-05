@@ -1379,6 +1379,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize,
+            FilePathValueSupported = input.InputType == InputType.File,
             DynamicLoading = CreateDynamicLoadingMetadata(input.DynamicLoading)
         };
     }

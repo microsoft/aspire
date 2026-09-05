@@ -267,6 +267,10 @@ internal static class ResourceSnapshotMapper
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
+            MaxFileSize = input.MaxFileSize,
+            FilePathValueSupported = input.FilePathValueSupported,
             DynamicLoading = MapDynamicLoading(input.DynamicLoading)
         };
     }

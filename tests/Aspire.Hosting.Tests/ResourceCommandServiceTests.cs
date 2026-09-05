@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIREFILESYSTEM001 // Tests use repository-managed temporary files.
 
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
@@ -562,6 +564,83 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(capturedArguments);
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
         Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_FileArgument_CopiesSelectedFileForCommand()
+    {
+        using var builder = CreateBuilder();
+        using var selectedFile = builder.FileSystemService.TempDirectory.CreateTempFile("bingo.json");
+        await File.WriteAllTextAsync(selectedFile.Path, """{"square":"free"}""");
+
+        string? capturedName = null;
+        string? capturedContent = null;
+        string? capturedPath = null;
+        string? dynamicContent = null;
+        string? validationContent = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "import",
+            displayName: "Import",
+            executeCommand: async context =>
+            {
+                using var files = context.Arguments["squares"].GetFiles();
+                var file = Assert.Single(files);
+                capturedName = file.Name;
+                capturedContent = await File.ReadAllTextAsync(file.FilePath);
+                capturedPath = file.FilePath;
+                return CommandResults.Success();
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "squares",
+                        InputType = InputType.File,
+                        Required = true,
+                        FileFilter = ".json",
+                        MaxFileSize = 1024,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            AlwaysLoadOnStart = true,
+                            LoadCallback = async context =>
+                            {
+                                using var files = context.Input.GetFiles();
+                                dynamicContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                            }
+                        }
+                    }
+                ],
+                ValidateArguments = async context =>
+                {
+                    using var files = context.Inputs["squares"].GetFiles();
+                    validationContent = await File.ReadAllTextAsync(Assert.Single(files).FilePath);
+                }
+            });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "squares",
+                InputType = InputType.File,
+                Value = JsonSerializer.Serialize(new[] { selectedFile.Path })
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "import", arguments);
+
+        Assert.True(result.Success);
+        Assert.Equal("bingo.json", capturedName);
+        Assert.Equal("""{"square":"free"}""", capturedContent);
+        Assert.Equal(capturedContent, dynamicContent);
+        Assert.Equal(capturedContent, validationContent);
+        Assert.NotEqual(selectedFile.Path, capturedPath);
     }
 
     [Fact]
