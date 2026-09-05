@@ -445,12 +445,30 @@ suite('E2E launch profile', () => {
         assert.ok(openWorkspaceCase.indexOf('getE2eWorkspaceFolderPath') < openWorkspaceCase.indexOf('markStarted();'));
     });
 
-    test('uses a shared timeout budget for workspace recovery and AppHost discovery', () => {
+    test('gives workspace-folder recovery its own timeout budget, independent of the caller\'s condition wait', () => {
+        // Regression coverage for a second, more severe CI failure introduced by the reload-based
+        // fix below: ensureWorkspaceFolderOpen used to accept the *caller's* Deadline and share it
+        // across its quick-check/reload/recovery preamble. Most callers default `timeoutMs` to just
+        // 120000ms total, so on a loaded CI machine the 30s quick check plus a slow window reload
+        // could by themselves exhaust that whole shared budget before the caller's actual
+        // condition-wait ever ran - failing nearly every E2E shard with "Timed out after 120000ms
+        // waiting for workspace folder diagnostics" even though the real condition was never
+        // actually attempted. ensureWorkspaceFolderOpen must build its own independent deadline, and
+        // every caller must await it before creating its own deadline for its real condition.
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
 
-        assert.ok(assertions.includes('const deadline = createDeadline(timeoutMs);'));
-        assert.ok(assertions.includes('getRemainingTimeout(deadline'));
+        assert.ok(assertions.includes('async function ensureWorkspaceFolderOpen(): Promise<void> {'), 'ensureWorkspaceFolderOpen must not accept the caller\'s deadline as a parameter');
+
+        const ensureOpenStart = assertions.indexOf('async function ensureWorkspaceFolderOpen(');
+        const ensureOpenEnd = assertions.indexOf('\nasync function tryWaitForWorkspaceFolder(', ensureOpenStart);
+        const ensureOpenBody = assertions.slice(ensureOpenStart, ensureOpenEnd);
+        assert.ok(ensureOpenBody.includes('const deadline = createDeadline('), 'ensureWorkspaceFolderOpen must create its own independent deadline');
+        assert.ok(ensureOpenBody.includes('getRemainingTimeout(deadline'));
+
+        const callerOrderPattern = /await ensureWorkspaceFolderOpen\(\);\s*\n\s*const deadline = createDeadline\(timeoutMs\);/g;
+        const callerOrderMatches = assertions.match(callerOrderPattern) ?? [];
+        assert.strictEqual(callerOrderMatches.length, 3, 'all 3 wait-helper callers must await ensureWorkspaceFolderOpen() before creating their own deadline, so its preamble never steals from the condition-wait budget');
     });
 
     test('recovers a stuck workspace-folder check by reloading the window instead of asking the extension to reopen the folder', () => {
@@ -471,7 +489,7 @@ suite('E2E launch profile', () => {
         const quickCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 30000)');
         const clearControlFileIndex = ensureOpenBody.indexOf('fs.rmSync(controlFilePath, { force: true });');
         const reloadWindowIndex = ensureOpenBody.indexOf('await reloadWindow();');
-        const recoveryCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 120000)');
+        const recoveryCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 90000)');
 
         assert.ok(ensureOpenStart >= 0);
         assert.ok(ensureOpenEnd > ensureOpenStart);

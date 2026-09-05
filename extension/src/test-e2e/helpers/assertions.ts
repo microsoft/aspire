@@ -23,8 +23,8 @@ let workspaceFolderOpened = false;
 // that calls this as its very first wait in a freshly-launched window, before any other helper has
 // had a chance to open the fixture workspace - can time out with no useful state ever observed.
 export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    await ensureWorkspaceFolderOpen();
     const deadline = createDeadline(timeoutMs);
-    await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
         file => file.state.isWorkspaceAppHostDiscoveryComplete && !file.state.isRepositoryLoading,
         'repository to become idle',
@@ -43,8 +43,8 @@ export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<Exten
  * empty candidate list until the timeout.
  */
 export async function waitForWorkspaceAppHostCandidate(appHostPath: string, timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    await ensureWorkspaceFolderOpen();
     const deadline = createDeadline(timeoutMs);
-    await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
         file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, appHostPath)),
         `workspace AppHost candidate '${appHostPath}'`,
@@ -52,8 +52,8 @@ export async function waitForWorkspaceAppHostCandidate(appHostPath: string, time
 }
 
 export async function waitForSelectedWorkspaceAppHost(appHostPath = getPrimaryAppHostProjectPath(), timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    await ensureWorkspaceFolderOpen();
     const deadline = createDeadline(timeoutMs);
-    await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
         file => file.state.workspaceAppHostPath !== undefined && isSamePath(file.state.workspaceAppHostPath, appHostPath),
         `selected workspace AppHost '${appHostPath}'`,
@@ -337,11 +337,22 @@ export function readStateFile(): ExtensionE2EStateFile {
     }
 }
 
-async function ensureWorkspaceFolderOpen(deadline: Deadline): Promise<void> {
+async function ensureWorkspaceFolderOpen(): Promise<void> {
     if (workspaceFolderOpened) {
         return;
     }
 
+    // This preamble is one-time setup, not part of any caller's own condition-wait, so it gets its
+    // own fixed deadline instead of sharing the `timeoutMs` a caller passed in for its actual
+    // condition. Sharing was a real bug: this function used to take the caller's `Deadline`
+    // directly, but most callers default `timeoutMs` to just 120000ms total, and on a loaded CI
+    // machine the 30s quick check below plus a slow window reload could by themselves exhaust that
+    // whole budget - leaving the post-reload recovery check a sliver of its requested time, or none
+    // at all, and failing with "Timed out after 120000ms waiting for workspace folder diagnostics"
+    // even though the reload was still legitimately in progress. Giving this its own independent
+    // deadline also guarantees a caller's subsequent wait for its real condition always gets the
+    // full `timeoutMs` it asked for, starting only once this preamble has actually finished.
+    const deadline = createDeadline(150000);
     const expectedPath = getWorkspaceRoot();
     // The E2E control-file bridge activates concurrently with RPC/DCP server setup, so give it
     // generous time to come up on its own before assuming anything is actually wrong: on a loaded
@@ -359,8 +370,7 @@ async function ensureWorkspaceFolderOpen(deadline: Deadline): Promise<void> {
     // This used to ask the extension to reopen the folder via the 'openWorkspaceFolder' control
     // command (vscode.commands.executeCommand('vscode.openFolder', ...)), but that was observed in
     // CI to hang the extension host indefinitely whenever the quick check above raced activation:
-    // the RPC server would tear down for the reload and the extension would never reactivate,
-    // eventually failing with "Timed out after 120000ms waiting for workspace folder diagnostics."
+    // the RPC server would tear down for the reload and the extension would never reactivate.
     // Reload the window directly instead - the same proven-reliable mechanism reloadWorkspaceForE2E
     // already uses elsewhere in this suite - and simply wait for the (already-correct) folder to be
     // reported open again once the fresh extension host comes up.
@@ -370,7 +380,7 @@ async function ensureWorkspaceFolderOpen(deadline: Deadline): Promise<void> {
     }
 
     await reloadWindow();
-    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 120000)) {
+    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 90000)) {
         workspaceFolderOpened = true;
         return;
     }
