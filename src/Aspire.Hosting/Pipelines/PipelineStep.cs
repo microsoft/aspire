@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRECOMPUTE004
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -58,6 +59,17 @@ public class PipelineStep
     [AspireExportIgnore(Reason = "The associated resource is an internal runtime link and may be null for steps that are not tied to a resource.")]
     public IResource? Resource { get; set; }
 
+    internal List<DeploymentConcurrencyGroup> DeploymentConcurrencyGroups { get; init; } = [];
+
+    // Keep groups configured directly on the step separate from groups derived from model annotations,
+    // so repeated resolution can rebuild only the derived memberships.
+    internal List<DeploymentConcurrencyGroup> ResolvedDeploymentConcurrencyGroups { get; } = [];
+
+    internal IEnumerable<DeploymentConcurrencyGroup> GetDeploymentConcurrencyGroups()
+    {
+        return DeploymentConcurrencyGroups.Concat(ResolvedDeploymentConcurrencyGroups);
+    }
+
     /// <summary>
     /// Adds a dependency on another step.
     /// </summary>
@@ -111,12 +123,13 @@ public class PipelineStep
 
     /// <summary>
     /// Creates a shallow clone of this step with fresh copies of its
-    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, and
-    /// <see cref="Tags"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
+    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>, and
+    /// <see cref="DeploymentConcurrencyGroups"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
     /// when isolating step-graph mutations during a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
     {
+        // Resolved deployment groups are model-derived and must be rebuilt for the clone's resolution.
         return new PipelineStep
         {
             Name = Name,
@@ -126,6 +139,7 @@ public class PipelineStep
             RequiredBySteps = [.. RequiredBySteps],
             Tags = [.. Tags],
             Resource = Resource,
+            DeploymentConcurrencyGroups = [.. DeploymentConcurrencyGroups],
         };
     }
 

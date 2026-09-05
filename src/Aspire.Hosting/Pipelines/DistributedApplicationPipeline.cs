@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECOMPUTE004
 
 using System.Diagnostics;
 using System.Globalization;
@@ -639,11 +640,68 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Convert RequiredBy relationships to DependsOn relationships before filtering
         var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
         NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
+        AssignDeploymentConcurrencyGroups(context.Model, allSteps);
 
         // Capture resolved pipeline data for diagnostics (before filtering)
         _lastResolvedSteps = allSteps;
 
         return allSteps;
+    }
+
+    private static void AssignDeploymentConcurrencyGroups(
+        DistributedApplicationModel model,
+        List<PipelineStep> steps)
+    {
+        var resourceNameComparer = new ResourceNameComparer();
+        foreach (var step in steps)
+        {
+            step.ResolvedDeploymentConcurrencyGroups.Clear();
+        }
+
+        var deploymentResources = model.Resources
+            .Concat(model.Resources.SelectMany(resource =>
+                resource.Annotations
+                    .OfType<DeploymentTargetAnnotation>()
+                    .Select(annotation => annotation.DeploymentTarget)))
+            .Distinct<IResource>(ReferenceEqualityComparer.Instance);
+
+        foreach (var resource in deploymentResources)
+        {
+            var concurrencyGroups = resource.Annotations
+                .OfType<DeploymentConcurrencyGroupAnnotation>()
+                .Select(annotation => annotation.Group)
+                .DistinctBy(group => group.Name, StringComparer.Ordinal)
+                .ToArray();
+
+            if (concurrencyGroups.Length == 0)
+            {
+                continue;
+            }
+
+            var deploymentSteps = steps.Where(step =>
+                resourceNameComparer.Equals(step.Resource, resource) &&
+                step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure))
+                .ToArray();
+
+            if (deploymentSteps.Length == 0)
+            {
+                deploymentSteps = steps.Where(step =>
+                    resourceNameComparer.Equals(step.Resource, resource) &&
+                    step.Tags.Contains(WellKnownPipelineTags.DeployCompute))
+                    .ToArray();
+            }
+
+            foreach (var deploymentStep in deploymentSteps)
+            {
+                foreach (var group in concurrencyGroups)
+                {
+                    if (!deploymentStep.GetDeploymentConcurrencyGroups().Any(existing => ReferenceEquals(existing, group)))
+                    {
+                        deploymentStep.ResolvedDeploymentConcurrencyGroups.Add(group);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -679,7 +737,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         PipelineContext context)
     {
         var pipelineOptions = context.Services.GetService<Microsoft.Extensions.Options.IOptions<PipelineOptions>>();
-        var stepName = pipelineOptions?.Value.Step;
+        return FilterStepsForExecution(allSteps, pipelineOptions?.Value.Step);
+    }
+
+    internal static (List<PipelineStep> StepsToExecute, Dictionary<string, PipelineStep> StepsByName) FilterStepsForExecution(
+        List<PipelineStep> allSteps,
+        string? stepName)
+    {
         var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
         if (string.IsNullOrWhiteSpace(stepName))
@@ -849,6 +913,22 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Validate no cycles exist in the dependency graph
         ValidateDependencyGraph(steps, stepsByName);
 
+        // Every step acquires its groups in the same order so overlapping memberships cannot deadlock.
+        var concurrencyGates = new Dictionary<string, (int Order, SemaphoreSlim Semaphore)>(StringComparer.Ordinal);
+        var nextConcurrencyGroupOrder = 0;
+        foreach (var step in steps)
+        {
+            foreach (var group in step.GetDeploymentConcurrencyGroups())
+            {
+                if (!concurrencyGates.ContainsKey(group.Name))
+                {
+                    concurrencyGates.Add(
+                        group.Name,
+                        (nextConcurrencyGroupOrder++, new SemaphoreSlim(1, 1)));
+                }
+            }
+        }
+
         // Create a TaskCompletionSource for each step
         var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
         var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
@@ -890,8 +970,21 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 }
             }
 
+            var acquiredConcurrencyGates = new Stack<SemaphoreSlim>();
             try
             {
+                var stepConcurrencyGates = step.GetDeploymentConcurrencyGroups()
+                    .Select(group => group.Name)
+                    .Distinct(StringComparer.Ordinal)
+                    .Select(groupName => concurrencyGates[groupName])
+                    .OrderBy(gate => gate.Order);
+
+                foreach (var gate in stepConcurrencyGates)
+                {
+                    await gate.Semaphore.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    acquiredConcurrencyGates.Push(gate.Semaphore);
+                }
+
                 var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
                 var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
                 var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
@@ -933,51 +1026,68 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 stepTcs.TrySetException(ex);
                 throw;
             }
+            finally
+            {
+                while (acquiredConcurrencyGates.TryPop(out var gate))
+                {
+                    gate.Release();
+                }
+            }
         }
 
-        // Start all steps (they'll wait on their dependencies internally)
-        var allStepTasks = new Task[steps.Count];
-        for (var i = 0; i < steps.Count; i++)
-        {
-            var step = steps[i];
-            allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
-        }
-
-        // Wait for all steps to complete (or fail)
         try
         {
-            await Task.WhenAll(allStepTasks).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Collect all failed steps and their names
-            var failures = allStepTasks
-                .Where(t => t.IsFaulted)
-                .Select(t => t.Exception!)
-                .SelectMany(ae => ae.InnerExceptions)
-                .ToList();
-
-            if (failures.Count > 1)
+            // Start all steps (they'll wait on their dependencies internally)
+            var allStepTasks = new Task[steps.Count];
+            for (var i = 0; i < steps.Count; i++)
             {
-                // Match failures to steps to get their names
-                var failedStepNames = new List<string>();
-                for (var i = 0; i < allStepTasks.Length; i++)
-                {
-                    if (allStepTasks[i].IsFaulted)
-                    {
-                        failedStepNames.Add(steps[i].Name);
-                    }
-                }
-
-                var message = failedStepNames.Count > 0
-                    ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
-                    : "Multiple pipeline steps failed.";
-
-                throw new AggregateException(message, failures);
+                var step = steps[i];
+                allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
             }
 
-            // Single failure - just rethrow
-            throw;
+            // Wait for all steps to complete (or fail)
+            try
+            {
+                await Task.WhenAll(allStepTasks).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Collect all failed steps and their names
+                var failures = allStepTasks
+                    .Where(t => t.IsFaulted)
+                    .Select(t => t.Exception!)
+                    .SelectMany(ae => ae.InnerExceptions)
+                    .ToList();
+
+                if (failures.Count > 1)
+                {
+                    // Match failures to steps to get their names
+                    var failedStepNames = new List<string>();
+                    for (var i = 0; i < allStepTasks.Length; i++)
+                    {
+                        if (allStepTasks[i].IsFaulted)
+                        {
+                            failedStepNames.Add(steps[i].Name);
+                        }
+                    }
+
+                    var message = failedStepNames.Count > 0
+                        ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
+                        : "Multiple pipeline steps failed.";
+
+                    throw new AggregateException(message, failures);
+                }
+
+                // Single failure - just rethrow
+                throw;
+            }
+        }
+        finally
+        {
+            foreach (var gate in concurrencyGates.Values)
+            {
+                gate.Semaphore.Dispose();
+            }
         }
     }
 
@@ -1153,10 +1263,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// reasons why certain steps may not be executed.
     /// </summary>
     private static void DumpDependencyGraphDiagnostics(
-        List<PipelineStep> allSteps,
+        List<PipelineStep> resolvedSteps,
         PipelineStepContext context)
     {
         var sb = new StringBuilder();
+        var (allSteps, allStepsByName) = FilterStepsForExecution(resolvedSteps, stepName: null);
 
         sb.AppendLine();
         sb.AppendLine("PIPELINE DEPENDENCY GRAPH DIAGNOSTICS");
@@ -1173,8 +1284,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Always show full pipeline analysis for diagnostics
         sb.AppendLine("Analysis for full pipeline execution (showing all steps and their relationships)");
         sb.AppendLine();
-
-        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
         // Build execution order (topological sort)
         var executionOrder = GetTopologicalOrder(allSteps);
@@ -1292,12 +1401,16 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         sb.AppendLine();
         sb.AppendLine("EXECUTION SIMULATION (\"What If\" Analysis):");
         sb.AppendLine("Shows what steps would run for each possible target step and in what order.");
-        sb.AppendLine("Steps at the same level can run concurrently.");
+        sb.AppendLine("Steps at the same level have no dependency ordering, but deployment concurrency groups may still limit concurrent execution.");
         sb.AppendLine("─────────────────────────────────────────────────────────────────────────────");
 
         // Show execution simulation for each step as a potential target
-        foreach (var targetStep in allSteps.OrderBy(s => s.Name, StringComparer.Ordinal))
+        foreach (var targetStepDefinition in resolvedSteps.OrderBy(s => s.Name, StringComparer.Ordinal))
         {
+            var (stepsForTarget, stepsForTargetByName) =
+                FilterStepsForExecution(resolvedSteps, targetStepDefinition.Name);
+            var targetStep = stepsForTargetByName[targetStepDefinition.Name];
+
             sb.AppendLine(CultureInfo.InvariantCulture, $"If targeting '{targetStep.Name}':");
 
             // Debug: Show what dependencies this step has after normalization
@@ -1311,9 +1424,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 sb.AppendLine("  Direct dependencies: none");
             }
 
-            // Compute what would execute for this target
-            var stepsForTarget = ComputeTransitiveDependencies(targetStep, allStepsByName);
-            var executionLevels = GetExecutionLevelsByStep(stepsForTarget, allStepsByName);
+            var executionLevels = GetExecutionLevelsByStep(stepsForTarget, stepsForTargetByName);
 
             if (stepsForTarget.Count == 0)
             {
