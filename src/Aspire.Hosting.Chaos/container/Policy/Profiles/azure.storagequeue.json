@@ -1,0 +1,28 @@
+{
+  "id": "azure.storagequeue",
+  "safeFailFirstMax": 4,
+  "entries": [
+    {
+      "weight": 0.60,
+      "kind": "error",
+      "status": 503,
+      "contentType": "application/xml",
+      "headers": { "x-ms-error-code": "ServerBusy" },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>ServerBusy</Code><Message>The server is busy.</Message></Error>"
+    },
+    {
+      "weight": 0.25,
+      "kind": "latency",
+      "minMs": 100,
+      "maxMs": 1000
+    },
+    {
+      "weight": 0.15,
+      "kind": "error",
+      "status": 412,
+      "contentType": "application/xml",
+      "headers": { "x-ms-error-code": "ConditionNotMet" },
+      "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>ConditionNotMet</Code><Message>The condition specified using HTTP conditional header(s) is not met.</Message></Error>"
+    }
+  ]
+}
