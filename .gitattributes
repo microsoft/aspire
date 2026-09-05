@@ -63,3 +63,18 @@ src/Components/**/ConfigurationSchema.json text eol=lf
 *.h linguist-language=C
 
 .github/workflows/*.lock.yml linguist-generated=true
+
+# Text based Verify snapshot files are generated with LF endings and must stay
+# that way in the working tree, even on Windows. Binary snapshots are deliberately
+# not listed here.
+*.verified.bicep text eol=lf
+*.verified.json text eol=lf
+*.verified.yaml text eol=lf
+*.verified.txt text eol=lf
+*.verified.xml text eol=lf
+*.verified.env text eol=lf
+*.verified.ts text eol=lf
+*.verified.rs text eol=lf
+*.verified.py text eol=lf
+*.verified.java text eol=lf
+*.verified.go text eol=lf
