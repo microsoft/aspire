@@ -3038,13 +3038,15 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.Equal(canonicalBetaBefore, await File.ReadAllTextAsync(canonicalBetaPath));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("legacy-root-alias")]
+    [InlineData("Legacy_Sample")]
     [RequiresTools(["node"])]
-    public async Task CommandLineConvergesLegacyNormalizedTestRootWithoutOverwritingCanonical()
+    public async Task CommandLineConvergesLegacyNormalizedTestRootWithoutOverwritingCanonical(
+        string aliasCauseId)
     {
         const string legacyCauseId = "Legacy.Sample";
         const string canonicalCauseId = "legacy-sample";
-        const string aliasCauseId = "legacy-root-alias";
         const string testMethod = "Aspire.Sample.Tests.SampleTests.FlakyTest";
         string analysisPath = Path.Combine(_workspace.Path, "legacy-test-analysis.json");
         string causesDirectory = Directory.CreateDirectory(
@@ -3052,7 +3054,10 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         string priorCausesDirectory = Directory.CreateDirectory(
             Path.Combine(_workspace.Path, "legacy-test-prior-causes")).FullName;
         string retryPatternsPath = Path.Combine(_workspace.Path, "legacy-test-retry-patterns.json");
-        object payload = CreateLegacyNormalizedSameTestPayload(reverse: false, parameterized: true);
+        object payload = CreateLegacyNormalizedSameTestPayload(
+            reverse: false,
+            parameterized: true,
+            aliasCauseId: aliasCauseId);
         using JsonDocument payloadDocument = JsonDocument.Parse(
             JsonSerializer.Serialize(payload, s_jsonOptions));
         JsonElement root = payloadDocument.RootElement;
@@ -3117,8 +3122,10 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                 ],
                 ReadStrings(normalizedCause.RootElement, "test_names"));
             Assert.Equal(
-                ["Legacy.Sample", "legacy-root-alias", "legacy-root-marker", "safe-root-marker"],
-                ReadStrings(normalizedCause.RootElement, "aliases"));
+                new[] { legacyCauseId, aliasCauseId, "legacy-root-marker", "safe-root-marker" }
+                    .Distinct()
+                    .Order(),
+                ReadStrings(normalizedCause.RootElement, "aliases").Order());
             Assert.Equal(
                 "https://github.com/microsoft/aspire/issues/10",
                 normalizedCause.RootElement.GetProperty("issue_url").GetString());
@@ -3140,7 +3147,10 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             },
             error_pattern = "The safe sample root failed.",
             issue_url = "https://github.com/microsoft/aspire/issues/20",
-            aliases = new[] { "Legacy.Sample", "legacy-root-alias", "legacy-root-marker", "safe-root-marker" },
+            aliases = new[] { legacyCauseId, aliasCauseId, "legacy-root-marker", "safe-root-marker" }
+                .Distinct()
+                .Order()
+                .ToArray(),
             occurrences = new[] { new { run_id = 200, observed_at = "2026-08-02T00:00:00Z" } }
         });
         string canonicalPriorAfterFirstRun = await File.ReadAllTextAsync(canonicalPriorPath);
@@ -3797,7 +3807,8 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     private static object CreateLegacyNormalizedSameTestPayload(
         bool reverse,
-        bool parameterized = false)
+        bool parameterized = false,
+        string aliasCauseId = "legacy-root-alias")
     {
         const string testMethod = "Aspire.Sample.Tests.SampleTests.FlakyTest";
         string legacyTestName = parameterized ? $"{testMethod}(value: 1)" : testMethod;
@@ -3807,7 +3818,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         [
             new
             {
-                id = "legacy-root-alias",
+                id = aliasCauseId,
                 canonical_id = "Legacy.Sample",
                 type = "flaky-test",
                 occurrences = new[] { new { run_id = 150, observed_at = "2026-08-01T12:00:00Z" } }

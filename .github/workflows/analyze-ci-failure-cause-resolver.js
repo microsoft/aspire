@@ -128,9 +128,7 @@ function resolveCauses({
             : [];
         for (const record of normalizedLegacyRecords) {
             addPriorCauseAlias(priorCauseAliases, record.id, canonicalId);
-        }
-        if (normalizedDestinationPriorCause) {
-            compatibleNormalizedPriorAliases.add(priorCauseId);
+            compatibleNormalizedPriorAliases.add(record.id);
         }
         const supersededPriorCause =
             proposedCanonicalCause?.id !== priorCauseId &&
