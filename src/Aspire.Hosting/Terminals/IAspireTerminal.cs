@@ -45,6 +45,24 @@ public interface IAspireTerminal : IAsyncDisposable
     TerminalSurface Surface { get; }
 
     /// <summary>
+    /// Starts the terminal's workload if it is not already running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Starting is the caller's decision, not the dashboard's and not the interaction service's. Call this to
+    /// have the workload running before anyone is looking at it — a terminal that is already running when a
+    /// dialog opens shows its scrollback immediately, and automation can drive a terminal that is never
+    /// displayed at all.
+    /// </para>
+    /// <para>
+    /// This is idempotent and does not block: it schedules the workload rather than waiting for it to produce
+    /// output. Use <see cref="WaitForTextAsync"/> to wait for the workload to reach a known state.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The terminal has already stopped.</exception>
+    void Start();
+
+    /// <summary>
     /// Reveals the terminal dock in every connected dashboard and switches to this terminal's tab.
     /// </summary>
     /// <remarks>

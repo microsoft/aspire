@@ -79,6 +79,22 @@ public class TerminalServiceTests
     }
 
     [Fact]
+    public async Task Start_IsIdempotentAndThrowsOnceStopped()
+    {
+        var service = TestTerminalService.Create();
+        var terminal = CreateInteractionTerminal(service, "Shell");
+
+        // Callers decide when the workload spawns, so starting has to tolerate being called more than once --
+        // a caller that starts explicitly and then attaches a viewer goes through this twice.
+        terminal.Start();
+        terminal.Start();
+
+        await terminal.DisposeAsync().DefaultTimeout();
+
+        Assert.Throws<InvalidOperationException>(terminal.Start);
+    }
+
+    [Fact]
     public async Task DisposeAsync_RemovesTerminalFromRegistry()
     {
         var service = TestTerminalService.Create();

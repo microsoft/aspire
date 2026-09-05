@@ -57,14 +57,15 @@ internal static class TerminalInteractionCommands
                     ? new TerminalCommand("cmd.exe")
                     : new TerminalCommand("/bin/bash") { Arguments = ["-i", "-l"] };
 
-                // The caller owns the terminal, so it is disposed here rather than by the dialog. The workload does
-                // not start until the dialog is opened, so dismissing it without looking never spawns a shell.
+                // The caller owns the terminal: it starts it, and disposes it here rather than the dialog doing so.
                 await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = "Shell",
                     Command = command,
                     Surface = TerminalSurface.Interaction
                 });
+
+                terminal.Start();
 
                 var result = await interactionService.PromptInputsAsync(
                     "AppHost shell",
@@ -142,7 +143,7 @@ internal static class TerminalInteractionCommands
         var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
         var terminalService = commandContext.Services.GetRequiredService<TerminalService>();
 
-        // The caller owns the terminal, so it is disposed here rather than by the dialog.
+        // The caller owns the terminal: it starts it, and disposes it here rather than the dialog doing so.
         await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
@@ -152,6 +153,8 @@ internal static class TerminalInteractionCommands
             },
             Surface = TerminalSurface.Interaction
         });
+
+        terminal.Start();
 
         var result = await interactionService.PromptInputsAsync(
             title,
@@ -204,6 +207,7 @@ internal static class TerminalInteractionCommands
                 });
 
                 // Reveals the dock in every connected browser and switches it to this tab.
+                terminal.Start();
                 terminal.Show();
 
                 try
@@ -278,8 +282,8 @@ internal static class TerminalInteractionCommands
                 }
                 limit = Math.Clamp(limit, 2, 1_000_000);
 
-                // The command owns the terminal for its whole life: it drives the game through the handle, and
-                // disposes it once the answer has been shown.
+                // The command owns the terminal for its whole life: it starts it, drives the game through the
+                // handle, and disposes it once the answer has been shown.
                 await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
                 {
                     Title = "Number guess",
@@ -287,10 +291,14 @@ internal static class TerminalInteractionCommands
                     Surface = TerminalSurface.Interaction
                 });
 
+                // Start before the dialog rather than letting the first attach do it, so `dotnet run --file` is
+                // already compiling the script while the dialog is being raised.
+                terminal.Start();
+
                 using var gameCts = CancellationTokenSource.CreateLinkedTokenSource(commandContext.CancellationToken);
 
-                // Start the dialog before playing so a browser can attach while `dotnet run --file` is still
-                // compiling the script — otherwise the human misses the opening moves.
+                // Raise the dialog before playing so a browser can attach while the opening moves are still being
+                // made — otherwise the human joins after the game is already won.
                 var dialogTask = interactionService.PromptInputsAsync(
                     "Number guess",
                     $"Guessing a number between 1 and {limit}. Every keystroke below is being typed by the AppHost.",

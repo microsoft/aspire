@@ -64,6 +64,8 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
 
     public TerminalDescriptor Descriptor => new(Id, Title);
 
+    public void Start() => EnsureStarted();
+
     public void Show()
     {
         if (Surface != TerminalSurface.Dock)
@@ -120,8 +122,9 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     /// Starts the workload if it is not already running.
     /// </summary>
     /// <remarks>
-    /// Startup is lazy so that an interaction dialog dismissed without ever opening its terminal never
-    /// spawns a process. The first attach *or* the first automation call is what starts it.
+    /// Callers start a terminal explicitly through <see cref="Start"/>. This remains the backstop for the two
+    /// paths that cannot function without a running workload — a viewer attaching and an automation call — so
+    /// that forgetting to start is a late start rather than a hard failure.
     /// </remarks>
     private Hex1bTerminal EnsureStarted()
     {
