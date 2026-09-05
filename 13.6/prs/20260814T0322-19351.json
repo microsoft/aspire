@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backported to release/13.5",
+  "mergedAt": "2026-08-14T03:22:43Z",
+  "number": 19351,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Honor --source during template discovery"
+}

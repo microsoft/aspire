@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`WithTerminal()` could leave orphaned per-replica Unix-domain sockets under `~/.aspire/trmnl/` when a terminal host was stopped with SIGTERM or its owning AppHost exited unexpectedly. Terminal lifecycle cleanup is now resilient across graceful stops, forced termination, crashes, PID reuse, reboots, containers, and concurrent AppHosts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf9",
+  "firstMergedAt": "2026-08-15T16:44:51Z",
+  "lastMergedAt": "2026-08-15T16:44:51Z",
+  "name": "Handle SIGTERM in terminal host and clean up orphaned sockets",
+  "owner": "IEvangelist",
+  "prs": [
+    19344
+  ]
+}

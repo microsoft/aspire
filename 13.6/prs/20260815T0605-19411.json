@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Automated bot PR, not a backport",
+  "mergedAt": "2026-08-15T06:05:48Z",
+  "number": 19411,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "[Automated] Update Microsoft Foundry Models"
+}

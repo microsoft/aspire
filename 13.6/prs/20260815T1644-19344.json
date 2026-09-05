@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Handle SIGTERM in terminal host and GC orphaned sockets",
+  "mergedAt": "2026-08-15T16:44:51Z",
+  "number": 19344,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Handle SIGTERM in terminal host and GC orphaned sockets"
+}

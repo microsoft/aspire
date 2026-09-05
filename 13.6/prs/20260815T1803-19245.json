@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine servicing dependency update; also backported to release/13.5",
+  "mergedAt": "2026-08-15T18:03:01Z",
+  "number": 19245,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Update .NET Servicing deps"
+}

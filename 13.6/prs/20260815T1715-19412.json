@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-infrastructure only change; also backported to release/13.5",
+  "mergedAt": "2026-08-15T17:15:44Z",
+  "number": 19412,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Fix deployment E2E test matrix"
+}

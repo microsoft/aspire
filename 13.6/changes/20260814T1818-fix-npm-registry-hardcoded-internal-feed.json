@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A previous change accidentally made the internal dnceng Azure Artifacts feed the customer-facing default npm registry, which returns 401 for uncached tarballs and broke `aspire agent init` when installing packages such as `playwright`. The public npm registry is restored as the default in generated Dockerfiles and `aspire new` templates.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-08-14T18:18:43Z",
+  "lastMergedAt": "2026-08-14T18:18:43Z",
+  "name": "Fix npm registry hard-coded to internal feed",
+  "owner": "IEvangelist",
+  "prs": [
+    19388
+  ]
+}

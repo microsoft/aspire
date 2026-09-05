@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Redact secret env var fix (retargeted to main; backport outcome unconfirmed)",
+  "mergedAt": "2026-08-14T17:13:13Z",
+  "number": 19248,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Redact owning resource's own secret env var in describe"
+}

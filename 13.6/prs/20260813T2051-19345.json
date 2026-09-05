@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Require confirmation before change-location deletes Azure resources",
+  "mergedAt": "2026-08-13T20:51:42Z",
+  "number": 19345,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Require confirmation before change-location deletes Azure resources"
+}

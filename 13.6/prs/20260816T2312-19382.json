@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Progress prompt title API change (backport outcome unconfirmed)",
+  "mergedAt": "2026-08-16T23:12:56Z",
+  "number": 19382,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Move progress prompt title to options"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Rust hosting + VS Code debugger support",
+  "mergedAt": "2026-08-14T21:48:33Z",
+  "number": 18906,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Add Rust hosting package and VS Code debugger wiring"
+}

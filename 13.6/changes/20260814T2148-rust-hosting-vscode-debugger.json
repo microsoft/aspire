@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "afscrome"
+  ],
+  "description": "Aspire now has first-party support for Rust hosting via a new `Aspire.Hosting.Rust` integration that models Cargo applications, resolves Cargo targets for debugging and publishing, and exports APIs to C# and polyglot AppHosts. The VS Code extension adds matching debugger wiring for Rust resources and Rust AppHosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83e\udd80",
+  "firstMergedAt": "2026-08-14T21:48:33Z",
+  "lastMergedAt": "2026-08-14T21:48:33Z",
+  "name": "Add Rust hosting support with VS Code debugging",
+  "owner": "afscrome",
+  "prs": [
+    18906
+  ]
+}

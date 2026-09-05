@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backported to release/13.5",
+  "mergedAt": "2026-08-15T01:47:44Z",
+  "number": 19374,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Default fsGroup for Kubernetes"
+}

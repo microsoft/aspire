@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "TypeScript AppHost dev cert trust",
+  "mergedAt": "2026-08-13T20:39:22Z",
+  "number": 15634,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "included",
+  "title": "Ensure the typescript app host trusts the dev cert"
+}

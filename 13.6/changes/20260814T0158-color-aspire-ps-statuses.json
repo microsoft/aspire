@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire ps` now color-codes known resource statuses in table output \u2014 `running` in green and `stopped` in red \u2014 making it easier to scan AppHost state at a glance. JSON output is unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfa8",
+  "firstMergedAt": "2026-08-14T01:58:13Z",
+  "lastMergedAt": "2026-08-14T01:58:13Z",
+  "name": "Color statuses in aspire ps output",
+  "owner": "JamesNK",
+  "prs": [
+    19369
+  ]
+}

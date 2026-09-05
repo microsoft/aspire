@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backported to release/13.5",
+  "mergedAt": "2026-08-13T22:23:02Z",
+  "number": 19251,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Ensure Aspire CLI bundle resolution"
+}

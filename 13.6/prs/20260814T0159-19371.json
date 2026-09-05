@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backported to release/13.5",
+  "mergedAt": "2026-08-14T01:59:22Z",
+  "number": 19371,
+  "runDate": "2026-09-05T12:15:03Z",
+  "status": "excluded",
+  "title": "Fix template catalog member paths"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `change-location` dev-time command previously could delete and recreate an existing location-immutable Azure resource without warning, risking permanent data loss. It now requires an explicit confirmation (`--confirm-delete` on the CLI, a dashboard warning checkbox, or `arguments.confirmDelete=true` via MCP) before deleting a live Azure resource.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u26a0\ufe0f",
+  "firstMergedAt": "2026-08-13T20:51:42Z",
+  "lastMergedAt": "2026-08-13T20:51:42Z",
+  "name": "Require confirmation before change-location deletes Azure resources",
+  "owner": "IEvangelist",
+  "prs": [
+    19345
+  ]
+}
