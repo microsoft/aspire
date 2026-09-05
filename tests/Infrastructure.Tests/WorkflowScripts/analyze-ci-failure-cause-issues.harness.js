@@ -96,13 +96,17 @@ async function dispatch(operation, payload) {
     await fs.rm(memoryCausesDirectory, { recursive: true, force: true });
     await fs.mkdir(causesDirectory, { recursive: true });
     await fs.mkdir(memoryCausesDirectory, { recursive: true });
-    await fs.writeFile(
-        path.join(causesDirectory, `${payload.cause.id}.json`),
-        `${JSON.stringify(payload.cause)}\n`);
-    if (payload.storedCause) {
+    const causes = payload.causes ?? [payload.cause];
+    for (const cause of causes) {
         await fs.writeFile(
-            path.join(memoryCausesDirectory, `${payload.cause.id}.json`),
-            `${JSON.stringify(payload.storedCause)}\n`);
+            path.join(causesDirectory, `${cause.id}.json`),
+            `${JSON.stringify(cause)}\n`);
+    }
+    const storedCauses = payload.storedCauses ?? (payload.storedCause ? [payload.storedCause] : []);
+    for (const storedCause of storedCauses) {
+        await fs.writeFile(
+            path.join(memoryCausesDirectory, `${storedCause.id}.json`),
+            `${JSON.stringify(storedCause)}\n`);
     }
     for (const storedAlias of payload.storedAliases ?? []) {
         await fs.writeFile(
@@ -140,16 +144,23 @@ async function dispatch(operation, payload) {
     };
 
     let publish;
+    let publishes;
     const repeat = payload.repeat ?? 1;
     for (let index = 0; index < repeat; index++) {
-        const [currentPublish] = await publisher.publishCauseIssues(github, context, core, options);
+        const currentPublishes = await publisher.publishCauseIssues(github, context, core, options);
+        const [currentPublish] = currentPublishes;
         publish ??= currentPublish;
+        publishes ??= currentPublishes;
     }
 
+    const primaryCause = payload.cause ?? causes[0];
     const storedCause = JSON.parse(
-        await fs.readFile(path.join(memoryCausesDirectory, `${payload.cause.id}.json`), 'utf8'));
+        await fs.readFile(path.join(memoryCausesDirectory, `${primaryCause.id}.json`), 'utf8'));
+    const finalStoredCauses = await Promise.all(causes.map(async cause =>
+        JSON.parse(await fs.readFile(path.join(memoryCausesDirectory, `${cause.id}.json`), 'utf8'))));
     return {
         publish,
+        publishes,
         calls: github.calls,
         warnings,
         issues: store.issues.map(issue => ({
@@ -162,6 +173,7 @@ async function dispatch(operation, payload) {
             comments: issue.commentBodies,
         })),
         storedCause,
+        storedCauses: finalStoredCauses,
     };
 }
 

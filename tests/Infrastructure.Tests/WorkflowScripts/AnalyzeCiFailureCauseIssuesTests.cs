@@ -1181,6 +1181,211 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Contains("update", result.Calls);
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishFallsBackToOccurrenceUpdateWhenMainMigrationFails()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                causes = new object[]
+                {
+                    new
+                    {
+                        id = "a-main-breakage",
+                        type = "main-repository-breakage",
+                        title = "Agent-proposed main failure",
+                        error_pattern = "Agent-proposed main diagnostics",
+                        job_names = new[] { "Build / Windows" }
+                    },
+                    new
+                    {
+                        id = "z-worker-crash",
+                        type = "infra-failure",
+                        title = "Worker process crashed",
+                        error_pattern = "Worker crashed",
+                        job_names = new[] { "Build / Linux" }
+                    }
+                },
+                storedCauses = new object[]
+                {
+                    new
+                    {
+                        id = "a-main-breakage",
+                        type = "main-repository-breakage",
+                        occurrences = new object[]
+                        {
+                            new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                            new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                        }
+                    },
+                    new
+                    {
+                        id = "z-worker-crash",
+                        type = "infra-failure",
+                        occurrences = new object[]
+                        {
+                            new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                            new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                        }
+                    }
+                },
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        title = "[Main CI Failure] Legacy title",
+                        body = """
+                            <!-- ci-failure-cause:a-main-breakage -->
+                            <!-- ci-failure-cause-type:main-repository-breakage -->
+
+                            ## Operator notes
+
+                            This body deliberately has no visible type line.
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | main |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    },
+                    new
+                    {
+                        number = 11,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:a-main-breakage -->
+                            <!-- ci-failure-cause-type:main-repository-breakage -->
+                            """
+                    },
+                    new
+                    {
+                        number = 20,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:z-worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Linux ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                },
+                runScope = "main",
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222",
+                    candidateHistoryState = "unavailable"
+                }
+            });
+
+        Assert.Equal(2, result.Publishes.Length);
+
+        var mainIssue = Assert.Single(result.Issues, issue => issue.Number == 10);
+        Assert.Equal(
+            "[Main CI Failure] Main branch CI failure at 2222222222222222222222222222222222222222",
+            mainIssue.Title);
+        Assert.Contains("[991](", mainIssue.Body, StringComparison.Ordinal);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 11).State);
+        Assert.Empty(Assert.Single(result.Issues, issue => issue.Number == 11).Comments);
+
+        var laterIssue = Assert.Single(result.Issues, issue => issue.Number == 20);
+        Assert.Contains("[991](", laterIssue.Body, StringComparison.Ordinal);
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains(
+                "Skipping main issue migration and duplicate reconciliation",
+                StringComparison.Ordinal));
+
+        foreach (var storedCause in result.StoredCauses)
+        {
+            var occurrence = Assert.Single(
+                storedCause.EnumerateObject()
+                    .Single(property => property.NameEquals("occurrences"))
+                    .Value.EnumerateArray(),
+                occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+            Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublishDoesNotReceiptOccurrenceForMainTitleOnlyFallback()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    title = "Agent-proposed main failure",
+                    error_pattern = "Agent-proposed main diagnostics",
+                    job_names = new[] { "Build / Windows" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "main-repository-breakage",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        title = "[Main CI Failure] Legacy title",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:main-repository-breakage -->
+
+                            This issue has no supported occurrence section.
+                            """
+                    }
+                },
+                runScope = "main",
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222",
+                    candidateHistoryState = "unavailable"
+                }
+            });
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(
+            "[Main CI Failure] Main branch CI failure at 2222222222222222222222222222222222222222",
+            issue.Title);
+        Assert.DoesNotContain("[991](", issue.Body, StringComparison.Ordinal);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.False(occurrence.TryGetProperty("issue_published", out _));
+    }
+
     [Theory]
     [InlineData("incomplete")]
     [InlineData("unavailable")]
@@ -1345,10 +1550,12 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     private sealed record PublishResult(
         PublishSummary Publish,
+        PublishSummary[] Publishes,
         string[] Calls,
         string[] Warnings,
         IssueState[] Issues,
-        JsonElement StoredCause);
+        JsonElement StoredCause,
+        JsonElement[] StoredCauses);
 
     private sealed record PublishSummary(int Number, bool Created, bool Skipped, int[] DuplicatesClosed);
 

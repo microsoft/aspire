@@ -561,7 +561,16 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
                 }
             }
             if (cause.type === 'main-repository-breakage') {
-                updatedBody = migrateMainIssueBody(updatedBody, initialBody);
+                try {
+                    updatedBody = migrateMainIssueBody(updatedBody, initialBody);
+                } catch (error) {
+                    if (!(error instanceof OccurrenceRenderError)) {
+                        throw error;
+                    }
+                    core.warning(
+                        `Issue #${issue.number} has unsupported main issue content: ${error.message}. Skipping main issue migration and duplicate reconciliation.`);
+                    canReconcileDuplicates = false;
+                }
             }
             if (updatedBody === issue.body &&
                 (cause.type !== 'main-repository-breakage' || issue.title === issueTitle)) {
@@ -583,7 +592,10 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         occurrenceAlreadyPublished ||
         result.created ||
         result.appliedActions.some(action =>
-            action.type === 'update' && action.issueNumber === result.number);
+            action.type === 'update' &&
+            action.issueNumber === result.number &&
+            typeof action.body === 'string' &&
+            isOccurrencePublished(action.body, storedOccurrences, run.runId));
     await persistIssuePublication(
         storedCausePath,
         cause,
