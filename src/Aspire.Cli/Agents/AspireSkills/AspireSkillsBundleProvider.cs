@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Formats.Tar;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -214,7 +214,8 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' cannot exclude SKILL.md from installation.", skillName));
             }
 
-            var definition = SkillDefinition.CreateAspireSkillsBundle(
+            var definition = AgentFileAssetDefinition.CreateAspireSkillsBundle(
+                AgentAssetKind.Skill,
                 skillName,
                 skill.Description,
                 installExcludedRelativePaths,
@@ -222,7 +223,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
             var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hasSkillFile = false;
-            List<SkillAssetFile> files = [];
+            List<AgentAssetFile> files = [];
             foreach (var file in skillFiles)
             {
                 if (file is null)
@@ -273,7 +274,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
     }
 
-    private static SkillAssetFile ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
+    private static AgentAssetFile ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
         var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
@@ -321,7 +322,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             ValidateSkillFileFrontmatter(skillName, content);
         }
 
-        return new SkillAssetFile(relativePath, content);
+        return new AgentAssetFile(relativePath, content);
     }
 
     private static void ValidateSkillFileFrontmatter(string skillName, string content)

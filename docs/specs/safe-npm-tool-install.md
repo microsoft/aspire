@@ -94,9 +94,9 @@ Our verification chain relies on these trust anchors:
 
 ### Step 6: Generate and mirror skill files
 
-**Action:** Run `playwright-cli install --skills` to generate agent skill files in the primary skill directory (`.claude/skills/playwright-cli/`), then mirror the skill directory to all other detected agent environment skill directories (e.g., `.github/skills/playwright-cli/`, `.opencode/skill/playwright-cli/`). The mirror is a full sync — files are created, updated, and stale files are removed so all environments have identical skill content.
+**Action:** Run `playwright-cli install --skills` to generate agent skill files in the primary skill directory (`.claude/skills/playwright-cli/`), then mirror the skill directory to the workspace skill locations selected for installation (for example, `.agents/skills/playwright-cli/`, `.github/skills/playwright-cli/`, or `.opencode/skill/playwright-cli/`). The mirror is a full sync — files are created, updated, and stale files are removed so every selected workspace location has identical skill content. Skill directories that existed before the command are preserved when their location is not selected.
 
-**What this establishes:** The Playwright CLI skill files are available for all configured agent environments.
+**What this establishes:** The Playwright CLI skill files are available at every selected workspace skill location.
 
 ## Verification Chain Summary
 

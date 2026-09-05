@@ -187,6 +187,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Which MCP servers should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectMcpServers {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectMcpServers", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
         internal static string InitCommand_InstalledPlaywrightCli {
@@ -246,6 +255,33 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_ConfiguresDetectedAgentEnvironments {
             get {
                 return ResourceManager.GetString("InitCommand_ConfiguresDetectedAgentEnvironments", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection..
+        /// </summary>
+        internal static string InitCommand_NoDetectedClientForMcp {
+            get {
+                return ResourceManager.GetString("InitCommand_NoDetectedClientForMcp", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway..
+        /// </summary>
+        internal static string InitCommand_NoDetectedClientForSkills {
+            get {
+                return ResourceManager.GetString("InitCommand_NoDetectedClientForSkills", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No compatible detected agent environment is available for the selected MCP server configuration..
+        /// </summary>
+        internal static string InitCommand_NoCompatibleClientForSelectedMcp {
+            get {
+                return ResourceManager.GetString("InitCommand_NoCompatibleClientForSelectedMcp", resourceCulture);
             }
         }
 
@@ -597,6 +633,15 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillsOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of MCP servers to configure (e.g. {0}), &apos;{1}&apos;, or &apos;{2}&apos;.
+        /// </summary>
+        internal static string InitCommand_McpsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_McpsOptionDescription", resourceCulture);
             }
         }
 

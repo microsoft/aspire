@@ -147,9 +147,34 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_McpsOptionDescription">
+        <source>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoCompatibleClientForSelectedMcp">
+        <source>No compatible detected agent environment is available for the selected MCP server configuration.</source>
+        <target state="new">No compatible detected agent environment is available for the selected MCP server configuration.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoDetectedClientForMcp">
+        <source>No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</source>
+        <target state="new">No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoDetectedClientForSkills">
+        <source>No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</source>
+        <target state="new">No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectMcpServers">
+        <source>Which MCP servers should be installed?</source>
+        <target state="new">Which MCP servers should be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

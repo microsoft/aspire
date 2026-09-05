@@ -96,6 +96,9 @@
   <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
     <value>Install Aspire MCP server</value>
   </data>
+  <data name="InitCommand_SelectMcpServers" xml:space="preserve">
+    <value>Which MCP servers should be installed?</value>
+  </data>
   <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
     <value>Where should skill files be installed?</value>
   </data>
@@ -122,6 +125,15 @@
   </data>
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
+  </data>
+  <data name="InitCommand_NoDetectedClientForSkills" xml:space="preserve">
+    <value>No agent environment was detected, so default skill installation was skipped. Pass --skill-locations and --skills to install skills anyway.</value>
+  </data>
+  <data name="InitCommand_NoDetectedClientForMcp" xml:space="preserve">
+    <value>No agent environment was detected, so there is no configuration target for the Aspire MCP server. Skipping the MCP selection.</value>
+  </data>
+  <data name="InitCommand_NoCompatibleClientForSelectedMcp" xml:space="preserve">
+    <value>No compatible detected agent environment is available for the selected MCP server configuration.</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
     <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
@@ -239,6 +251,9 @@
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+  <data name="InitCommand_McpsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>

@@ -9,7 +9,7 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _applicatorTargets = new(StringComparer.Ordinal);
     private readonly HashSet<AgentClientKind> _detectedClients = [];
 
     /// <summary>
@@ -25,18 +25,20 @@ internal sealed class AgentEnvironmentScanContext
     public required DirectoryInfo RepositoryRoot { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a Playwright CLI applicator has been added.
-    /// This is used to ensure only one applicator for Playwright is added across all scanners.
-    /// </summary>
-    public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
     /// Adds an applicator to the collection of detected agent environments.
     /// </summary>
     /// <param name="applicator">The applicator to add.</param>
     public void AddApplicator(AgentEnvironmentApplicator applicator)
     {
         ArgumentNullException.ThrowIfNull(applicator);
+
+        if (applicator.Asset is { } asset &&
+            applicator.TargetId is { } targetId &&
+            !_applicatorTargets.Add($"{asset.AssetKind}:{asset.Name}:{targetId}"))
+        {
+            return;
+        }
+
         _applicators.Add(applicator);
     }
 
@@ -44,21 +46,6 @@ internal sealed class AgentEnvironmentScanContext
     /// Gets the collection of detected applicators.
     /// </summary>
     public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
-
-    /// <summary>
-    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
-    /// These directories are used to mirror skill files across all detected agent environments.
-    /// </summary>
-    /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>
-    public void AddSkillBaseDirectory(string relativeSkillBaseDir)
-    {
-        _skillBaseDirectories.Add(relativeSkillBaseDir);
-    }
-
-    /// <summary>
-    /// Gets the registered skill base directories for all detected agent environments.
-    /// </summary>
-    public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
 
     /// <summary>
     /// Records that an agent client was detected as present in the environment. Used to scope

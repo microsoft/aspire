@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Agents;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -97,7 +97,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DetectAsync_WithConfigurePlaywrightTrue_PassesContextToScanner()
+    public async Task DetectAsync_PassesContextToScanner()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scanner = new TestAgentEnvironmentScanner();

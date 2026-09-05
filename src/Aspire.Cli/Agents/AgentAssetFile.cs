@@ -4,6 +4,6 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Represents a text file that belongs to an installable skill.
+/// Represents a text file contained by an <see cref="AgentFileAssetDefinition"/>.
 /// </summary>
-internal sealed record SkillAssetFile(string RelativePath, string Content);
+internal sealed record AgentAssetFile(string RelativePath, string Content);

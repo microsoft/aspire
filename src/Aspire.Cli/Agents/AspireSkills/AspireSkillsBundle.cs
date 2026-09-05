@@ -6,17 +6,21 @@ using System.Globalization;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// A validated Aspire skills bundle.
+/// A validated Aspire Skills bundle.
 /// </summary>
 internal sealed class AspireSkillsBundle
 {
     private readonly string _version;
     private readonly IReadOnlyList<ValidatedAspireSkill> _skills;
 
-    internal AspireSkillsBundle(string version, IReadOnlyList<ValidatedAspireSkill> skills)
+    internal AspireSkillsBundle(
+        string version,
+        IReadOnlyList<ValidatedAspireSkill> skills)
     {
         _version = version;
-        _skills = skills;
+        _skills = skills
+            .Select(static skill => new ValidatedAspireSkill(skill.Definition, [.. skill.Files]))
+            .ToList();
     }
 
     /// <summary>
@@ -25,39 +29,37 @@ internal sealed class AspireSkillsBundle
     public string Version => _version;
 
     /// <summary>
-    /// Gets installable files for the specified skill.
+    /// Gets installable files for a skill supplied by this bundle.
     /// </summary>
-    public Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<AgentAssetFile>> GetSkillFilesAsync(
+        AgentFileAssetDefinition skill,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(skill);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundledSkill = _skills.FirstOrDefault(s => string.Equals(s.Definition.Name, skill.Name, StringComparison.Ordinal));
+        // Bundle definitions are payload handles. Requiring the exact instance prevents a same-name
+        // asset from another bundle or source from resolving to this bundle's files.
+        var bundledSkill = _skills.FirstOrDefault(candidate => ReferenceEquals(candidate.Definition, skill));
         if (bundledSkill is null)
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle does not contain skill '{0}'.", skill.Name));
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire Skills bundle does not own skill definition '{0}'.",
+                skill.Name));
         }
 
-        List<SkillAssetFile> files = [];
-        foreach (var bundledFile in bundledSkill.Files.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
-        {
-            var relativePath = bundledFile.RelativePath;
-            if (!skill.ShouldInstallFile(relativePath) ||
-                !bundledSkill.Definition.ShouldInstallFile(relativePath))
-            {
-                continue;
-            }
-
-            files.Add(bundledFile);
-        }
-
-        return Task.FromResult<IReadOnlyList<SkillAssetFile>>(files);
+        return Task.FromResult<IReadOnlyList<AgentAssetFile>>(
+            bundledSkill.Files
+                .Where(file => skill.ShouldInstallFile(file.RelativePath))
+                .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
+                .ToList());
     }
 
     /// <summary>
     /// Gets the installable skill definitions declared by the bundle manifest.
     /// </summary>
-    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
+    public IReadOnlyList<AgentFileAssetDefinition> GetSkillDefinitions()
     {
         return _skills
             .Select(static skill => skill.Definition)
@@ -66,5 +68,5 @@ internal sealed class AspireSkillsBundle
 }
 
 internal sealed record ValidatedAspireSkill(
-    SkillDefinition Definition,
-    IReadOnlyList<SkillAssetFile> Files);
+    AgentFileAssetDefinition Definition,
+    IReadOnlyList<AgentAssetFile> Files);

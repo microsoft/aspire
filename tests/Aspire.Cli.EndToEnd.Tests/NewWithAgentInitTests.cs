@@ -108,6 +108,11 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
             description: "agent init prompt after aspire new");
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("MCP servers should be installed"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "MCP server selection prompt");
+        await auto.EnterAsync(); // Keep the optional MCP asset unselected.
 
         // Wait for agent init to complete (downloads @playwright/cli from npm).
         // Skill location and skill selection are provided via --skill-locations/--skills flags
