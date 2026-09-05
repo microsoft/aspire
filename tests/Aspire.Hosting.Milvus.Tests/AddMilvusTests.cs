@@ -109,9 +109,10 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         var servicesKeysCount = config.Keys.Count(k => k.StartsWith("ConnectionStrings__"));
-        Assert.Equal(1, servicesKeysCount);
+        Assert.Equal(2, servicesKeysCount);
 
         Assert.Contains(config, kvp => kvp.Key == "ConnectionStrings__my-milvus" && kvp.Value == "Endpoint=http://localhost:19530;Key=root:pass");
+        Assert.Contains(config, kvp => kvp.Key == "ConnectionStrings__my_milvus" && kvp.Value == "Endpoint=http://localhost:19530;Key=root:pass");
 
         var container1 = appBuilder.AddContainer("container1", "fake")
             .WithReference(milvus);
@@ -120,9 +121,10 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         var containerConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(container1.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         var containerServicesKeysCount = containerConfig.Keys.Count(k => k.StartsWith("ConnectionStrings__"));
-        Assert.Equal(1, containerServicesKeysCount);
+        Assert.Equal(2, containerServicesKeysCount);
 
         Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my-milvus" && kvp.Value == "Endpoint=http://my-milvus.dev.internal:19530;Key=root:pass");
+        Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my_milvus" && kvp.Value == "Endpoint=http://my-milvus.dev.internal:19530;Key=root:pass");
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -30,7 +32,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ResourceBuilderExtensions
 {
-    private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
     private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -1085,7 +1086,9 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
-    /// The format of the environment variable will be "ConnectionStrings__{sourceResourceName}={connectionString}".
+    /// The logical connection name is preserved for application configuration. When that name is not portable as an environment-variable suffix,
+    /// Aspire emits both the legacy name and a portable alias that replaces characters unsupported in environment-variable names.
+    /// For example, <c>my-db</c> produces <c>ConnectionStrings__my-db</c> and <c>ConnectionStrings__my_db</c> on targets that support both names.
     /// <para>
     /// Each resource defines the format of the connection string value. The
     /// underlying connection string value can be retrieved using <see cref="IResourceWithConnectionString.GetConnectionStringAsync(CancellationToken)"/>.
@@ -1098,7 +1101,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where connection string will be injected.</param>
     /// <param name="source">The resource from which to extract the connection string.</param>
-    /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
+    /// <param name="connectionName">An override of the source resource's logical connection name. The physical environment-variable names are derived from this value when it is not <see langword="null"/>.</param>
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
@@ -1117,13 +1120,30 @@ public static class ResourceBuilderExtensions
         // Determine what to inject based on the annotation on the destination resource
         builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
         var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+        var environmentVariableNames = ConnectionStringEnvironmentVariableNames.Create(resource, connectionName);
+
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+        {
+            var referenceAnnotation = new ConnectionStringReferenceAnnotation(
+                resource,
+                environmentVariableNames,
+                optional,
+                nameof(IResourceWithConnectionString.ConnectionStringExpression));
+            ValidateConnectionStringReference(builder.Resource, referenceAnnotation);
+            builder.Resource.Annotations.Add(referenceAnnotation);
+        }
 
         return builder.WithEnvironment(context =>
         {
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
             {
-                var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"{ConnectionStringEnvironmentName}{connectionName}";
-                context.EnvironmentVariables[connectionStringName] = new ConnectionStringReference(resource, optional);
+                var connectionStringReference = new ConnectionStringReference(resource, optional);
+                context.EnvironmentVariables[environmentVariableNames.LegacyName] = connectionStringReference;
+
+                if (!string.Equals(environmentVariableNames.LegacyName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.EnvironmentVariables[environmentVariableNames.PortableName] = connectionStringReference;
+                }
             }
 
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
@@ -1145,6 +1165,38 @@ public static class ResourceBuilderExtensions
                 }
             }
         });
+    }
+
+    private static void ValidateConnectionStringReference(IResource destination, ConnectionStringReferenceAnnotation candidate)
+    {
+        foreach (var existing in destination.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        {
+            if (IsEquivalentConnectionStringReference(existing, candidate))
+            {
+                continue;
+            }
+
+            var conflictingName = existing.EnvironmentVariableNames.GetPhysicalNames()
+                .Intersect(candidate.EnvironmentVariableNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            if (conflictingName is not null)
+            {
+                throw new DistributedApplicationException(
+                    $"Connection-string references '{existing.EnvironmentVariableNames.LogicalName}' and " +
+                    $"'{candidate.EnvironmentVariableNames.LogicalName}' on resource '{destination.Name}' both use " +
+                    $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
+            }
+        }
+    }
+
+    private static bool IsEquivalentConnectionStringReference(
+        ConnectionStringReferenceAnnotation left,
+        ConnectionStringReferenceAnnotation right)
+    {
+        return ReferenceEquals(left.Source, right.Source) &&
+            string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
+            left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }
 
     private static void SplatConnectionProperties(IResourceWithConnectionString resource, string prefix, EnvironmentCallbackContext context)

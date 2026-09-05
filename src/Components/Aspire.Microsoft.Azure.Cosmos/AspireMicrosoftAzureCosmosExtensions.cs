@@ -212,8 +212,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
-        var connectionString = builder.Configuration.GetConnectionString(connectionName);
-        if (string.IsNullOrEmpty(connectionString))
+        if (!builder.Configuration.TryGetConnectionString(connectionName, out var connectionString) || string.IsNullOrEmpty(connectionString))
         {
             return null;
         }

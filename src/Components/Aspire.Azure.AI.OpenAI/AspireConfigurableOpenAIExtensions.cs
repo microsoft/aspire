@@ -35,7 +35,7 @@ public static class AspireConfigurableOpenAIExtensions
 
         var useAzure = false;
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             useAzure = IsAzureConnectionString(connectionString, connectionName);
         }
@@ -61,7 +61,7 @@ public static class AspireConfigurableOpenAIExtensions
 
         var useAzure = false;
 
-        if (builder.Configuration.GetConnectionString(name) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(name, out var connectionString))
         {
             useAzure = IsAzureConnectionString(connectionString, name);
         }

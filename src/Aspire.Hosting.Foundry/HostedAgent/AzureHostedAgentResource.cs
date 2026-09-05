@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
+
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
@@ -116,7 +118,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var def = new HostedAgentConfiguration(imageName)
         {
             // ProcessEnvironmentVariableValuesAsync does not resolve values properly in the deploy context
-            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, Target, context.Logger, context.CancellationToken).ConfigureAwait(false),
+            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, context.Logger, context.CancellationToken).ConfigureAwait(false),
         };
         if (Configure is not null)
         {
@@ -302,14 +304,14 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
         DistributedApplicationExecutionContext context,
         AzureHostedAgentResource hostedAgent,
-        IResource resource,
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        var target = hostedAgent.Target;
         var collectedEnvVars = new Dictionary<string, object>();
-        if (resource.TryGetEnvironmentVariables(out var callbacks))
+        if (target.TryGetEnvironmentVariables(out var callbacks))
         {
-            var envContext = new EnvironmentCallbackContext(context, resource, collectedEnvVars, cancellationToken)
+            var envContext = new EnvironmentCallbackContext(context, target, collectedEnvVars, cancellationToken)
             {
                 Logger = logger
             };
@@ -319,6 +321,9 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 await callback.Callback(envContext).ConfigureAwait(false);
             }
         }
+
+        ProjectPortableConnectionStringAliases(target, collectedEnvVars);
+
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
         {
@@ -327,7 +332,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 // Foundry injects platform-owned variables such as PORT itself. Some Aspire resource
                 // types use these variables to model local/container startup, but forwarding them in
                 // the hosted-agent definition causes Foundry to reject the version payload.
-                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, resource.Name);
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, target.Name);
                 continue;
             }
 
@@ -336,7 +341,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 // Endpoint target-port variables model how a local process or container binds. Foundry
                 // hosted agents own the container port contract during deployment, and their endpoint
                 // resolver intentionally does not support EndpointProperty.TargetPort.
-                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, target.Name);
                 continue;
             }
 
@@ -349,17 +354,37 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                     resolvedEnvVars[key] = s;
                     break;
                 case IValueProvider provider:
-                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, resource, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, target, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
                     break;
                 case IFormattable f:
                     resolvedEnvVars[key] = f.ToString(null, CultureInfo.InvariantCulture);
                     break;
                 default:
-                    logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, resource.Name, value.GetType().FullName);
+                    logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, target.Name, value.GetType().FullName);
                     break;
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static void ProjectPortableConnectionStringAliases(IResource target, Dictionary<string, object> environmentVariables)
+    {
+        foreach (var reference in target.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        {
+            var names = reference.EnvironmentVariableNames;
+            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Foundry Hosted Agents accept only letters, digits, and underscores. Deploy only the
+            // portable generated alias, preserving any later override of the exact logical alias.
+            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            {
+                environmentVariables[names.PortableName] = legacyValue;
+            }
+        }
     }
 
     private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
