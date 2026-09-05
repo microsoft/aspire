@@ -636,9 +636,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// Projects the terminals the AppHost itself owns — dock tabs, terminals shown in an interaction dialog,
     /// and terminals driven only through automation — into the listing.
     /// </summary>
+    /// <remarks>
+    /// The terminal service is resolved optionally. A listing already reports degraded entries rather than
+    /// failing when a resource's terminal host is unreachable, so failing the whole call because this one
+    /// contributor is absent would throw away the resource half of an answer that is still correct.
+    /// </remarks>
     private AppHostTerminalSummary[] CollectAppHostTerminals()
     {
-        var terminalService = serviceProvider.GetRequiredService<Aspire.Hosting.Terminals.TerminalService>();
+        if (serviceProvider.GetService<Aspire.Hosting.Terminals.TerminalService>() is not { } terminalService)
+        {
+            return [];
+        }
 
         return [.. terminalService.ListAll()
             .Where(t => t.Owner == Aspire.Hosting.Terminals.TerminalOwner.AppHost)

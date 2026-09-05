@@ -28,6 +28,8 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
     [Fact]
     public async Task AutomationTypesIntoAndReadsBackFromATerminalHost()
     {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
+
         // A shell is the workload because the round trip being proven is a human-shaped one: type a command,
         // have the workload run it, read the result off the replicated screen.
         await using var host = await StartTerminalHostAsync("bash");
@@ -47,6 +49,8 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
     [Fact]
     public async Task WaitForTextThrowsTimeoutWhenTheTextNeverAppears()
     {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
+
         await using var host = await StartTerminalHostAsync("bash");
 
         await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance);
