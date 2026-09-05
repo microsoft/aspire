@@ -658,104 +658,6 @@ render_issue_occurrences()
   mv "$output_temp" "$output_file"
 }
 
-migrate_main_issue_body()
-{
-  local current_body_file="$1"
-  local canonical_body_file="$2"
-  local output_file="$3"
-  local max_bytes="$4"
-  local output_temp
-
-  if [ ! -f "$current_body_file" ] ||
-     [ ! -f "$canonical_body_file" ] ||
-     [[ ! "$max_bytes" =~ ^[1-9][0-9]*$ ]]; then
-    echo "::error::Invalid main issue migration input" >&2
-    return 1
-  fi
-
-  output_temp=$(mktemp)
-  if ! jq -nj \
-      --rawfile current "$current_body_file" \
-      --rawfile canonical "$canonical_body_file" \
-      --argjson max_bytes "$max_bytes" '
-      def normalized:
-        gsub("\r\n"; "\n");
-      def managed_parts:
-        (normalized | split("<!-- ci-failure-occurrences:start -->")) as $start_parts |
-        if ($start_parts | length) != 2 then
-          error("ambiguous managed occurrence section")
-        else
-          ($start_parts[1] | split("<!-- ci-failure-occurrences:end -->")) as $end_parts |
-          if ($end_parts | length) != 2 or ($end_parts[1] | test("^\\s*$") | not) then
-            error("ambiguous managed occurrence section")
-          else
-            {
-              prefix: $start_parts[0],
-              occurrences:
-                "<!-- ci-failure-occurrences:start -->" +
-                $end_parts[0] +
-                "<!-- ci-failure-occurrences:end -->\n"
-            }
-          end
-        end;
-      def legacy_parts:
-        (normalized | split("\n## Occurrences\n")) as $parts |
-        if ($parts | length) != 2 then
-          error("unsupported legacy occurrence section")
-        else
-          {prefix: $parts[0], occurrences: "## Occurrences\n" + $parts[1]}
-        end;
-      def parts:
-        if (normalized | contains("<!-- ci-failure-occurrences:start -->")) or
-           (normalized | contains("<!-- ci-failure-occurrences:end -->")) then
-          managed_parts
-        else
-          legacy_parts
-        end;
-      def main_prefix:
-        (. | sub("\n+$"; "") | split("\n")) as $lines |
-        ([range(0; $lines | length) |
-          select($lines[.] == "**Type**: main-repository-breakage")]) as $type_lines |
-        if ($type_lines | length) != 1 then
-          error("ambiguous main issue type")
-        else
-          ($type_lines[0]) as $type_line |
-          {
-            generated: ($lines[0:($type_line + 1)] | join("\n")),
-            suffix: ($lines[($type_line + 1):] | join("\n") | sub("^\n+"; "") | sub("\n+$"; ""))
-          }
-        end;
-      ($current | parts) as $current_parts |
-      ($canonical | managed_parts) as $canonical_parts |
-      if (($current_parts.prefix | normalized | split("\n") | .[0]) !=
-          ($canonical_parts.prefix | normalized | split("\n") | .[0])) then
-        error("issue identity marker does not match")
-      else
-        ($current_parts.prefix | normalized | main_prefix) as $current_prefix |
-        ($canonical_parts.prefix | normalized | main_prefix) as $canonical_prefix |
-        (
-          $canonical_prefix.generated +
-          (if ($current_prefix.suffix | length) > 0
-           then "\n\n" + $current_prefix.suffix
-           else ""
-           end) +
-          "\n\n" +
-          $current_parts.occurrences
-        ) as $output |
-        if ($output | utf8bytelength) <= $max_bytes then
-          $output
-        else
-          error("migrated issue body exceeds the publication budget")
-        end
-      end
-    ' > "$output_temp"; then
-    rm -f "$output_temp"
-    return 2
-  fi
-
-  mv "$output_temp" "$output_file"
-}
-
 cache_cause_issues()
 {
   local repo="$1"
@@ -918,13 +820,6 @@ case "$COMMAND" in
     render_issue_occurrences \
       "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" "$OUTPUT_FILE" "$MAX_BYTES"
     ;;
-  migrate-main-issue-body)
-    CURRENT_BODY_FILE="${2:?current issue body file is required}"
-    CANONICAL_BODY_FILE="${3:?canonical issue body file is required}"
-    OUTPUT_FILE="${4:?output file is required}"
-    MAX_BYTES="${5:-65000}"
-    migrate_main_issue_body "$CURRENT_BODY_FILE" "$CANONICAL_BODY_FILE" "$OUTPUT_FILE" "$MAX_BYTES"
-    ;;
   cache-cause-issues)
     REPO="${2:?repository is required}"
     OPEN_ISSUES_FILE="${3:?open issues file is required}"
@@ -1019,13 +914,17 @@ case "$COMMAND" in
 
     jq -s '
       .[0] as $new | .[1] as $existing |
-      ($existing | del(.job_ids, .job_names)) * {
+      ($existing | del(.job_ids, .job_names, .aliases, .test_names)) * {
         occurrences: (
           [($existing.occurrences // [])[], ($new.occurrences // [])[]]
           | unique_by(.run_id)
           | sort_by(.observed_at)
         )
-      }
+      } *
+      (([($existing.aliases // [])[], ($new.aliases // [])[]] | unique) as $aliases |
+        if ($aliases | length) > 0 then {aliases: $aliases} else {} end) *
+      (([($existing.test_names // [])[], ($new.test_names // [])[]] | unique) as $test_names |
+        if ($test_names | length) > 0 then {test_names: $test_names} else {} end)
     ' "$NEW_CAUSE_FILE" "$EXISTING_CAUSE_FILE" > "$OUTPUT_FILE"
     ;;
   render-prior-cause)
