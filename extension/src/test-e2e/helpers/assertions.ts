@@ -337,6 +337,19 @@ export function readStateFile(): ExtensionE2EStateFile {
     }
 }
 
+// Best-effort read used only to detect a session change after a reload. Unlike readStateFile's
+// other callers, ensureWorkspaceFolderOpen's fallback can run before the state file has ever been
+// written at all (it exists precisely to handle activation still being in progress), so a missing
+// file here is expected, not an error - treat it the same as "no previous session observed".
+function tryReadExtensionHostSessionId(): string | undefined {
+    try {
+        return readStateFile().extensionHostSessionId;
+    }
+    catch {
+        return undefined;
+    }
+}
+
 async function ensureWorkspaceFolderOpen(): Promise<void> {
     if (workspaceFolderOpened) {
         return;
@@ -371,15 +384,27 @@ async function ensureWorkspaceFolderOpen(): Promise<void> {
     // command (vscode.commands.executeCommand('vscode.openFolder', ...)), but that was observed in
     // CI to hang the extension host indefinitely whenever the quick check above raced activation:
     // the RPC server would tear down for the reload and the extension would never reactivate.
-    // Reload the window directly instead - the same proven-reliable mechanism reloadWorkspaceForE2E
-    // already uses elsewhere in this suite - and simply wait for the (already-correct) folder to be
-    // reported open again once the fresh extension host comes up.
+    // Reload the window directly instead, same as reloadWorkspaceForE2E (fixtures.ts) does.
+    const previousExtensionHostSessionId = tryReadExtensionHostSessionId();
     const controlFilePath = getControlFilePath();
     if (controlFilePath) {
         fs.rmSync(controlFilePath, { force: true });
     }
 
     await reloadWindow();
+    // A bare reload is not the end of the story: the old extension host has to actually shut down
+    // and a new one has to finish activating before the control-file bridge is trustworthy again.
+    // reloadWorkspaceForE2E established this pattern by waiting for a state-file write carrying a
+    // new extensionHostSessionId before doing anything else post-reload. Without that wait here,
+    // the workspace-folder poll below can spend its whole remaining budget racing a still-dying old
+    // host or a not-yet-ready new one, and end up reporting a premature - but genuine - empty folder
+    // list once the deadline runs out. Tolerate this wait itself timing out (e.g. if the state file
+    // never existed before the reload) by falling through to the existing poll unconditionally.
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to report a new session after reload',
+        getRemainingTimeout(deadline, 'extension host reload')).catch(() => undefined);
+
     if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 90000)) {
         workspaceFolderOpened = true;
         return;

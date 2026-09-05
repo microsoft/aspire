@@ -500,6 +500,42 @@ suite('E2E launch profile', () => {
         assert.strictEqual(ensureOpenBody.includes("command: { name: 'openWorkspaceFolder'"), false);
     });
 
+    test('waits for a new extension host session before polling for the workspace folder after a reload', () => {
+        // Regression coverage for a third CI regression from this same fallback: reloadWindow()
+        // only requests the reload - it does not confirm the old extension host actually shut down
+        // or that a new one finished activating. reloadWorkspaceForE2E (fixtures.ts) established the
+        // fix for this exact gap by waiting for a state-file write carrying a new
+        // extensionHostSessionId before doing anything else post-reload. Without that wait here, the
+        // recovery poll can race a still-dying old host or a not-yet-ready new one for its entire
+        // remaining budget and report a premature, but genuine, empty workspace-folder list once the
+        // deadline expires - "Timed out ... Last workspace folders: []" even though the reload
+        // eventually would have succeeded.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const ensureOpenStart = assertions.indexOf('async function ensureWorkspaceFolderOpen(');
+        const ensureOpenEnd = assertions.indexOf('\nasync function tryWaitForWorkspaceFolder(', ensureOpenStart);
+        const ensureOpenBody = assertions.slice(ensureOpenStart, ensureOpenEnd);
+
+        const previousIdCaptureIndex = ensureOpenBody.indexOf('const previousExtensionHostSessionId = tryReadExtensionHostSessionId();');
+        const reloadWindowIndex = ensureOpenBody.indexOf('await reloadWindow();');
+        const sessionWaitIndex = ensureOpenBody.indexOf('file.extensionHostSessionId !== previousExtensionHostSessionId');
+        const recoveryCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 90000)');
+
+        assert.ok(previousIdCaptureIndex >= 0, 'must capture the extension host session id before reloading');
+        assert.ok(reloadWindowIndex > previousIdCaptureIndex, 'must capture the previous session id before reloading the window');
+        assert.ok(sessionWaitIndex > reloadWindowIndex, 'must wait for a new extensionHostSessionId after reloading the window');
+        assert.ok(recoveryCheckIndex > sessionWaitIndex, 'must wait for the new extension host session before polling for the workspace folder');
+
+        // tryReadExtensionHostSessionId must tolerate the state file not existing yet - this
+        // fallback can run as the very first wait in a freshly-launched window, before the
+        // extension has ever written a state file.
+        const helperStart = assertions.indexOf('function tryReadExtensionHostSessionId(');
+        const helperEnd = assertions.indexOf('\nasync function ensureWorkspaceFolderOpen(', helperStart);
+        assert.ok(helperStart >= 0, 'tryReadExtensionHostSessionId must exist');
+        const helperBody = assertions.slice(helperStart, helperEnd);
+        assert.ok(helperBody.includes('catch'), 'tryReadExtensionHostSessionId must tolerate a missing or unreadable state file');
+    });
+
     test('bounds the ExTester process below the workflow timeout so diagnostics still run', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
