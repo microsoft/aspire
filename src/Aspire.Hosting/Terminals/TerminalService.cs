@@ -48,6 +48,16 @@ public sealed class TerminalService : IAsyncDisposable
     }
 
     /// <summary>
+    /// Gets or sets the catalog consulted for terminals that belong to resources rather than to the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// Assigned once the application model exists. It is settable rather than a constructor argument because
+    /// this service is created before the model is built, and it stays null in tests that exercise only
+    /// AppHost terminals.
+    /// </remarks>
+    internal ResourceTerminalCatalog? ResourceTerminals { get; set; }
+
+    /// <summary>
     /// Creates a terminal. The workload does not start until something needs it: the first viewer attaching,
     /// or the first automation call.
     /// </summary>
@@ -146,16 +156,71 @@ public sealed class TerminalService : IAsyncDisposable
     /// <param name="terminalId">The <see cref="IAspireTerminal.Id"/> of the terminal to find.</param>
     /// <param name="terminal">The terminal, if one with that id exists.</param>
     /// <returns><see langword="true"/> if the terminal was found.</returns>
+    /// <remarks>
+    /// Resolves terminals the AppHost owns as well as those belonging to resources, so automation code can
+    /// drive either kind through the same handle without knowing which it has.
+    /// </remarks>
     public bool TryGetTerminal(string terminalId, [NotNullWhen(true)] out IAspireTerminal? terminal)
     {
+        ArgumentNullException.ThrowIfNull(terminalId);
+
         if (_terminals.TryGetValue(terminalId, out var found))
         {
             terminal = found;
             return true;
         }
 
+        if (ResourceTerminals?.TryGetTerminal(terminalId, out var resourceTerminal) == true)
+        {
+            terminal = resourceTerminal!;
+            return true;
+        }
+
         terminal = null;
         return false;
+    }
+
+    /// <summary>
+    /// Lists every terminal in the AppHost, whether the AppHost or a resource owns it.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes a single listing possible: dock tabs, terminals being shown in an interaction
+    /// dialog, terminals driven only by automation, and each terminal-enabled resource replica all appear
+    /// here. Resource entries are read from the application model and carry no liveness — obtaining that
+    /// requires a round trip to each replica's terminal host, which a listing should not force on callers
+    /// that only want to know what exists.
+    /// </remarks>
+    internal IReadOnlyList<TerminalListing> ListAll()
+    {
+        var listings = new List<TerminalListing>();
+
+        foreach (var terminal in _terminals.Values)
+        {
+            listings.Add(new TerminalListing(
+                terminal.Id,
+                terminal.Title,
+                TerminalOwner.AppHost,
+                terminal.Placement,
+                ResourceName: null,
+                ReplicaIndex: null,
+                ConsumerUdsPath: null,
+                ControlUdsPath: null));
+        }
+
+        foreach (var entry in ResourceTerminals?.List() ?? [])
+        {
+            listings.Add(new TerminalListing(
+                entry.Id,
+                entry.Title,
+                TerminalOwner.Resource,
+                TerminalPlacement.ResourceView,
+                entry.ResourceName,
+                entry.ReplicaIndex,
+                entry.ConsumerUdsPath,
+                entry.ControlUdsPath));
+        }
+
+        return listings;
     }
 
     /// <summary>
@@ -290,7 +355,10 @@ public sealed class TerminalService : IAsyncDisposable
             channel.Writer.TryComplete();
         }
 
-        await Task.CompletedTask.ConfigureAwait(false);
+        if (ResourceTerminals is { } resourceTerminals)
+        {
+            await resourceTerminals.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
 
@@ -313,3 +381,20 @@ internal sealed record TerminalSubscription(
 
     public void Dispose() => Unsubscribe();
 }
+
+/// <summary>
+/// One terminal in the AppHost, as reported by <see cref="TerminalService.ListAll"/>.
+/// </summary>
+/// <remarks>
+/// The resource-specific members are populated only for <see cref="TerminalOwner.Resource"/> terminals, whose
+/// per-replica liveness is obtained by querying <see cref="ControlUdsPath"/>.
+/// </remarks>
+internal sealed record TerminalListing(
+    string Id,
+    string Title,
+    TerminalOwner Owner,
+    TerminalPlacement Placement,
+    string? ResourceName,
+    int? ReplicaIndex,
+    string? ConsumerUdsPath,
+    string? ControlUdsPath);

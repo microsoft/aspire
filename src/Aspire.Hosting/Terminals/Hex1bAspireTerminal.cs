@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
 using System.Threading.Channels;
 using Hex1b;
 using Hex1b.Automation;
@@ -22,8 +21,6 @@ namespace Aspire.Hosting.Terminals;
 /// </remarks>
 internal sealed class Hex1bAspireTerminal : IAspireTerminal
 {
-    private static readonly TimeSpan s_defaultAutomationTimeout = TimeSpan.FromSeconds(30);
-
     // Unbounded because the producer is a viewer attaching; the queue depth is realistically 0 or 1 and
     // dropping or blocking an attach would strand the RPC that is waiting to be served.
     private readonly Channel<Stream> _clients = Channel.CreateUnbounded<Stream>();
@@ -150,7 +147,7 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
                 .WithHmp1Server(_clients.Reader.ReadAllAsync)
                 .Build();
 
-            _automator = new Hex1bTerminalAutomator(_terminal, s_defaultAutomationTimeout);
+            _automator = new Hex1bTerminalAutomator(_terminal, TerminalAutomation.DefaultTimeout);
 
             _logger.LogDebug("Starting terminal {TerminalId} ({Title}).", Id, Title);
 
@@ -202,14 +199,13 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         ArgumentNullException.ThrowIfNull(text);
 
         EnsureStarted();
-        await _automator!.TypeAsync(text, cancellationToken).ConfigureAwait(false);
+        await TerminalAutomation.SendTextAsync(_automator!, text, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
     {
         var terminal = EnsureStarted();
-        var sequence = AspireTerminalKeySequences.Get(key);
-        await terminal.SendInputAsync(Encoding.UTF8.GetBytes(sequence), cancellationToken).ConfigureAwait(false);
+        await TerminalAutomation.SendKeyAsync(terminal, key, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
@@ -217,58 +213,15 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         ArgumentNullException.ThrowIfNull(text);
 
         EnsureStarted();
-
-        // Hex1b's wait takes a timeout but no token, so the caller's cancellation is layered on here. The
-        // underlying wait keeps running until its timeout elapses; that is acceptable because it is a passive
-        // screen poll with no side effects.
-        var wait = _automator!.WaitUntilTextAsync(text, timeout ?? s_defaultAutomationTimeout);
-        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var registration = cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), cancelled);
-
-        var completed = await Task.WhenAny(wait, cancelled.Task).ConfigureAwait(false);
-        if (completed != wait)
-        {
-            // The wait is abandoned rather than awaited, so nothing would observe the WaitUntilTimeoutException it
-            // raises when its own timeout later elapses. An unobserved faulted task surfaces on
-            // TaskScheduler.UnobservedTaskException, which is a process-wide event an AppHost may treat as fatal.
-            _ = wait.ContinueWith(
-                static t => _ = t.Exception,
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        try
-        {
-            await wait.ConfigureAwait(false);
-        }
-        catch (WaitUntilTimeoutException ex)
-        {
-            // Translate so callers never have to reference Hex1b to handle a timeout.
-            throw new TimeoutException($"Terminal '{Id}' did not display the expected text within the timeout.", ex);
-        }
+        await TerminalAutomation.WaitForTextAsync(_automator!, Id, text, timeout, cancellationToken).ConfigureAwait(false);
     }
 
     public string GetScreenText()
     {
-        Hex1bTerminalAutomator? automator;
         lock (_gate)
         {
-            automator = _automator;
+            return TerminalAutomation.GetScreenText(_automator);
         }
-
-        // A terminal that has never been attached to or driven has no screen yet. Reporting empty is
-        // friendlier than starting the workload as a side effect of a read.
-        if (automator is null)
-        {
-            return string.Empty;
-        }
-
-        // The snapshot holds pooled buffers, so it must be released rather than left to finalization.
-        using var snapshot = automator.CreateSnapshot();
-        return snapshot.GetScreenText();
     }
 
     /// <summary>

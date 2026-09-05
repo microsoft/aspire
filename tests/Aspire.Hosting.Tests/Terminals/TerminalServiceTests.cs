@@ -230,6 +230,65 @@ public class TerminalServiceTests
         Assert.Throws<ObjectDisposedException>(() => CreateInteractionTerminal(service, "Shell"));
     }
 
+    [Fact]
+    public void ListAll_IncludesTerminalsRegardlessOfPlacement()
+    {
+        // A terminal driven only through automation is never displayed, so a listing keyed off the dock would
+        // miss it entirely. `aspire terminal ps` is meant to answer "what exists", not "what is on screen".
+        var service = TestTerminalService.Create();
+        var dock = CreateDockTerminal(service, "Dock");
+        var dialog = CreateInteractionTerminal(service, "Dialog");
+        var hidden = service.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Automation",
+            Command = new TerminalCommand("bash"),
+            Placement = TerminalPlacement.None
+        });
+
+        var listings = service.ListAll();
+
+        Assert.Equal(
+            new[] { dock.Id, dialog.Id, hidden.Id }.OrderBy(id => id, StringComparer.Ordinal),
+            listings.Select(l => l.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(listings, l => Assert.Equal(TerminalOwner.AppHost, l.Owner));
+        Assert.All(listings, l => Assert.Null(l.ResourceName));
+    }
+
+    [Fact]
+    public void ListAll_CarriesPlacementAndTitle()
+    {
+        var service = TestTerminalService.Create();
+        CreateDockTerminal(service, "Build output");
+
+        var listing = Assert.Single(service.ListAll());
+
+        Assert.Equal("Build output", listing.Title);
+        Assert.Equal(TerminalPlacement.Dock, listing.Placement);
+    }
+
+    [Fact]
+    public async Task ListAll_DropsRemovedTerminals()
+    {
+        var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Dock");
+
+        await terminal.DisposeAsync().DefaultTimeout();
+
+        Assert.Empty(service.ListAll());
+    }
+
+    [Fact]
+    public void ListAll_WithoutAResourceCatalogReturnsOnlyAppHostTerminals()
+    {
+        // ResourceTerminals is left null when the AppHost has no model yet, which must degrade to "no resource
+        // terminals" rather than faulting the listing.
+        var service = TestTerminalService.Create();
+        CreateDockTerminal(service, "Dock");
+
+        Assert.Null(service.ResourceTerminals);
+        Assert.Single(service.ListAll());
+    }
+
     private static IAspireTerminal CreateInteractionTerminal(TerminalService service, string title)
         => service.CreateTerminal(new TerminalLaunchOptions
         {

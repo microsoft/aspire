@@ -471,8 +471,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
         // Constructed explicitly rather than by DI activation: TerminalService is public (so AppHost code can
         // resolve it) but its constructor is internal, and the DI container only activates public constructors.
-        _innerBuilder.Services.AddSingleton(sp => new Terminals.TerminalService(
-            sp.GetRequiredService<ILogger<Terminals.TerminalService>>()));
+        _innerBuilder.Services.AddSingleton(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<Terminals.TerminalService>>();
+
+            return new Terminals.TerminalService(logger)
+            {
+                // Terminals belonging to resources are discovered from the model rather than registered, so the
+                // service is given a catalog to consult instead of owning their lifetime.
+                ResourceTerminals = new Terminals.ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
+            };
+        });
 
         ConfigureHealthChecks();
 
