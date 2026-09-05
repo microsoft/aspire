@@ -617,7 +617,21 @@ class ResourceGraph {
     };
 
     cogMenuKeyDown = async (event) => {
-        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
+        if (event.repeat) {
+            return;
+        }
+
+        // The cursor-positioned menu doesn't take focus, so Escape remains on the cog and must
+        // be forwarded to the Blazor close path that restores state and focus.
+        if (event.key === 'Escape' && this.openContextMenu) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            await this.resourcesInterop.invokeMethodAsync('CloseResourceContextMenu');
+            return;
+        }
+
+        if (event.key !== 'Enter' && event.key !== ' ') {
             return;
         }
 
