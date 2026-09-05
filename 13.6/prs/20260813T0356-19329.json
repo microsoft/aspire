@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only E2E synchronization fix, no user impact",
+  "mergedAt": "2026-08-13T03:56:49Z",
+  "number": 19329,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "excluded",
+  "title": "[automated] Fix AppHost discovery E2E synchronization"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added `aspire_apphost_start` and `aspire_apphost_stop` Language Model tools so AI agents in VS Code can start and stop a discovered AppHost directly instead of spawning a separate CLI process.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83e\udd16",
+  "firstMergedAt": "2026-08-13T04:23:54Z",
+  "lastMergedAt": "2026-08-13T04:23:54Z",
+  "name": "Let agents start and stop AppHosts through VS Code",
+  "owner": "adamint",
+  "prs": [
+    19134
+  ]
+}

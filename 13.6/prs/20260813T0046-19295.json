@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Multi-root workspace AppHost discovery in VS Code extension",
+  "mergedAt": "2026-08-13T00:46:37Z",
+  "number": 19295,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Show AppHosts from every VS Code workspace root"
+}

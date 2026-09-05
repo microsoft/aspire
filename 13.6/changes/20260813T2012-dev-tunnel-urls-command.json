@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Dev tunnel port resources now publish their public tunnel, inspect, and local endpoint URLs as highlighted resource properties, and add a **Show tunnel URLs** dashboard action to view them.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-08-13T20:12:18Z",
+  "lastMergedAt": "2026-08-13T20:12:18Z",
+  "name": "Add command to show dev tunnel URLs",
+  "owner": "maddymontaquila",
+  "prs": [
+    16842
+  ]
+}

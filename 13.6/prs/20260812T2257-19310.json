@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "New DNX local tool manifest support for AppHost invocation",
+  "mergedAt": "2026-08-12T22:57:01Z",
+  "number": 19310,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Support local tool manifests for AppHost DNX invocation"
+}

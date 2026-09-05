@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Removes unused vendored source, no user-facing impact",
+  "mergedAt": "2026-08-13T16:10:09Z",
+  "number": 19316,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "excluded",
+  "title": "Remove inert OpenTelemetry shared source"
+}

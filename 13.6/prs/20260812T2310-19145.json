@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code debugger fixes: browser targets, webRoot, shutdown ordering",
+  "mergedAt": "2026-08-12T23:10:43Z",
+  "number": 19145,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Fix browser debug targets, empty webRoot, and resource stop ordering"
+}

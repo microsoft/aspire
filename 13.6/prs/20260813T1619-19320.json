@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fix developer certificate generation deadlock on Unix/macOS",
+  "mergedAt": "2026-08-13T16:19:26Z",
+  "number": 19320,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Sync ASP.NET Core certificate generation sources"
+}

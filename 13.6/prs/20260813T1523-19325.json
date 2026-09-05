@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Internal dependency removal (Microsoft.OpenApi), no user-facing behavior change",
+  "mergedAt": "2026-08-13T15:23:09Z",
+  "number": 19325,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "excluded",
+  "title": "Remove dashboard dependency on Microsoft.OpenApi"
+}

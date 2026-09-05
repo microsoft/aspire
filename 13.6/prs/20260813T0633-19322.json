@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Lifecycle management for interaction upload files",
+  "mergedAt": "2026-08-13T06:33:50Z",
+  "number": 19322,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Clean up uploaded interaction files"
+}

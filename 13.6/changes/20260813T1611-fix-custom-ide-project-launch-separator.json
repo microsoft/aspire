@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a regression where custom IDE project launches (such as Azure Functions) that combined launch-profile and AppHost arguments received an invalid `dotnet -- ...` separator, producing a broken command line.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee0\ufe0f",
+  "firstMergedAt": "2026-08-13T16:11:56Z",
+  "lastMergedAt": "2026-08-13T16:11:56Z",
+  "name": "Fix custom IDE project launch argument separator regression",
+  "owner": "karolz-ms",
+  "prs": [
+    19306
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Skills bundle now verifies integrity using SHA-512 instead of SHA-256, aligning with the CLI acquisition scripts, and the preview `aspireSkillsRemoteFetchEnabled` toggle is hidden from user-facing surfaces.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd12",
+  "firstMergedAt": "2026-08-13T14:07:19Z",
+  "lastMergedAt": "2026-08-13T14:07:19Z",
+  "name": "Use SHA-512 for Aspire Skills bundle integrity checks",
+  "owner": "IEvangelist",
+  "prs": [
+    19303
+  ]
+}

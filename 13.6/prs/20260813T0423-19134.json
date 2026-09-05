@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New Language Model tools to start/stop AppHosts through VS Code",
+  "mergedAt": "2026-08-13T04:23:54Z",
+  "number": 19134,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Let agents start and stop AppHosts through VS Code"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fix custom IDE project launch argument separator regression",
+  "mergedAt": "2026-08-13T16:11:56Z",
+  "number": 19306,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Fix custom IDE project launch"
+}

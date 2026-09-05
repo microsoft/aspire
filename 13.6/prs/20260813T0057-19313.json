@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fix Azure Functions task launch in VS Code",
+  "mergedAt": "2026-08-13T00:57:09Z",
+  "number": 19313,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Fix Azure Functions task launch in VS Code"
+}

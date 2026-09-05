@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed VS Code debugger issues: browser debug targets now validate against an explicit allowlist with clearer errors, empty webRoot values no longer break source-map resolution, and resource debug sessions now stop in an ordered, concurrent sequence before the AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-08-12T23:10:43Z",
+  "lastMergedAt": "2026-08-12T23:10:43Z",
+  "name": "VS Code debugger fixes for browser targets, webRoot, and shutdown ordering",
+  "owner": "adamint",
+  "prs": [
+    19145
+  ]
+}

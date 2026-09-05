@@ -1,0 +1,9 @@
+{
+  "author": "jesuszarate",
+  "comment": "Internal signing/compliance change for template JS files, no user-facing impact",
+  "mergedAt": "2026-08-13T19:17:22Z",
+  "number": 17811,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "excluded",
+  "title": "Use catalog signing for template JS files instead of Authenticode"
+}

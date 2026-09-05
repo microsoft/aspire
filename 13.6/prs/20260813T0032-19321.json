@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal CI test-dispatch security tightening, no user-facing impact",
+  "mergedAt": "2026-08-13T00:32:30Z",
+  "number": 19321,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "excluded",
+  "title": "Tighten deployment test dispatch"
+}

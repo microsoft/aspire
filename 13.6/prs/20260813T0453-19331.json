@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fix Dashboard HTML lang under invariant culture",
+  "mergedAt": "2026-08-13T04:53:37Z",
+  "number": 19331,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Fix Dashboard HTML language under invariant culture"
+}

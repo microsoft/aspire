@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Expose resolved environment variables to debug launch producers",
+  "mergedAt": "2026-08-13T18:00:41Z",
+  "number": 19077,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Expose resolved environment variables to debug launch producers"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire add` no longer hangs indefinitely when the bundled NuGet helper is searching package metadata; a 3-minute timeout now produces a clear timeout error instead of waiting for the 10-minute CI hang timeout.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-08-13T03:02:31Z",
+  "lastMergedAt": "2026-08-13T03:02:31Z",
+  "name": "Bound the NuGet package search timeout",
+  "owner": "adamint",
+  "prs": [
+    19178
+  ]
+}

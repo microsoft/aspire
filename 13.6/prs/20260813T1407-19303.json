@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Use SHA-512 for Aspire Skills bundle integrity checks",
+  "mergedAt": "2026-08-13T14:07:19Z",
+  "number": 19303,
+  "runDate": "2026-09-05T06:06:45Z",
+  "status": "included",
+  "title": "Use SHA-512 for Aspire Skills bundle integrity checks and hide the remote-fetch preview toggle"
+}

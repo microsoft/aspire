@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed Azure Functions resources failing to start in current VS Code releases by launching them through an Aspire-owned registered `func: host start` task instead of relying on a dynamic task type VS Code doesn't recognize.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a1",
+  "firstMergedAt": "2026-08-13T00:57:09Z",
+  "lastMergedAt": "2026-08-13T00:57:09Z",
+  "name": "Fix Azure Functions task launch in VS Code",
+  "owner": "adamint",
+  "prs": [
+    19313
+  ]
+}

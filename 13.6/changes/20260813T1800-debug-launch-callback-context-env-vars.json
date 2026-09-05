@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Debug launch configuration producers can now read Aspire-resolved environment variables through a new context-based `WithDebugSupport` overload, enabling IDE launch configurations that depend on resolved values.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf31",
+  "firstMergedAt": "2026-08-13T18:00:41Z",
+  "lastMergedAt": "2026-08-13T18:00:41Z",
+  "name": "Expose resolved environment variables to debug launch producers",
+  "owner": "adamint",
+  "prs": [
+    19077
+  ]
+}
