@@ -20,11 +20,8 @@ internal sealed class AzureKeyVaultCertificatesComponent : AbstractAzureKeyVault
     internal override CertificateClient CreateComponentClient(Uri vaultUri, CertificateClientOptions options, TokenCredential cred)
         => new(vaultUri, cred, options);
 
-    protected override bool GetHealthCheckEnabled(AzureSecurityKeyVaultSettings settings)
-        => false;
-
     protected override IHealthCheck CreateHealthCheck(CertificateClient client, AzureSecurityKeyVaultSettings settings)
-        => throw new NotImplementedException();
+        => new AzureKeyVaultCertificatesHealthCheck(client);
 
     protected override void BindClientOptionsToConfiguration(IAzureClientBuilder<CertificateClient, CertificateClientOptions> clientBuilder, IConfiguration configuration)
 #pragma warning disable IDE0200 // Remove unnecessary lambda expression - needed so the ConfigBinder Source Generator works
