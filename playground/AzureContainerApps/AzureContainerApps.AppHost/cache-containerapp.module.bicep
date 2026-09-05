@@ -10,7 +10,7 @@ param cache_password_value string
 
 param infra_outputs_volumes_cache_0 string
 
-resource cache 'Microsoft.App/containerApps@2025-01-01' = {
+resource cache 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'cache'
   location: location
   properties: {
