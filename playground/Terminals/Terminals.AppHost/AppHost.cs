@@ -35,7 +35,7 @@ builder.AddContainer("shellbox", "alpine")
     .WithContainerName("terminals-playground-shellbox")
     .WithArgs("sleep", "infinity")
     .WithContainerShellCommand()
-    // Same shell, but delivered as a tab in the dashboard's terminal dock (Ctrl+`) rather than a modal dialog.
+    // Same shell, but delivered as a tab in the dashboard's terminal dock (Shift+`) rather than a modal dialog.
     .WithDockShellCommand();
 
 // Latest Node.js image, kept alive so the "Node REPL" interaction command can exec into it. The Node REPL is a

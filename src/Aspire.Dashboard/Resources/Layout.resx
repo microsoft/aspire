@@ -124,7 +124,7 @@
     <value>Help</value>
   </data>
   <data name="MainLayoutToggleTerminalDock" xml:space="preserve">
-    <value>Toggle terminal (Ctrl+`)</value>
+    <value>Toggle terminal (Shift+`)</value>
   </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
     <value>Settings</value>
@@ -187,7 +187,7 @@
     <value>Focus window</value>
   </data>
   <data name="TerminalDockHide" xml:space="preserve">
-    <value>Hide terminal panel (Ctrl+`)</value>
+    <value>Hide terminal panel (Shift+`)</value>
   </data>
   <data name="TerminalDockNewTerminal" xml:space="preserve">
     <value>New terminal</value>
@@ -199,7 +199,7 @@
     <value>No terminal selected</value>
   </data>
   <data name="TerminalDockPanelHint" xml:space="preserve">
-    <value>Press Ctrl+` to hide this panel.</value>
+    <value>Press Shift+` to hide this panel.</value>
   </data>
   <data name="TerminalDockReturnToDock" xml:space="preserve">
     <value>Return to panel</value>

@@ -162,7 +162,7 @@ internal static class TerminalInteractionCommands
     /// </summary>
     /// <remarks>
     /// This is the counterpart to the interaction-input commands above. Instead of a modal dialog bound to a single
-    /// dialog lifetime, the terminal becomes a tab in the dashboard's terminal dock (Ctrl+`) that outlives the command
+    /// dialog lifetime, the terminal becomes a tab in the dashboard's terminal dock (Shift+`) that outlives the command
     /// that created it. It also exercises <c>IAspireTerminal</c>'s automation surface — send input, wait for output,
     /// read the screen — which is how AppHost code can script a terminal it owns.
     /// </remarks>

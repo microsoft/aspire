@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutToggleTerminalDock">
-        <source>Toggle terminal (Ctrl+`)</source>
-        <target state="new">Toggle terminal (Ctrl+`)</target>
+        <source>Toggle terminal (Shift+`)</source>
+        <target state="new">Toggle terminal (Shift+`)</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutUnhandledErrorMessage">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockHide">
-        <source>Hide terminal panel (Ctrl+`)</source>
-        <target state="new">Hide terminal panel (Ctrl+`)</target>
+        <source>Hide terminal panel (Shift+`)</source>
+        <target state="new">Hide terminal panel (Shift+`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockNewTerminal">
@@ -193,8 +193,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
-        <source>Press Ctrl+` to hide this panel.</source>
-        <target state="new">Press Ctrl+` to hide this panel.</target>
+        <source>Press Shift+` to hide this panel.</source>
+        <target state="new">Press Shift+` to hide this panel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
