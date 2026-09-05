@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The TypeScript/polyglot `aspire add` path no longer filters stable-shaped staging feeds as stable-only, so integrations that intentionally remain prerelease (like Azure Kubernetes) are discovered again instead of disappearing from search results.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-08-17T02:43:11Z",
+  "lastMergedAt": "2026-08-17T02:43:11Z",
+  "name": "Fixed mixed-quality staging package discovery",
+  "owner": "mitchdenny",
+  "prs": [
+    19426
+  ]
+}

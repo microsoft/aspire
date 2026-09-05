@@ -1,0 +1,9 @@
+{
+  "author": "Shaurya2k06",
+  "comment": "Scope AppHost lifecycle by worktree and forward launch arguments",
+  "mergedAt": "2026-08-18T15:53:24Z",
+  "number": 19384,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "Scope AppHost lifecycle by worktree and forward launch arguments"
+}

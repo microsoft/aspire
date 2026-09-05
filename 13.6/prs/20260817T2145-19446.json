@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/CI fix for docs safe-output workflow, no user-facing impact",
+  "mergedAt": "2026-08-17T21:45:57Z",
+  "number": 19446,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Fix docs safe-output base resolution"
+}

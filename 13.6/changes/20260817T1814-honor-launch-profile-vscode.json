@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now honors the AppHost launch profile selected in `launch.json` instead of launching with the default profile's environment variables and URL when an older Aspire CLI flattens them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\ude80",
+  "firstMergedAt": "2026-08-17T18:14:25Z",
+  "lastMergedAt": "2026-08-17T18:14:25Z",
+  "name": "Honor selected AppHost launch profile in VS Code",
+  "owner": "adamint",
+  "prs": [
+    19400
+  ]
+}

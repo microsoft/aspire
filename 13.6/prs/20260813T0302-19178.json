@@ -1,9 +1,9 @@
 {
   "author": "adamint",
-  "comment": "Bound NuGet package search timeout in CLI",
+  "comment": "Reverted by #19337; feature never shipped",
   "mergedAt": "2026-08-13T03:02:31Z",
   "number": 19178,
-  "runDate": "2026-09-05T06:06:45Z",
-  "status": "included",
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
   "title": "Bound the NuGet package search timeout"
 }

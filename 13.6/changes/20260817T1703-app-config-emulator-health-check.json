@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@zhiyuanliang-ms"
+  ],
+  "description": "The Azure App Configuration emulator now exposes an HTTP health check, so `OnResourceReady` only fires once the emulator is actually ready to accept requests instead of racing its startup.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc93",
+  "firstMergedAt": "2026-08-17T17:03:39Z",
+  "lastMergedAt": "2026-08-17T17:03:39Z",
+  "name": "Health check for Azure App Configuration emulator",
+  "owner": "sebastienros",
+  "prs": [
+    19041
+  ]
+}

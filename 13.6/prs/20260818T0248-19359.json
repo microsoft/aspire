@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fix remembered AppHost folder in multi-root workspaces",
+  "mergedAt": "2026-08-18T02:48:08Z",
+  "number": 19359,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "Fix remembered AppHost folder in multi-root workspaces"
+}

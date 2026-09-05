@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine dependency version bump, not user-facing",
+  "mergedAt": "2026-08-17T20:53:39Z",
+  "number": 19440,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Update available external dependencies"
+}

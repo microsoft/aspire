@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal release-engineering process change (draft-then-publish flow), not user-facing",
+  "mergedAt": "2026-08-18T18:46:46Z",
+  "number": 18068,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Switch release flow to draft-then-publish for immutable releases"
+}

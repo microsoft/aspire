@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Aspire CLI bundle setup commands that exceed their timeout now have a bounded five-second post-termination wait, so MSBuild reports a clear cleanup timeout instead of waiting indefinitely for process termination to complete.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f3",
+  "firstMergedAt": "2026-08-18T19:39:58Z",
+  "lastMergedAt": "2026-08-18T19:39:58Z",
+  "name": "Bound Aspire CLI process termination wait",
+  "owner": "karolz-ms",
+  "prs": [
+    19367
+  ]
+}

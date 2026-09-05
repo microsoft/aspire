@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire skills cache is now keyed by both bundle version and archive SHA-512 digest, so an updated skills bundle whose contents changed without a version bump is no longer served from a stale cached extraction.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd12",
+  "firstMergedAt": "2026-08-18T17:36:50Z",
+  "lastMergedAt": "2026-08-18T17:36:50Z",
+  "name": "Harden Aspire skills bundle caching",
+  "owner": "ellahathaway",
+  "prs": [
+    19068
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "zhiyuanliang-ms",
+  "comment": "Health check endpoint for Azure App Config emulator",
+  "mergedAt": "2026-08-17T17:03:39Z",
+  "number": 19041,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "[Azure App Configuration] - Add health check endpoint for app config emulator"
+}

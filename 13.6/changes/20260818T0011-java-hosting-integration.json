@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@marshalhayes"
+  ],
+  "description": "Adds `Aspire.Hosting.Java`, a new hosting integration for running and building Java applications (including Maven and Gradle projects), ported and reworked from the Community Toolkit for parity with the existing Rust, Go, Node, and Python resource integrations.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u2615",
+  "firstMergedAt": "2026-08-18T00:11:39Z",
+  "lastMergedAt": "2026-08-18T00:11:39Z",
+  "name": "Java hosting integration",
+  "owner": "adamint",
+  "prs": [
+    18033
+  ]
+}

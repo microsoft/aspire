@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Executable-annotated project resources now recognize additional supported `dotnet` command prefixes (like `dotnet --diagnostics run` or `dotnet -d watch`), so more valid invocation styles get the expected configuration and launch-profile handling instead of being skipped.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2699\ufe0f",
+  "firstMergedAt": "2026-08-17T21:16:01Z",
+  "lastMergedAt": "2026-08-17T21:16:01Z",
+  "name": "Support advanced dotnet invocation options",
+  "owner": "karolz-ms",
+  "prs": [
+    19352
+  ]
+}

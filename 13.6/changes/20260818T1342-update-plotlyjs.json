@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updates the Plotly.js bundle used for dashboard metrics graphs from 2.35.2 to 4.0.0-rc.0, keeping the metrics visualization current with the upcoming Plotly.js major release.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udcc8",
+  "firstMergedAt": "2026-08-18T13:42:59Z",
+  "lastMergedAt": "2026-08-18T13:42:59Z",
+  "name": "Update dashboard metrics graphing library",
+  "owner": "JamesNK",
+  "prs": [
+    19377
+  ]
+}

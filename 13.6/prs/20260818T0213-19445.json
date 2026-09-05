@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/CI fix for gh-aw safe-output parsing, no user-facing impact",
+  "mergedAt": "2026-08-18T02:13:35Z",
+  "number": 19445,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Fix gh-aw v0.86.2 safe-output base parsing"
+}

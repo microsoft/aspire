@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering-only: upgrades gh-aw compiler and workflow lock files, no user-facing impact",
+  "mergedAt": "2026-08-17T18:32:20Z",
+  "number": 19438,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Upgrade gh-aw compiler to v0.86.2"
+}

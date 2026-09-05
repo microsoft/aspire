@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Tolerate NuGet credential-provider stdout preamble in package search parsing",
+  "mergedAt": "2026-08-17T18:50:40Z",
+  "number": 19343,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "Tolerate NuGet credential-provider stdout preamble in package search parsing"
+}

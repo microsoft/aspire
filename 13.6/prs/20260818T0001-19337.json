@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Reverts PR #19178 (its changelog entry has been removed); restores pre-PR state",
+  "mergedAt": "2026-08-18T00:01:49Z",
+  "number": 19337,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "excluded",
+  "title": "Revert \"Bound the NuGet package search timeout\""
+}

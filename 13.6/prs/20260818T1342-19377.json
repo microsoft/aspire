@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Update Plotly.js dashboard metrics library",
+  "mergedAt": "2026-08-18T13:42:59Z",
+  "number": 19377,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "Update Plotly.js to 4.0.0-rc.0"
+}

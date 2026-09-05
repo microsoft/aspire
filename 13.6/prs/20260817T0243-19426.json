@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Fixed mixed-quality staging package discovery",
+  "mergedAt": "2026-08-17T02:43:11Z",
+  "number": 19426,
+  "runDate": "2026-09-05T18:07:19Z",
+  "status": "included",
+  "title": "Fix mixed-quality staging package discovery"
+}
