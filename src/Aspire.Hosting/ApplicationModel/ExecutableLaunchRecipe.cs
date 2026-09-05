@@ -310,7 +310,16 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
 
     public async Task<ExecutableLaunchPlan> CreateLaunchPlanAsync(ExecutableLaunchContext context)
     {
-        var resource = (ExecutableResource)context.Resource;
+        // Resolve the command/working directory from the annotation rather than casting to ExecutableResource:
+        // a substitution helper (e.g. RunAsTool) can attach this recipe, via a copied ExecutableAnnotation, to a
+        // resource whose concrete type is not ExecutableResource (for example a ProjectResource being run as a
+        // tool). ExecutableResource.Command/.WorkingDirectory already just read this same annotation.
+        var resource = context.Resource;
+        if (!resource.TryGetExecutableAnnotation(out var executableAnnotation))
+        {
+            throw new InvalidOperationException($"Resource '{resource.Name}' is missing required executable annotation.");
+        }
+
         var arguments = context.ExecutionConfiguration.Arguments.ToList();
         var launchToolArgumentsData = context.ExecutionConfiguration.AdditionalConfigurationData
             .OfType<LaunchToolArgumentsData>()
@@ -358,8 +367,8 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
         var launchConfigurations = await CreateLaunchConfigurationsAsync(context).ConfigureAwait(false);
 
         return new(
-            resource.Command,
-            resource.WorkingDirectory,
+            executableAnnotation.Command,
+            executableAnnotation.WorkingDirectory,
             context.Decision.Mechanism,
             executableArguments.Count > 0 ? executableArguments : null,
             context.ExecutionConfiguration.EnvironmentVariables,
@@ -432,13 +441,23 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
 
     public async Task<ExecutableLaunchPlan> CreateLaunchPlanAsync(ExecutableLaunchContext context)
     {
-        var resource = (ProjectResource)context.Resource;
+        // Resolve everything from annotations rather than casting to ProjectResource: a substitution helper
+        // (e.g. RunAsProject) can attach this recipe, via a copied IProjectMetadata annotation, to a resource
+        // whose concrete type is not ProjectResource (for example a ContainerResource being run as a project).
+        var resource = context.Resource;
         if (!resource.TryGetProjectMetadata(out var projectMetadata))
         {
             throw new InvalidOperationException($"Project resource '{resource.Name}' is missing required metadata.");
         }
 
-        resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
+        // ExecutableAnnotation is a deliberate command/argument override for a real ProjectResource (e.g. MAUI
+        // attaches it to launch via `adb`/`xcrun` instead of `dotnet run --project`). A resource that merely
+        // carries project metadata without being a genuine ProjectResource (e.g. RunAsProject substituting a
+        // ContainerResource) has no such established override contract, so it always gets plain project launch
+        // semantics regardless of any incidental ExecutableAnnotation.
+        var executableAnnotation = resource is ProjectResource && resource.TryGetLastAnnotation<ExecutableAnnotation>(out var annotation)
+            ? annotation
+            : null;
         resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
 
         var command = executableAnnotation?.Command ?? "dotnet";
@@ -529,7 +548,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
 
     private static async Task<IReadOnlyList<JsonElement>> CreateLaunchConfigurationsAsync(
         ExecutableLaunchContext context,
-        ProjectResource resource,
+        IResource resource,
         IProjectMetadata projectMetadata,
         ExecutableAnnotation? executableAnnotation,
         ProjectLaunchArgsOverrideAnnotation? launchOverride)
@@ -641,7 +660,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
     }
 
     private static (List<ExecutableLaunchArgument> LaunchArguments, int? DotnetProjectLaunchArgumentIndex) BuildLaunchArguments(
-        ProjectResource resource,
+        IResource resource,
         ExecutableLaunchMechanism mechanism,
         bool projectLaunchConfigurationHandlesLaunchProfile,
         IEnumerable<(string Value, bool IsSensitive)> appHostArguments,
@@ -829,7 +848,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         argument is "-d" or "--diagnostics";
 
     private static bool IsExecutableAnnotatedDotnetProject(IResource resource) =>
-        resource is ProjectResource &&
+        resource.TryGetProjectAnnotation(out _) &&
         resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) &&
         string.Equals(Path.GetFileNameWithoutExtension(executableAnnotation.Command), "dotnet", StringComparison.OrdinalIgnoreCase);
 

@@ -851,25 +851,12 @@ public static class ResourceExtensions
             var publicPort = EndpointAnnotation.NormalizePort(endpoint.Port);
             var configuredTargetPort = EndpointAnnotation.NormalizePort(endpoint.TargetPort);
 
-            // Compute target port based on resource type and endpoint configuration
-            ResolvedPort targetPort = (resource, endpoint.UriScheme, configuredTargetPort, publicPort) switch
-            {
-                // The port was explicitly specified so use it
-                (_, _, int target, _) => ResolvedPort.Explicit(target),
+            var isProjectAnnotated = resource.TryGetProjectAnnotation(out _);
 
-                // Container resources get their default listening port from the exposed port (implicit)
-                (ContainerResource, _, null, int port) => ResolvedPort.Implicit(port),
+            ResolvedPort targetPort = ResolveTargetPort(endpoint.UriScheme, configuredTargetPort, publicPort, isProjectAnnotated);
 
-                // Check whether the project views this endpoint as Default (for its scheme).
-                // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
-
-                // Allocate a dynamic port
-                _ => ResolvedPort.Allocated(portAllocator.AllocatePort())
-            };
-
-            // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            // Track HTTP schemes encountered for project-annotated resources.
+            if (isProjectAnnotated && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -913,6 +900,37 @@ public static class ResourceExtensions
         return result;
 
         static bool IsHttpScheme(string scheme) => scheme is "http" or "https";
+
+        // Compute target port based on resource type and endpoint configuration.
+        ResolvedPort ResolveTargetPort(string uriScheme, int? configuredTargetPort, int? publicPort, bool isProjectAnnotated)
+        {
+            if (configuredTargetPort is int target)
+            {
+                // The port was explicitly specified so use it.
+                return ResolvedPort.Explicit(target);
+            }
+
+            if (isProjectAnnotated && IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme))
+            {
+                // Check whether the project views this endpoint as Default (for its scheme).
+                // If so, we don't specify the target port, as it will get one from the deployment tool.
+                return ResolvedPort.None();
+            }
+
+            if (!isProjectAnnotated && resource.IsContainer() && publicPort is int port)
+            {
+                // Container resources get their default listening port from the exposed port (implicit).
+                // Checked after the project case above: a substituted resource (e.g. RunAsProject) can be a
+                // ContainerResource that also carries project metadata, and the project rule takes precedence.
+                // Annotation-based (IsContainer/ContainerImageAnnotation) rather than a type check: a substituted
+                // resource (e.g. RunAsContainer) can be a ProjectResource that now carries a container image
+                // annotation instead.
+                return ResolvedPort.Implicit(port);
+            }
+
+            // Allocate a dynamic port.
+            return ResolvedPort.Allocated(portAllocator.AllocatePort());
+        }
     }
 
     /// <summary>
@@ -1006,7 +1024,7 @@ public static class ResourceExtensions
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.TryGetProjectAnnotation(out _) || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1854,22 +1872,51 @@ public static class ResourceExtensions
         }
     }
 
-#pragma warning disable ASPIREDOTNETTOOL // DotnetToolResource is experimental
     /// <summary>
     /// Gets the resource type string for the specified resource.
     /// </summary>
-    internal static string GetResourceType(this IResource resource) => resource switch
+    /// <remarks>
+    /// Classification is annotation-based, not tied to the resource's concrete CLR type: a substitution helper
+    /// (e.g. the ResourceSubstitution playground's RunAsProject/RunAsContainer/RunAsTool) can attach project,
+    /// container, or tool annotations to a resource whose concrete type doesn't match. Precedence (project, then
+    /// container, then tool, then plain executable) matches GetProjectAnnotatedResources/
+    /// GetExecutableAnnotatedResources so a resource is classified the same way it was created.
+    /// </remarks>
+#pragma warning disable ASPIREDOTNETTOOL // DotnetToolAnnotation is experimental
+    internal static string GetResourceType(this IResource resource)
     {
-        ProjectResource => KnownResourceTypes.Project,
-        ContainerResource => KnownResourceTypes.Container,
-        ContainerExecutableResource => KnownResourceTypes.ContainerExec,
-        DotnetToolResource => KnownResourceTypes.Tool,
-        ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,
-        ExecutableResource => KnownResourceTypes.Executable,
-        ParameterResource => KnownResourceTypes.Parameter,
-        ConnectionStringResource => KnownResourceTypes.ConnectionString,
-        ExternalServiceResource => KnownResourceTypes.ExternalService,
-        _ => resource.GetType().Name
-    };
+        if (resource.TryGetProjectAnnotation(out _))
+        {
+            return KnownResourceTypes.Project;
+        }
+
+        if (resource is ContainerExecutableResource)
+        {
+            return KnownResourceTypes.ContainerExec;
+        }
+
+        if (resource.IsContainer())
+        {
+            return KnownResourceTypes.Container;
+        }
+
+        if (resource.HasAnnotationOfType<DotnetToolAnnotation>())
+        {
+            return KnownResourceTypes.Tool;
+        }
+
+        if (resource.TryGetExecutableAnnotation(out _))
+        {
+            return KnownResourceTypes.Executable;
+        }
+
+        return resource switch
+        {
+            ParameterResource => KnownResourceTypes.Parameter,
+            ConnectionStringResource => KnownResourceTypes.ConnectionString,
+            ExternalServiceResource => KnownResourceTypes.ExternalService,
+            _ => resource.GetType().Name
+        };
+    }
 #pragma warning restore ASPIREDOTNETTOOL
 }

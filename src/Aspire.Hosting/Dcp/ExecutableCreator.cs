@@ -123,11 +123,34 @@ internal sealed class ExecutableCreator(
         ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
-        var recipes = resource.Annotations.OfType<ExecutableLaunchRecipeAnnotation>().ToArray();
-        if (recipes.Length != 1)
+        // A resource can accumulate more than one recipe annotation when a substitution helper (e.g. RunAsTool,
+        // RunAsContainer) layers a donor resource's annotations onto an existing project/executable resource
+        // rather than replacing it outright. Follow the same "last annotation wins" convention used for every
+        // other resource annotation in this file (see TryGetLastAnnotation usages) instead of treating the
+        // resource as invalid.
+        //
+        // A resource can also have none at all: ExecutableLaunchRecipeAnnotation is only attached by the
+        // ExecutableResource/ProjectResource constructors, but GetProjectAnnotatedResources/
+        // GetExecutableAnnotatedResources (and therefore PrepareProjectExecutables/PreparePlainExecutables) accept
+        // any IResource carrying the matching annotation directly, regardless of its concrete type. Derive the
+        // recipe in that case using the exact same project-wins precedence those two lookups already use.
+        IExecutableLaunchRecipe recipe;
+        if (resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var recipeAnnotation))
+        {
+            recipe = recipeAnnotation.Recipe;
+        }
+        else if (resource.TryGetProjectAnnotation(out _))
+        {
+            recipe = ProjectExecutableLaunchRecipe.Instance;
+        }
+        else if (resource.TryGetExecutableAnnotation(out _))
+        {
+            recipe = DirectExecutableLaunchRecipe.Instance;
+        }
+        else
         {
             throw new InvalidOperationException(
-                $"Resource '{resource.Name}' must have exactly one executable launch recipe, but {recipes.Length} were found.");
+                $"Resource '{resource.Name}' must have an executable launch recipe, but none were found.");
         }
 
         var decision = launchPolicy.Decide(resource);
@@ -139,7 +162,7 @@ internal sealed class ExecutableCreator(
             decision,
             resourceLogger,
             cancellationToken);
-        var plan = await recipes[0].Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
+        var plan = await recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
 
         if (plan.Mechanism != decision.Mechanism)
         {
@@ -203,11 +226,11 @@ internal sealed class ExecutableCreator(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var project in _model.GetProjectResources())
+        foreach (var project in _model.GetProjectAnnotatedResources())
         {
             if (!project.TryGetProjectMetadata(out var projectMetadata))
             {
-                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata.");
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required project metadata annotation, despite being returned from GetProjectAnnotatedResources().");
             }
 
             EnsureRequiredAnnotations(project);
@@ -232,13 +255,18 @@ internal sealed class ExecutableCreator(
 
     private void PreparePlainExecutables()
     {
-        foreach (var resource in _model.GetExecutableResources())
+        foreach (var resource in _model.GetExecutableAnnotatedResources())
         {
+            if (!resource.TryGetExecutableAnnotation(out var executableAnnotation))
+            {
+                throw new InvalidOperationException($"Executable resource '{resource.Name}' is missing required executable annotation, despite being returned from GetExecutableAnnotatedResources().");
+            }
+
             EnsureRequiredAnnotations(resource);
 
             var instance = DcpExecutor.GetDcpInstance(resource, instanceIndex: 0);
-            var executable = Executable.Create(instance.Name, resource.Command);
-            executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+            var executable = Executable.Create(instance.Name, executableAnnotation.Command);
+            executable.Spec.WorkingDirectory = executableAnnotation.WorkingDirectory;
 
             ApplyCommonAnnotations(executable, resource, instance, replicaCount: 1, replicaIndex: 0);
             ApplyExplicitStart(resource, executable.Spec);
