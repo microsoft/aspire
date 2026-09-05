@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI/workflow gating change for VS Code extension E2E tests; not user-facing product behavior.",
+  "mergedAt": "2026-08-12T06:00:01Z",
+  "number": 19275,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Run VS Code extension E2E tests as non-blocking"
+}

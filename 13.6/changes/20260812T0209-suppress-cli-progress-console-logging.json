@@ -5,15 +5,16 @@
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
-  "description": "Console status spinners could interleave with diagnostic log output, shifting `aspire doctor -l trace` timestamps or splitting progress text across log lines. Status/progress rendering is now suppressed whenever console logging is enabled, while command output and action behavior are unchanged.",
+  "description": "CLI commands that emit console or debug logs now keep readable status messages without interactive spinner frames. Aspire still reports progress, but renders it as stable text so verbose logging no longer interleaves with spinner output.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "\ud83d\udda5\ufe0f",
   "firstMergedAt": "2026-08-12T02:09:46Z",
-  "lastMergedAt": "2026-08-12T02:09:46Z",
+  "lastMergedAt": "2026-08-12T05:16:38Z",
   "name": "Suppress CLI progress spinners when console logging is enabled",
   "owner": "JamesNK",
   "prs": [
-    19214
+    19214,
+    19272
   ]
 }

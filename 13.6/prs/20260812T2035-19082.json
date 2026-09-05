@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "User-facing CLI diagnostic fix for AppHost build failures.",
+  "mergedAt": "2026-08-12T20:35:17Z",
+  "number": 19082,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Fix misleading AppHost build failure diagnostics"
+}

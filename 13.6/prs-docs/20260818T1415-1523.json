@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Matched to misleading AppHost build failure diagnostics entry (#19082).",
+  "mergedAt": "2026-08-18T14:15:15Z",
+  "number": 1523,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Document Azure Artifacts package search issue"
+}

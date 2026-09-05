@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering signing configuration change only.",
+  "mergedAt": "2026-08-12T21:12:14Z",
+  "number": 19195,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Add third-party signing entries for Hex1b and QRCoder"
+}

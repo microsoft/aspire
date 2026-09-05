@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching included 13.6 product changelog entry in processed scope.",
+  "mergedAt": "2026-08-18T14:01:38Z",
+  "number": 1528,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "[docs] Document partial Linux certificate trust behavior for `aspire certs trust`"
+}

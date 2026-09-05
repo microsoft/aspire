@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching included 13.6 product changelog entry in processed scope.",
+  "mergedAt": "2026-08-18T14:27:17Z",
+  "number": 1502,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "[docs] Document default fsGroup for Kubernetes persistent volumes"
+}

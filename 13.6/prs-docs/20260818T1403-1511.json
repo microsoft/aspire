@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to CLI bundle default AppHost templates entry (#19076).",
+  "mergedAt": "2026-08-18T14:03:44Z",
+  "number": 1511,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "[docs] Document new experimental APIs from Aspire.Hosting.Dotnet decoupling (ASPIREPROJECTS001)"
+}

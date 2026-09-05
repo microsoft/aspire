@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "User-visible VS Code debug-session cleanup fix.",
+  "mergedAt": "2026-08-12T20:50:03Z",
+  "number": 19296,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Close the dashboard debug browser when the Aspire session ends"
+}

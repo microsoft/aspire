@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only VS Code extension E2E stabilization with no user-facing product change.",
+  "mergedAt": "2026-08-12T05:37:36Z",
+  "number": 19276,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Stabilize AppHost tree discovery E2E"
+}

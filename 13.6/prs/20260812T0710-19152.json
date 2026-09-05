@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Lifecycle cleanup/internal extension deactivation behavior without a distinct user-facing milestone note.",
+  "mergedAt": "2026-08-12T07:10:41Z",
+  "number": 19152,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Stop the Aspire CLI and own its RPC connections during extension deactivation"
+}

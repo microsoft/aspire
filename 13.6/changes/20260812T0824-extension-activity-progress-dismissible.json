@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Long-running Aspire extension activity now shows as window progress instead of a modal notification, so it can be ignored or hidden without blocking the editor while builds, AppHost startup, or dashboard startup continue.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd14",
+  "firstMergedAt": "2026-08-12T08:24:38Z",
+  "lastMergedAt": "2026-08-12T08:24:38Z",
+  "name": "Make Aspire extension activity progress dismissible",
+  "owner": "adamint",
+  "prs": [
+    19124
+  ]
+}

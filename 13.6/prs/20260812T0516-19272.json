@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Grouped into existing CLI status/logging entry with #19214.",
+  "mergedAt": "2026-08-12T05:16:38Z",
+  "number": 19272,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Preserve CLI status messages without interactive spinners"
+}

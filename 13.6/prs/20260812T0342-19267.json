@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only VS Code extension change to keep CI matrix metadata in sync.",
+  "mergedAt": "2026-08-12T03:42:37Z",
+  "number": 19267,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "[Broken main] Track the disabled Azure Functions E2E shard in the matrix allowlist"
+}

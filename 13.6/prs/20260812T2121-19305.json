@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-data-only follow-up to avoid secret scanning false positives.",
+  "mergedAt": "2026-08-12T21:21:17Z",
+  "number": 19305,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Avoid MongoDB credential false positive"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard now resolves database peers more accurately for telemetry spans that share a server address, using the reported database name to prefer the matching database resource instead of attributing spans to the wrong container or sibling database.",
+  "docsPrs": [
+    1508
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddc4\ufe0f",
+  "firstMergedAt": "2026-08-12T17:18:35Z",
+  "lastMergedAt": "2026-08-12T17:18:35Z",
+  "name": "Fix database resource peer resolution",
+  "owner": "JamesNK",
+  "prs": [
+    19224
+  ]
+}

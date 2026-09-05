@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test infrastructure update for newer VS Code in extension E2E coverage.",
+  "mergedAt": "2026-08-12T07:33:13Z",
+  "number": 19127,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Run VS Code extension E2E tests on a current VS Code"
+}

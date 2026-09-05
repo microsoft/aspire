@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stopping an Aspire debug session in VS Code now also closes the dashboard browser by default, preventing orphaned browser windows from accumulating after AppHosts stop.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\ude9f",
+  "firstMergedAt": "2026-08-12T20:50:03Z",
+  "lastMergedAt": "2026-08-12T20:50:03Z",
+  "name": "Close dashboard debug browsers when sessions end",
+  "owner": "adamint",
+  "prs": [
+    19296
+  ]
+}

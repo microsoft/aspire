@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI/test gating restoration with no direct product behavior change.",
+  "mergedAt": "2026-08-12T18:43:51Z",
+  "number": 19291,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Restore trustworthy VS Code extension E2E gating"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "User-facing VS Code extension progress UI improvement.",
+  "mergedAt": "2026-08-12T08:24:38Z",
+  "number": 19124,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Make Aspire extension activity notifications dismissible"
+}

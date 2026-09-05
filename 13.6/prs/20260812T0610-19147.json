@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test/build-only change to keep E2E bridge code out of production VSIX builds.",
+  "mergedAt": "2026-08-12T06:10:29Z",
+  "number": 19147,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Keep the E2E state file bridge out of production extension builds"
+}

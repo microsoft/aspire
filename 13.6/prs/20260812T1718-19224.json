@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "User-visible dashboard telemetry attribution fix for database resources.",
+  "mergedAt": "2026-08-12T17:18:35Z",
+  "number": 19224,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Fix database resource peer resolution"
+}

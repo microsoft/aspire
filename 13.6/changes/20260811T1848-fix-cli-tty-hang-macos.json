@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Fixed a hang on macOS where aspire new/init/add/restore for the TypeScript starter would silently stall because a spawned guest process inherited the parent CLI's TTY and blocked on a stdin read.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "🍎",
+  "emoji": "\ud83c\udf4e",
   "firstMergedAt": "2026-08-11T18:48:26Z",
   "lastMergedAt": "2026-08-11T18:48:26Z",
   "name": "Fix CLI hang on macOS from inherited TTY stdin",

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching included 13.6 product changelog entry in processed scope.",
+  "mergedAt": "2026-08-18T14:08:13Z",
+  "number": 1529,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "[docs] Document ASPIRE_CLI_START_TIMEOUT environment variable"
+}

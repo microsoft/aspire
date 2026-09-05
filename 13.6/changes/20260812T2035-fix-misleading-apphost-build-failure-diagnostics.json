@@ -1,0 +1,23 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "When an AppHost exists but fails MSBuild evaluation, Aspire CLI now preserves the user-selected project and surfaces the real build diagnostics instead of incorrectly claiming that no AppHost was found.",
+  "docsPrs": [
+    1523
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf1",
+  "firstMergedAt": "2026-08-12T20:35:17Z",
+  "lastMergedAt": "2026-08-12T20:35:17Z",
+  "name": "Fix misleading AppHost build failure diagnostics",
+  "owner": "DamianEdwards",
+  "prs": [
+    19082
+  ]
+}

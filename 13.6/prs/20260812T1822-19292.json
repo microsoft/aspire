@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "User-visible VS Code extension fix for symlinked workspaces.",
+  "mergedAt": "2026-08-12T18:22:25Z",
+  "number": 19292,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Fix editor state for AppHosts opened through symlinks"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "User-facing template/default behavior change for generated C# AppHosts.",
+  "mergedAt": "2026-08-12T17:56:45Z",
+  "number": 19076,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "included",
+  "title": "Enable CLI bundle in C# AppHost templates"
+}

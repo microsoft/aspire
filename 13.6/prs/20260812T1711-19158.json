@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Doctor environment-classification fix is diagnostic-only and not significant enough for this milestone changelog.",
+  "mergedAt": "2026-08-12T17:11:25Z",
+  "number": 19158,
+  "runDate": "2026-09-05T00:09:24Z",
+  "status": "excluded",
+  "title": "Report an undetermined WSL version instead of asserting WSL2"
+}
