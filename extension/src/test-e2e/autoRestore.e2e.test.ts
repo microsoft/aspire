@@ -5,6 +5,7 @@ import { getCommandInvocationCount, waitForCommandOutcome, waitForRepositoryIdle
 import { executeE2eControlCommand, reloadWorkspaceForE2E, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, writeFileWithRetry, writeWorkspaceAppHostConfigForPath, writeWorkspaceSetting } from './helpers/fixtures';
 import { runProcess } from './helpers/process';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './helpers/paths';
+import { openAspireView } from './helpers/vscode';
 
 function delay(milliseconds: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -97,6 +98,14 @@ suite('Aspire auto-restore E2E', function () {
     test('automatically restores a stale non-.NET AppHost on activation and force-restores it via the manual command', async function () {
         this.timeout(600000);
 
+        // ExTester launches VS Code with no workspace folder open, so the extension's
+        // `workspaceContains:*` activation events never fire on their own - every other E2E
+        // suite activates the extension by opening its view container first (VS Code infers an
+        // `onView:*` activation event for a contributed view regardless of workspace state).
+        // Without this, `waitForRepositoryIdle()` below polls a state file the extension has
+        // never been triggered to create, and times out with "Last state: <none>".
+        await openAspireView();
+
         // A real `aspire init` is the only way to get a guest-language AppHost whose on-disk
         // scaffolding matches what the extension's marker-based staleness check expects (Theme F3
         // added the `.codegen-version` write this flow depends on to the same `init` code path).
@@ -166,6 +175,10 @@ suite('Aspire auto-restore E2E', function () {
 
     test('does not create restore artifacts for a .NET AppHost', async function () {
         this.timeout(300000);
+
+        // See the comment in the previous test - the extension only activates once its view
+        // container is opened, and this test must not depend on suite/file test order for that.
+        await openAspireView();
 
         restoreWorkspaceAppHostConfig();
 
