@@ -20,6 +20,25 @@
     justify-content: flex-end;
 }
 
+::deep .notifications-dismiss-all {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 2px;
+    border-radius: 6px;
+    color: var(--colorBrandForeground1);
+    font-size: 14px;
+    font-weight: var(--fontWeightRegular);
+    line-height: 20px;
+}
+
+::deep .notifications-dismiss-all:hover {
+    color: var(--colorBrandForegroundLinkHover);
+}
+
+::deep .notifications-dismiss-all:active {
+    color: var(--colorBrandForegroundLinkPressed);
+}
+
 .notifications-scroll {
     overflow-y: auto;
     flex: 1;

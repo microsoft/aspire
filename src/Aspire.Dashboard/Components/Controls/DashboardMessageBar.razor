@@ -31,11 +31,11 @@
     <div class="dashboard-message-bar-actions">
         @if (!string.IsNullOrEmpty(Content.PrimaryAction))
         {
-            <FluentButton OnClick="@(() => CloseAsync(true))">@Content.PrimaryAction</FluentButton>
+            <FluentButton Class="aspire-compact-button aspire-neutral-button dashboard-message-bar-action" OnClick="@(() => CloseAsync(true))">@Content.PrimaryAction</FluentButton>
         }
         @if (!string.IsNullOrEmpty(Content.SecondaryAction))
         {
-            <FluentButton OnClick="@(() => CloseAsync(false))">@Content.SecondaryAction</FluentButton>
+            <FluentButton Class="aspire-compact-button aspire-neutral-button dashboard-message-bar-action" OnClick="@(() => CloseAsync(false))">@Content.SecondaryAction</FluentButton>
         }
         @if (Content.AllowDismiss)
         {

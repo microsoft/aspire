@@ -76,7 +76,13 @@
     color: var(--colorNeutralForeground3);
 }
 
+::deep .notification-entry-dismiss {
+    --aspire-link-button-color: var(--colorNeutralForeground1);
+    --aspire-link-button-hover-color: var(--colorNeutralForeground1);
+    --aspire-link-button-pressed-color: var(--colorNeutralForeground1);
+}
+
 ::deep .notification-entry-action {
-    height: 24px;
-    font-size: 12px;
+    --aspire-neutral-button-background: var(--notification-action-background);
+    --aspire-neutral-button-border: var(--notification-action-border);
 }

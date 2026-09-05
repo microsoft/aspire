@@ -15,6 +15,7 @@
     </div>
     <div class="notification-entry-close">
         <FluentButton Appearance="ButtonAppearance.Transparent"
+                      Class="aspire-icon-button aspire-link-button notification-entry-dismiss"
                       aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
                       OnClick="@HandleDismiss">
             <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Default" />
@@ -29,9 +30,9 @@
         }
         @if (Entry.PrimaryAction is { } primaryAction)
         {
-            <FluentButton Appearance="ButtonAppearance.Default"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
                           OnClick="@HandlePrimaryAction"
-                          Class="notification-entry-action">
+                          Class="aspire-compact-button aspire-neutral-button notification-entry-action">
                 @primaryAction.Text
             </FluentButton>
         }

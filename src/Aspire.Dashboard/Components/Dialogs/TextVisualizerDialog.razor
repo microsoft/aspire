@@ -68,15 +68,15 @@
         @if (!_isLoading)
         {
             <div class="button-container">
-                @if (ShowSecretsWarning is true)
-                {
-                    <FluentButton Class="text-visualizer-unmask-content"
-                                  OnClick="@UnmaskContentAsync">
-                        @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
-                    </FluentButton>
-                }
-
                 <div class="button-container-right">
+                    @if (ShowSecretsWarning is true)
+                    {
+                        <FluentButton Class="text-visualizer-unmask-content"
+                                      OnClick="@UnmaskContentAsync">
+                            @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
+                        </FluentButton>
+                    }
+
                     @if (Content.DownloadFileName is not null)
                     {
                         <FluentButton OnClick="@DownloadAsync"

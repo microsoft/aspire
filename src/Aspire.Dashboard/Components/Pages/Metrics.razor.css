@@ -35,6 +35,10 @@
     padding: 4px 16px;
 }
 
+::deep .metrics-instrument-link {
+    --aspire-link-button-background: var(--aspire-page-background);
+}
+
 /* Metrics chart SVG */
 ::deep .yaxislayer-above {
     transform: translate(-10px,0px);

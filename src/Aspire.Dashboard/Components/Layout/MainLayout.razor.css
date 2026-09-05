@@ -14,13 +14,14 @@
     align-items: center;
     flex: 0 1 auto;
     min-width: 0;
-    margin-inline-start: -6px; /* offset the 6px gap on the header */
+    height: 28px;
+    padding: 0 2px;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
     font-family: var(--aspire-font-display);
     font-size: 20px;
-    font-weight: 600;
-    line-height: 26px;
+    font-weight: var(--fontWeightRegular);
+    line-height: 20px;
     text-decoration: none;
     text-overflow: ellipsis;
 }
@@ -60,7 +61,7 @@
 }
 
 ::deep.layout > header .header-button:hover {
-    background: var(--colorNeutralBackground1Hover);
+    background: var(--colorNeutralBackground3);
 }
 
 ::deep.layout > header .notification-counter-badge {
@@ -78,6 +79,10 @@
     min-width: 0;
     padding: 12px;
     gap: 8px;
+}
+
+::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
+    display: none;
 }
 
 ::deep fluent-toast-b.resource-command-toast::part(dialog) {

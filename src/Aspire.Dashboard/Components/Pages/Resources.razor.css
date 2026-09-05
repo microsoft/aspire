@@ -182,6 +182,25 @@
     column-gap: 10px;
 }
 
+::deep .resource-graph-controls fluent-button {
+    border: var(--strokeWidthThin) solid transparent;
+    background-color: var(--aspire-page-background);
+}
+
+::deep .resource-graph-controls fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .resource-graph-controls fluent-button:active,
+::deep .resource-graph-controls fluent-button:hover:active {
+    background-color: var(--resource-graph-secondary-hover-background);
+}
+
+::deep .resource-graph-controls fluent-button > svg {
+    width: 24px;
+    height: 24px;
+}
+
 ::deep .resource-graph .texts {
     cursor: pointer;
 }
@@ -192,7 +211,7 @@
 
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
-    stroke: var(--colorNeutralBackground1);
+    stroke: var(--aspire-page-background);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -201,12 +220,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--colorNeutralBackground1);
-    fill: var(--colorNeutralBackground1);
+    stroke: var(--aspire-page-background);
+    fill: var(--aspire-page-background);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--colorNeutralBackground1Hover) !important;
+    fill: var(--resource-graph-hover-background) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -214,11 +233,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--colorNeutralBackground1Selected) !important;
+    fill: var(--colorNeutralBackground3) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--colorNeutralStroke1Hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -226,11 +245,11 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--colorNeutralStroke1Hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--colorNeutralStroke1Hover);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-node-border {
@@ -240,13 +259,13 @@
 }
 
 ::deep .resource-endpoint {
-    fill: var(--colorNeutralForeground3);
+    fill: var(--foreground-subtext-rest);
     font-size: 11px;
     text-anchor: middle;
 }
 
 ::deep .resource-status-circle {
-    fill: var(--colorNeutralBackground1);
+    fill: var(--aspire-page-background);
 }
 
 /* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
@@ -273,14 +292,14 @@
 }
 
 ::deep .resource-menu-cog-background {
-    fill: var(--colorNeutralBackground1);
+    fill: var(--aspire-page-background);
     stroke: var(--colorNeutralStroke1);
     stroke-width: var(--strokeWidthThin);
 }
 
 ::deep .resource-menu-cog:hover .resource-menu-cog-background {
-    fill: var(--colorNeutralBackground1Hover);
-    stroke: var(--colorNeutralStroke1Hover);
+    fill: var(--resource-graph-secondary-hover-background);
+    stroke: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
@@ -316,22 +335,22 @@
 }
 
 ::deep .arrow-highlight {
-    fill: var(--colorNeutralStroke1Hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--colorNeutralStroke1Hover);
+    fill: var(--aspire-button-hover-border);
 }
 
 ::deep .resource-link-highlight {
-    stroke: var(--colorNeutralStroke1Hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--colorNeutralStroke1Hover);
+    stroke: var(--aspire-button-hover-border);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);

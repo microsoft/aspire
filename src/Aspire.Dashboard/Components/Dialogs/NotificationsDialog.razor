@@ -14,7 +14,9 @@
         else
         {
             <div class="notifications-dismiss">
-                <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="@DismissAll">
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              Class="aspire-link-button notifications-dismiss-all"
+                              OnClick="@DismissAll">
                     @Loc[nameof(Dialogs.NotificationCenterDismissAll)]
                 </FluentButton>
             </div>

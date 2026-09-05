@@ -121,7 +121,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("width", "17.5")
             .attr("height", "17.5")
-            .attr("fill", "var(--colorNeutralBackground1)");
+            .attr("fill", "var(--aspire-page-background)");
 
         highlightedPattern
             .append("line")
@@ -129,7 +129,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("x2", "0")
             .attr("y2", "17.5")
-            .attr("stroke", "var(--colorNeutralBackground2Hover)")
+            .attr("stroke", "var(--resource-graph-secondary-hover-background)")
             .attr("stroke-width", "15");
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");

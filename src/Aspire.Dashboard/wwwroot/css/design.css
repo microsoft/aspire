@@ -84,6 +84,10 @@
     --aspire-popup-background: #ffffff;
     --aspire-popup-shadow: rgba(0, 0, 0, 0.2) 0 0 2px 0, rgba(0, 0, 0, 0.24) 0 16px 32px 0;
     --aspire-menu-item-hover-background: #f3f3f3;
+    --resource-graph-hover-background: #f3f3f3;
+    --resource-graph-secondary-hover-background: #efefef;
+    --notification-action-background: var(--messagebar-action-background);
+    --notification-action-border: var(--messagebar-action-border);
     --aspire-dropdown-option-foreground: #212121;
     --aspire-dropdown-option-selected-background: #f3f3f3;
     --aspire-dropdown-option-selected-hover-background: #f7f7f7;
@@ -287,6 +291,45 @@ fluent-field.aspire-input > fluent-number-input::part(control) {
     font-weight: var(--fontWeightRegular);
 }
 
+.aspire-compact-button,
+.aspire-compact-button::part(control) {
+    height: 24px;
+    min-height: 24px;
+    padding-inline: 14px;
+    border-radius: 6px;
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightRegular);
+    line-height: 20px;
+}
+
+.aspire-neutral-button,
+.aspire-neutral-button::part(control) {
+    border-color: transparent;
+    background:
+        padding-box linear-gradient(var(--aspire-neutral-button-background, var(--messagebar-action-background)), var(--aspire-neutral-button-background, var(--messagebar-action-background))),
+        border-box var(--aspire-neutral-button-border, var(--messagebar-action-border));
+    color: var(--colorNeutralForeground1);
+}
+
+.aspire-neutral-button:hover,
+.aspire-neutral-button:hover::part(control) {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-hover-background), var(--messagebar-action-hover-background)),
+        border-box var(--messagebar-action-hover-border);
+}
+
+.aspire-neutral-button:active,
+.aspire-neutral-button:active::part(control) {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-pressed-background), var(--messagebar-action-pressed-background)),
+        border-box var(--messagebar-action-pressed-border);
+}
+
+.aspire-neutral-button:focus-visible,
+.aspire-neutral-button:focus-visible::part(control) {
+    outline-offset: -2px;
+}
+
 .aspire-icon-button,
 .aspire-icon-button::part(control) {
     width: 28px;
@@ -296,6 +339,44 @@ fluent-field.aspire-input > fluent-number-input::part(control) {
     padding: 0;
     border-radius: 6px;
     background-color: transparent;
+}
+
+.aspire-link-button,
+.aspire-link-button::part(control) {
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background-color: var(--aspire-link-button-background, transparent);
+    color: var(--aspire-link-button-color, var(--colorBrandForeground1));
+    font-weight: var(--fontWeightRegular);
+    text-decoration: none;
+}
+
+.aspire-link-button:hover,
+.aspire-link-button:hover::part(control) {
+    border-color: transparent;
+    background-color: var(--colorNeutralBackground3);
+    color: var(--aspire-link-button-hover-color, var(--colorBrandForegroundLinkHover));
+    text-decoration: none;
+}
+
+.aspire-link-button:active,
+.aspire-link-button:active::part(control) {
+    border-color: transparent;
+    background-color: light-dark(#efefef, #2d2937);
+    color: var(--aspire-link-button-pressed-color, var(--colorBrandForegroundLinkPressed));
+    text-decoration: none;
+}
+
+.aspire-link-button:focus-visible,
+.aspire-link-button:focus-visible::part(control) {
+    outline-offset: -2px;
 }
 
 fluent-field.aspire-checkbox {
@@ -502,6 +583,10 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
     --colorNeutralForeground2BrandHover: #dcd5f6;
     --aspire-popup-background: #363241;
     --aspire-menu-item-hover-background: #44404e;
+    --resource-graph-hover-background: #312e3c;
+    --resource-graph-secondary-hover-background: #2d2937;
+    --notification-action-background: var(--aspire-page-background);
+    --notification-action-border: var(--colorNeutralStroke1);
     --aspire-dropdown-option-foreground: #ffffff;
     --aspire-dropdown-option-selected-background: #44404e;
     --aspire-dropdown-option-selected-hover-background: #3f3c4a;

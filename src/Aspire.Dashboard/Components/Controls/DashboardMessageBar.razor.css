@@ -78,39 +78,6 @@
     gap: 8px;
 }
 
-::deep .dashboard-message-bar-actions fluent-button {
-    height: 24px;
-    min-height: 24px;
-    padding-inline: 14px;
-    border-color: transparent;
-    border-radius: 6px;
-    background-color: transparent;
-    font-size: var(--fontSizeBase200);
-}
-
-::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss) {
-    color: var(--colorNeutralForeground1);
-    background:
-        padding-box linear-gradient(var(--messagebar-action-background), var(--messagebar-action-background)),
-        border-box var(--messagebar-action-border);
-}
-
-::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):hover {
-    background:
-        padding-box linear-gradient(var(--messagebar-action-hover-background), var(--messagebar-action-hover-background)),
-        border-box var(--messagebar-action-hover-border);
-}
-
-::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):active {
-    background:
-        padding-box linear-gradient(var(--messagebar-action-pressed-background), var(--messagebar-action-pressed-background)),
-        border-box var(--messagebar-action-pressed-border);
-}
-
-::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):focus-visible {
-    outline-offset: -2px;
-}
-
 ::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
     flex: 0 0 16px;
     width: 16px;
@@ -119,6 +86,9 @@
     height: 16px;
     min-height: 16px;
     padding: 0;
+    border-color: transparent;
+    border-radius: 6px;
+    background-color: transparent;
 }
 
 ::deep .dashboard-message-bar-dismiss svg {

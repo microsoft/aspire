@@ -119,7 +119,7 @@
                                             TGridItem="OtlpInstrumentSummary">
                                             <ChildContent>
                                                 <TemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
-                                                    <a class="button-hyperlink-no-icon" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
+                                                    <a class="aspire-link-button metrics-instrument-link" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
                                                         @context.Name
                                                     </a>
                                                 </TemplateColumn>

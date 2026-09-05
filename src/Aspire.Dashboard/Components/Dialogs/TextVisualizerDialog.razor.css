@@ -12,10 +12,6 @@
     width: 100%;
 }
 
-.button-container ::deep.text-visualizer-unmask-content {
-    margin-left: 0;
-}
-
 .button-container-right {
     display: flex;
     gap: 8px;
