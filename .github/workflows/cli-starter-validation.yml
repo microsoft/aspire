@@ -33,11 +33,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner }}
-    # Shared budget for every caller of this reusable workflow. The validation script can spend
-    # up to four startup waits (run + start for two templates) and three resource waits, which is
-    # 27 minutes on the current Windows ARM64 input set before template creation, package add, log
-    # collection, and artifact upload. Keep the job timeout above that aggregate budget.
-    timeout-minutes: 45
+    # The scenario budgets can total 85 minutes. Reserve additional time for bounded cleanup,
+    # dependency and CLI setup, diagnostics collection, and artifact upload.
+    timeout-minutes: 110
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -57,6 +55,10 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install CLI smoke harness dependencies
+        run: npm ci
+        working-directory: eng/scripts/cli-platform-smoke
+
       - name: Install Aspire CLI from PR dogfood script
         shell: pwsh
         env:
@@ -71,9 +73,8 @@ jobs:
           aspire --version
 
       - name: Create starter app and validate startup
-        # Leave headroom above the script's aggregate wait budget so slower runs can still finish
-        # template creation, aspire add, and cleanup instead of being cancelled mid-validation.
-        timeout-minutes: 40
+        # Cleanup can consume an additional 130 seconds per scenario after its global timeout.
+        timeout-minutes: 100
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}
