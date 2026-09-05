@@ -129,6 +129,7 @@ suite('Aspire package contribution surface E2E', function () {
         for (const commandId of [
             'aspire-vscode.createWithAspire',
             'aspire-vscode.runAppHost',
+            'aspire-vscode.restoreAppHost',
             'aspire-vscode.debugAppHost',
             'aspire-vscode.deployAppHost',
             'aspire-vscode.publishAppHost',
@@ -653,6 +654,7 @@ const expectedCommandIds = [
     'aspire-vscode.refreshAppHosts',
     'aspire-vscode.restartResource',
     'aspire-vscode.restore',
+    'aspire-vscode.restoreAppHost',
     'aspire-vscode.runAppHost',
     'aspire-vscode.runAppHostCommand',
     'aspire-vscode.runAppHostFromEditorCommand',

@@ -408,6 +408,51 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('getWorkspaceFolderForAppHostPath resolves the folder that discovered a candidate, even when its path lies outside every open folder', async () => {
+        const rootA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-a'),
+            name: 'root-a',
+            index: 0,
+        };
+        const rootB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-b'),
+            name: 'root-b',
+            index: 1,
+        };
+        const rootAAppHostPath = path.join(rootA.uri.fsPath, 'MyAppHost.csproj');
+        // root-b's `aspire.config.json` legitimately points its `appHost.path` at a directory
+        // outside root-b's own folder -- the scenario that makes path-based CLI target resolution
+        // fall back to the window CLI (see AspireAppHostTreeProvider.restoreAppHost).
+        const rootBAppHostPath = path.join('/configured', 'root-b', 'MyAppHost.csproj');
+        const workspaceFoldersStub = stubWorkspaceFolders([rootA, rootB]);
+        const discover = sinon.stub().callsFake((workspaceFolder: vscode.WorkspaceFolder) => Promise.resolve([{
+            path: workspaceFolder === rootA ? rootAAppHostPath : rootBAppHostPath,
+            language: 'csharp',
+            status: 'buildable',
+            selected: workspaceFolder === rootA,
+        } satisfies CandidateAppHostDisplayInfo]));
+        const discoveryService = {
+            discover,
+            forgetWorkspaceFolder: () => { },
+            onDidChangeCandidates: new vscode.EventEmitter<vscode.WorkspaceFolder>().event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'initial workspace discovery did not complete');
+
+            assert.strictEqual(repository.getWorkspaceFolderForAppHostPath(rootBAppHostPath), rootB);
+            assert.strictEqual(repository.getWorkspaceFolderForAppHostPath(rootAAppHostPath), rootA);
+            assert.strictEqual(repository.getWorkspaceFolderForAppHostPath('/unrelated/AppHost.csproj'), undefined);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace-folder changes preserve a queued forced refresh', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),

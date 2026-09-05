@@ -416,6 +416,22 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installDeno: true
+          - name: Linux
+            shardName: auto-restore
+            spec: out/test-e2e/test-e2e/autoRestore.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: auto-restore
+            spec: out/test-e2e/test-e2e/autoRestore.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
     defaults:
       run:
         shell: pwsh

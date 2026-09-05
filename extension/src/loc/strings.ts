@@ -273,6 +273,7 @@ export const loadingPipelineSteps = vscode.l10n.t('Loading pipeline steps...');
 export const selectPipelineStep = vscode.l10n.t('Select a pipeline step to execute');
 export const noPipelineStepsFound = vscode.l10n.t('No pipeline steps were found.');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
+export const appHostRestoreActionLabel = vscode.l10n.t('Restore AppHost');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
 export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
 export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);

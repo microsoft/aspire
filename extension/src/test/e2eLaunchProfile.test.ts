@@ -445,13 +445,69 @@ suite('E2E launch profile', () => {
         assert.ok(openWorkspaceCase.indexOf('getE2eWorkspaceFolderPath') < openWorkspaceCase.indexOf('markStarted();'));
     });
 
-    test('uses a shared timeout budget for workspace recovery and AppHost discovery', () => {
+    test('gives workspace-folder recovery its own timeout budget, independent of the caller\'s condition wait', () => {
+        // Regression coverage for a second, more severe CI failure introduced by the reload-based
+        // fix below: ensureWorkspaceFolderOpen used to accept the *caller's* Deadline and share it
+        // across its quick-check/reload/recovery preamble. Most callers default `timeoutMs` to just
+        // 120000ms total, so on a loaded CI machine the 30s quick check plus a slow window reload
+        // could by themselves exhaust that whole shared budget before the caller's actual
+        // condition-wait ever ran - failing nearly every E2E shard with "Timed out after 120000ms
+        // waiting for workspace folder diagnostics" even though the real condition was never
+        // actually attempted. ensureWorkspaceFolderOpen must build its own independent deadline, and
+        // every caller must await it before creating its own deadline for its real condition.
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
 
-        assert.ok(assertions.includes('const deadline = createDeadline(timeoutMs);'));
-        assert.ok(assertions.includes('getRemainingTimeout(deadline'));
-        assert.ok(assertions.includes('throwIfControlFailed(openWorkspaceRevision);'));
+        assert.ok(assertions.includes('async function ensureWorkspaceFolderOpen(): Promise<void> {'), 'ensureWorkspaceFolderOpen must not accept the caller\'s deadline as a parameter');
+
+        const ensureOpenStart = assertions.indexOf('async function ensureWorkspaceFolderOpen(');
+        const ensureOpenEnd = assertions.indexOf('\nasync function tryWaitForWorkspaceFolder(', ensureOpenStart);
+        const ensureOpenBody = assertions.slice(ensureOpenStart, ensureOpenEnd);
+        assert.ok(ensureOpenBody.includes('const deadline = createDeadline('), 'ensureWorkspaceFolderOpen must create its own independent deadline');
+        assert.ok(ensureOpenBody.includes('getRemainingTimeout(deadline'));
+
+        const callerOrderPattern = /await ensureWorkspaceFolderOpen\(\);\s*\n\s*const deadline = createDeadline\(timeoutMs\);/g;
+        const callerOrderMatches = assertions.match(callerOrderPattern) ?? [];
+        assert.strictEqual(callerOrderMatches.length, 3, 'all 3 wait-helper callers must await ensureWorkspaceFolderOpen() before creating their own deadline, so its preamble never steals from the condition-wait budget');
+    });
+
+    test('recovers a stuck workspace-folder check by asking the extension to open the folder, not by reloading the window', () => {
+        // Regression coverage for a CI regression caused by a *previous* fix attempt at this exact
+        // fallback: a prior revision replaced this 'openWorkspaceFolder' control command with a
+        // bare reloadWindow(), reasoning (incorrectly) that ExTester always launches VS Code with
+        // this folder already open, so a genuine folder switch would never be required here. That
+        // is false: run-e2e.js invokes ExTester's run-tests CLI without --open_resource, so
+        // VSBrowser.openResources() - the ExTester API a genuine "always already open" design would
+        // rely on - is a documented no-op. The folder only starts out open because run-e2e.js
+        // separately patches ExTester's own VS Code launch arguments to add it directly
+        // (patchExtesterLaunchLocale) - and this control command is what recovers the (common) case
+        // where that one-time, launch-time open has not landed yet by the time a suite's first wait
+        // runs. reloadWindow() cannot substitute for it: reloading only restarts the extension host
+        // with whatever workspace context already exists, it never requests a *new* one - so once
+        // the launch-time open replaced with reloadWindow() failed to have landed yet, every
+        // subsequent reload just restarted an empty window forever. That regressed nearly every E2E
+        // shard (from a narrow, pre-existing ~4-job failure to ~35+ failing shards), confirmed via
+        // CI runs 33933067017 (narrow baseline) vs. 33945306615 (broad regression after reload-only).
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const ensureOpenStart = assertions.indexOf('async function ensureWorkspaceFolderOpen(');
+        const ensureOpenEnd = assertions.indexOf('\nasync function tryWaitForWorkspaceFolder(', ensureOpenStart);
+        const ensureOpenBody = assertions.slice(ensureOpenStart, ensureOpenEnd);
+
+        const quickCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 30000)');
+        const openFolderCommandIndex = ensureOpenBody.indexOf("command: { name: 'openWorkspaceFolder', folderPath: expectedPath }");
+        const startedWaitIndex = ensureOpenBody.indexOf("'started',");
+        const recoveryCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 120000, openWorkspaceRevision)');
+        const controlFailureCheckIndex = ensureOpenBody.indexOf('throwIfControlFailed(openWorkspaceRevision);');
+
+        assert.ok(ensureOpenStart >= 0);
+        assert.ok(ensureOpenEnd > ensureOpenStart);
+        assert.ok(quickCheckIndex >= 0);
+        assert.ok(openFolderCommandIndex > quickCheckIndex, 'must ask the extension to open the workspace folder after the quick check fails');
+        assert.ok(startedWaitIndex > openFolderCommandIndex, 'must only wait for the command to start, not to fully apply, since the restart it triggers never resolves that revision');
+        assert.ok(recoveryCheckIndex > startedWaitIndex, 'must poll for the folder becoming available after the extension host restarts');
+        assert.ok(controlFailureCheckIndex > recoveryCheckIndex, 'must fail fast on an explicit control error instead of waiting out the full deadline');
+        assert.strictEqual(ensureOpenBody.includes('await reloadWindow()'), false, 'must not substitute a bare window reload for actually requesting the folder be opened');
     });
 
     test('bounds the ExTester process below the workflow timeout so diagnostics still run', () => {

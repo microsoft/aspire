@@ -1,19 +1,33 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { aspireConfigFileName } from './cliTypes';
-import { findAspireSettingsFiles } from './workspace';
+import { AspireConfigFile } from './cliTypes';
+import { findAspireConfigFiles } from './workspace';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess } from './process/cliProcess';
+import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
-import { getCliPathTargetForUri } from './cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri } from './cliPathVariables';
 import { reportCliResolvedForOperation } from './cliOperationResolution';
 import { extensionLogOutputChannel } from './logging';
 import { getEnableAutoRestore } from './settings';
 import { runningAspireRestore, runningAspireRestoreProgress, aspireRestoreCompleted, aspireRestoreAllCompleted, aspireRestoreFailed, aspireRestoreFailedStatusBar } from '../loc/strings';
+import { ConfigInfoProvider, type CliVersionInfo } from './configInfoProvider';
+import { codeGenerationVersionMarkerCapability } from '../types/configInfo';
+import { classifyAppHostPath } from './appHostLanguage';
+import { parseJsoncObject } from './appHostTargetVersion';
+
+const generatedModulesDirectory = path.join('.aspire', 'modules');
+const legacyGeneratedModulesDirectory = '.modules';
+const codeGenerationVersionFileName = '.codegen-version';
+
+interface ResolvedRestoreCli {
+    readonly target: CliPathResolutionTarget;
+    readonly cliPath: string;
+}
 
 /**
- * Runs `aspire restore` on workspace open and whenever aspire.config.json content changes
- * (e.g. after a git branch switch).
+ * Automatically restores existing generated modules for non-.NET AppHosts when they were produced
+ * by a different Aspire CLI version. Explicit restore commands retain the broader workspace-wide
+ * behavior.
  */
 export class AspirePackageRestoreProvider implements vscode.Disposable {
     private static readonly _maxConcurrency = 4;
@@ -22,20 +36,26 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
 
     private readonly _disposables: vscode.Disposable[] = [];
     private readonly _terminalProvider: AspireTerminalProvider;
+    private readonly _configInfoProvider: ConfigInfoProvider;
     private readonly _statusBarItem: vscode.StatusBarItem;
-    private readonly _lastContent = new Map<string, string>(); // fsPath → content
     private readonly _active = new Map<string, string>(); // configDir → relativePath
     private readonly _childProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _timeouts = new Set<ReturnType<typeof setTimeout>>();
     private readonly _pendingRestore = new Map<string, boolean>(); // configDir → force restore
     private readonly _failedDirs = new Set<string>(); // configDirs that failed
+    private readonly _cliVersionByPath = new Map<string, Promise<CliVersionInfo | null>>();
+    private readonly _markerSupportByCliIdentity = new Map<string, Promise<boolean>>();
     private _total = 0;
     private _completed = 0;
     private _hideTimeout: ReturnType<typeof setTimeout> | undefined;
     private _disposed = false;
 
-    constructor(terminalProvider: AspireTerminalProvider) {
+    constructor(
+        terminalProvider: AspireTerminalProvider,
+        configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(terminalProvider),
+    ) {
         this._terminalProvider = terminalProvider;
+        this._configInfoProvider = configInfoProvider;
         this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
         this._statusBarItem.command = 'aspire-vscode.restore';
         this._disposables.push(this._statusBarItem);
@@ -44,17 +64,29 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     async activate(): Promise<void> {
         this._disposables.push(
             vscode.workspace.onDidChangeConfiguration(e => {
-                if (e.affectsConfiguration('aspire.enableAutoRestore') && getEnableAutoRestore()) {
+                const shouldRecheck = e.affectsConfiguration('aspire.enableAutoRestore')
+                    || e.affectsConfiguration('aspire.aspireCliExecutablePath');
+                if (shouldRecheck && getEnableAutoRestore()) {
                     void this._restoreAll().catch(err => {
                         extensionLogOutputChannel.warn(`Auto-restore failed: ${String(err)}`);
                     });
                 }
-            })
+            }),
+            vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                if (getEnableAutoRestore()) {
+                    void this._restoreAll().catch(err => {
+                        extensionLogOutputChannel.warn(`Auto-restore failed after workspace folders changed: ${String(err)}`);
+                    });
+                }
+            }),
+            vscode.workspace.onDidGrantWorkspaceTrust(() => {
+                if (getEnableAutoRestore()) {
+                    void this._restoreAll().catch(err => {
+                        extensionLogOutputChannel.warn(`Auto-restore failed after workspace trust was granted: ${String(err)}`);
+                    });
+                }
+            }),
         );
-
-        // Always set up watchers so they're ready when the setting is toggled on.
-        // _onChanged gates on the current setting value.
-        this._watchConfigFiles();
 
         if (!getEnableAutoRestore()) {
             extensionLogOutputChannel.info('Auto-restore is disabled');
@@ -71,23 +103,39 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     }
 
     private async _restoreAll(force = false): Promise<void> {
-        if (this._disposed || (!force && !getEnableAutoRestore())) {
-            extensionLogOutputChannel.info('Auto-restore is disabled, skipping restore');
+        if (this._disposed || (!force && (!getEnableAutoRestore() || !vscode.workspace.isTrusted))) {
+            extensionLogOutputChannel.info('Auto-restore is disabled or the workspace is not trusted; skipping restore');
             return;
         }
-        const allConfigs = await findAspireSettingsFiles();
-        const configs = allConfigs.filter(uri => uri.fsPath.endsWith(aspireConfigFileName));
+        // Auto-restore only ever targets the new-format config file, so use the config-only
+        // finder directly instead of findAspireSettingsFiles()+filter: that avoids discarding an
+        // entire legacy-settings glob walk this path never needed, and lets this call coalesce
+        // with any concurrent caller of findAspireConfigFiles() during activation.
+        const configs = await findAspireConfigFiles();
         if (configs.length === 0) {
             return;
         }
 
-        this._total = this._active.size + configs.length;
-        this._completed = 0;
-        this._failedDirs.clear();
+        this._cliVersionByPath.clear();
+        this._markerSupportByCliIdentity.clear();
+        if (this._active.size === 0) {
+            this._total = 0;
+            this._completed = 0;
+            this._failedDirs.clear();
+        }
 
         const pending = new Set<Promise<void>>();
         for (const uri of configs) {
-            const p = this._restoreIfChanged(uri, true, force).finally(() => pending.delete(p));
+            // Isolate failures per-config: an uncaught rejection here (e.g. from an unexpected
+            // error while resolving the CLI) must not abort Promise.race/Promise.all below, which
+            // would silently abandon every remaining config still waiting in this batch.
+            const p = this._restoreIfNeeded(uri, force)
+                .catch(error => {
+                    extensionLogOutputChannel.warn(`Unexpected error restoring ${vscode.workspace.asRelativePath(uri)}: ${String(error)}`);
+                    this._failedDirs.add(path.dirname(uri.fsPath));
+                    this._showProgress();
+                })
+                .finally(() => pending.delete(p));
             pending.add(p);
             if (pending.size >= AspirePackageRestoreProvider._maxConcurrency) {
                 await Promise.race(pending);
@@ -96,69 +144,29 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         await Promise.all(pending);
     }
 
-    private _watchConfigFiles(): void {
-        for (const folder of vscode.workspace.workspaceFolders ?? []) {
-            const watcher = vscode.workspace.createFileSystemWatcher(
-                new vscode.RelativePattern(folder, `**/${aspireConfigFileName}`)
-            );
-            watcher.onDidChange(uri => void this._onChanged(uri).catch(err => extensionLogOutputChannel.warn(`Watcher handler failed: ${String(err)}`)));
-            watcher.onDidCreate(uri => void this._onChanged(uri).catch(err => extensionLogOutputChannel.warn(`Watcher handler failed: ${String(err)}`)));
-            watcher.onDidDelete(uri => {
-                this._lastContent.delete(uri.fsPath);
-            });
-            this._disposables.push(watcher);
-        }
-    }
-
-    private async _onChanged(uri: vscode.Uri): Promise<void> {
-        if (this._disposed || !getEnableAutoRestore()) {
+    private async _restoreIfNeeded(uri: vscode.Uri, force: boolean, continueBatch = false): Promise<void> {
+        if (this._disposed || (!force && (!getEnableAutoRestore() || !vscode.workspace.isTrusted))) {
             return;
         }
-        const configDir = path.dirname(uri.fsPath);
-        // Don't inflate total if a re-restore is already queued for this directory
-        if (!this._pendingRestore.has(configDir)) {
-            if (this._active.size === 0 && this._completed >= this._total) {
-                this._total = 1;
-                this._completed = 0;
-                this._failedDirs.clear();
-            } else {
-                this._total++;
+
+        let resolvedCli: ResolvedRestoreCli | undefined;
+        if (!force) {
+            let content: string;
+            try {
+                content = (await vscode.workspace.fs.readFile(uri)).toString();
+            } catch (error) {
+                extensionLogOutputChannel.warn(`Failed to read ${uri.fsPath}: ${error}`);
+                return;
             }
-        }
-        await this._restoreIfChanged(uri, false, false);
-    }
-
-    private async _restoreIfChanged(
-        uri: vscode.Uri,
-        isInitial: boolean,
-        force: boolean,
-    ): Promise<void> {
-        if (this._disposed || (!force && !getEnableAutoRestore())) {
-            return;
-        }
-
-        let content: string;
-        try {
-            content = (await vscode.workspace.fs.readFile(uri)).toString();
-        } catch (error) {
-            extensionLogOutputChannel.warn(`Failed to read ${uri.fsPath}: ${error}`);
-            this._completed++;
-            this._showProgress();
-            this._scheduleHide();
-            return;
-        }
-
-        const prev = this._lastContent.get(uri.fsPath);
-        if (!force && !isInitial && prev === content) {
-            this._completed++;
-            this._showProgress();
-            this._scheduleHide();
-            return;
+            resolvedCli = await this._getAutoRestoreCli(uri, content);
+            if (!resolvedCli) {
+                return;
+            }
         }
 
         const configDir = path.dirname(uri.fsPath);
         const relativePath = vscode.workspace.asRelativePath(uri);
-        extensionLogOutputChannel.info(`${isInitial ? 'Initial' : 'Changed'} restore for ${relativePath}`);
+        extensionLogOutputChannel.info(`${force ? 'Manual' : 'Automatic'} restore for ${relativePath}`);
 
         // Queue re-restore if one is already active for this config directory
         if (this._active.has(configDir)) {
@@ -168,13 +176,18 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
             return;
         }
 
+        if (!continueBatch && this._active.size === 0 && this._completed >= this._total) {
+            this._total = 0;
+            this._completed = 0;
+            this._failedDirs.clear();
+        }
+        this._total++;
+
         try {
-            await this._runRestore(uri, configDir, relativePath, force);
+            await this._runRestore(uri, configDir, relativePath, force, resolvedCli);
             if (this._disposed) {
                 return;
             }
-            // Only update baseline after successful restore so a retry is attempted on next change
-            this._lastContent.set(uri.fsPath, content);
             this._failedDirs.delete(configDir);
             this._showProgress();
             this._scheduleHide();
@@ -187,12 +200,137 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
             extensionLogOutputChannel.warn(`Restore failed for ${relativePath}: ${error}`);
         }
 
-        // If a change arrived while we were restoring, re-read and restore again
+        // Preserve an explicit manual retry that arrived while an automatic restore was active.
         while (!this._disposed && this._pendingRestore.has(configDir)) {
             const reportPendingCliUse = this._pendingRestore.get(configDir) ?? false;
             this._pendingRestore.delete(configDir);
-            await this._restoreIfChanged(uri, false, reportPendingCliUse);
+            await this._restoreIfNeeded(uri, reportPendingCliUse, true);
         }
+    }
+
+    private async _getAutoRestoreCli(uri: vscode.Uri, content: string): Promise<ResolvedRestoreCli | undefined> {
+        let config: AspireConfigFile;
+        try {
+            // Tolerate the same JSONC dialect (comments, trailing commas, leading BOM) already
+            // supported for aspire.config.json elsewhere in the extension (appHostTargetVersion.ts),
+            // rather than the narrower JSON.parse(stripComments(...)) which rejects both a leading
+            // BOM and trailing commas.
+            const parsed = parseJsoncObject(content);
+            if (!parsed) {
+                throw new Error('content is not a valid JSON object');
+            }
+            config = parsed as AspireConfigFile;
+        } catch (error) {
+            extensionLogOutputChannel.warn(`Skipping auto-restore for invalid config ${uri.fsPath}: ${String(error)}`);
+            return undefined;
+        }
+
+        const appHost = config.appHost;
+        // appHost.path/language are untyped user-editable JSON, so a malformed config (e.g. a
+        // number or array where a string is expected) must not throw here -- treat any non-string
+        // value the same as an absent one instead of trusting the AspireConfigFile type assertion.
+        const configuredPath = typeof appHost?.path === 'string' ? appHost.path.trim() : undefined;
+        const configuredLanguage = typeof appHost?.language === 'string' ? appHost.language.trim().toLowerCase() : undefined;
+        if (!appHost || (!configuredPath && !configuredLanguage)) {
+            return undefined;
+        }
+        if (configuredLanguage === 'csharp'
+            || (!configuredLanguage && classifyAppHostPath(configuredPath) === 'csharp')) {
+            return undefined;
+        }
+
+        const configDirectory = path.dirname(uri.fsPath);
+        const appHostDirectory = configuredPath
+            ? path.dirname(path.resolve(configDirectory, configuredPath))
+            : configDirectory;
+        let usesLegacyTypeScriptLayout = false;
+        if (path.basename(configuredPath ?? '').toLowerCase() === 'apphost.ts') {
+            try {
+                const modernAppHost = await vscode.workspace.fs.stat(vscode.Uri.file(path.join(appHostDirectory, 'apphost.mts')));
+                usesLegacyTypeScriptLayout = (modernAppHost.type & vscode.FileType.File) === 0;
+            } catch (error) {
+                if (isFileNotFound(error)) {
+                    usesLegacyTypeScriptLayout = true;
+                } else {
+                    extensionLogOutputChannel.warn(`Unable to inspect the TypeScript AppHost layout in ${appHostDirectory}: ${String(error)}`);
+                    return undefined;
+                }
+            }
+        }
+        const generatedDirectories = usesLegacyTypeScriptLayout
+            ? [legacyGeneratedModulesDirectory, generatedModulesDirectory]
+            : [generatedModulesDirectory, legacyGeneratedModulesDirectory];
+        let modulesDirectory: string | undefined;
+        for (const generatedDirectory of generatedDirectories) {
+            const candidate = path.join(appHostDirectory, generatedDirectory);
+            try {
+                const stat = await vscode.workspace.fs.stat(vscode.Uri.file(candidate));
+                if ((stat.type & vscode.FileType.Directory) !== 0) {
+                    modulesDirectory = candidate;
+                    break;
+                }
+            } catch (error) {
+                // Missing generated modules are restored explicitly from the AppHost tree. Avoid
+                // generating every sample or test AppHost merely because its config is in a workspace.
+                if (!isFileNotFound(error)) {
+                    extensionLogOutputChannel.warn(`Unable to inspect generated modules at ${candidate}: ${String(error)}`);
+                }
+            }
+        }
+        if (!modulesDirectory) {
+            return undefined;
+        }
+
+        const target = getCliPathTargetForUri(uri);
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+        let cliVersionPromise = this._cliVersionByPath.get(cliPath);
+        if (!cliVersionPromise) {
+            cliVersionPromise = this._configInfoProvider.getCliVersion({ target, cliPath });
+            this._cliVersionByPath.set(cliPath, cliVersionPromise);
+        }
+        const cliVersion = await cliVersionPromise;
+        if (!cliVersion) {
+            extensionLogOutputChannel.warn(`Skipping auto-restore for ${vscode.workspace.asRelativePath(uri)} because the Aspire CLI version could not be determined.`);
+            return undefined;
+        }
+
+        const cliIdentityKey = `${cliPath}\0${cliVersion.executableIdentity}`;
+        let markerSupportPromise = this._markerSupportByCliIdentity.get(cliIdentityKey);
+        if (!markerSupportPromise) {
+            markerSupportPromise = this._configInfoProvider.getCapabilityStatus(
+                codeGenerationVersionMarkerCapability,
+                { target, cliPath, suppressErrors: true, forceRefresh: true })
+                .then(status => status === 'supported');
+            this._markerSupportByCliIdentity.set(cliIdentityKey, markerSupportPromise);
+        }
+        if (!await markerSupportPromise) {
+            extensionLogOutputChannel.info(
+                `Skipping auto-restore for ${vscode.workspace.asRelativePath(uri)} because the selected Aspire CLI does not advertise ${codeGenerationVersionMarkerCapability}.`);
+            return undefined;
+        }
+
+        const versionUri = vscode.Uri.file(path.join(modulesDirectory, codeGenerationVersionFileName));
+        let generatedVersion: string | undefined;
+        try {
+            generatedVersion = (await vscode.workspace.fs.readFile(versionUri)).toString().trim();
+        } catch (error) {
+            if (isFileNotFound(error)) {
+                extensionLogOutputChannel.info(`Generated modules for ${vscode.workspace.asRelativePath(uri)} have no Aspire CLI version marker; restoring once to create it.`);
+                return { target, cliPath };
+            }
+
+            extensionLogOutputChannel.warn(`Unable to read generated module version marker ${versionUri.fsPath}: ${String(error)}`);
+            return undefined;
+        }
+
+        if (generatedVersion === cliVersion.version) {
+            extensionLogOutputChannel.info(`Generated modules for ${vscode.workspace.asRelativePath(uri)} already match Aspire CLI ${cliVersion.version}; skipping restore.`);
+            return undefined;
+        }
+
+        extensionLogOutputChannel.info(
+            `Generated modules for ${vscode.workspace.asRelativePath(uri)} were created by Aspire CLI ${generatedVersion || '<unknown>'}; restoring with ${cliVersion.version}.`);
+        return { target, cliPath };
     }
 
     private async _runRestore(
@@ -200,6 +338,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         configDir: string,
         relativePath: string,
         reportCliUse: boolean,
+        resolvedCli?: ResolvedRestoreCli,
     ): Promise<void> {
         if (this._disposed) {
             return;
@@ -209,8 +348,8 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         this._showProgress();
 
         try {
-            const target = getCliPathTargetForUri(uri);
-            const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+            const target = resolvedCli?.target ?? getCliPathTargetForUri(uri);
+            const cliPath = resolvedCli?.cliPath ?? await this._terminalProvider.getAspireCliExecutablePath(target);
             if (this._disposed) {
                 return;
             }
@@ -222,6 +361,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 const proc = spawnCliProcess(this._terminalProvider, cliPath, ['restore'], {
                     workingDirectory: configDir,
                     noExtensionVariables: true,
+                    createProcessGroup: true,
                     exitCallback: code => {
                         if (settled) { return; }
                         settled = true;
@@ -244,7 +384,11 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 const timeout = setTimeout(() => {
                     if (settled) { return; }
                     settled = true;
-                    try { proc.kill(); } catch { /* ignore */ }
+                    // Spawned above with createProcessGroup: true, so terminateCliProcess can tear
+                    // down the whole process tree instead of orphaning descendants (issue #16338).
+                    void terminateCliProcess(proc, `aspire restore (${relativePath})`).catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate aspire restore (${relativePath}): ${String(error)}`);
+                    });
                     reject(new Error('restore timed out'));
                 }, AspirePackageRestoreProvider._restoreTimeoutMs);
                 this._timeouts.add(timeout);
@@ -261,6 +405,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 this._showProgress();
             }
         }
+
     }
 
     private _scheduleHide(): void {
@@ -311,9 +456,16 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         this._disposed = true;
 
         for (const proc of this._childProcesses) {
-            try { proc.kill(); } catch { /* ignore */ }
+            // Spawned with createProcessGroup: true, so terminateCliProcess can tear down the
+            // whole process tree instead of orphaning descendants (issue #16338). dispose() is
+            // synchronous, so this is fire-and-forget rather than awaited.
+            void terminateCliProcess(proc, 'aspire restore').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate aspire restore: ${String(error)}`);
+            });
         }
         this._childProcesses.clear();
+        this._cliVersionByPath.clear();
+        this._markerSupportByCliIdentity.clear();
         for (const timeout of this._timeouts) {
             clearTimeout(timeout);
         }
@@ -323,4 +475,8 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         }
         this._disposables.length = 0;
     }
+}
+
+function isFileNotFound(error: unknown): boolean {
+    return error instanceof vscode.FileSystemError && error.code === 'FileNotFound';
 }
