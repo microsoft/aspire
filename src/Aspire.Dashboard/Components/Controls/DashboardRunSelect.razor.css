@@ -1,8 +1,206 @@
-.application-run-select ::deep .application-run-select-button {
+.application-run-timeline {
+    min-width: 0;
+    max-width: min(44vw, 560px);
     margin-right: 8px;
+    background: transparent;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
-.application-run-select ::deep .application-run-select-button::part(control) {
-    padding-left: 8px;
-    padding-right: 8px;
+.application-run-timeline-track {
+    display: flex;
+    justify-content: flex-end;
+    min-width: max-content;
+    padding: 4px 6px;
+    background: transparent;
+}
+
+.application-run-node-container {
+    position: relative;
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+}
+
+.application-run-node-container:not(:last-child)::after {
+    position: absolute;
+    z-index: 0;
+    top: 19px;
+    left: 28px;
+    width: 24px;
+    height: 2px;
+    background: var(--neutral-stroke-rest);
+    content: "";
+}
+
+.application-run-node {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+    place-items: center;
+}
+
+.application-run-node-dot {
+    position: relative;
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--accent-fill-rest);
+    border-radius: 50%;
+    background: transparent;
+    transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.application-run-node:hover .application-run-node-dot {
+    border-color: var(--accent-fill-rest);
+    transform: scale(1.12);
+}
+
+.application-run-node:focus-visible {
+    outline: 2px solid var(--focus-stroke-outer);
+    outline-offset: 0;
+}
+
+.application-run-node.selected .application-run-node-dot {
+    border-color: var(--accent-fill-rest);
+    background: var(--accent-fill-rest);
+}
+
+.application-run-node.current .application-run-node-dot::before {
+    position: absolute;
+    inset: -5px;
+    border: 2px solid transparent;
+    border-top-color: var(--success);
+    border-right-color: var(--success);
+    border-radius: 50%;
+    animation: application-run-live-spin 1.4s linear infinite;
+    content: "";
+}
+
+.application-run-node.annotated .application-run-node-dot {
+    border-color: var(--accent-fill-rest);
+}
+
+.application-run-node-pin {
+    color: var(--accent-fill-rest);
+}
+
+.application-run-node.selected .application-run-node-pin {
+    color: #ffffff;
+}
+
+.application-run-node-note {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-fill-rest);
+}
+
+.application-run-bubble-content {
+    position: relative;
+    width: min(360px, 80vw);
+    color: var(--neutral-foreground-rest);
+    background: var(--neutral-layer-floating);
+}
+
+.application-run-bubble-content ::deep fluent-text-area {
+    width: 100%;
+}
+
+.application-run-bubble-content::before {
+    position: absolute;
+    top: -14px;
+    left: calc(50% - 6px);
+    width: 12px;
+    height: 12px;
+    border-top: 1px solid var(--neutral-stroke-rest);
+    border-left: 1px solid var(--neutral-stroke-rest);
+    background: var(--neutral-layer-floating);
+    content: "";
+    transform: rotate(45deg);
+}
+
+::deep .application-run-bubble .fluent-popover-content,
+::deep .application-run-bubble .fluent-popover-body {
+    color: var(--neutral-foreground-rest);
+    background: var(--neutral-layer-floating);
+}
+
+.application-run-bubble-header {
+    display: flex;
+    min-height: 28px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.application-run-bubble-time {
+    color: var(--neutral-foreground-rest);
+    font-weight: 600;
+}
+
+.application-run-bubble-pin {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    color: var(--accent-fill-rest);
+    background: transparent;
+    cursor: pointer;
+    place-items: center;
+}
+
+.application-run-bubble-pin:hover:not(:disabled) {
+    background: var(--neutral-fill-stealth-hover);
+}
+
+.application-run-bubble-pin:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+@keyframes application-run-live-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .application-run-node.current .application-run-node-dot::before {
+        border: 2px solid var(--success);
+        animation: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .application-run-timeline {
+        max-width: min(52vw, 320px);
+    }
+
+    .application-run-node-container {
+        width: 36px;
+        flex-basis: 36px;
+    }
+
+    .application-run-node-container:not(:last-child)::after {
+        width: 20px;
+    }
 }

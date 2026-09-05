@@ -201,4 +201,16 @@
   <data name="DashboardRunSelectUnpin" xml:space="preserve">
     <value>Unpin run</value>
   </data>
+  <data name="DashboardRunTimelineTitle" xml:space="preserve">
+    <value>Dashboard run timeline</value>
+  </data>
+  <data name="DashboardRunTimelineSelect" xml:space="preserve">
+    <value>Select and annotate {0}</value>
+  </data>
+  <data name="DashboardRunTimelineNoteLabel" xml:space="preserve">
+    <value>Investigation note</value>
+  </data>
+  <data name="DashboardRunTimelineNotePlaceholder" xml:space="preserve">
+    <value>Add an annotation...</value>
+  </data>
 </root>
