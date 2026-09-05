@@ -953,6 +953,9 @@ safe-outputs:
                   # budget while the memory branch retains the complete history.
                   CURRENT_BODY_FILE=$(mktemp)
                   gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""' > "$CURRENT_BODY_FILE"
+                  BODY_FILE=""
+                  BODY_SOURCE_FILE="$CURRENT_BODY_FILE"
+                  OCCURRENCE_BODY_AVAILABLE="false"
                   # Anchor the pattern with '(' from the markdown link to avoid
                   # partial matches (e.g., run 123 matching run 1234).
                   if grep -qF "[${RUN_ID}](" "$CURRENT_BODY_FILE"; then
@@ -966,16 +969,56 @@ safe-outputs:
                     OCCURRENCE_RENDER_STATUS=$?
                     set -e
                     if [ "$OCCURRENCE_RENDER_STATUS" -eq 0 ]; then
-                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+                      BODY_SOURCE_FILE="$BODY_FILE"
+                      OCCURRENCE_BODY_AVAILABLE="true"
                     elif [ "$OCCURRENCE_RENDER_STATUS" -eq 2 ]; then
                       echo "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update."
+                      rm -f "$BODY_FILE"
+                      BODY_FILE=""
                     else
                       echo "::error::Unable to render occurrence history for issue #${EXISTING_ISSUE}."
                       rm -f "$CURRENT_BODY_FILE" "$BODY_FILE"
                       exit "$OCCURRENCE_RENDER_STATUS"
                     fi
-                    rm -f "$BODY_FILE"
                   fi
+
+                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                    # Existing issues may contain agent-authored attribution from
+                    # older runs. Refresh the generated details from trusted
+                    # context while retaining occurrence history and operator notes.
+                    CANONICAL_BODY_FILE=$(mktemp)
+                    ISSUE_METADATA_FILE=$(mktemp)
+                    MIGRATED_BODY_FILE=$(mktemp)
+                    bash .github/workflows/analyze-ci-failure-issue.sh \
+                      "$CAUSE_STORED" "$RUN_CONTEXT_FILE" \
+                      ci-failure-data/last-successful-main-run.json \
+                      ci-failure-data/triggering-merge-pr.json \
+                      ci-failure-data/candidate-merge-history-status.json \
+                      "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
+                      "$NEW_OCCURRENCE_ROW" "$CANONICAL_BODY_FILE" "$ISSUE_METADATA_FILE"
+                    MIGRATED_BODY_AVAILABLE="false"
+                    if bash .github/workflows/analyze-ci-failure-persistence.sh \
+                        migrate-main-issue-body \
+                        "$BODY_SOURCE_FILE" "$CANONICAL_BODY_FILE" "$MIGRATED_BODY_FILE"; then
+                      MIGRATED_BODY_AVAILABLE="true"
+                    else
+                      echo "::warning::Unable to migrate publisher-owned details for issue #${EXISTING_ISSUE}. Updating only the fields that can be changed safely."
+                    fi
+                    ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
+                    if [ "$MIGRATED_BODY_AVAILABLE" = "true" ]; then
+                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" \
+                        --title "$ISSUE_TITLE" --body-file "$MIGRATED_BODY_FILE"
+                    elif [ "$OCCURRENCE_BODY_AVAILABLE" = "true" ]; then
+                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" \
+                        --title "$ISSUE_TITLE" --body-file "$BODY_FILE"
+                    else
+                      gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --title "$ISSUE_TITLE"
+                    fi
+                    rm -f "$CANONICAL_BODY_FILE" "$ISSUE_METADATA_FILE" "$MIGRATED_BODY_FILE"
+                  elif [ "$OCCURRENCE_BODY_AVAILABLE" = "true" ]; then
+                    gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+                  fi
+                  rm -f "${BODY_FILE:-}"
                   rm -f "$CURRENT_BODY_FILE"
 
                   if [ "$REOPEN" = "true" ]; then
@@ -1498,7 +1541,7 @@ Field details:
 - `failed_tests[].stack_trace`: Copy the stack trace from the matching TRX test failure, or use `null` when it is absent. The validator replaces `error` and `stack_trace` with the bounded trusted TRX values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
-- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine distinct flaky tests merely to fit within it.
+- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine or omit distinct flaky tests merely to fit within it.
 
 #### 3b. Per-cause files
 
@@ -1597,7 +1640,7 @@ The failure is a deterministic code or repository failure on main. Indicators:
 - Deterministic test, API compatibility, lint, or formatting failures on main
 - Semantic merge conflicts where independently valid changes are incompatible together
 
-Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence and candidate history is available and complete. If candidate history is unavailable or incomplete, do not name any PR as causal, including the triggering merge; report only repository-level evidence.
+Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence and candidate history comes from a complete `ahead` comparison. Identical, behind, diverged, malformed, or incomplete comparisons are non-attributable; report only repository-level evidence and do not name any PR as causal, including the triggering merge.
 
 ## Analysis Process
 
@@ -1639,7 +1682,7 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
 ### If ALL failures are Main Repository Breakages:
 
-Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context when candidate history is available and complete, and include the main candidate range in `main_context`. If candidate history is unavailable or incomplete, do not identify a causal PR or claim a candidate range. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue.
+Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context when candidate history comes from a complete `ahead` comparison, and include the main candidate range in `main_context`. Otherwise, do not identify a causal PR or claim a candidate range. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue. The publisher derives the public issue title and diagnostic text from trusted run context; agent-proposed main-breakage title and error-pattern fields are not published as attribution.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 

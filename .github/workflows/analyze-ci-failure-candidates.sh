@@ -38,8 +38,9 @@ fi
 if ! jq -e '
     type == "array" and
     length > 0 and
+    .[0].status == "ahead" and
     (.[0].total_commits | type) == "number" and
-    .[0].total_commits >= 0 and
+    .[0].total_commits > 0 and
     .[0].total_commits == (.[0].total_commits | floor) and
     all(.[]; type == "object" and (.commits | type) == "array") and
     all(.[].commits[];

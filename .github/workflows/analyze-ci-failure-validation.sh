@@ -496,6 +496,27 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       fi
     fi
   done
+
+  FLAKY_CAUSES=$(
+    jq -s \
+      '[.[] | select(.type == "flaky-test") | {test_name, job_ids}]' \
+      "${CAUSE_FILES[@]}"
+  )
+  if ! jq -e \
+      --argjson flaky_causes "$FLAKY_CAUSES" \
+      --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
+      all(.failed_tests[] | select(.classification == "flaky"); . as $test |
+        any($flaky_causes[];
+          . as $cause |
+          $cause.test_name == $test.name and
+          any($cause.job_ids[];
+            . as $job_id |
+            any($trusted_jobs[0][];
+              .id == $job_id and .name == $test.job))))
+    ' "$ANALYSIS_FILE" >/dev/null; then
+    echo "::error::Every flaky test and job must be covered by a matching cause"
+    exit 1
+  fi
 fi
 
 if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ] &&

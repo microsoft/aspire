@@ -73,6 +73,9 @@ TYPE_MARKER="<!-- ci-failure-cause-type:${CAUSE_TYPE} -->"
 if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
   LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // "unknown"' "$LAST_SUCCESSFUL_RUN_FILE")
   FAILED_SHA=$(jq -r '.head_sha // "unknown"' "$RUN_CONTEXT_FILE")
+  TITLE="Main branch CI failure at ${FAILED_SHA}"
+  TITLE_CODE=$(render_code_span "$TITLE")
+  MAIN_ERROR_MESSAGE="The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics."
   CANDIDATE_HISTORY_STATE=$(
     jq -er '.state | select(. == "available" or . == "incomplete" or . == "unavailable")' \
       "$CANDIDATE_HISTORY_STATUS_FILE" 2>/dev/null || printf 'unavailable'
@@ -117,13 +120,17 @@ fi
   echo ""
   echo "## Error Message"
   echo ""
-  jq -r '
-    (.error_pattern // "") as $pattern |
-    (if ($pattern | test("[^[:space:]]")) then $pattern else "No diagnostic pattern recorded." end) |
-    .[0:500] |
-    split("\n")[] |
-    "    " + .
-  ' "$CAUSE_FILE"
+  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+    echo "    ${MAIN_ERROR_MESSAGE}"
+  else
+    jq -r '
+      (.error_pattern // "") as $pattern |
+      (if ($pattern | test("[^[:space:]]")) then $pattern else "No diagnostic pattern recorded." end) |
+      .[0:500] |
+      split("\n")[] |
+      "    " + .
+    ' "$CAUSE_FILE"
+  fi
   echo ""
   echo "## Description"
   echo ""
