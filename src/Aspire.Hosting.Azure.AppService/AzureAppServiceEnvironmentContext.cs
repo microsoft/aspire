@@ -77,10 +77,16 @@ internal sealed class AzureAppServiceEnvironmentContext(
             await context.ProcessAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var provisioningResource = new AzureAppServiceWebSiteResource(resource.Name + "-website", context.BuildWebSite, resource)
+        var provisioningResource = new AzureAppServiceWebSiteResource(resource.GetStampQualifiedName(Environment) + "-website", context.BuildWebSite, resource)
         {
-            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
+            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions,
+            ComputeEnvironment = Environment
         };
+
+        // A web site must be created in the same region as its App Service plan, so the site inherits
+        // whatever region the environment was pinned to with WithLocation. Without this, every stamp of a
+        // multi-region application would be emitted into the application-wide region.
+        provisioningResource.InheritLocationFrom(Environment);
 
         // Add references to any prerequisite resources to ensure they are provisioned first
         if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))

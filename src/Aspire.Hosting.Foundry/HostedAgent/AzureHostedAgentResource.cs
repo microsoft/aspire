@@ -44,7 +44,18 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         Annotations.Add(new PipelineStepAnnotation(async (ctx) =>
         {
             List<PipelineStep> steps = [];
-            var deploymentAnnotation = Target.GetDeploymentTargetAnnotation() ?? throw new InvalidOperationException($"Deployment target annotation is required on resource '{Target.Name}' to deploy as hosted agent.");
+            // Hosted agents deploy to a single Foundry project, so a target deployed as several regional
+            // stamps cannot be expressed here. Report that directly rather than surfacing the generic
+            // deployment-target ambiguity error.
+            var deploymentAnnotations = Target.GetDeploymentTargetAnnotations();
+            if (deploymentAnnotations.Count > 1)
+            {
+                throw new InvalidOperationException($"Resource '{Target.Name}' is deployed as multiple stamps and cannot be deployed as a hosted agent. Bind it to a single compute environment.");
+            }
+
+            var deploymentAnnotation = deploymentAnnotations.Count == 1
+                ? deploymentAnnotations[0]
+                : throw new InvalidOperationException($"Deployment target annotation is required on resource '{Target.Name}' to deploy as hosted agent.");
             var project = deploymentAnnotation.ComputeEnvironment as AzureCognitiveServicesProjectResource
                 ?? throw new InvalidOperationException($"Compute environment for resource '{Target.Name}' must be an AzureCognitiveServicesProjectResource to deploy as hosted agent.");
 

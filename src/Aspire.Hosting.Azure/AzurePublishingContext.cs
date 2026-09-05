@@ -347,10 +347,25 @@ public sealed class AzurePublishingContext(
 
             var module = moduleMap[resource];
             module.Scope = GetScopeExpression(resource);
-            module.Parameters.Add("location", locationParam);
+
+            // A resource can pin itself to a specific Azure region with WithLocation, which is how one
+            // application spans multiple regions (the deployment stamp topology). Only an explicit
+            // override wins here: resource.Parameters can also hold a "location" value that the
+            // provisioner inferred from the Azure environment, and that must keep resolving to the
+            // shared environment parameter so publish output stays stable.
+            var configuredLocation = resource.GetConfiguredLocation();
+            module.Parameters.Add(
+                AzureBicepResource.KnownParameters.Location,
+                configuredLocation is null ? locationParam : ResolveValue(Eval(configuredLocation)));
 
             foreach (var parameter in resource.Parameters)
             {
+                // Location is mapped above. Adding it again would throw because the module already has it.
+                if (parameter.Key == AzureBicepResource.KnownParameters.Location)
+                {
+                    continue;
+                }
+
                 if (parameter.Key == AzureBicepResource.KnownParameters.UserPrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
@@ -412,9 +427,16 @@ public sealed class AzurePublishingContext(
         // These include DeploymentTarget resources and any other resources that have parameters that reference bicep outputs.
         foreach (var resource in model.Resources)
         {
-            if (resource.GetDeploymentTargetAnnotation() is { } annotation && annotation.DeploymentTarget is AzureBicepResource br)
+            // A stamped resource has one deployment target per compute environment, and each of those is a
+            // separate Bicep module, so every stamp has to be visited.
+            var bicepDeploymentTargets = resource.GetDeploymentTargetAnnotations()
+                .Where(a => a.DeploymentTarget is AzureBicepResource)
+                .ToList();
+
+            if (bicepDeploymentTargets.Count > 0)
             {
-                // Materialize Dockerfile factory if present
+                // Materialize Dockerfile factory if present. The image is built once and shared by every
+                // stamp, so this is done per resource rather than per deployment target.
                 if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) &&
                     dockerfileBuildAnnotation.DockerfileFactory is not null)
                 {
@@ -430,26 +452,36 @@ public sealed class AzurePublishingContext(
                     await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(context, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
-                var task = await step.CreateTaskAsync(
-                    $"Processing deployment target {resource.Name}",
-                    cancellationToken: default
-                )
-                .ConfigureAwait(false);
+                foreach (var annotation in bicepDeploymentTargets)
+                {
+                    var br = (AzureBicepResource)annotation.DeploymentTarget;
 
-                var moduleDirectory = outputDirectory.CreateSubdirectory(resource.Name);
+                    // The module directory is stamp-qualified so the stamps of one resource do not overwrite
+                    // each other. For a resource bound to a single compute environment this is the plain
+                    // resource name, which keeps existing publish output paths unchanged.
+                    var moduleName = resource.GetStampQualifiedName(annotation.ComputeEnvironment);
 
-                var modulePath = Path.Combine(moduleDirectory.FullName, $"{resource.Name}.bicep");
+                    var task = await step.CreateTaskAsync(
+                        $"Processing deployment target {moduleName}",
+                        cancellationToken: default
+                    )
+                    .ConfigureAwait(false);
 
-                var file = br.GetBicepTemplateFile(tempDirectory);
+                    var moduleDirectory = outputDirectory.CreateSubdirectory(moduleName);
 
-                File.Copy(file.Path, modulePath, true);
+                    var modulePath = Path.Combine(moduleDirectory.FullName, $"{moduleName}.bicep");
 
-                CaptureBicepOutputsFromParameters(br);
+                    var file = br.GetBicepTemplateFile(tempDirectory);
 
-                await task.SucceedAsync(
-                    $"Wrote bicep module for deployment target {resource.Name} to {modulePath}",
-                    cancellationToken: default
-                ).ConfigureAwait(false);
+                    File.Copy(file.Path, modulePath, true);
+
+                    CaptureBicepOutputsFromParameters(br);
+
+                    await task.SucceedAsync(
+                        $"Wrote bicep module for deployment target {moduleName} to {modulePath}",
+                        cancellationToken: default
+                    ).ConfigureAwait(false);
+                }
             }
             else if (resource is IResourceWithParameters rwp && !bicepResourcesToPublish.Contains(resource))
             {

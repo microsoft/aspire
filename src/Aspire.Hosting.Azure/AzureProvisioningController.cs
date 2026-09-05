@@ -1178,7 +1178,15 @@ internal sealed class AzureProvisioningController(
                 // Remove stale inferred parameters when the environment context changed. Leaving
                 // them in place would make a reset/reprovision keep deploying to the previous
                 // environment location.
-                bicepResource.Parameters.Remove(AzureBicepResource.KnownParameters.Location);
+                //
+                // A region the author pinned in the app model with WithLocation is not inferred state, so it
+                // must survive. Removing it would let the next provisioning pass refill the slot from the
+                // environment location and silently move the resource — which, for a stamped application,
+                // would collapse every region onto the same one.
+                if (bicepResource.GetConfiguredLocation() is null)
+                {
+                    bicepResource.Parameters.Remove(AzureBicepResource.KnownParameters.Location);
+                }
             }
 
             await ClearCachedDeploymentStateAsync(bicepResource, preserveOverrides, environmentLocation, currentLocationOverride, preserveInferredLocationOverrides, cancellationToken).ConfigureAwait(false);

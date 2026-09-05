@@ -77,10 +77,16 @@ internal sealed class ContainerAppEnvironmentContext(
             await context.ProcessResourceAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var provisioningResource = new AzureContainerAppResource(resource.Name + "-containerapp", context.BuildContainerApp, resource)
+        var provisioningResource = new AzureContainerAppResource(resource.GetStampQualifiedName(environment) + "-containerapp", context.BuildContainerApp, resource)
         {
-            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
+            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions,
+            ComputeEnvironment = environment
         };
+
+        // A container app must be created in the same region as its managed environment, so the app inherits
+        // whatever region the environment was pinned to with WithLocation. Without this, every stamp of a
+        // multi-region application would be emitted into the application-wide region.
+        provisioningResource.InheritLocationFrom(environment);
 
         // Add references to any prerequisite resources to ensure they are provisioned first
         if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))

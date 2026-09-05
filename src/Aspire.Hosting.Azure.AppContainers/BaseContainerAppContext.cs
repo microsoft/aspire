@@ -23,7 +23,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
     /// throughout the container app creation process for both the resource identifier 
     /// and endpoint mapping host names.
     /// </summary>
-    public string NormalizedContainerAppName => resource.Name.ToLowerInvariant();
+    public string NormalizedContainerAppName => resource.GetStampQualifiedName(_containerAppEnvironmentContext.Environment).ToLowerInvariant();
 
     protected record struct EndpointMapping(string Scheme, string Host, int Port, int? TargetPort, bool IsHttpIngress, bool External, bool TlsEnabled);
     protected readonly Dictionary<string, EndpointMapping> _endpointMapping = [];
