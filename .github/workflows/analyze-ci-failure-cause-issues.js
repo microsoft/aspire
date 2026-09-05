@@ -163,9 +163,15 @@ function parseOccurrenceSection(body) {
         throw new OccurrenceRenderError('unsupported occurrence section contents');
     }
 
+    const totalLines = lines
+        .map(line => /^Showing \d+ most recent of (\d+) occurrences\.$/.exec(line))
+        .filter(match => match !== null);
     return {
         prefix: prefix.replace(/\n+$/, ''),
         rows: lines.filter(line => OCCURRENCE_ROW_PATTERN.test(line)),
+        totalOccurrenceCount: totalLines.length === 1
+            ? Number.parseInt(totalLines[0][1], 10)
+            : undefined,
     };
 }
 
@@ -279,13 +285,116 @@ async function readStoredCause(filePath, fallbackCause) {
     }
 }
 
-function storedOccurrenceCount(storedCause) {
-    return Array.isArray(storedCause.occurrences) && storedCause.occurrences.length > 0
-        ? storedCause.occurrences.length
+async function readStoredCauseFamily(memoryCausesDirectory, cause) {
+    const storedCausePath = path.join(memoryCausesDirectory, `${cause.id}.json`);
+    const storedCause = await readStoredCause(storedCausePath, cause);
+    const storedRecordsById = new Map([[cause.id, storedCause]]);
+    const pendingIds = [...new Set(cause.aliases ?? [])];
+    while (pendingIds.length > 0) {
+        const alias = pendingIds.shift();
+        if (!LEGACY_CAUSE_ID_PATTERN.test(alias) || storedRecordsById.has(alias)) {
+            continue;
+        }
+
+        try {
+            const storedAlias = await readJson(
+                path.join(memoryCausesDirectory, `${alias}.json`));
+            if (storedAlias.id !== alias || storedAlias.type !== cause.type) {
+                continue;
+            }
+
+            storedRecordsById.set(alias, storedAlias);
+            if (LEGACY_CAUSE_ID_PATTERN.test(storedAlias.canonical_id ?? '')) {
+                pendingIds.push(storedAlias.canonical_id);
+            }
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                throw error;
+            }
+        }
+    }
+
+    const resolvesToCanonical = record => {
+        const visited = new Set([record.id]);
+        let canonicalId = record.canonical_id;
+        while (typeof canonicalId === 'string' && !visited.has(canonicalId)) {
+            if (canonicalId === cause.id) {
+                return true;
+            }
+            visited.add(canonicalId);
+            canonicalId = storedRecordsById.get(canonicalId)?.canonical_id;
+        }
+        return false;
+    };
+    const storedRecords = [
+        storedCause,
+        ...[...storedRecordsById.values()]
+            .filter(record => record.id !== cause.id && resolvesToCanonical(record)),
+    ];
+    const occurrencesByRunId = new Map();
+    for (const record of storedRecords) {
+        for (const occurrence of record.occurrences ?? []) {
+            const existing = occurrencesByRunId.get(occurrence.run_id);
+            if (!existing) {
+                occurrencesByRunId.set(occurrence.run_id, occurrence);
+            } else if (occurrence.issue_published === true && existing.issue_published !== true) {
+                occurrencesByRunId.set(occurrence.run_id, {
+                    ...existing,
+                    issue_published: true,
+                });
+            }
+        }
+    }
+
+    return {
+        storedCausePath,
+        storedCause,
+        storedOccurrences: [...occurrencesByRunId.values()],
+    };
+}
+
+function storedOccurrenceCount(storedOccurrences) {
+    return storedOccurrences.length > 0
+        ? storedOccurrences.length
         : undefined;
 }
 
-async function persistIssueUrl(filePath, fallbackCause, issueUrl) {
+function isOccurrencePublished(body, storedOccurrences, runId) {
+    if (hasOccurrence(body, runId)) {
+        return true;
+    }
+
+    const storedOccurrence = storedOccurrences.find(occurrence => occurrence.run_id === runId);
+    if (!storedOccurrence) {
+        return false;
+    }
+    if (storedOccurrence.issue_published === true) {
+        return true;
+    }
+
+    try {
+        const parsed = parseOccurrenceSection(body);
+        const storedRunIds = new Set(storedOccurrences.map(occurrence => occurrence.run_id));
+        const renderedRunIds = parsed.rows.map(row => Number.parseInt(/\[(\d+)\]\(/.exec(row)[1], 10));
+
+        // Older records predate the durable publication receipt. A managed body whose
+        // total already accounts for the complete stored history proves that a trimmed
+        // run was published without confusing a memory-only write with publication.
+        return parsed.totalOccurrenceCount === storedRunIds.size &&
+            renderedRunIds.every(renderedRunId => storedRunIds.has(renderedRunId));
+    } catch (error) {
+        if (error instanceof OccurrenceRenderError) {
+            return false;
+        }
+        throw error;
+    }
+}
+
+async function persistIssuePublication(
+    filePath,
+    fallbackCause,
+    issueUrl,
+    publishedRunId) {
     let storedCause = fallbackCause;
     try {
         storedCause = await readJson(filePath);
@@ -295,11 +404,19 @@ async function persistIssueUrl(filePath, fallbackCause, issueUrl) {
         }
     }
 
+    const persistedCause = { ...storedCause, issue_url: issueUrl };
+    if (publishedRunId !== undefined && Array.isArray(storedCause.occurrences)) {
+        persistedCause.occurrences = storedCause.occurrences.map(occurrence =>
+            occurrence.run_id === publishedRunId
+                ? { ...occurrence, issue_published: true }
+                : occurrence);
+    }
+
     const temporaryPath = `${filePath}.tmp`;
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(
         temporaryPath,
-        `${JSON.stringify({ ...storedCause, issue_url: issueUrl }, null, 2)}\n`);
+        `${JSON.stringify(persistedCause, null, 2)}\n`);
     await fs.rename(temporaryPath, filePath);
 }
 
@@ -316,9 +433,12 @@ async function ensureCauseLabels(github, context, cause) {
 }
 
 async function publishCauseIssue(github, context, core, cause, run, memoryCausesDirectory) {
-    const storedCausePath = path.join(memoryCausesDirectory, `${cause.id}.json`);
-    const storedCause = await readStoredCause(storedCausePath, cause);
-    const totalOccurrenceCount = storedOccurrenceCount(storedCause);
+    const {
+        storedCausePath,
+        storedCause,
+        storedOccurrences,
+    } = await readStoredCauseFamily(memoryCausesDirectory, cause);
+    const totalOccurrenceCount = storedOccurrenceCount(storedOccurrences);
     const initialBody = buildIssueBody(cause, run, totalOccurrenceCount ?? 1);
     if (!isWithinIssueBodyBudget(initialBody)) {
         core.warning(
@@ -332,6 +452,7 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         .filter(causeId => LEGACY_CAUSE_ID_PATTERN.test(causeId))
         .map(causeMarker);
     const transport = tracking.createOctokitIssueTransport(github, context);
+    let occurrenceAlreadyPublished = false;
     const result = await tracking.executeIssueReconciliation(transport, core, {
         label: CAUSE_LABEL,
         labels: labelsForCause(cause),
@@ -344,7 +465,8 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
         isCanonicalIssue: issue => normalizedBodyLines(issue.body)[0] === marker,
         actionsForCanonical: (issue, { created }) => {
-            if (created || hasOccurrence(issue.body, run.runId)) {
+            if (created || isOccurrencePublished(issue.body, storedOccurrences, run.runId)) {
+                occurrenceAlreadyPublished = true;
                 return [];
             }
             let updatedBody;
@@ -369,10 +491,16 @@ async function publishCauseIssue(github, context, core, cause, run, memoryCauses
     });
 
     const issueUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${result.number}`;
-    await persistIssueUrl(
+    const occurrencePublished =
+        occurrenceAlreadyPublished ||
+        result.created ||
+        result.appliedActions.some(action =>
+            action.type === 'update' && action.issueNumber === result.number);
+    await persistIssuePublication(
         storedCausePath,
         cause,
-        issueUrl);
+        issueUrl,
+        occurrencePublished ? run.runId : undefined);
     return {
         number: result.number,
         created: result.created,

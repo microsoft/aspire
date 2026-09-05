@@ -4941,10 +4941,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
         await File.WriteAllTextAsync(
             newCausePath,
-            """{"id":"same-id","type":"infra-failure","title":"Injected title","error_pattern":"Injected pattern","occurrences":[{"run_id":2,"observed_at":"2026-08-31T12:00:00Z"}]}""");
+            """{"id":"same-id","type":"infra-failure","title":"Injected title","error_pattern":"Injected pattern","occurrences":[{"run_id":1,"observed_at":"2026-09-01T12:00:00Z"},{"run_id":2,"observed_at":"2026-08-31T12:00:00Z"}]}""");
         await File.WriteAllTextAsync(
             existingCausePath,
-            $$"""{"id":"same-id","type":"infra-failure","title":"Stored title","error_pattern":"{{new string('x', 595)}}","issue_url":"https://github.com/microsoft/aspire/issues/1","occurrences":[{"run_id":1,"observed_at":"2026-08-30T12:00:00Z"}]}""");
+            $$"""{"id":"same-id","type":"infra-failure","title":"Stored title","error_pattern":"{{new string('x', 595)}}","issue_url":"https://github.com/microsoft/aspire/issues/1","occurrences":[{"run_id":1,"observed_at":"2026-08-30T12:00:00Z","issue_published":true}]}""");
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
@@ -4958,6 +4958,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(
             [1, 2],
             output.RootElement.GetProperty("occurrences").EnumerateArray().Select(item => item.GetProperty("run_id").GetInt32()));
+        var firstOccurrence = output.RootElement.GetProperty("occurrences")[0];
+        Assert.Equal("2026-08-30T12:00:00Z", firstOccurrence.GetProperty("observed_at").GetString());
+        Assert.True(firstOccurrence.GetProperty("issue_published").GetBoolean());
     }
 
     [Fact]

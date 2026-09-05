@@ -214,6 +214,265 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReplayingTrimmedOccurrenceDoesNotReopenClosedIssue()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 991, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-29T00:00:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 2 most recent of 3 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-29 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.True(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.DoesNotContain("[991](", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("update", result.Calls);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingPersistedOccurrenceRetriesWhenPriorIssueUpdateDidNotComplete()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 2 most recent of 2 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.False(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Contains("[991](", issue.Body, StringComparison.Ordinal);
+        Assert.Contains("update", result.Calls);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingOccurrenceWithPublicationReceiptDoesNotReopenClosedIssue()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 200, observed_at = "2026-08-28T00:00:00Z" },
+                        new
+                        {
+                            run_id = 991,
+                            observed_at = "2026-08-29T18:30:00Z",
+                            issue_published = true
+                        },
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 2 most recent of 2 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            | 2026-08-28 | [200](https://github.com/microsoft/aspire/actions/runs/200) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.True(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.DoesNotContain("[991](", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("update", result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReplayingOccurrenceWithChainedAliasPublicationReceiptDoesNotReopenClosedIssue()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    aliases = new[] { "intermediate-worker-crash", "legacy-worker-crash" },
+                    type = "infra-failure",
+                    title = "Worker process crashed",
+                    error_pattern = "Process completed with exit code -1073741502 (0xC0000142)",
+                    job_names = new[] { "Build / Windows", "Tests / Windows" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-28T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                storedAliases = new object[]
+                {
+                    new
+                    {
+                        id = "intermediate-worker-crash",
+                        canonical_id = "worker-crash",
+                        type = "infra-failure"
+                    },
+                    new
+                    {
+                        id = "legacy-worker-crash",
+                        canonical_id = "intermediate-worker-crash",
+                        type = "infra-failure",
+                        occurrences = new object[]
+                        {
+                            new
+                            {
+                                run_id = 991,
+                                observed_at = "2026-08-27T00:00:00Z",
+                                issue_published = true
+                            },
+                        }
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.True(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.DoesNotContain("[991](", issue.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("update", result.Calls);
+        var occurrence = Assert.Single(
+            result.StoredCause.GetProperty("occurrences").EnumerateArray(),
+            occurrence => occurrence.GetProperty("run_id").GetInt64() == 991);
+        Assert.True(occurrence.GetProperty("issue_published").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task PublishUpdatesManagedOccurrenceSectionAndPreservesTotalCount()
     {
         var cause = CreateCause();

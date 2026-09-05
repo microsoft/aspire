@@ -98,6 +98,11 @@ async function dispatch(operation, payload) {
             path.join(memoryCausesDirectory, `${payload.cause.id}.json`),
             `${JSON.stringify(payload.storedCause)}\n`);
     }
+    for (const storedAlias of payload.storedAliases ?? []) {
+        await fs.writeFile(
+            path.join(memoryCausesDirectory, `${storedAlias.id}.json`),
+            `${JSON.stringify(storedAlias)}\n`);
+    }
 
     const store = {
         next: 1000,
