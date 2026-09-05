@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -38,7 +39,7 @@ public class ResourceWaitServiceTests
                 });
             }
         };
-        var service = new ResourceWaitService();
+        var service = new ResourceWaitService(TimeProvider.System, NullLogger<ResourceWaitService>.Instance);
 
         var result = await service.WaitAsync(
             backchannel,
@@ -67,7 +68,7 @@ public class ResourceWaitServiceTests
                 State = "FailedToStart"
             })
         };
-        var service = new ResourceWaitService();
+        var service = new ResourceWaitService(TimeProvider.System, NullLogger<ResourceWaitService>.Instance);
 
         var result = await service.WaitAsync(
             backchannel,
@@ -100,7 +101,7 @@ public class ResourceWaitServiceTests
                 ErrorMessage = "Wait failed."
             })
         };
-        var service = new ResourceWaitService();
+        var service = new ResourceWaitService(TimeProvider.System, NullLogger<ResourceWaitService>.Instance);
 
         var result = await service.WaitAsync(
             backchannel,

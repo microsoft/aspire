@@ -34,6 +34,16 @@ internal sealed class TestMcpServerTransport : IMcpTransportFactory, IDisposable
     /// </summary>
     public ITransport ServerTransport { get; }
 
+    /// <summary>
+    /// Gets or sets an exception to throw when server transport creation is attempted.
+    /// </summary>
+    public Exception? CreateTransportException { get; set; }
+
+    /// <summary>
+    /// Gets the number of server transport creation attempts.
+    /// </summary>
+    public int CreateTransportCallCount { get; private set; }
+
     public TestMcpServerTransport(ILoggerFactory? loggerFactory = null)
     {
         _loggerFactory = loggerFactory;
@@ -45,7 +55,17 @@ internal sealed class TestMcpServerTransport : IMcpTransportFactory, IDisposable
     }
 
     /// <inheritdoc />
-    public ITransport CreateTransport() => ServerTransport;
+    public ITransport CreateTransport()
+    {
+        CreateTransportCallCount++;
+
+        if (CreateTransportException is not null)
+        {
+            throw CreateTransportException;
+        }
+
+        return ServerTransport;
+    }
 
     /// <summary>
     /// Creates an MCP client that connects to the server through the in-memory pipes.
@@ -79,4 +99,3 @@ internal sealed class TestMcpServerTransport : IMcpTransportFactory, IDisposable
         CompletePipes();
     }
 }
-

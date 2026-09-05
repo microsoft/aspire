@@ -94,7 +94,9 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
             // Fetch all logs from the API. Limiting of returned telemetry to the MCP caller happens later.
             var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
-            logger.LogDebug("Fetching structured logs from {Url}", url);
+            logger.LogDebug(
+                "Fetching structured logs from {Url}",
+                McpToolHelpers.SanitizeDashboardRequestUrl(url));
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
             TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -134,10 +136,10 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
         }
         catch (HttpRequestException ex)
         {
-            logger.LogError(ex, "Failed to fetch structured logs from Dashboard API");
+            logger.LogError("Failed to fetch structured logs from Dashboard API");
             var errorMessage = dashboardInfoProvider.IsDirectConnection
                 ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
-                : $"Failed to fetch structured logs: {ex.Message}";
+                : "Failed to fetch structured logs from the Dashboard API.";
             throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
     }

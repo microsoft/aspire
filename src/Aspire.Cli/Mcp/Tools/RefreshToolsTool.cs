@@ -6,7 +6,9 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
 
-internal sealed class RefreshToolsTool(IMcpResourceToolRefreshService refreshService) : CliMcpTool
+internal sealed class RefreshToolsTool(
+    IMcpResourceToolRefreshService refreshService,
+    Func<int> getKnownToolCount) : CliMcpTool
 {
     public override string Name => KnownMcpTools.RefreshTools;
 
@@ -19,10 +21,10 @@ internal sealed class RefreshToolsTool(IMcpResourceToolRefreshService refreshSer
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        var (resourceToolMap, _) = await refreshService.RefreshResourceToolMapAsync(cancellationToken).ConfigureAwait(false);
+        var (snapshot, _) = await refreshService.RefreshResourceToolMapAsync(cancellationToken).ConfigureAwait(false);
         await refreshService.SendToolsListChangedNotificationAsync(cancellationToken).ConfigureAwait(false);
 
-        var totalToolCount = KnownMcpTools.All.Count + resourceToolMap.Count;
+        var totalToolCount = getKnownToolCount() + snapshot.ToolMap.Count;
         return new CallToolResult
         {
             Content = [new TextContentBlock { Text = $"Tools refreshed: {totalToolCount} tools available" }]

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
 using Microsoft.Extensions.Logging;
@@ -19,9 +20,10 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     private readonly ILogger _logger;
     private readonly object _lock = new();
     private McpServer? _server;
-    private Dictionary<string, ResourceToolEntry> _resourceToolMap = new(StringComparer.Ordinal);
+    private ResourceToolMapSnapshot _snapshot = new(
+        null,
+        new Dictionary<string, ResourceToolEntry>(StringComparer.Ordinal));
     private bool _invalidated = true;
-    private string? _lastRefreshedAppHostPath;
 
     public McpResourceToolRefreshService(
         IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
@@ -32,20 +34,25 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     }
 
     /// <inheritdoc/>
-    public bool TryGetResourceToolMap(out IReadOnlyDictionary<string, ResourceToolEntry> resourceToolMap)
+    public bool TryGetResourceToolMap(
+        IAppHostAuxiliaryBackchannel? connection,
+        out ResourceToolMapSnapshot snapshot)
     {
         lock (_lock)
         {
-            if (_invalidated || _lastRefreshedAppHostPath != _auxiliaryBackchannelMonitor.ResolvedAppHostPath)
+            if (_invalidated || !IsSameConnection(connection))
             {
-                resourceToolMap = null!;
+                snapshot = null!;
                 return false;
             }
 
-            resourceToolMap = _resourceToolMap;
+            snapshot = _snapshot;
             return true;
         }
     }
+
+    private bool IsSameConnection(IAppHostAuxiliaryBackchannel? connection)
+        => ReferenceEquals(_snapshot.Connection, connection);
 
     /// <inheritdoc/>
     public void InvalidateToolMap()
@@ -72,21 +79,18 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
     }
 
     /// <inheritdoc/>
-    public async Task<(IReadOnlyDictionary<string, ResourceToolEntry> ToolMap, bool Changed)> RefreshResourceToolMapAsync(CancellationToken cancellationToken)
+    public async Task<(ResourceToolMapSnapshot Snapshot, bool Changed)> RefreshResourceToolMapAsync(CancellationToken cancellationToken)
     {
         _logger.LogDebug("Refreshing resource tool map.");
 
         var refreshedMap = new Dictionary<string, ResourceToolEntry>(StringComparer.Ordinal);
 
-        string? selectedAppHostPath = null;
-        try
+        var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(_auxiliaryBackchannelMonitor, _logger, cancellationToken).ConfigureAwait(false);
+
+        if (connection is not null)
         {
-            var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(_auxiliaryBackchannelMonitor, _logger, cancellationToken).ConfigureAwait(false);
-
-            if (connection is not null)
+            try
             {
-                selectedAppHostPath = connection.AppHostInfo?.AppHostPath;
-
                 var allResources = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
                 var resourcesWithTools = allResources.Where(r => r.McpServer is not null && !McpToolHelpers.IsExcludedFromMcp(r)).ToList();
 
@@ -110,51 +114,87 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
                     }
                 }
             }
-            else
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogDebug("Unable to refresh resource tool map because there's no selected connection.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Resource discovery failures should not hide the CLI's built-in MCP tools.
+                _logger.LogDebug(ex, "Failed to refresh resource MCP tool routing map.");
             }
         }
-        catch (Exception ex)
+        else
         {
-            // Don't fail refresh_tools if resource discovery fails; still emit notification.
-            _logger.LogDebug(ex, "Failed to refresh resource MCP tool routing map.");
+            _logger.LogDebug("Unable to refresh resource tool map because there's no selected connection.");
         }
 
         lock (_lock)
         {
-            var changed = _resourceToolMap.Count != refreshedMap.Count;
-            if (!changed)
-            {
-                // Check for deleted tools (in old but not in new).
-                foreach (var key in _resourceToolMap.Keys)
-                {
-                    if (!refreshedMap.ContainsKey(key))
-                    {
-                        changed = true;
-                        break;
-                    }
-                }
+            var changed = !ToolMapsHaveEquivalentContracts(_snapshot.ToolMap, refreshedMap);
 
-                // Check for new tools (in new but not in old).
-                if (!changed)
-                {
-                    foreach (var key in refreshedMap.Keys)
-                    {
-                        if (!_resourceToolMap.ContainsKey(key))
-                        {
-                            changed = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            _resourceToolMap = refreshedMap;
-            _lastRefreshedAppHostPath = selectedAppHostPath;
+            _snapshot = new ResourceToolMapSnapshot(connection, refreshedMap);
             _invalidated = false;
-            return (_resourceToolMap, changed);
+            return (_snapshot, changed);
         }
     }
 
+    private static bool ToolMapsHaveEquivalentContracts(
+        IReadOnlyDictionary<string, ResourceToolEntry> previous,
+        IReadOnlyDictionary<string, ResourceToolEntry> current)
+    {
+        if (previous.Count != current.Count)
+        {
+            return false;
+        }
+
+        foreach (var (exposedName, previousEntry) in previous)
+        {
+            if (!current.TryGetValue(exposedName, out var currentEntry) ||
+                !ToolContractsAreEquivalent(
+                    previousEntry.ToProtocolTool(exposedName),
+                    currentEntry.ToProtocolTool(exposedName)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ToolContractsAreEquivalent(Tool previous, Tool current)
+    {
+        return string.Equals(previous.Name, current.Name, StringComparison.Ordinal) &&
+            string.Equals(previous.Description, current.Description, StringComparison.Ordinal) &&
+            JsonElement.DeepEquals(previous.InputSchema, current.InputSchema) &&
+            JsonSchemasAreEquivalent(previous.OutputSchema, current.OutputSchema) &&
+            ToolAnnotationsAreEquivalent(previous.Annotations, current.Annotations);
+    }
+
+    private static bool JsonSchemasAreEquivalent(JsonElement? previous, JsonElement? current)
+    {
+        if (previous is not { } previousValue)
+        {
+            return current is null;
+        }
+
+        return current is { } currentValue &&
+            JsonElement.DeepEquals(previousValue, currentValue);
+    }
+
+    private static bool ToolAnnotationsAreEquivalent(ToolAnnotations? previous, ToolAnnotations? current)
+    {
+        if (ReferenceEquals(previous, current))
+        {
+            return true;
+        }
+
+        return previous is not null &&
+            current is not null &&
+            string.Equals(previous.Title, current.Title, StringComparison.Ordinal) &&
+            previous.DestructiveHint == current.DestructiveHint &&
+            previous.IdempotentHint == current.IdempotentHint &&
+            previous.OpenWorldHint == current.OpenWorldHint &&
+            previous.ReadOnlyHint == current.ReadOnlyHint;
+    }
 }

@@ -70,6 +70,27 @@ export interface TelemetryEventSchema {
         properties: 'command' | 'outcome' | 'source' | 'error_kind';
         measurements: 'duration_ms';
     };
+    'aspire/vscode/editorassistance/result': {
+        properties:
+            | 'tool'
+            | 'outcome'
+            | 'source'
+            | 'scope'
+            | 'controller'
+            | 'mode'
+            | 'stage'
+            | 'category'
+            | 'provider_kind'
+            | 'state_bucket'
+            | 'error_kind'
+            | 'exit_code_bucket'
+            | 'presentation';
+        measurements: 'duration_ms';
+    };
+    'aspire/vscode/launchfailure/recorded': {
+        properties: 'stage' | 'category' | 'controller' | 'mode' | 'provider_kind' | 'exit_code_bucket';
+        measurements: 'journal_size';
+    };
     'aspire/vscode/cli/availability': {
         properties: 'available' | 'source' | 'operation';
         measurements: 'duration_ms';

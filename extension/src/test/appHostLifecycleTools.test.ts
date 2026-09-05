@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 
 const mutableFs = require('fs') as typeof fs;
 
+import { type AspireOperationKind } from '../dcp/types';
 import {
     AppHostLifecycleToolService,
     AppHostStartLanguageModelTool,
@@ -21,9 +22,11 @@ import {
     type AppHostLifecycleRunningAppHost,
     type AppHostLifecycleToolResult,
 } from '../lm/appHostLifecycleTools';
-import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
+import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostLaunchTarget, type AppHostStopResult } from '../services/AppHostLaunchService';
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
-import { compareAppHostIdentity, type AppHostIdentityRelation } from '../utils/appHostIdentity';
+import { compareAppHostIdentity, getOrCreateIdentityForCurrentAppHostTarget, type AppHostIdentityRelation } from '../utils/appHostIdentity';
+import { extensionLogOutputChannel } from '../utils/logging';
+import { SafeAppHostTargetResolver } from '../lm/safeAppHostTargetResolver';
 import { resolveIsolated } from '../utils/gitWorktree';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
@@ -38,7 +41,11 @@ interface LaunchCall {
 
 class FakeLaunchService implements AppHostLifecycleLaunchService {
     readonly launchCalls: LaunchCall[] = [];
+    /** The whole bound target each launch/stop received, so tests can assert what was carried. */
+    readonly launchTargets: AppHostLaunchTarget[] = [];
+    readonly stopTargets: AppHostLaunchTarget[] = [];
     readonly launchInputIsolations: Array<boolean | undefined> = [];
+    readonly launchInferredIsolationOverrides: Array<boolean | undefined> = [];
     readonly stopCalls: string[] = [];
     launchingPaths = new Set<string>();
     editorSessions: FakeEditorSession[] = [];
@@ -67,6 +74,10 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
         return this.launchingPaths.has(path.resolve(appHostPath));
     }
 
+    hasPendingOrActiveRunLaunch(appHostPath: string): boolean {
+        return this.isLaunching(appHostPath);
+    }
+
     tryReserveLaunch(appHostPath: string): boolean {
         this.reserveLaunchAttempts++;
         if (this.isLaunching(appHostPath)) {
@@ -79,6 +90,17 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
 
     clearLaunching(appHostPath: string): void {
         this.launchingPaths.delete(path.resolve(appHostPath));
+    }
+
+    getEditorSessions() {
+        return this.editorSessions.map(session => ({
+            appHostPath: session.appHostPath,
+            resolvedAppHostPath: session.resolvedAppHostPath,
+            operationKind: session.operationKind,
+            startupCompleted: session.startupCompleted,
+            noDebug: session.configuration.noDebug === true,
+            isStopping: session.isStopping,
+        }));
     }
 
     getEditorRunSessions(appHostPath: string): AppHostLifecycleEditorSessions {
@@ -147,7 +169,11 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
         }
     }
 
-    async resolveLaunchIsolation(appHostPath: string, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<{ effective: boolean; option: boolean | undefined }> {
+    async resolveLaunchIsolation(
+        appHostPath: string,
+        isolated: boolean | undefined,
+        token: vscode.CancellationToken,
+        inferredIsolationOverride?: boolean): Promise<{ effective: boolean; option: boolean | undefined }> {
         this.resolveLaunchIsolationCalls++;
         if (token.isCancellationRequested) {
             throw new vscode.CancellationError();
@@ -157,7 +183,7 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
             throw this.resolveLaunchIsolationError;
         }
 
-        const effective = resolveIsolated(isolated, appHostPath);
+        const effective = isolated ?? inferredIsolationOverride ?? resolveIsolated(undefined, appHostPath);
         if (this.supportsIsolatedLaunch) {
             return { effective, option: isolated ?? (effective ? true : undefined) };
         }
@@ -169,16 +195,21 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
     }
 
     async launchFromLifecycleOwner(
-        appHostPath: string,
+        launchTarget: AppHostLaunchTarget,
         command: 'run',
         noDebug: boolean,
         isolated: boolean | undefined,
         token: vscode.CancellationToken,
         launchProfile?: string,
-    ): Promise<{ effective: boolean; option: boolean | undefined }> {
+        inferredIsolationOverride?: boolean): Promise<{ effective: boolean; option: boolean | undefined }> {
+        this.launchTargets.push(launchTarget);
+        // Production performs the launch against the bound physical AppHost, so the fake keeps
+        // recording that path as the launched one.
+        const appHostPath = launchTarget.canonicalPath;
         this.launchInputIsolations.push(isolated);
+        this.launchInferredIsolationOverrides.push(inferredIsolationOverride);
         this.onBeforeLaunch?.();
-        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token);
+        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, inferredIsolationOverride);
         const launchCall: LaunchCall = { appHostPath, command, noDebug, isolated: launchIsolation.option };
         if (launchProfile !== undefined) {
             launchCall.launchProfile = launchProfile;
@@ -207,11 +238,19 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
     }
 
     async stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult> {
+        const stopTarget: AppHostLaunchTarget = {
+            selectorPath: appHostPath,
+            canonicalPath: appHostPath,
+            identity: getOrCreateIdentityForCurrentAppHostTarget(appHostPath),
+            displayPath: vscode.workspace.asRelativePath(appHostPath),
+        };
         return await this.runWithAppHostLifecycleLock(appHostPath, token, lockToken =>
-            this.stopAppHostFromLifecycleOwner(appHostPath, lockToken));
+            this.stopAppHostFromLifecycleOwner(stopTarget, lockToken));
     }
 
-    async stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult> {
+    async stopAppHostFromLifecycleOwner(stopTarget: AppHostLaunchTarget, token: vscode.CancellationToken): Promise<AppHostStopResult> {
+        this.stopTargets.push(stopTarget);
+        const appHostPath = stopTarget.canonicalPath;
         this.stopCalls.push(appHostPath);
         if (this.stopError) {
             throw this.stopError;
@@ -279,12 +318,12 @@ class FakeDiscoveryService implements AppHostLifecycleDiscoveryService {
             throw this.discoverError;
         }
 
-        const folderError = this.discoverErrorsByFolder.get(workspaceFolder.uri.fsPath);
+        const folderPath = fs.realpathSync.native(workspaceFolder.uri.fsPath);
+        const folderError = this.discoverErrorsByFolder.get(folderPath);
         if (folderError) {
             throw folderError;
         }
 
-        const folderPath = workspaceFolder.uri.fsPath;
         return this.registeredPaths
             .filter(candidatePath => {
                 const relative = path.relative(folderPath, candidatePath);
@@ -297,6 +336,8 @@ class FakeDiscoveryService implements AppHostLifecycleDiscoveryService {
 class FakeEditorSession implements AppHostLifecycleEditorSession {
     stopCount = 0;
     stopError: Error | undefined;
+    resolvedAppHostPath: string | undefined;
+    isStopping = false;
     startupCompleted = true;
     // Mirrors production: AspireDebugSession.stopDebugging() ends with the session
     // being removed from the editor-owned session list.
@@ -305,7 +346,8 @@ class FakeEditorSession implements AppHostLifecycleEditorSession {
     constructor(
         readonly appHostPath: string | undefined,
         readonly configuration: { noDebug?: boolean; command?: string },
-        readonly operationKind: string = configuration.command ?? 'run') {
+        readonly operationKind: AspireOperationKind = (configuration.command ?? 'run') as AspireOperationKind) {
+        this.resolvedAppHostPath = appHostPath;
     }
 
     async stopDebugging(): Promise<void> {
@@ -337,7 +379,7 @@ function createFixtureDirectory(prefix: string): string {
     // Stop the ancestor walk at this fixture so a checkout that is itself a linked
     // worktree does not make every LM-tool test infer isolated mode.
     fs.mkdirSync(path.join(directory, '.git'));
-    return directory;
+    return fs.realpathSync.native(directory);
 }
 
 function readToolResultPayload(result: vscode.LanguageModelToolResult): AppHostLifecycleToolResult {
@@ -400,6 +442,44 @@ suite('AppHost lifecycle language model tools', () => {
         removeDirectorySafely(outsideRoot);
     });
 
+    /**
+     * Registers one registry entry that is a symlink, plus the two AppHosts it can point at.
+     *
+     * Returns `undefined` when the platform refuses to create the link, which is how the tests
+     * that need a retargetable selector skip on a Windows agent without developer mode.
+     */
+    function createRetargetableAlias(): {
+        readonly firstProject: string;
+        readonly secondProject: string;
+        readonly aliasProject: string;
+        readonly retargetTo: (target: string) => void;
+    } | undefined {
+        const directory = path.join(workspaceRoot, 'Aliased');
+        fs.mkdirSync(directory, { recursive: true });
+        const firstProject = path.join(directory, 'First.csproj');
+        const secondProject = path.join(directory, 'Second.csproj');
+        const aliasProject = path.join(directory, 'Alias.csproj');
+        fs.writeFileSync(firstProject, appHostProjectContents);
+        fs.writeFileSync(secondProject, appHostProjectContents);
+        try {
+            fs.symlinkSync(firstProject, aliasProject);
+        }
+        catch {
+            return undefined;
+        }
+
+        discoveryService.registeredPaths.push(aliasProject);
+        return {
+            firstProject,
+            secondProject,
+            aliasProject,
+            retargetTo: (target: string) => {
+                fs.rmSync(aliasProject, { force: true });
+                fs.symlinkSync(target, aliasProject);
+            },
+        };
+    }
+
     suite('manifest and localization', () => {
         test('contributes both AppHost lifecycle tools with localized, schema-bound definitions', () => {
             const extensionRoot = path.resolve(__dirname, '..', '..');
@@ -408,7 +488,10 @@ suite('AppHost lifecycle language model tools', () => {
                 contributes: { languageModelTools?: Array<Record<string, any>> };
             };
             const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
-            const tools = manifest.contributes.languageModelTools ?? [];
+            const tools = (manifest.contributes.languageModelTools ?? [])
+                .filter(tool =>
+                    tool.name === aspireAppHostStartToolName ||
+                    tool.name === aspireAppHostStopToolName);
 
             assert.deepStrictEqual(tools.map(tool => tool.name), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
 
@@ -530,6 +613,12 @@ suite('AppHost lifecycle language model tools', () => {
                 const registration = registerAppHostLifecycleTools(service);
                 assert.strictEqual(registration.registered, true);
                 assert.deepStrictEqual(registerToolStub.getCalls().map(call => call.args[0]), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
+                assert.strictEqual(
+                    registration.tools.get(aspireAppHostStartToolName),
+                    registerToolStub.firstCall.args[1]);
+                assert.strictEqual(
+                    registration.tools.get(aspireAppHostStopToolName),
+                    registerToolStub.secondCall.args[1]);
 
                 registration.dispose();
                 assert.deepStrictEqual(disposed, [aspireAppHostStartToolName, aspireAppHostStopToolName]);
@@ -899,6 +988,71 @@ suite('AppHost lifecycle language model tools', () => {
     });
 
     suite('start behavior', () => {
+        test('carries the confirmed selector and the AppHost it was bound to into the launch', async function () {
+            // The launch needs both halves: the physical AppHost it runs, and the selector it is
+            // validated against and scoped by. Handing it only the physical path would leave the
+            // launch's own pre-start freshness check comparing that path with itself, and would
+            // resolve the CLI from a path that can sit outside every open workspace folder.
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            const result = await service.start({ appHostPath: 'Aliased/Alias.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.appHostPath, 'Aliased/Alias.csproj');
+            assert.deepStrictEqual(launchService.launchTargets, [{
+                selectorPath: alias.aliasProject,
+                canonicalPath: fs.realpathSync.native(alias.firstProject),
+                identity: launchService.launchTargets[0]?.identity,
+                displayPath: 'Aliased/Alias.csproj',
+            }]);
+            assert.strictEqual(
+                launchService.launchTargets[0].identity,
+                new SafeAppHostTargetResolver(discoveryService).getIdentityForAppHostPath(alias.firstProject));
+        });
+
+        test('keeps the launch on the AppHost it captured when the selector moves during the launch', async function () {
+            // The retarget lands after ownership was taken and while the launch is running, which
+            // is the window a captured physical path exists for. Whatever the name reaches now,
+            // the launch has to stay on the file the caller confirmed.
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            const canonicalFirstProject = fs.realpathSync.native(alias.firstProject);
+            launchService.onBeforeLaunch = () => alias.retargetTo(alias.secondProject);
+
+            const result = await service.start({ appHostPath: 'Aliased/Alias.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.deepStrictEqual(launchService.launchTargets.map(target => target.canonicalPath), [canonicalFirstProject]);
+            assert.deepStrictEqual(launchService.launchCalls.map(call => call.appHostPath), [canonicalFirstProject]);
+        });
+
+        test('refuses to start when the confirmed selector names a different AppHost by the time ownership is taken', async function () {
+            // The caller confirmed one AppHost. Resolution runs again inside the lifecycle lock,
+            // and if the selector has been repointed in between, launching the entry it names
+            // now would start an AppHost nobody approved under the identity that was approved.
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            launchService.onLifecycleLockHeld = () => alias.retargetTo(alias.secondProject);
+
+            const result = await service.start({ appHostPath: 'Aliased/Alias.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.deepStrictEqual(launchService.launchCalls, []);
+            assert.strictEqual(launchService.launchingPaths.size, 0);
+        });
+
         test('maps run mode to a non-debug aspire run launch', async () => {
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
 
@@ -1061,6 +1215,7 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(result.outcome, 'started');
             assert.strictEqual(result.isolated, false);
             assert.deepStrictEqual(launchService.launchInputIsolations, [false]);
+            assert.deepStrictEqual(launchService.launchInferredIsolationOverrides, [undefined]);
             assert.deepStrictEqual(launchService.launchCalls, [{
                 appHostPath: appHostProjectPath,
                 command: 'run',
@@ -1268,15 +1423,34 @@ suite('AppHost lifecycle language model tools', () => {
         });
 
         test('reports a bounded failure without leaking launch error details', async () => {
-            launchService.launchError = new Error('aspire run failed: token=super-secret-value at /Users/private/AppHost.csproj');
+            const sandbox = sinon.createSandbox();
+            const sentinels = [
+                '/Users/private/AppHost.csproj',
+                'https://dashboard.example.invalid/login?token=url-secret-value',
+                'raw CLI stdout: build-secret-output',
+                'credential=super-secret-value',
+                'stack-message-private',
+            ];
 
-            const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
-            const serialized = JSON.stringify(result);
+            try {
+                const errorLog = sandbox.stub(extensionLogOutputChannel, 'error');
+                launchService.launchError = new Error(sentinels.join('\n'));
 
-            assert.strictEqual(result.outcome, 'failed');
-            assertResultOmitsIsolated(result);
-            assert.strictEqual(serialized.includes('super-secret-value'), false);
-            assert.strictEqual(serialized.includes('/Users/private'), false);
+                const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+                const serialized = JSON.stringify(result);
+                const logText = errorLog.getCalls().map(call => String(call.args[0])).join('\n');
+
+                assert.strictEqual(result.outcome, 'failed');
+                assertResultOmitsIsolated(result);
+                assert.strictEqual(logText, `Aspire language model tool ${aspireAppHostStartToolName} failed.`);
+                for (const sentinel of sentinels) {
+                    assert.strictEqual(serialized.includes(sentinel), false);
+                    assert.strictEqual(logText.includes(sentinel), false);
+                }
+            }
+            finally {
+                sandbox.restore();
+            }
         });
 
         test('reports cancellation when the launch pipeline cancels', async () => {
@@ -1427,6 +1601,47 @@ suite('AppHost lifecycle language model tools', () => {
     });
 
     suite('stop behavior', () => {
+        test('carries the confirmed selector and the AppHost it was bound to into the stop', async function () {
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            launchService.runningAppHosts = [{ appHostPath: alias.firstProject }];
+
+            const result = await service.stop({ appHostPath: 'Aliased/Alias.csproj' }, new vscode.CancellationTokenSource().token);
+
+            assert.deepStrictEqual(
+                { outcome: result.outcome, controller: result.controller },
+                { outcome: 'stopped', controller: 'external' });
+            assert.deepStrictEqual(launchService.stopTargets.map(target => ({
+                selectorPath: target.selectorPath,
+                canonicalPath: target.canonicalPath,
+                displayPath: target.displayPath,
+            })), [{
+                selectorPath: alias.aliasProject,
+                canonicalPath: fs.realpathSync.native(alias.firstProject),
+                displayPath: 'Aliased/Alias.csproj',
+            }]);
+        });
+
+        test('refuses to stop when the confirmed selector names a different AppHost by the time ownership is taken', async function () {
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            launchService.runningAppHosts = [{ appHostPath: alias.firstProject }, { appHostPath: alias.secondProject }];
+            launchService.onLifecycleLockHeld = () => alias.retargetTo(alias.secondProject);
+
+            const result = await service.stop({ appHostPath: 'Aliased/Alias.csproj' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.deepStrictEqual(launchService.stopCalls, []);
+        });
+
         test('stops only the matching editor-owned session', async () => {
             const otherAppHost = path.join(workspaceRoot, 'AppHost', 'Other.csproj');
             fs.writeFileSync(otherAppHost, appHostProjectContents);
@@ -1707,6 +1922,296 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(prepared?.confirmationMessages?.message, 'Stop the Aspire AppHost AppHost/AppHost.csproj?');
         });
 
+        test('rejects a start whose target changes after preparation', async () => {
+            const otherAppHostPath = path.join(workspaceRoot, 'Other', 'AppHost.csproj');
+            discoveryService.registeredPaths.push(otherAppHostPath);
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+
+            await tool.prepareInvocation({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
+            }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input: { appHostPath: 'Other/AppHost.csproj', mode: 'run' },
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('rejects a start whose mode changes after preparation', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+
+            await tool.prepareInvocation({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
+            }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' },
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('rejects a start whose isolation changes after preparation', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+
+            await tool.prepareInvocation({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: false },
+            }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: true },
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('rejects a start whose launch profile changes after preparation', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+
+            for (const launchProfile of ['Profile B', undefined]) {
+                await tool.prepareInvocation({
+                    input: {
+                        appHostPath: 'AppHost/AppHost.csproj',
+                        mode: 'run',
+                        launchProfile: 'Profile A',
+                    },
+                }, token);
+                const result = readToolResultPayload(await tool.invoke({
+                    input: {
+                        appHostPath: 'AppHost/AppHost.csproj',
+                        mode: 'run',
+                        ...(launchProfile === undefined ? {} : { launchProfile }),
+                    },
+                    toolInvocationToken: undefined,
+                }, token));
+
+                assert.strictEqual(result.outcome, 'failed');
+            }
+
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('rejects indistinguishable preparations that resolved to different AppHosts', async () => {
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+            const inputKey = JSON.stringify([input.appHostPath, input.mode, null, null]);
+            const preparedActions = (service as unknown as {
+                _preparedActions: Array<{
+                    tool: string;
+                    inputKey: string;
+                    identity: string;
+                    isolated: boolean;
+                    expiresAt: number;
+                }>;
+            })._preparedActions;
+            preparedActions.push(
+                {
+                    tool: aspireAppHostStartToolName,
+                    inputKey,
+                    identity: 'apphost-a',
+                    isolated: false,
+                    expiresAt: Date.now() + 60_000,
+                },
+                {
+                    tool: aspireAppHostStartToolName,
+                    inputKey,
+                    identity: 'apphost-b',
+                    isolated: false,
+                    expiresAt: Date.now() + 60_000,
+                });
+            const tool = new AppHostStartLanguageModelTool(service);
+
+            const result = readToolResultPayload(await tool.invoke(
+                { input, toolInvocationToken: undefined },
+                new vscode.CancellationTokenSource().token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('rejects a start when inferred isolation changes after preparation', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+            let changedWorktree = false;
+            launchService.onRunningAppHostsRequested = () => {
+                if (!changedWorktree) {
+                    changedWorktree = true;
+                    fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
+                    writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
+                }
+            };
+
+            await tool.prepareInvocation({ input }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input,
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('pins inferred isolation after the final confirmation check', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+            launchService.onBeforeLaunch = () => {
+                fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
+                writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
+            };
+
+            await tool.prepareInvocation({ input }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input,
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.isolated, false);
+            assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
+            assert.deepStrictEqual(launchService.launchInferredIsolationOverrides, [false]);
+            assert.deepStrictEqual(launchService.launchCalls, [{
+                appHostPath: appHostProjectPath,
+                command: 'run',
+                noDebug: true,
+                isolated: undefined,
+            }]);
+        });
+
+        test('keeps confirmed inferred isolation eligible for older CLI fallback', async () => {
+            fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
+            writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
+            launchService.supportsIsolatedLaunch = false;
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+
+            await tool.prepareInvocation({ input }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input,
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.isolated, false);
+            assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
+            assert.deepStrictEqual(launchService.launchInferredIsolationOverrides, [true]);
+            assert.deepStrictEqual(launchService.launchCalls, [{
+                appHostPath: appHostProjectPath,
+                command: 'run',
+                noDebug: true,
+                isolated: undefined,
+            }]);
+        });
+
+        test('rejects a stop whose target changes after preparation', async () => {
+            const otherAppHostPath = path.join(workspaceRoot, 'Other', 'AppHost.csproj');
+            discoveryService.registeredPaths.push(otherAppHostPath);
+            const otherSession = new FakeEditorSession(otherAppHostPath, { noDebug: true });
+            editorSessions.push(otherSession);
+            const tool = new AppHostStopLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+
+            await tool.prepareInvocation({
+                input: { appHostPath: 'AppHost/AppHost.csproj' },
+            }, token);
+            const result = readToolResultPayload(await tool.invoke({
+                input: { appHostPath: 'Other/AppHost.csproj' },
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(otherSession.stopCount, 0);
+        });
+
+        test('rejects a trusted invocation that was not prepared', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+
+            const result = readToolResultPayload(await tool.invoke({
+                input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
+                toolInvocationToken: undefined,
+            }, new vscode.CancellationTokenSource().token));
+
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 0);
+        });
+
+        test('consumes a prepared action only once', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+
+            await tool.prepareInvocation({ input }, token);
+            const first = readToolResultPayload(await tool.invoke({
+                input,
+                toolInvocationToken: undefined,
+            }, token));
+            const replay = readToolResultPayload(await tool.invoke({
+                input,
+                toolInvocationToken: undefined,
+            }, token));
+
+            assert.strictEqual(first.outcome, 'started');
+            assert.strictEqual(replay.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 1);
+        });
+
+        test('allows independently confirmed identical actions to deduplicate concurrently', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+
+            await Promise.all([
+                tool.prepareInvocation({ input }, token),
+                tool.prepareInvocation({ input }, token),
+            ]);
+            const [first, second] = await Promise.all([
+                tool.invoke({ input, toolInvocationToken: undefined }, token),
+                tool.invoke({ input, toolInvocationToken: undefined }, token),
+            ]);
+            const outcomes = [first, second]
+                .map(readToolResultPayload)
+                .map(result => result.outcome)
+                .sort();
+            const replay = readToolResultPayload(await tool.invoke(
+                { input, toolInvocationToken: undefined },
+                token));
+
+            assert.deepStrictEqual(outcomes, ['alreadyStarting', 'started']);
+            assert.strictEqual(replay.outcome, 'failed');
+            assert.strictEqual(launchService.launchCalls.length, 1);
+        });
+
+        test('rejects an expired prepared action', async () => {
+            const now = sinon.stub(Date, 'now').returns(1_000);
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
+            try {
+                await tool.prepareInvocation({ input }, token);
+                now.returns(301_001);
+
+                const result = readToolResultPayload(await tool.invoke({
+                    input,
+                    toolInvocationToken: undefined,
+                }, token));
+
+                assert.strictEqual(result.outcome, 'failed');
+                assert.strictEqual(launchService.launchCalls.length, 0);
+            }
+            finally {
+                now.restore();
+            }
+        });
+
         test('confirms unresolvable input without echoing an unbounded raw path', async () => {
             const tool = new AppHostStartLanguageModelTool(service);
             const longPath = `${'a'.repeat(400)}\n**injected**`;
@@ -1855,6 +2360,41 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(launchService.runningAppHostRequests, 0);
         });
 
+        test('uses a supplied safe target resolver', async () => {
+            const injectedResolver = new SafeAppHostTargetResolver(discoveryService);
+            const resolveTarget = sinon.stub(injectedResolver, 'resolveTarget').resolves({
+                resolved: true,
+                target: {
+                    absolutePath: appHostProjectPath,
+                    canonicalPath: fs.realpathSync.native(appHostProjectPath),
+                    relativePath: 'Injected/AppHost.csproj',
+                    displayPath: 'Injected/AppHost.csproj',
+                    identity: injectedResolver.getIdentityForAppHostPath(appHostProjectPath),
+                },
+            });
+            const injectedService = new AppHostLifecycleToolService({
+                launchService,
+                discoveryService,
+            }, injectedResolver);
+            const tokenSource = new vscode.CancellationTokenSource();
+            try {
+                const displayPath = await injectedService.describeTarget(
+                    'model-selector',
+                    tokenSource.token);
+
+                assert.strictEqual(displayPath, 'Injected/AppHost.csproj');
+                sinon.assert.calledOnceWithExactly(
+                    resolveTarget,
+                    'model-selector',
+                    tokenSource.token);
+                assert.strictEqual(discoveryService.discoverCalls, 0);
+            }
+            finally {
+                tokenSource.dispose();
+                injectedService.dispose();
+            }
+        });
+
         test('prepareInvocation does not launch or stop anything', async () => {
             const session = new FakeEditorSession(appHostProjectPath, { noDebug: false });
             editorSessions.push(session);
@@ -1881,9 +2421,13 @@ suite('AppHost lifecycle language model tools', () => {
             const result = readToolResultPayload(await tool.invoke(
                 { input: { ...input }, toolInvocationToken: undefined },
                 token));
+            const replay = readToolResultPayload(await tool.invoke(
+                { input: { ...input }, toolInvocationToken: undefined },
+                token));
 
             assert.ok(prepared.confirmationMessages);
             assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(replay.outcome, 'failed');
             assert.strictEqual(launchService.launchCalls.length, 1);
         });
     });
@@ -1891,10 +2435,13 @@ suite('AppHost lifecycle language model tools', () => {
     suite('tool result shape', () => {
         test('start returns only bounded, non-sensitive fields', async () => {
             const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' } as const;
 
+            await tool.prepareInvocation({ input }, token);
             const result = await tool.invoke(
-                { input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, toolInvocationToken: undefined },
-                new vscode.CancellationTokenSource().token);
+                { input, toolInvocationToken: undefined },
+                token);
             const payload = readToolResultPayload(result);
 
             assert.deepStrictEqual(Object.keys(payload).sort(), ['appHostPath', 'controller', 'effectiveMode', 'isolated', 'outcome', 'requestedMode', 'tool']);
@@ -1905,13 +2452,41 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(JSON.stringify(payload).includes(realWorkspaceRoot), false);
         });
 
+        test('a resolved aliased target never exposes its canonical path to the model', async function () {
+            const alias = createRetargetableAlias();
+            if (!alias) {
+                this.skip();
+                return;
+            }
+
+            const canonicalPath = fs.realpathSync.native(alias.firstProject);
+            const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'Aliased/Alias.csproj', mode: 'run' } as const;
+
+            await tool.prepareInvocation({ input }, token);
+            const result = await tool.invoke(
+                { input, toolInvocationToken: undefined },
+                token);
+            const payload = readToolResultPayload(result);
+            const serialized = JSON.stringify(payload);
+
+            assert.strictEqual(payload.appHostPath, 'Aliased/Alias.csproj');
+            assert.strictEqual(serialized.includes(canonicalPath), false);
+            assert.strictEqual(serialized.includes(path.dirname(alias.firstProject)), false);
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'canonicalPath'), false);
+        });
+
         test('stop returns only bounded, non-sensitive fields', async () => {
             editorSessions.push(new FakeEditorSession(appHostProjectPath, { noDebug: true }));
             const tool = new AppHostStopLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            const input = { appHostPath: 'AppHost/AppHost.csproj' };
 
+            await tool.prepareInvocation({ input }, token);
             const result = await tool.invoke(
-                { input: { appHostPath: 'AppHost/AppHost.csproj' }, toolInvocationToken: undefined },
-                new vscode.CancellationTokenSource().token);
+                { input, toolInvocationToken: undefined },
+                token);
             const payload = readToolResultPayload(result);
 
             assert.deepStrictEqual(Object.keys(payload).sort(), ['appHostPath', 'controller', 'effectiveMode', 'outcome', 'tool']);

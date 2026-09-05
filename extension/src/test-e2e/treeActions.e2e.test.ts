@@ -305,7 +305,10 @@ suite('Aspire tree action command E2E', function () {
         const workerResourceName = workerResource.name;
         await waitForDashboardUrl();
 
-        const commandState = await waitForResource('e2e-worker');
+        const commandState = await waitForExtensionState(
+            file => findResource(file.state, 'e2e-worker')?.commands?.['disabled-e2e-command']?.state === 'Disabled',
+            'e2e-worker command metadata',
+            120000);
         const commands = findResource(commandState.state, 'e2e-worker')?.commands;
         assert.ok(commands, 'Expected e2e-worker commands in the E2E state snapshot.');
         assert.ok(commands['echo-arguments'], 'Expected enabled echo-arguments command.');
