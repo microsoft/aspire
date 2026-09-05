@@ -408,11 +408,11 @@ path_rules:
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by CLI e2e, extension e2e, and installers
 
-# Project rules: an affected non-matrix project (Layer 1, matched by project-NAME glob) -> targets.
+# Project rules: an affected production/non-test project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
 # so its jobs fire too (more correct than a literal path glob, and additive -- never removes a
-# trigger). Matrix test projects are handled by the Layer 1 intersection and excluded here; broad
-# globs can also match non-matrix test-support projects.
+# trigger). Every project under tests/ is excluded here; test projects are handled by the Layer 1
+# intersection or explicit test rules.
 # Inert when Layer 1 did not run (--skip-layer1); the loose-file path_rules above still cover those
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
