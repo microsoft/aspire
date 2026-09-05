@@ -9,6 +9,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -486,6 +487,14 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (_, _) => true
         };
+        var mcpConfigured = false;
+        var mcpApplicator = new AgentEnvironmentApplicator(
+            AgentCommandStrings.InitCommand_ConfigureMcpServer,
+            _ =>
+            {
+                mcpConfigured = true;
+                return Task.CompletedTask;
+            });
 
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
@@ -498,6 +507,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
             }
 
+            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
             return items
                 .OfType<SkillDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
@@ -510,6 +520,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(mcpApplicator);
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -523,6 +534,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(subtleMessages, m => m.Contains("copilot", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
         Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
+        Assert.False(mcpConfigured);
     }
 
     [Fact]

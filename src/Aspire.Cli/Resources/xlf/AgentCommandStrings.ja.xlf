@@ -112,14 +112,14 @@
         <target state="new">Install Aspire MCP server</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
+        <source>Configure the Aspire MCP server for detected agent environments?</source>
+        <target state="new">Configure the Aspire MCP server for detected agent environments?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize agent environment configuration for detected agents</source>
         <target state="needs-review-translation">検出されたエージェントのエージェント環境構成を初期化します。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfiguresDetectedAgentEnvironments">
-        <source>(configures detected agent environments)</source>
-        <target state="new">(configures detected agent environments)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
@@ -145,6 +145,11 @@
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
         <target state="new">Skills: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_McpOptionDescription">
+        <source>Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
+        <target state="new">Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
