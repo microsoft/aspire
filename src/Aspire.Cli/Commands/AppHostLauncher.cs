@@ -403,7 +403,10 @@ internal sealed class AppHostLauncher(
     /// </param>
     internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity, string? appHostSelectionOrigin)
     {
-        var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
+        var environment = new Dictionary<string, string>
+        {
+            [KnownConfigNames.CliRunDetached] = "true"
+        };
 
         // Record the foreground launcher's identity (PID + start time) so the detached child can watch
         // it during startup and tear the AppHost tree down if the launcher is killed before the app

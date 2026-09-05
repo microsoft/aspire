@@ -54,7 +54,6 @@ internal interface IExtensionBackchannel
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
 {
     private const string Name = "Aspire Extension";
-
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
     private readonly object _connectionSetupLock = new();
@@ -65,6 +64,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
     private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
+    private int _connected;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
         : this(logger, target, configuration, connectCoreAsyncOverride: null)
@@ -86,6 +86,11 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
+            if (Volatile.Read(ref _connected) == 0)
+            {
+                return;
+            }
+
             try
             {
                 StopDebuggingAsync().GetAwaiter().GetResult();
@@ -164,6 +169,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 {
                     await ConnectCoreAsync().ConfigureAwait(false);
                     _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
+                    Volatile.Write(ref _connected, 1);
                     connectionSetupTcs.TrySetResult();
                     return;
                 }

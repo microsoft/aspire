@@ -16,6 +16,8 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal sealed class AspireCliTelemetry : IHostedService
 {
+    private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(20);
+
     /// <summary>
     /// The name of the ActivitySource for report telemetry. This telemetry is exported to external systems.
     /// </summary>
@@ -52,6 +54,8 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly TelemetryTagsSource _tagsSource;
+    private Task _internalMicrosoftDiagnosticsTask = Task.CompletedTask;
+    private Task? _internalMicrosoftDiagnosticsCompletionTask;
 
     private bool _isInitialized;
 
@@ -125,7 +129,9 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// </summary>
     internal async Task<IReadOnlyList<KeyValuePair<string, object?>>> GetDefaultTagsAsync()
     {
-        return await _tagsSource.TagsTask.ConfigureAwait(false);
+        var tags = await _tagsSource.TagsTask.ConfigureAwait(false);
+        await _internalMicrosoftDiagnosticsTask.ConfigureAwait(false);
+        return tags;
     }
 
     /// <summary>
@@ -227,7 +233,35 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => CompleteInternalMicrosoftDiagnosticsAsync(cancellationToken);
+
+    internal Task CompleteInternalMicrosoftDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        var completionTask = Volatile.Read(ref _internalMicrosoftDiagnosticsCompletionTask);
+        if (completionTask is null)
+        {
+            var newCompletionTask = WaitForInternalMicrosoftDiagnosticsAsync();
+            completionTask = Interlocked.CompareExchange(ref _internalMicrosoftDiagnosticsCompletionTask, newCompletionTask, comparand: null) ?? newCompletionTask;
+        }
+
+        return cancellationToken.CanBeCanceled
+            ? completionTask.WaitAsync(cancellationToken)
+            : completionTask;
+    }
+
+    private async Task WaitForInternalMicrosoftDiagnosticsAsync()
+    {
+        try
+        {
+            await _internalMicrosoftDiagnosticsTask.WaitAsync(s_internalMicrosoftDiagnosticsCompletionTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            // Telemetry must never prevent the CLI from exiting. Detector probes are individually
+            // bounded, but this also protects shutdown from unexpected filesystem or provider stalls.
+            _logger.LogDebug(ex, "Timed out waiting for internal Microsoft diagnostics to complete.");
+        }
+    }
 
     /// <summary>
     /// Starts background tag calculation. Returns immediately; the tags become available
@@ -242,8 +276,11 @@ internal sealed class AspireCliTelemetry : IHostedService
 
         _isInitialized = true;
 
+        var internalMicrosoftResultSource = new TaskCompletionSource<InternalMicrosoftDetectionResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _tagsSource.StartCalculation(async () =>
         {
+            InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
+            CancellationTokenSource? internalMicrosoftTimeoutSource = null;
             try
             {
                 var tagsList = new List<KeyValuePair<string, object?>>();
@@ -255,44 +292,41 @@ internal sealed class AspireCliTelemetry : IHostedService
                 if (_telemetryConfiguration.ReportedTelemetryEnabled)
                 {
                     // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
-                    // telemetry is enabled. Use CancellationToken.None because background tag calculation should not be interrupted by app shutdown.
-                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+                    // telemetry is enabled. Ordinary commands are not interrupted by app shutdown. The
+                    // high-frequency agent hook has its own 10-second process deadline, so it uses a
+                    // shorter detector budget to leave time for activity export and process teardown.
+                    if (_telemetryConfiguration.InternalMicrosoftDetectionTimeout is { } timeout)
+                    {
+                        internalMicrosoftTimeoutSource = new(timeout);
+                    }
+                    internalMicrosoftTask = GetInternalMicrosoftResultAsync(internalMicrosoftTimeoutSource);
                 }
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
 
-                InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
                 if (internalMicrosoftTask is not null)
                 {
-                    try
-                    {
-                        internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug(ex, "Internal Microsoft detection failed.");
-                        }
-                    }
+                    internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
                 }
 
+                var isCIEnvironment = _ciEnvironmentDetector.IsCIEnvironment();
                 tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
                 tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-                if (internalMicrosoftResult is { IsInternalMicrosoft: true })
+                if (internalMicrosoftResult is not null)
                 {
                     tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Source))
+
+                    if (internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Source))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftResult.Source));
                     }
 
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Alias))
+                    if (!isCIEnvironment && internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Alias))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftResult.Alias));
                     }
 
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Domain))
+                    if (!isCIEnvironment && internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Domain))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftResult.Domain));
                     }
@@ -318,7 +352,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                     tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
                 }
 
-                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
+                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, isCIEnvironment ? "ci" : "local"));
 
                 tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
                 tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
@@ -332,7 +366,125 @@ internal sealed class AspireCliTelemetry : IHostedService
                 _logger.LogError(ex, "Error occurred initializing telemetry service.");
                 return Array.Empty<KeyValuePair<string, object?>>();
             }
+            finally
+            {
+                internalMicrosoftTimeoutSource?.Dispose();
+                internalMicrosoftResultSource.TrySetResult(internalMicrosoftResult);
+            }
         });
+
+        // Detector diagnostics are reported only after default tag calculation completes. Reported
+        // activities are enriched on stop, so emitting from inside the calculation would make the
+        // enrichment processor synchronously wait on the task that is currently producing the activity.
+        _internalMicrosoftDiagnosticsTask = EmitInternalMicrosoftDetectorDiagnosticsAsync(internalMicrosoftResultSource.Task);
+    }
+
+    private async Task<InternalMicrosoftDetectionResult> GetInternalMicrosoftResultAsync(CancellationTokenSource? timeoutSource)
+    {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var cancellationToken = timeoutSource?.Token ?? CancellationToken.None;
+
+        try
+        {
+            return await _internalMicrosoftDetector
+                .IsInternalMicrosoftMachineAsync(cancellationToken)
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutSource?.IsCancellationRequested == true)
+        {
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Internal Microsoft detection failed.");
+            }
+
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.Failed,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: Stopwatch.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
+        }
+    }
+
+    private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
+    {
+        if (!_telemetryConfiguration.ReportedTelemetryEnabled ||
+            !_telemetryConfiguration.EmitInternalMicrosoftDiagnostics)
+        {
+            return;
+        }
+
+        var result = await resultTask.ConfigureAwait(false);
+        await _tagsSource.TagsTask.ConfigureAwait(false);
+        if (result is null)
+        {
+            return;
+        }
+
+        using var activity = StartReportedActivity(TelemetryConstants.Activities.InternalMicrosoftDetector);
+        if (activity is null)
+        {
+            return;
+        }
+
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome);
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus);
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds);
+        if (!string.IsNullOrEmpty(result.Source))
+        {
+            activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
+        }
+
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias));
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain));
+
+        foreach (var probe in result.ProbeDiagnostics)
+        {
+            var tags = new ActivityTagsCollection
+            {
+                [TelemetryConstants.Tags.InternalMicrosoftSource] = probe.Source,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeOutcome] = probe.Outcome,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeDurationMs] = (long)probe.Duration.TotalMilliseconds,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasAlias] = probe.HasAlias,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasDomain] = probe.HasDomain
+            };
+
+            if (probe.Failure is { } failure)
+            {
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode] = failure.Code;
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage] = failure.Stage;
+                if (failure.ExceptionType is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType] = failure.ExceptionType;
+                }
+                if (failure.ProcessExitCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode] = failure.ProcessExitCode;
+                }
+                if (failure.HttpStatusCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode] = failure.HttpStatusCode;
+                }
+            }
+
+            activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.InternalMicrosoftProbe, tags: tags));
+        }
     }
 
     /// <summary>

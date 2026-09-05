@@ -4,17 +4,38 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
 public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void ProbeFailureMetadataValues_AreBoundedStaticIdentifiers()
+    {
+        foreach (var type in new[]
+        {
+            typeof(InternalMicrosoftProbeFailureCode),
+            typeof(InternalMicrosoftProbeFailureStage),
+            typeof(InternalMicrosoftProbeExceptionType)
+        })
+        {
+            foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            {
+                var value = Assert.IsType<string>(field.GetValue(null));
+                Assert.InRange(value.Length, 1, 64);
+                Assert.Matches("^[A-Za-z0-9._]+$", value);
+            }
+        }
+    }
+
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_UsesFreshCache()
     {
@@ -24,7 +45,9 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
+              "version": 6,
               "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
               "source": "cached source",
               "alias": "cached.alias",
               "domain": "CACHED",
@@ -51,7 +74,58 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("cached source", result.Source);
         Assert.Equal("cached.alias", result.Alias);
         Assert.Equal("CACHED", result.Domain);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Detected, result.Outcome);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
         Assert.False(probeRan);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_PropagatesCallerCancellationWithoutWritingCache()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("slow", async cancellationToken =>
+            {
+                probeStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return InternalMicrosoftProbeResult.NotDetected;
+            })]]);
+        using var cancellationSource = new CancellationTokenSource();
+
+        var detectionTask = detector.IsInternalMicrosoftMachineAsync(cancellationSource.Token);
+        await probeStarted.Task.DefaultTimeout();
+        await cancellationSource.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => detectionTask);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_UsesFreshNegativeCache()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 6,
+              "isInternalMicrosoft": false,
+              "isCIEnvironment": false,
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(cacheFilePath, now, []);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
     }
 
     [Fact]
@@ -80,9 +154,12 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("positive", result.Source);
         Assert.Equal("stale.alias", result.Alias);
         Assert.Equal("STALE", result.Domain);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
+        Assert.Contains("\"version\": 6", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"isCIEnvironment\": false", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"alias\": \"stale.alias\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"domain\": \"STALE\"", updatedCache, StringComparison.Ordinal);
@@ -125,7 +202,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_CancelsOtherProbesInStageAfterSuccessfulProbe()
+    public async Task IsInternalMicrosoftMachineAsync_StageTimeoutBoundsSlowProbeWhenFastProbeDetects()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var slowProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -143,7 +220,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                     new InternalMicrosoftProbe("slow", async cancellationToken =>
                     {
                         slowProbeStarted.SetResult();
-
                         try
                         {
                             await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
@@ -157,7 +233,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                         return InternalMicrosoftProbeResult.NotDetected;
                     })
                 ]
-            ]);
+            ],
+            probeStageTimeout: TimeSpan.FromSeconds(2));
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
@@ -166,47 +243,83 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("positive.alias", result.Alias);
         Assert.Equal("POSITIVE", result.Domain);
         await slowProbeCancelled.Task.DefaultTimeout();
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_ReturnsPositiveResultWhenCancelledProbeFaultsDuringDrain()
+    public async Task IsInternalMicrosoftMachineAsync_IgnoresPositiveResultThatCompletesDuringCancellationDrain()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var faultingProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stageCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("late positive", async cancellationToken =>
+            {
+                using var registration = cancellationToken.Register(stageCancelled.SetResult);
+                probeStarted.SetResult();
+                await releaseProbe.Task;
+                return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "late.alias", Domain: "LATE");
+            })]],
+            probeStageTimeout: TimeSpan.FromMilliseconds(50));
+
+        var detectionTask = detector.IsInternalMicrosoftMachineAsync();
+        await probeStarted.Task.DefaultTimeout();
+        await stageCancelled.Task.DefaultTimeout();
+        releaseProbe.SetResult();
+        var result = await detectionTask;
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "late positive" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IsInternalMicrosoftMachineAsync_SelectsDeterministicStrongestResultRegardlessOfCompletionOrder(bool strongCompletesFirst)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
             [
                 [
-                    new InternalMicrosoftProbe("positive", async _ =>
+                    new InternalMicrosoftProbe("weak", async _ =>
                     {
-                        await faultingProbeStarted.Task;
-                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "fault.alias", Domain: "FAULT");
+                        if (!strongCompletesFirst)
+                        {
+                            releaseFirst.SetResult();
+                        }
+                        else
+                        {
+                            await releaseFirst.Task;
+                        }
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: null, Domain: null);
                     }),
-                    new InternalMicrosoftProbe("faulting", async cancellationToken =>
+                    new InternalMicrosoftProbe("strong", async _ =>
                     {
-                        faultingProbeStarted.SetResult();
-
-                        try
+                        if (strongCompletesFirst)
                         {
-                            await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
+                            releaseFirst.SetResult();
                         }
-                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        else
                         {
-                            throw new NotSupportedException("Unexpected probe failure after cancellation.");
+                            await releaseFirst.Task;
                         }
-
-                        return InternalMicrosoftProbeResult.NotDetected;
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "strong.alias", Domain: "STRONG");
                     })
                 ]
             ]);
-
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
         Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("positive", result.Source);
-        Assert.Equal("fault.alias", result.Alias);
-        Assert.Equal("FAULT", result.Domain);
+        Assert.Equal("strong", result.Source);
+        Assert.Equal("strong.alias", result.Alias);
+        Assert.Equal("STRONG", result.Domain);
     }
 
     [Fact]
@@ -227,6 +340,246 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("positive", result.Source);
         Assert.Equal("later.alias", result.Alias);
         Assert.Equal("LATER", result.Domain);
+        var failure = Assert.Single(result.ProbeDiagnostics, probe => probe.Source == "faulting");
+        Assert.Equal(InternalMicrosoftProbeOutcome.Failed, failure.Outcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.Exception, failure.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.Probe, failure.Failure?.Stage);
+        Assert.Equal(InternalMicrosoftProbeExceptionType.Other, failure.Failure?.ExceptionType);
+        Assert.Null(failure.Failure?.ProcessExitCode);
+        Assert.Null(failure.Failure?.HttpStatusCode);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReturnsNotDetectedOutcomeWhenNoProbeDetects()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Miss, result.CacheStatus);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "negative" && probe.Outcome == InternalMicrosoftProbeOutcome.NotDetected);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReturnsFailedOutcomeAndDoesNotCacheWhenAllProbesFail()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("faulting", _ => throw new NotSupportedException("Unexpected probe failure."))]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "faulting" && probe.Outcome == InternalMicrosoftProbeOutcome.Failed);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReportsElapsedDurationForDetectorWideFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 6,
+              "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
+              "source": "cached source",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [],
+            timeProvider: new DelayedThrowingTimeProvider());
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.True(result.Duration >= TimeSpan.FromMilliseconds(20));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheNegativeWhenAnyProbeFails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[
+                new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected)),
+                new InternalMicrosoftProbe("failed", _ => Task.FromResult(InternalMicrosoftProbeResult.Failed(new(
+                    InternalMicrosoftProbeFailureCode.RequestFailed,
+                    InternalMicrosoftProbeFailureStage.Probe))))
+            ]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.False(File.Exists(cacheFilePath));
+        Assert.Contains(result.ProbeDiagnostics, diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.NotDetected);
+        Assert.Contains(result.ProbeDiagnostics, diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReturnsTimedOutOutcomeWhenProbeStageTimesOut()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("slow", async cancellationToken =>
+            {
+                await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
+                return InternalMicrosoftProbeResult.NotDetected;
+            })]],
+            probeStageTimeout: TimeSpan.FromMilliseconds(50));
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReportsStageTimeoutDurationWhenProbeIgnoresCancellation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var releaseProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probeStageTimeout = TimeSpan.FromMilliseconds(50);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("hung", async _ =>
+            {
+                await releaseProbe.Task;
+                return InternalMicrosoftProbeResult.NotDetected;
+            })]],
+            probeStageTimeout: probeStageTimeout);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+        releaseProbe.SetResult();
+
+        var diagnostic = Assert.Single(result.ProbeDiagnostics);
+        Assert.Equal("hung", diagnostic.Source);
+        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, diagnostic.Outcome);
+        Assert.Equal(probeStageTimeout, diagnostic.Duration);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_TreatsUnknownCacheVersionAsStale()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 99,
+              "isInternalMicrosoft": true,
+              "source": "future source",
+              "alias": "future.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var probeRan = false;
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("current source", _ =>
+            {
+                probeRan = true;
+                return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "current.alias", Domain: "CURRENT"));
+            })]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(probeRan);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Equal("current source", result.Source);
+        Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotReuseNegativeCacheAcrossCIAndLocalModes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var ciDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("CI negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
+            environmentVariables: new Dictionary<string, string?> { ["CI"] = "true" });
+
+        var ciResult = await ciDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, ciResult.Outcome);
+        var ciCache = await File.ReadAllTextAsync(cacheFilePath);
+        Assert.Contains("\"version\": 6", ciCache, StringComparison.Ordinal);
+        Assert.Contains("\"isCIEnvironment\": true", ciCache, StringComparison.Ordinal);
+
+        var localProbeRan = false;
+        var localDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("local positive", _ =>
+            {
+                localProbeRan = true;
+                return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "local.alias", Domain: null));
+            })]]);
+
+        var localResult = await localDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(localProbeRan);
+        Assert.True(localResult.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, localResult.CacheStatus);
+        Assert.Equal("local.alias", localResult.Alias);
+    }
+
+    [Theory]
+    [InlineData("Visual Studio Microsoft tenant")]
+    [InlineData("WSL Visual Studio Microsoft tenant")]
+    public async Task IsInternalMicrosoftMachineAsync_RejectsLegacyVisualStudioCacheEntry(string source)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, $$"""
+            {
+              "isInternalMicrosoft": true,
+              "source": "{{source}}",
+              "alias": "Cached.Alias",
+              "domain": "redmond.corp.microsoft.com",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(cacheFilePath, now, []);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
     }
 
     [Fact]
@@ -251,7 +604,66 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task CheckWindowsWorkplaceJoinAsync_UsesExecutionContextEnvironmentAndProcessFactory()
+    public async Task CheckWindowsUserDnsDomainAsync_RejectsNonAsciiAlias()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "tést.alias"
+            });
+
+        var result = await detector.CheckWindowsUserDnsDomainAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+    }
+
+    [Fact]
+    public async Task CheckWindowsWorkplaceJoinAsync_UsesTenantBoundAliasAndProcessFactory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd.EXE"), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (0, """
+                AzureAdJoined : YES
+                WorkplaceJoined : NO
+                TenantId : 72f988bf-86f1-41af-91ab-2d7cd011db47
+                User Email : Bound.Alias@microsoft.com
+                """)
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = workspace.Path,
+                ["PATHEXT"] = ".EXE",
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "unrelated.local"
+            });
+
+        var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("bound.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+        Assert.Equal("dsregcmd", processFactory.LastFileName);
+        var arguments = Assert.IsType<string[]>(processFactory.LastArguments);
+        Assert.Equal(["/status"], arguments);
+    }
+
+    [Fact]
+    public async Task CheckWindowsWorkplaceJoinAsync_DoesNotUseAmbientUserNameAsAlias()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
@@ -274,21 +686,18 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                 ["PATH"] = workspace.Path,
                 ["PATHEXT"] = ".EXE",
                 ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
-                ["USERNAME"] = "test.alias"
+                ["USERNAME"] = "unrelated.local"
             });
 
         var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
 
         Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("test.alias", result.Alias);
+        Assert.Null(result.Alias);
         Assert.Equal("REDMOND", result.Domain);
-        Assert.Equal("dsregcmd", processFactory.LastFileName);
-        var arguments = Assert.IsType<string[]>(processFactory.LastArguments);
-        Assert.Equal(["/status"], arguments);
     }
 
     [Fact]
-    public async Task CheckWindowsWorkplaceJoinAsync_ReturnsNotDetectedWhenProcessStartTimesOutInternally()
+    public async Task CheckWindowsWorkplaceJoinAsync_ReturnsSafeFailureWhenProcessStartTimesOutInternally()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
@@ -314,11 +723,103 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
 
         Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessStart, result.Failure?.Stage);
+        Assert.Null(result.Failure?.ExceptionType);
         Assert.Equal("dsregcmd", processFactory.LastFileName);
     }
 
     [Fact]
-    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseWhenUserRequestFails()
+    public async Task CheckWindowsWorkplaceJoinAsync_ReturnsOnlyNonSensitiveProcessExitCode()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd.EXE"), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (7, "sensitive-host-name sensitive-user-path")
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = workspace.Path,
+                ["PATHEXT"] = ".EXE"
+            });
+
+        var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessExit, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, result.Failure?.Stage);
+        Assert.Equal(7, result.Failure?.ProcessExitCode);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result.Failure), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("gh")]
+    [InlineData("gh.exe")]
+    public async Task CheckGhCliExecutableAsync_ReturnsSafeFailureWhenTokenCommandExitsNonZero(string executable)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, executable), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (7, "sensitive-token-or-path")
+        };
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["PATH"] = workspace.Path
+        });
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environment: environment);
+
+        var result = await detector.CheckGhCliExecutableAsync(executable, CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessExit, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, result.Failure?.Stage);
+        Assert.Equal(7, result.Failure?.ProcessExitCode);
+        Assert.Equal(executable, processFactory.LastFileName);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result.Failure), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("gh")]
+    [InlineData("gh.exe")]
+    public async Task CheckGhCliExecutableAsync_ReturnsNotDetectedWhenAuthenticationIsRequired(string executable)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, executable), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (4, "sensitive-token-or-path")
+        };
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["PATH"] = workspace.Path
+        });
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environment: environment);
+
+        var result = await detector.CheckGhCliExecutableAsync(executable, CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Failure);
+        Assert.Equal(executable, processFactory.LastFileName);
+    }
+
+    [Fact]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFailureWhenUserRequestIsUnauthorized()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
@@ -333,10 +834,84 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             probeStages: [],
             gitHubHttpMessageHandler: handler);
 
-        var result = await detector.CheckGitHubMembershipWithTokenAsync(CreateGitHubToken(1), CancellationToken.None);
+        var result = await detector.CheckGitHubMembershipWithTokenResultForTestingAsync(CreateGitHubToken(1), CancellationToken.None);
 
-        Assert.False(result);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.HttpStatus, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.GitHubUser, result.Failure?.Stage);
+        Assert.Equal(401, result.Failure?.HttpStatusCode);
         Assert.Equal(["/user"], handler.GetRequestPaths());
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(408)]
+    [InlineData(403)]
+    [InlineData(429)]
+    [InlineData(503)]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsSafeHttpFailureMetadata(int statusCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var handler = new TestGitHubHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage((HttpStatusCode)statusCode)));
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenResultForTestingAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.HttpStatus, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.GitHubUser, result.Failure?.Stage);
+        Assert.Equal(statusCode, result.Failure?.HttpStatusCode);
+        Assert.Null(result.Failure?.ExceptionType);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheUnauthorizedGitHubTokenResult()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var handler = new TestGitHubHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+        InternalMicrosoftDetector? detector = null;
+        detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("github", cancellationToken =>
+                detector!.CheckGitHubMembershipWithTokenResultForTestingAsync(CreateGitHubToken(1), cancellationToken))]],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Theory]
+    [InlineData("/user", InternalMicrosoftProbeFailureStage.GitHubUser)]
+    [InlineData("/user/memberships/orgs/microsoft", InternalMicrosoftProbeFailureStage.GitHubMembership)]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsShapeFailureForNonObjectResponse(string malformedPath, string expectedStage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                var path when path == malformedPath => JsonResponse(HttpStatusCode.OK, "[]"),
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenResultForTestingAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+        Assert.Equal(expectedStage, result.Failure?.Stage);
+        Assert.Null(result.Failure?.ExceptionType);
     }
 
     [Fact]
@@ -466,6 +1041,210 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
     }
 
+    [Theory]
+    [InlineData("true")]
+    [InlineData("2")]
+    public async Task CheckCopilotCliAsync_SkipsGitHubTokenCandidatesInCI(string ciValue)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["CI"] = ciValue,
+                ["COPILOT_GH_ACCOUNT_1"] = CreateGitHubToken(1)
+            },
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Empty(handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_PrefersPersonalizationAccount()
+    {
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("fallback.alias@microsoft.com"),
+            new VisualStudioAccountRecord("Current.Alias@microsoft.com", IsPersonalizationAccount: true));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_UsesNonPersonalizationAccountAsFallback()
+    {
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            CreateVisualStudioAccountStore(new VisualStudioAccountRecord("Fallback.Alias@microsoft.com")),
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("fallback.alias", result.Alias);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DetectVisualStudioMicrosoftTenantForTesting_OmitsAmbiguousIdentity(bool personalizationAccounts)
+    {
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("first.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts),
+            new VisualStudioAccountRecord("second.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_EmitsDuplicateIdentity()
+    {
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("same.alias@microsoft.com"),
+            new VisualStudioAccountRecord("same.alias@microsoft.com"));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("same.alias", result.Alias);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DetectVisualStudioMicrosoftTenantForTesting_OmitsIdentityForMalformedMicrosoftPeer(bool personalizationAccounts)
+    {
+        var store = CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+            new VisualStudioAccountRecord("valid.alias@microsoft.com", IsPersonalizationAccount: personalizationAccounts),
+            peerIsPersonalizationAccount: personalizationAccounts);
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_IgnoresMalformedFallbackWhenPersonalizationIdentityIsValid()
+    {
+        var store = CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+            new VisualStudioAccountRecord("valid.alias@microsoft.com", IsPersonalizationAccount: true),
+            peerIsPersonalizationAccount: false);
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("valid.alias", result.Alias);
+    }
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("identity-provider")]
+    [InlineData("home-tenant")]
+    [InlineData("token-tenant")]
+    [InlineData("token-issuer")]
+    [InlineData("preferred-username")]
+    [InlineData("preferred-username-substring")]
+    [InlineData("token-payload")]
+    public void DetectVisualStudioMicrosoftTenantForTesting_RejectsIncompleteOrMismatchedEvidence(string mismatch)
+    {
+        const string OtherTenantId = "11111111-1111-1111-1111-111111111111";
+        var account = mismatch switch
+        {
+            "stale" => new VisualStudioAccountRecord("user@microsoft.com", Stale: true),
+            "identity-provider" => new VisualStudioAccountRecord("user@microsoft.com", IdentityProvider: OtherTenantId),
+            "home-tenant" => new VisualStudioAccountRecord("user@microsoft.com", HomeTenant: OtherTenantId),
+            "token-tenant" => new VisualStudioAccountRecord("user@microsoft.com", TokenTenant: OtherTenantId),
+            "token-issuer" => new VisualStudioAccountRecord("user@microsoft.com", TokenIssuer: $"https://login.microsoftonline.com/{OtherTenantId}/v2.0"),
+            "preferred-username" => new VisualStudioAccountRecord("user@example.com"),
+            "preferred-username-substring" => new VisualStudioAccountRecord("display user@microsoft.com text"),
+            "token-payload" => new VisualStudioAccountRecord(
+                "user@microsoft.com",
+                IdTokenPayload: CreateJwt(MicrosoftTenantIdForTests, "user@microsoft.com")),
+            _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+        };
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            CreateVisualStudioAccountStore(account),
+            CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        if (mismatch is "preferred-username" or "preferred-username-substring")
+        {
+            Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+            Assert.Equal(InternalMicrosoftProbeFailureStage.IdTokenUsername, result.Failure?.Stage);
+        }
+        else if (mismatch == "token-payload")
+        {
+            Assert.Equal(InternalMicrosoftProbeFailureCode.JsonParse, result.Failure?.Code);
+            Assert.Equal(InternalMicrosoftProbeFailureStage.IdTokenPayload, result.Failure?.Stage);
+            Assert.Equal(InternalMicrosoftProbeExceptionType.Json, result.Failure?.ExceptionType);
+        }
+        else
+        {
+            Assert.Null(result.Failure);
+        }
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_DoesNotMatchUnrelatedTenantTextOrAlias()
+    {
+        var store = $$"""
+            [
+              {
+                "Stale": false,
+                "IsPersonalizationAccount": true,
+                "DisplayInfo": "wrong.alias@microsoft.com",
+                "Properties": {
+                  "UnrelatedTenant": "{{MicrosoftTenantIdForTests}}"
+                }
+              }
+            ]
+            """;
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(store, CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.AccountStoreRecordIdentityProvider, result.Failure?.Stage);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_ReturnsSafeJsonParseFailure()
+    {
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            """[{"Properties":{"preferred_username":"sensitive.user@microsoft.com"}}""",
+            CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonParse, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.AccountStore, result.Failure?.Stage);
+        Assert.Equal(InternalMicrosoftProbeExceptionType.Json, result.Failure?.ExceptionType);
+        Assert.DoesNotContain("sensitive", JsonSerializer.Serialize(result.Failure), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout()
     {
@@ -562,27 +1341,39 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     private static InternalMicrosoftDetector CreateDetector(
         string cacheFilePath,
         DateTimeOffset now,
-        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages,
+        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         TestProcessExecutionFactory? processFactory = null,
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
         TimeSpan? gitHubCandidateTimeout = null,
-        TimeSpan? gitHubHttpTimeout = null)
+        TimeSpan? gitHubHttpTimeout = null,
+        TimeSpan? probeStageTimeout = null,
+        TestEnvironment? environment = null,
+        DirectoryInfo? homeDirectory = null,
+        TimeProvider? timeProvider = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
-            new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory));
+            new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
+            homeDirectory: homeDirectory);
+        var effectiveEnvironment = environment ?? new TestEnvironment(environmentVariables);
+        var ciEnvironmentDetector = new CIEnvironmentDetector(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(effectiveEnvironment.Variables)
+                .Build());
 
         return new InternalMicrosoftDetector(
             executionContext,
-            new TestEnvironment(environmentVariables),
+            effectiveEnvironment,
             cacheFilePath,
-            new FixedTimeProvider(now),
+            timeProvider ?? new FixedTimeProvider(now),
             NullLogger<InternalMicrosoftDetector>.Instance,
             processFactory ?? new TestProcessExecutionFactory(),
+            ciEnvironmentDetector,
             probeStages,
             gitHubHttpMessageHandler,
             gitHubCandidateTimeout,
-            gitHubHttpTimeout);
+            gitHubHttpTimeout,
+            probeStageTimeout);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)
@@ -596,9 +1387,81 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     private static string CreateGitHubToken(int index)
         => $"gho_{index:D2}{new string('a', 24)}";
 
+    private const string MicrosoftTenantIdForTests = "72f988bf-86f1-41af-91ab-2d7cd011db47";
+
+    private static string CreateJwt(string tenantId, string userName)
+    {
+        var payload = JsonSerializer.Serialize(new { tid = tenantId, preferred_username = userName });
+        return $"eyJ0eXAiOiJKV1Q.{Base64UrlEncode(Encoding.UTF8.GetBytes(payload))}.signature";
+    }
+
+    private static string Base64UrlEncode(byte[] bytes)
+        => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string CreateVisualStudioAccountStore(params VisualStudioAccountRecord[] accounts)
+    {
+        return JsonSerializer.Serialize(accounts.Select(account => new
+        {
+            account.Stale,
+            account.IsPersonalizationAccount,
+            DisplayInfo = account.PreferredUsername,
+            Properties = new
+            {
+                IdentityProvider = account.IdentityProvider ?? MicrosoftTenantIdForTests,
+                HomeTenant = account.HomeTenant ?? MicrosoftTenantIdForTests,
+                IdTokenPayload = account.IdTokenPayload ?? JsonSerializer.Serialize(new
+                {
+                    tid = account.TokenTenant ?? MicrosoftTenantIdForTests,
+                    iss = account.TokenIssuer ?? $"https://login.microsoftonline.com/{MicrosoftTenantIdForTests}/v2.0",
+                    preferred_username = account.PreferredUsername
+                })
+            }
+        }));
+    }
+
+    private static string CreateVisualStudioAccountStoreWithMalformedMicrosoftPeer(
+        VisualStudioAccountRecord validAccount,
+        bool peerIsPersonalizationAccount)
+    {
+        using var validStore = JsonDocument.Parse(CreateVisualStudioAccountStore(validAccount));
+        var validRecord = validStore.RootElement[0].Clone();
+        return JsonSerializer.Serialize(new object[]
+        {
+            validRecord,
+            new
+            {
+                Stale = false,
+                IsPersonalizationAccount = peerIsPersonalizationAccount,
+                Properties = new
+                {
+                    IdentityProvider = MicrosoftTenantIdForTests
+                }
+            }
+        });
+    }
+
+    private sealed record VisualStudioAccountRecord(
+        string PreferredUsername,
+        bool IsPersonalizationAccount = false,
+        bool Stale = false,
+        string? IdentityProvider = null,
+        string? HomeTenant = null,
+        string? TokenTenant = null,
+        string? TokenIssuer = null,
+        string? IdTokenPayload = null);
+
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class DelayedThrowingTimeProvider : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            Thread.Sleep(20);
+            throw new InvalidOperationException("Simulated detector-wide failure.");
+        }
     }
 
     private sealed class StartCancellingProcessExecution(

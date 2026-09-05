@@ -811,7 +811,7 @@ public class Program
     internal static async Task DisplayFirstTimeUseNoticeIfNeededAsync(IServiceProvider serviceProvider, string[] args, CancellationToken cancellationToken = default)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var isInformationalCommand = ContainsRootOption(args, CommonOptionNames.InformationalOptionNames.Contains);
+        var isInformationalCommand = CommonOptionNames.IsInformationalInvocation(args);
         var isMachineReadableOutput = HasMachineReadableOutput(args);
         var noLogo = ContainsRootOption(args, a => a == CommonOptionNames.NoLogo)
             || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)
@@ -1072,9 +1072,15 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
+        TelemetryManager telemetryManager;
         try
         {
             app = await BuildApplicationAsync(args, startupContext);
+            // Create telemetry providers before hosted services start. AspireCliTelemetry starts
+            // background tag calculation as a hosted service and can complete a cache-hit detector
+            // immediately; resolving the manager first guarantees its listener is attached before
+            // the detector-health activity is created.
+            telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -1089,9 +1095,8 @@ public class Program
         // Ensure dispose of app when Main exits.
         using var _ = app;
 
-        // Immediately get telemetry and telemetry manager so they are created by DI and telemetry is configured.
+        // Immediately get telemetry so background tag calculation is available to command activities.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
-        var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
         var profilingTelemetry = app.Services.GetRequiredService<ProfilingTelemetry>();
         var profileCaptureState = app.Services.GetRequiredService<ProfileCaptureState>();
 
@@ -1221,22 +1226,6 @@ public class Program
                 mainActivity?.Stop();
             }
 
-            // The agent telemetry command runs fire-and-forget from an agent hook and the process
-            // exits immediately after. The short Release shutdown flush window is not enough to
-            // reliably export the single just-created span, so force a bounded reported-provider
-            // flush here before returning. This is a no-op when telemetry is opted out (no provider).
-            if (isAgentTelemetryInvocation)
-            {
-                try
-                {
-                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // A telemetry flush failure must never change the hook's exit code.
-                }
-            }
-
             // This state is only consulted when the parent started a capture session. A successful
             // extension handoff transfers export to the child, while the parent still disposes its session.
             if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
@@ -1270,8 +1259,30 @@ public class Program
                 await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
             }
 
-            // Shutting down telemetry manager to flush any remaining telemetry and will take time.
-            // Start shutdown of telemetry manager immediately and run concurrently with app shutdown.
+            // The detector-health activity is created asynchronously after default tags resolve. Ensure
+            // it has been handed to the provider before shutdown starts so short CLI invocations do not
+            // lose the activity while the provider is flushing.
+            await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
+
+            // The agent telemetry command runs fire-and-forget from an agent hook and the process
+            // exits immediately after. The short Release shutdown flush window is not enough to
+            // reliably export its just-created activity, so flush after telemetry tag calculation
+            // has completed and the agent activity has been submitted to the reported provider.
+            if (isAgentTelemetryInvocation)
+            {
+                try
+                {
+                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A telemetry flush failure must never change the hook's exit code.
+                }
+            }
+
+            // Shutting down telemetry manager to flush any remaining telemetry will take time.
+            // Run it concurrently with application shutdown after all asynchronously-created telemetry
+            // has been submitted to the providers.
             var shutdownTelemetryTask = telemetryManager.ShutdownAsync();
 
             await app.StopAsync().ConfigureAwait(false);
@@ -1340,7 +1351,6 @@ public class Program
         {
             builder.Services.AddSingleton<IExtensionRpcTarget, ExtensionRpcTarget>();
             builder.Services.AddSingleton<IExtensionBackchannel, ExtensionBackchannel>();
-
             var extensionPromptEnabled = builder.Configuration[KnownConfigNames.ExtensionPromptEnabled] is "true";
             builder.Services.AddSingleton<IInteractionService>(provider =>
             {
