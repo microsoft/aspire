@@ -10,6 +10,7 @@ export type Capability =
     | 'devkit' // Support for .NET DevKit extension (old, used for determining whether to build .NET projects in extension)
     | 'ms-dotnettools.csdevkit' // Older AppHost versions used this extension identifier instead of devkit
     | 'project' // Support for running C# projects
+    | 'project-with-external-build.v1' // Support for externally built C# projects
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
@@ -124,6 +125,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
 
     if (isCsharpInstalled()) {
         capabilities.push("project");
+        capabilities.push("project-with-external-build.v1");
         capabilities.push(csharpExtensionId);
 
         // Azure Functions debugging requires both C# (coreclr attach to the worker

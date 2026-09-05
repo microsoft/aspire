@@ -2,9 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using Aspire.Hosting.Dcp;
-using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -190,17 +189,10 @@ public static class DebugSupportExtensions
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)
     {
-        try
-        {
-            if (configuration[KnownConfigNames.DebugSessionInfo] is { } debugSessionInfoJson && JsonSerializer.Deserialize<RunSessionInfo>(debugSessionInfoJson) is { } debugSessionInfo)
-            {
-                return debugSessionInfo.SupportedLaunchConfigurations;
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        return null;
+        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+            configuration[KnownConfigNames.DebugSessionInfo],
+            out var supportedLaunchConfigurations)
+                ? supportedLaunchConfigurations
+                : null;
     }
 }

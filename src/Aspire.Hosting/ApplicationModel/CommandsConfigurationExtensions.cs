@@ -126,17 +126,7 @@ internal static class CommandsConfigurationExtensions
 
         if (resource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())
         {
-            // A file-based app is compiled as part of `dotnet run --file`, so every start already
-            // rebuilds it and an explicit Rebuild command would be redundant and confusing.
-            // AddRebuilderResource skips file-based apps for the same reason.
-            //
-            // A marked resource carrying no metadata at all keeps the command: that is only reachable
-            // by constructing a .NET resource type directly, and the command reports the missing
-            // rebuilder when invoked.
-            if (!resource.TryGetProjectMetadata(out var projectMetadata) || !projectMetadata.IsFileBasedApp)
-            {
-                AddRebuildCommand(resource);
-            }
+            AddRebuildCommand(resource);
         }
 
         // Treat "Unknown" as stopped so the command to start the resource is available when "Unknown".

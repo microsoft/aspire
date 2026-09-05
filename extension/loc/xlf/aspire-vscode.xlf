@@ -391,6 +391,9 @@
     <trans-unit id="aspire-vscode.strings.denoInspectorPortAllocationFailed">
       <source xml:lang="en">Failed to allocate a Deno inspector port.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.failedToCleanUpMsBuildTemporaryDirectory">
+      <source xml:lang="en">Failed to clean up temporary MSBuild directory &apos;{0}&apos;: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToConfigureLaunchJson">
       <source xml:lang="en">Failed to configure launch.json: {0}.</source>
     </trans-unit>
@@ -420,6 +423,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliOutputParseFailed">
       <source xml:lang="en">Failed to parse {0} output: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.failedToGetProjectRunProperties">
+      <source xml:lang="en">Failed to resolve the run command for project {0}: {1}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToShowPromptEmpty">
       <source xml:lang="en">Failed to show prompt, text was empty.</source>
@@ -697,8 +703,8 @@
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.dotNetRunFallbackDisablesDebugger">
-      <source xml:lang="en">Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
+    <trans-unit id="aspire-vscode.strings.resolvedRunCommandDisablesDebugger">
+      <source xml:lang="en">Project output {0} is not directly runnable; launching the resolved run command for {1} without debugger attach. Breakpoints will not be hit for this resource.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPublishActionLabel">
       <source xml:lang="en">Publish AppHost</source>
@@ -967,6 +973,9 @@
     <trans-unit id="aspire-vscode.strings.dotNetRunFileBasedExecutableProfileFallback">
       <source xml:lang="en">The default launch profile &apos;{0}&apos; is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.prebuiltProjectOutputMissing">
+      <source xml:lang="en">The expected prebuilt output {1} for project {0} does not exist. Aspire will not rebuild the project because building is suppressed.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debuggerInstalledRestartAppHost">
       <source xml:lang="en">The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.</source>
     </trans-unit>
@@ -1152,6 +1161,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustBuildProducedMultipleExecutables">
       <source xml:lang="en">cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.invalidMsBuildRunCommandResponse">
+      <source xml:lang="en">dotnet msbuild returned an invalid run-command response.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>

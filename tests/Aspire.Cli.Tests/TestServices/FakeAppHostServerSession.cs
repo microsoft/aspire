@@ -85,6 +85,23 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 
     public Dictionary<string, string>? CapturedEnvironmentVariables { get; private set; }
 
+    public static FakeAppHostServerSessionFactory CreateForScaffolding(
+        IReadOnlyDictionary<string, string>? scaffoldFiles = null)
+    {
+        var rpcClient = new FakeAppHostRpcClient
+        {
+            ScaffoldAppHostAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(scaffoldFiles is null
+                    ? new Dictionary<string, string>()
+                    : new Dictionary<string, string>(scaffoldFiles))
+        };
+
+        return new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(rpcClient)
+        };
+    }
+
     public IAppHostServerSession Create(
         IAppHostServerProject appHostServerProject,
         Dictionary<string, string>? environmentVariables,
@@ -107,6 +124,7 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 internal class FakeAppHostRpcClient : IAppHostRpcClient
 {
     public RuntimeSpec? RuntimeSpec { get; init; }
+    public Func<string, string, string?, CancellationToken, Task<Dictionary<string, string>>>? ScaffoldAppHostAsyncCallback { get; init; }
 
     public virtual Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
         => Task.FromResult(RuntimeSpec ?? new RuntimeSpec
@@ -119,7 +137,9 @@ internal class FakeAppHostRpcClient : IAppHostRpcClient
         });
 
     public virtual Task<Dictionary<string, string>> ScaffoldAppHostAsync(string languageId, string targetPath, string? projectName, CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+        => ScaffoldAppHostAsyncCallback is not null
+            ? ScaffoldAppHostAsyncCallback(languageId, targetPath, projectName, cancellationToken)
+            : throw new NotSupportedException();
 
     public virtual Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
         => Task.FromResult(new Dictionary<string, string>());

@@ -33,6 +33,57 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ResolveToFilesystemPath_UsesOnDiskCasing_WhenVolumeIsCaseInsensitive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var directory = workspace.WorkspaceRoot.CreateSubdirectory("MixedCase");
+        var file = new FileInfo(Path.Combine(directory.FullName, "App.csproj"));
+        File.WriteAllText(file.FullName, "<Project />");
+        var caseVariantPath = Path.Combine(workspace.WorkspaceRoot.FullName, "mixedcase", "app.CSPROJ");
+        if (!File.Exists(caseVariantPath))
+        {
+            Assert.Skip("The test volume is case-sensitive.");
+        }
+
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(file.FullName),
+            PathNormalizer.ResolveToFilesystemPath(caseVariantPath));
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_ReturnsExactPath_WhenVolumeIsCaseSensitive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var directory = workspace.WorkspaceRoot.CreateSubdirectory("MixedCase");
+        var file = new FileInfo(Path.Combine(directory.FullName, "App.csproj"));
+        File.WriteAllText(file.FullName, "<Project />");
+        var caseVariantPath = Path.Combine(workspace.WorkspaceRoot.FullName, "mixedcase", "app.CSPROJ");
+        if (File.Exists(caseVariantPath))
+        {
+            Assert.Skip("The test volume is case-insensitive.");
+        }
+
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(file.FullName),
+            PathNormalizer.ResolveToFilesystemPath(file.FullName));
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_CanonicalizesExistingPrefix_WhenPathIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing", "App.csproj");
+        var expectedPath = Path.Combine(
+            PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName),
+            "Missing",
+            "App.csproj");
+
+        Assert.Equal(expectedPath, PathNormalizer.ResolveToFilesystemPath(missingPath));
+    }
+
+    [Fact]
     public void ResolveSymlinks_ResolvesFinalFileSymlink()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

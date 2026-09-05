@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
@@ -504,9 +505,15 @@ public static class ProjectResourceBuilderExtensions
                 $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
         }
 
+        launchDefaults.BuildConfiguration =
+            builder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+
+        var launchConfigurationType = ProjectLaunchConfigurationFactory.GetLaunchConfigurationType(
+            builder.Resource,
+            projectMetadata);
         builder.WithDebugSupport(
             mode => ProjectLaunchConfigurationFactory.Create(builder.Resource, mode),
-            KnownLaunchConfigurationTypes.Project);
+            launchConfigurationType);
 
         // File-based apps (a bare .cs file) are a .NET 10 SDK feature. The check lives here rather than in
         // each Add* method so every .NET-launched resource gets it, and it is deferred to start time because
@@ -595,7 +602,7 @@ public static class ProjectResourceBuilderExtensions
         // In run mode, create a hidden rebuilder resource for this project.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            AddRebuilderResource(builder, projectResource);
+            AddRebuilderResource(builder, projectResource, launchDefaults);
         }
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -1052,22 +1059,30 @@ public static class ProjectResourceBuilderExtensions
     /// <summary>
     /// Creates a hidden rebuilder resource that runs 'dotnet build' on demand via the rebuild command.
     /// </summary>
-    private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
+    private static void AddRebuilderResource<TProjectResource>(
+        IResourceBuilder<TProjectResource> builder,
+        TProjectResource projectResource,
+        ProjectLaunchDefaultsAnnotation launchDefaults)
         where TProjectResource : class, IResource
     {
         var projectMetadata = projectResource.GetProjectMetadata();
-        if (projectMetadata.IsFileBasedApp)
-        {
-            return;
-        }
-
         var rebuilderName = $"{projectResource.Name}-rebuilder";
         var rebuilder = new ProjectRebuilderResource(rebuilderName, projectResource, projectMetadata.ProjectPath);
         rebuilder.Annotations.Add(NameValidationPolicyAnnotation.None);
         var rebuilderBuilder = builder.ApplicationBuilder.AddResource(rebuilder);
 
         rebuilderBuilder
-            .WithArgs("build", projectMetadata.ProjectPath)
+            .WithArgs(context =>
+            {
+                context.Args.Add("build");
+                context.Args.Add(projectMetadata.ProjectPath);
+
+                if (!string.IsNullOrEmpty(launchDefaults.BuildConfiguration))
+                {
+                    context.Args.Add("--configuration");
+                    context.Args.Add(launchDefaults.BuildConfiguration);
+                }
+            })
             .WithAnnotation(new ExplicitStartupAnnotation())
             .WithAnnotation(new ExcludeLifecycleCommandsAnnotation())
             .ExcludeFromManifest()

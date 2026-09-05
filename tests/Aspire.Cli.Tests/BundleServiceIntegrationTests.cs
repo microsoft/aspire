@@ -324,6 +324,39 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryCleanupStaleVersions_LeavesVersionWhenLeaseDirectoryCannotBeEnumerated()
+    {
+        if (OperatingSystem.IsWindows() || Environment.IsPrivilegedProcess)
+        {
+            Assert.Skip("Requires a non-privileged process on a platform with Unix file modes.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var versionsDir = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
+        var staleVersionDir = Path.Combine(versionsDir, "stale-version");
+        var leasesDir = Path.Combine(staleVersionDir, BundleVersionLease.LeasesDirectoryName);
+        Directory.CreateDirectory(leasesDir);
+        File.WriteAllText(Path.Combine(leasesDir, "unknown.lease"), "{}");
+        var originalMode = File.GetUnixFileMode(leasesDir);
+
+        try
+        {
+            File.SetUnixFileMode(leasesDir, UnixFileMode.None);
+
+            BundleService.TryCleanupStaleVersions(versionsDir, activeVersionId: "active-version");
+
+            Assert.True(Directory.Exists(staleVersionDir));
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                leasesDir,
+                originalMode | UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
     public void BundleVersionLease_AllowsConcurrentReadersForSameVersion()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
