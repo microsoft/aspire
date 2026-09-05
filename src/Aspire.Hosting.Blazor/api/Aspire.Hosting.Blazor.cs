@@ -21,8 +21,19 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> AddDotnetProjectBlazorGateway(this IDistributedApplicationBuilder builder, string name) { throw null; }
+
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithBlazorClientApp(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> gateway, ApplicationModel.IResourceBuilder<BlazorWasmAppResource> wasmApp, string apiPrefix = "_api", string otlpPrefix = "_otlp", bool proxyTelemetry = true) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport("withDotnetProjectBlazorClientApp", MethodName = "withBlazorClientApp")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBlazorClientApp(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> gateway, ApplicationModel.IResourceBuilder<BlazorWasmAppResource> wasmApp, string apiPrefix = "_api", string otlpPrefix = "_otlp", bool proxyTelemetry = true) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<BlazorWasmAppResource> WithBlazorDebuggerBrowser(this ApplicationModel.IResourceBuilder<BlazorWasmAppResource> wasmApp, string browser = "msedge") { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -33,6 +44,9 @@ namespace Aspire.Hosting
 
         [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> ProxyBlazorTelemetry(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> host, string otlpPrefix = "_otlp") { throw null; }
+
+        [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithBlazorDebuggerBrowser(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> host, string browser = "msedge") { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -40,6 +54,8 @@ namespace Aspire.Hosting
     public sealed partial class BlazorWasmAppResource : ApplicationModel.Resource, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResource, ApplicationModel.IResourceWithParent
     {
         public BlazorWasmAppResource(string name, string projectPath) : base(default!) { }
+
+        public string DebuggerBrowser { get { throw null; } }
 
         public ApplicationModel.IResource Parent { get { throw null; } }
 
