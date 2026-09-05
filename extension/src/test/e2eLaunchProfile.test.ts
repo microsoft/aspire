@@ -451,7 +451,35 @@ suite('E2E launch profile', () => {
 
         assert.ok(assertions.includes('const deadline = createDeadline(timeoutMs);'));
         assert.ok(assertions.includes('getRemainingTimeout(deadline'));
-        assert.ok(assertions.includes('throwIfControlFailed(openWorkspaceRevision);'));
+    });
+
+    test('recovers a stuck workspace-folder check by reloading the window instead of asking the extension to reopen the folder', () => {
+        // Regression coverage for a CI hang: ensureWorkspaceFolderOpen's original fallback asked
+        // the extension to reopen the (already open) folder via the 'openWorkspaceFolder' control
+        // command, which drove vscode.commands.executeCommand('vscode.openFolder', ...). That was
+        // observed to hang the extension host indefinitely when the initial quick check raced
+        // activation on a loaded CI machine - the RPC server tore down for the reload and the
+        // extension never reactivated, eventually failing with "Timed out after 120000ms waiting
+        // for workspace folder diagnostics." Recovery must instead reload the window directly, the
+        // same proven-reliable mechanism reloadWorkspaceForE2E already uses elsewhere in the suite.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const ensureOpenStart = assertions.indexOf('async function ensureWorkspaceFolderOpen(');
+        const ensureOpenEnd = assertions.indexOf('\nasync function tryWaitForWorkspaceFolder(', ensureOpenStart);
+        const ensureOpenBody = assertions.slice(ensureOpenStart, ensureOpenEnd);
+
+        const quickCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 30000)');
+        const clearControlFileIndex = ensureOpenBody.indexOf('fs.rmSync(controlFilePath, { force: true });');
+        const reloadWindowIndex = ensureOpenBody.indexOf('await reloadWindow();');
+        const recoveryCheckIndex = ensureOpenBody.indexOf('tryWaitForWorkspaceFolder(expectedPath, deadline, 120000)');
+
+        assert.ok(ensureOpenStart >= 0);
+        assert.ok(ensureOpenEnd > ensureOpenStart);
+        assert.ok(quickCheckIndex >= 0);
+        assert.ok(clearControlFileIndex > quickCheckIndex);
+        assert.ok(reloadWindowIndex > clearControlFileIndex);
+        assert.ok(recoveryCheckIndex > reloadWindowIndex);
+        assert.strictEqual(ensureOpenBody.includes("command: { name: 'openWorkspaceFolder'"), false);
     });
 
     test('bounds the ExTester process below the workflow timeout so diagnostics still run', () => {

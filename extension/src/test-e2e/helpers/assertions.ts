@@ -4,6 +4,7 @@ import * as https from 'https';
 import * as path from 'path';
 import type { AspireAppHostState as AppHostState, AspireDebugSessionState, AspireExtensionE2EControlStatus as ExtensionE2EControlStatus, AspireExtensionE2EStateFile as ExtensionE2EStateFile, AspireExtensionE2ETaskProcessEvent as TaskProcessEvent, AspireExtensionStateSnapshot as ExtensionStateSnapshot, AspireResourceState as ResourceState } from '../../types/extensionApi';
 import { getControlFilePath, getPrimaryAppHostProjectPath, getRunId, getStateFilePath, getWorkspaceRoot } from './paths';
+import { reloadWindow } from './vscode';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
 type BrowserDebugSession = ExtensionE2EStateFile['browserDebugSessions'][number];
@@ -342,34 +343,46 @@ async function ensureWorkspaceFolderOpen(deadline: Deadline): Promise<void> {
     }
 
     const expectedPath = getWorkspaceRoot();
-    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 5000)) {
+    // The E2E control-file bridge activates concurrently with RPC/DCP server setup, so give it
+    // generous time to come up on its own before assuming anything is actually wrong: on a loaded
+    // CI machine, activation alone can take well over the 5s this quick check previously allowed,
+    // which made the fallback below trigger far more often than the "genuinely stuck" case it
+    // exists for.
+    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 30000)) {
         workspaceFolderOpened = true;
         return;
     }
 
-    const openWorkspaceStatus = await applyE2eControl(
-        { command: { name: 'openWorkspaceFolder', folderPath: expectedPath } },
-        'started',
-        getRemainingTimeout(deadline, 'openWorkspaceFolder control to start', 10000));
-    const openWorkspaceRevision = openWorkspaceStatus.revision;
-    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 120000, openWorkspaceRevision)) {
+    // The expected folder is always already open - ExTester launches VS Code with it as the
+    // startup folder, and getE2eWorkspaceFolderPath strictly enforces that 'openWorkspaceFolder'
+    // can only ever target that same folder - so a genuine folder switch is never required here.
+    // This used to ask the extension to reopen the folder via the 'openWorkspaceFolder' control
+    // command (vscode.commands.executeCommand('vscode.openFolder', ...)), but that was observed in
+    // CI to hang the extension host indefinitely whenever the quick check above raced activation:
+    // the RPC server would tear down for the reload and the extension would never reactivate,
+    // eventually failing with "Timed out after 120000ms waiting for workspace folder diagnostics."
+    // Reload the window directly instead - the same proven-reliable mechanism reloadWorkspaceForE2E
+    // already uses elsewhere in this suite - and simply wait for the (already-correct) folder to be
+    // reported open again once the fresh extension host comes up.
+    const controlFilePath = getControlFilePath();
+    if (controlFilePath) {
+        fs.rmSync(controlFilePath, { force: true });
+    }
+
+    await reloadWindow();
+    if (await tryWaitForWorkspaceFolder(expectedPath, deadline, 120000)) {
         workspaceFolderOpened = true;
         return;
     }
 
-    throwIfControlFailed(openWorkspaceRevision);
     const folders = await getWorkspaceFolders(getRemainingTimeout(deadline, 'workspace folder diagnostics', 10000))
         .catch(error => `failed to query workspace folders: ${error instanceof Error ? error.message : String(error)}`);
     throw new Error(`Timed out after ${deadline.timeoutMs}ms waiting for VS Code to open E2E workspace '${expectedPath}'. Last workspace folders: ${JSON.stringify(folders)}`);
 }
 
-async function tryWaitForWorkspaceFolder(expectedPath: string, deadline: Deadline, timeoutMs: number, openWorkspaceRevision?: number): Promise<boolean> {
+async function tryWaitForWorkspaceFolder(expectedPath: string, deadline: Deadline, timeoutMs: number): Promise<boolean> {
     const endsAt = Date.now() + getRemainingTimeout(deadline, `VS Code workspace folder '${expectedPath}'`, timeoutMs);
     while (Date.now() < endsAt) {
-        if (openWorkspaceRevision !== undefined) {
-            throwIfControlFailed(openWorkspaceRevision);
-        }
-
         const queryTimeoutMs = Math.min(10000, Math.max(1, endsAt - Date.now()), getRemainingTimeout(deadline, 'workspace folder query'));
         const folders = await getWorkspaceFolders(queryTimeoutMs).catch(() => []);
         if (folders.some(folder => folder.fileName && isSamePath(folder.fileName, expectedPath))) {
@@ -385,13 +398,6 @@ async function tryWaitForWorkspaceFolder(expectedPath: string, deadline: Deadlin
 async function getWorkspaceFolders(timeoutMs: number): Promise<Array<{ fileName?: string }>> {
     const status = await applyE2eControl({ command: { name: 'getWorkspaceFolders' } }, 'applied', timeoutMs);
     return Array.isArray(status.result) ? status.result as Array<{ fileName?: string }> : [];
-}
-
-function throwIfControlFailed(revision: number): void {
-    const control = readStateFile().control;
-    if (control?.revision === revision && control.status === 'error') {
-        throw new Error(`Failed to apply E2E control revision ${revision}: ${control.errorMessage ?? '<unknown>'}`);
-    }
 }
 
 export async function applyE2eControl(payload: Record<string, unknown>, waitFor: 'started' | 'applied' = 'applied', timeoutMs = 10000): Promise<ExtensionE2EControlStatus> {
