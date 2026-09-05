@@ -789,10 +789,11 @@ public class GuestAppHostProjectTests : IDisposable
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
 
+        var appHostServerProject = new FakeFailingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
         var factory = new TestAppHostServerProjectFactory
         {
-            CreateAsyncCallback = (appPath, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+            CreateAsyncCallback = (_, _) =>
+                Task.FromResult<IAppHostServerProject>(appHostServerProject)
         };
 
         var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
@@ -803,10 +804,13 @@ public class GuestAppHostProjectTests : IDisposable
                 AppHostFile = new FileInfo(appHostPath),
                 PackageId = "Aspire.Hosting.Redis",
                 PackageVersion = "2.0.0",
+                Source = "https://configured.example/v3/index.json",
+                IsSourceExplicit = true,
             },
             CancellationToken.None);
 
         Assert.False(result);
+        Assert.Equal("https://configured.example/v3/index.json", appHostServerProject.LastPackageSourceOverride);
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
@@ -814,6 +818,149 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded.Packages);
         Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
         Assert.False(reloaded.Packages.ContainsKey("Aspire.Hosting.Redis"));
+    }
+
+    [Theory]
+    [InlineData(true, true, true, "https://configured.example/v3/index.json")]
+    [InlineData(false, true, true, null)]
+    [InlineData(false, false, true, "https://configured.example/v3/index.json")]
+    [InlineData(false, true, false, "https://configured.example/v3/index.json")]
+    public async Task AddPackageAsync_ForwardsOnlyRequiredSourceOverrides(
+        bool isSourceExplicit,
+        bool sourceIsEnabled,
+        bool sourceIsMapped,
+        string? expectedSourceOverride)
+    {
+        const string source = "https://configured.example/v3/index.json";
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var nugetConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(nugetConfigPath, $$"""
+            <configuration>
+              <packageSources>
+                <add key="configured" value="{{source}}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="configured">
+                  <package pattern="{{(sourceIsMapped ? "Aspire*" : "Other*")}}" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetNuGetSourcesAsyncCallback = (_, _, _) =>
+                (0, sourceIsEnabled ? [source] : []),
+            GetNuGetConfigPathsAsyncCallback = (_, _, _) =>
+                (0, [nugetConfigPath])
+        };
+        var appHostServerProject = new FakeFailingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) =>
+                Task.FromResult<IAppHostServerProject>(appHostServerProject)
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: factory,
+            runner: runner);
+
+        var result = await project.AddPackageAsync(
+            new AddPackageContext
+            {
+                AppHostFile = new FileInfo(appHostPath),
+                PackageId = "Aspire.Hosting.Redis",
+                PackageVersion = "2.0.0",
+                Source = source,
+                IsSourceExplicit = isSourceExplicit,
+            },
+            CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(expectedSourceOverride, appHostServerProject.LastPackageSourceOverride);
+    }
+
+    [Fact]
+    public async Task AddPackageAsync_WhenSourceDiscoveryFails_RetainsConfiguredSourceOverride()
+    {
+        const string source = "https://configured.example/v3/index.json";
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetNuGetSourcesAsyncCallback = (_, _, _) =>
+                throw new InvalidOperationException("dotnet is unavailable")
+        };
+        var appHostServerProject = new FakeFailingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) =>
+                Task.FromResult<IAppHostServerProject>(appHostServerProject)
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: factory,
+            runner: runner);
+
+        var result = await project.AddPackageAsync(
+            new AddPackageContext
+            {
+                AppHostFile = new FileInfo(appHostPath),
+                PackageId = "Aspire.Hosting.Redis",
+                PackageVersion = "2.0.0",
+                Source = source,
+            },
+            CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(source, appHostServerProject.LastPackageSourceOverride);
+    }
+
+    [Fact]
+    public async Task AddPackageAsync_WhenSourceDiscoveryIsCanceled_PropagatesCancellation()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetNuGetSourcesAsyncCallback = (_, _, cancellationToken) =>
+                throw new OperationCanceledException(cancellationToken)
+        };
+        var project = CreateGuestAppHostProject(runner: runner);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => project.AddPackageAsync(
+                new AddPackageContext
+                {
+                    AppHostFile = new FileInfo(appHostPath),
+                    PackageId = "Aspire.Hosting.Redis",
+                    PackageVersion = "2.0.0",
+                    Source = "https://configured.example/v3/index.json",
+                },
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -1528,7 +1675,8 @@ public class GuestAppHostProjectTests : IDisposable
         string languageId = "typescript/nodejs",
         IEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        TestDotNetCliRunner? runner = null)
     {
         var effectiveConfiguration = configuration ?? _configuration;
 
@@ -1561,7 +1709,7 @@ public class GuestAppHostProjectTests : IDisposable
             backchannel: backchannel ?? new TestAppHostBackchannel(),
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
-            runner: new TestDotNetCliRunner(),
+            runner: runner ?? new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),

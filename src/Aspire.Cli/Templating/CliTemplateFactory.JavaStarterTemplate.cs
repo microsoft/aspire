@@ -88,7 +88,7 @@ internal sealed partial class CliTemplateFactory
                         _interactionService.DisplayError("Automatic 'aspire restore' failed for the new Java starter project. Run 'aspire restore' in the project directory for more details.");
                         return new TemplateResult((int)CliExitCodes.FailedToBuildArtifacts, outputPath);
                     }
-                    await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
+                    await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.PersistenceSource, inputs.Channel, outputPath, cancellationToken);
 
                     return new TemplateResult((int)CliExitCodes.Success, outputPath);
                 }), emoji: KnownEmojis.Rocket);

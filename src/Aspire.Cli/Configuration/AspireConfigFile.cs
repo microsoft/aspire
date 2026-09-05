@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
@@ -53,6 +54,7 @@ namespace Aspire.Cli.Configuration;
 internal sealed class AspireConfigFile
 {
     public const string FileName = "aspire.config.json";
+    public const string NuGetSourceKey = "nugetSource";
 
     /// <summary>
     /// The JSON Schema URL for this configuration file.
@@ -93,6 +95,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("channel")]
     [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.")]
     public string? Channel { get; set; }
+
+    /// <summary>
+    /// The default NuGet source for package and template operations.
+    /// </summary>
+    [JsonPropertyName(NuGetSourceKey)]
+    [Description("The default NuGet source for package and template operations. Explicit --source arguments override this value.")]
+    public string? NuGetSource { get; set; }
 
     /// <summary>
     /// Feature flags.
@@ -193,13 +202,25 @@ internal sealed class AspireConfigFile
             // of .aspire/). Re-base the path so it resolves correctly from the new location.
             // Paths are always stored with '/' separators regardless of platform, but we normalize
             // to the OS separator for Path operations and back to '/' for storage.
+            var legacySettingsDir = Path.Combine(directory, AspireJsonConfiguration.SettingsFolder);
             if (config.AppHost?.Path is { Length: > 0 } migratedPath && !Path.IsPathRooted(migratedPath))
             {
-                var legacySettingsDir = Path.Combine(directory, AspireJsonConfiguration.SettingsFolder);
                 var absolutePath = PathNormalizer.NormalizePathForCurrentPlatform(
                     Path.Combine(legacySettingsDir, migratedPath));
                 config.AppHost.Path = PathNormalizer.NormalizePathForStorage(
                     Path.GetRelativePath(directory, absolutePath));
+            }
+
+            if (config.NuGetSource is { Length: > 0 } migratedSource)
+            {
+                var resolvedSource = PackageSourceOverrideMappings.ResolveForWorkingDirectory(
+                    migratedSource,
+                    new DirectoryInfo(legacySettingsDir));
+                if (!string.Equals(migratedSource, resolvedSource, StringComparison.Ordinal))
+                {
+                    config.NuGetSource = PathNormalizer.NormalizePathForStorage(
+                        Path.GetRelativePath(directory, resolvedSource));
+                }
             }
 
             // Persist the migrated config (legacy files are kept for older CLI versions)
@@ -414,6 +435,7 @@ internal sealed class AspireConfigFile
             }
 
             config.Channel = settings.Channel;
+            config.NuGetSource = settings.NuGetSource;
             config.Features = settings.Features;
             config.Packages = settings.Packages;
         }

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Projects;
@@ -79,6 +81,66 @@ internal sealed class AddPackageContext
     /// Gets or sets the optional NuGet source.
     /// </summary>
     public string? Source { get; init; }
+
+    /// <summary>
+    /// Gets or sets whether the source was explicitly provided for package installation.
+    /// </summary>
+    public bool IsSourceExplicit { get; init; }
+
+    /// <summary>
+    /// Gets the source override that must be forced for this package operation.
+    /// </summary>
+    public async Task<string?> GetPackageSourceOverrideAsync(
+        IDotNetCliRunner runner,
+        IEnvironment environment,
+        bool configWillBeRelocated,
+        CancellationToken cancellationToken)
+    {
+        var source = Source;
+        if (IsSourceExplicit || source is null)
+        {
+            return source;
+        }
+
+        try
+        {
+            var workingDirectory = AppHostFile.Directory!;
+            var (exitCode, enabledSources) = await runner.GetNuGetSourcesAsync(
+                workingDirectory,
+                new ProcessInvocationOptions(),
+                cancellationToken);
+            if (exitCode != 0 ||
+                !enabledSources.Any(enabledSource => PackageSourceOverrideMappings.SourcesMatch(enabledSource, source, environment)))
+            {
+                return source;
+            }
+
+            var (configExitCode, configPaths) = await runner.GetNuGetConfigPathsAsync(
+                workingDirectory,
+                new ProcessInvocationOptions(),
+                cancellationToken);
+            if (configExitCode != 0 ||
+                !PackageSourceOverrideMappings.IsSourceMappedForPackage(
+                    source,
+                    PackageId,
+                    configPaths,
+                    workingDirectory,
+                    configWillBeRelocated,
+                    environment))
+            {
+                return source;
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Source discovery only decides whether an override can be omitted. Retaining the
+            // override is the safe fallback, especially for guest AppHosts that do not require
+            // the .NET SDK used by these discovery commands.
+            return source;
+        }
+    }
 
     /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.

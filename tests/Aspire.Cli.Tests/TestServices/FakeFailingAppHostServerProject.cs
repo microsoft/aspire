@@ -19,6 +19,8 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
 
     public bool Disposed { get; private set; }
 
+    public string? LastPackageSourceOverride { get; private set; }
+
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
     public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -26,8 +28,11 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
+        CancellationToken cancellationToken = default)
+    {
+        LastPackageSourceOverride = packageSourceOverride;
+        return Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
+    }
 
     public Task<AppHostServerRunResult> RunAsync(
         int hostPid,
