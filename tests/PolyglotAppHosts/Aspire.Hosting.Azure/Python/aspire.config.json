@@ -7,6 +7,9 @@
     "experimentalPolyglot:python": true
   },
   "packages": {
-    "Aspire.Hosting.Azure": ""
+    "Aspire.Hosting.Azure": "",
+    "Aspire.Hosting.Azure.Provisioning": "",
+    "Aspire.Hosting.Azure.Provisioning.CognitiveServices": "",
+    "Aspire.Hosting.Azure.Provisioning.Storage": ""
   }
 }

@@ -17,8 +17,20 @@
 
 Setting `AspireUseCliBundle=true` enables CLI delegation. `AspireCliInvocationMode=Path` uses `aspire` from `PATH`, falling back to the `Aspire.Cli` version paired with the AppHost SDK through DNX when a compatible command is unavailable. `AspireCliInvocationMode=Dnx` invokes the unversioned `Aspire.Cli` package through DNX so an in-scope tool manifest is honored, or the latest package is used when no manifest applies. `AspireCliInvocationMode=DnxPinned` invokes the exact `Aspire.Cli` version paired with `Aspire.AppHost.Sdk`.
 
+## Experimental API Warnings
+
+| Diagnostic ID | Severity | Description | Location |
+| ------------- | -------- | ----------- | -------- |
+| `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
+| `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
+
 ## Analyzer Warnings
 
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
+| `ASPIREAZUREPROVISIONING002` | Warning | A public property on a generated Azure Provisioning proxy cannot be exported because its shape or type is unsupported. | [src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs](../src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs) |
+| `ASPIREAZUREPROVISIONING003` | Warning | A public method on a generated Azure Provisioning proxy cannot be exported because its signature is unsupported. | [src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs](../src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs) |
+| `ASPIREAZUREPROVISIONING004` | Warning | Two Azure Provisioning methods map to the same exported signature, so the duplicate method cannot be exported. | [src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs](../src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs) |
+| `ASPIREAZUREPROVISIONING005` | Warning | A selected Azure Provisioning proxy root is not a supported non-generic, non-static class or struct. | [src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs](../src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs) |
+| `ASPIREAZUREPROVISIONING006` | Warning | A selected Azure Provisioning proxy root is a mutable struct, which cannot be safely projected as a proxy. | [src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs](../src/Aspire.Hosting.Azure.Provisioning.Generators/AspireProvisioningProxyGenerator.cs) |
 | `ASPIRE006` | Error | Application model items must have valid names | [src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs](../src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs) |

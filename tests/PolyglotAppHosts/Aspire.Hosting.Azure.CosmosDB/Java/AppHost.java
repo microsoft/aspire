@@ -4,6 +4,13 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addAzureCosmosDB
         var cosmos = builder.addAzureCosmosDB("cosmos");
+        cosmos.configureInfrastructure((infrastructure) -> {
+            var account = infrastructure.getCosmosDBAccount();
+            account.tags().set("provisioning-proxy", "java");
+            var bypassResourceId = infrastructure.createCosmosDBResourceIdentifier(
+                "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass");
+            account.networkAclBypassResourceIds().add(bypassResourceId);
+        });
         // 2) withDefaultAzureSku
         cosmos.withDefaultAzureSku();
         // 3) addCosmosDatabase

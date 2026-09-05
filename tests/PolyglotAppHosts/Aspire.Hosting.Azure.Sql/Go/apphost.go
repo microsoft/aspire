@@ -31,6 +31,10 @@ func main() {
 	}
 
 	sqlServer := builder.AddAzureSqlServer("sql")
+	_ = sqlServer.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		server := infrastructure.GetSqlServer()
+		server.Tags().Set("provisioning-proxy", "go")
+	})
 	if sqlServer.Err() != nil {
 		log.Fatalf(aspire.FormatError(sqlServer.Err()))
 	}
