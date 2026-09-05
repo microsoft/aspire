@@ -81,6 +81,45 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_ErrorLogs_DoesNotClearErrorBadgeCount()
+    {
+        // Arrange
+        SetupStructureLogsServices();
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Test error", severity: SeverityNumber.Error)
+                        }
+                    }
+                }
+            }
+        });
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+
+        // Act
+        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+
+        // Assert
+        cut.WaitForAssertion(() => Assert.Contains("Test error", cut.Markup, StringComparison.Ordinal));
+        var errorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
+        Assert.True(errorCounts.TryGetValue(new ResourceKey("TestApp", "1"), out var errorCount));
+        Assert.Equal(1, errorCount);
+    }
+
+    [Fact]
     public void Render_TraceIdAndSpanId_FilterAdded()
     {
         // Arrange
