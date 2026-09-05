@@ -29,9 +29,6 @@ Then, in the AppHost, add an Azure sandbox group. When it is the only compute en
 
 builder.AddAzureSandboxGroup("sandboxes");
 var api = builder.AddProject<Projects.ApiService>("api");
-
-builder.AddProject<Projects.WebFrontend>("frontend")
-    .WithReference(api);
 ```
 
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:

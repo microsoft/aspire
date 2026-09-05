@@ -619,10 +619,11 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
     private static string VerifySandboxUrlSummaryCommand(string urlFile, string deployOutputFile, string resourceName)
     {
-        // Summary item names are ANSI-colored, so strip formatting before matching the rendered "name: URL" text.
+        // Spectre renders summary labels with CSI colors and URLs with OSC 8 hyperlinks. Strip both
+        // control sequences while preserving the visible "name: URL" text used by the assertion.
         return
             $"URL=$(cat {BashQuote(urlFile)}) && " +
-            $"NORMALIZED=$(sed $'s/\\033\\\\[[0-9;]*[mK]//g' {BashQuote(deployOutputFile)} | tr -d '\\r' | tr '\\n' ' ' | sed -E 's/[[:space:]]+/ /g') && " +
+            $"NORMALIZED=$(perl -pe 's/\\e\\][^\\e]*\\e\\\\\\\\//g; s/\\e\\[[0-9;]*[mK]//g' {BashQuote(deployOutputFile)} | tr -d '\\r' | tr '\\n' ' ' | sed -E 's/[[:space:]]+/ /g') && " +
             "case \"$NORMALIZED\" in *\"Pipeline succeeded\"*) ;; *) echo \"Successful deployment summary was not reported\"; exit 1;; esac && " +
             "SUMMARY=$(printf '%s' \"$NORMALIZED\" | sed 's/^.*Pipeline succeeded//') && " +
             $"case \"$SUMMARY\" in *\" {resourceName}: $URL\"*) ;; *) echo \"Summary item '{resourceName}: $URL' was not reported\"; exit 1;; esac && " +
