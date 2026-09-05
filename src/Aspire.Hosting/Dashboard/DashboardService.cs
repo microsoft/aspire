@@ -719,18 +719,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
     }
 
-    public override Task<CreateDockTerminalResponse> CreateDockTerminal(
-        CreateDockTerminalRequest request,
-        ServerCallContext context)
-    {
-        var terminal = terminalService.CreateDockTerminal(string.IsNullOrWhiteSpace(request.Title) ? null : request.Title);
-
-        return Task.FromResult(new CreateDockTerminalResponse
-        {
-            Terminal = new TerminalDescriptor { TerminalId = terminal.Id, Title = terminal.Title }
-        });
-    }
-
     public override async Task<CloseTerminalResponse> CloseTerminal(
         CloseTerminalRequest request,
         ServerCallContext context)

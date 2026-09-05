@@ -22,5 +22,5 @@ namespace Aspire.Hosting.Utils;
 internal static class TestTerminalService
 {
     public static TerminalService Create()
-        => new(NullLogger<TerminalService>.Instance, new PlaceholderDockTerminalFactory());
+        => new(NullLogger<TerminalService>.Instance);
 }

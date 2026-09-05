@@ -50,6 +50,15 @@
     color: #58a6ff;
 }
 
+/* The + selects the panel rather than performing an action, so it needs the same pressed affordance a tab gets.
+   ::deep because FluentButton renders the element the class lands on, and ::part(control) because the web
+   component paints an opaque background on its internal control element, which would otherwise hide anything
+   set on the host. */
+::deep .terminal-dock-new.active::part(control) {
+    background-color: #0d1117;
+    border-radius: 4px 4px 0 0;
+}
+
 .terminal-dock-tab-title {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -76,13 +85,45 @@
     visibility: hidden;
 }
 
-.terminal-dock-empty {
+/* Stacked over the panes rather than replacing them, so a terminal underneath keeps its xterm buffer and socket.
+   Opaque for the same reason: the panes are only hidden with visibility, so anything translucent would show them. */
+.terminal-dock-panel {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
+    background-color: #0d1117;
+    overflow: auto;
+}
+
+.terminal-dock-panel-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 420px;
+    padding: 24px;
+    text-align: center;
     color: #8b949e;
+}
+
+.terminal-dock-panel-heading {
+    margin: 0;
+    color: #c9d1d9;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.terminal-dock-panel-body,
+.terminal-dock-panel-hint {
+    margin: 0;
     font-size: 12px;
+    line-height: 1.5;
+}
+
+.terminal-dock-panel-hint {
+    color: #6e7681;
 }
 
 .terminal-dock-resize-handle {

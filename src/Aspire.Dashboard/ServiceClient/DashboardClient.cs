@@ -1166,21 +1166,6 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
-    public async Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken)
-    {
-        EnsureInitialized();
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
-        var request = new CreateDockTerminalRequest();
-        if (!string.IsNullOrWhiteSpace(title))
-        {
-            request.Title = title;
-        }
-
-        var response = await _client!.CreateDockTerminalAsync(request, headers: _headers, cancellationToken: cts.Token).ConfigureAwait(false);
-        return response.Terminal;
-    }
-
     public async Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         EnsureInitialized();

@@ -11,7 +11,7 @@
         <div class="terminal-dock-tabstrip">
             @foreach (var terminal in _terminals)
             {
-                <div class="terminal-dock-tab @(terminal.TerminalId == _activeTerminalId ? "active" : string.Empty)"
+                <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
                      @key="terminal.TerminalId"
                      @onclick="@(() => Activate(terminal.TerminalId))">
                     <span class="terminal-dock-tab-title">@terminal.Title</span>
@@ -25,10 +25,11 @@
                 </div>
             }
             <FluentButton Appearance="Appearance.Stealth"
-                          Class="terminal-dock-new"
+                          Class="@(IsPanelVisible ? "terminal-dock-new active" : "terminal-dock-new")"
                           Title="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
                           aria-label="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
-                          OnClick="@CreateTerminalAsync">
+                          aria-pressed="@(IsPanelVisible ? "true" : "false")"
+                          OnClick="@ShowPanel">
                 <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
             </FluentButton>
             <div class="terminal-dock-filler"></div>
@@ -40,7 +41,7 @@
                           Class="terminal-dock-detach"
                           Title="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
                           aria-label="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
-                          Disabled="@(_activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                          Disabled="@(IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
                           OnClick="@DetachActiveAsync">
                 <FluentIcon Value="@(new Icons.Regular.Size16.WindowNew())" Color="Color.Neutral" />
             </FluentButton>
@@ -57,7 +58,7 @@
             {
                 @* Inactive panes use visibility rather than display so they keep real dimensions — xterm measures
                    its grid from the element box, and a display:none pane would refit to zero columns. *@
-                <div class="terminal-dock-pane @(terminal.TerminalId == _activeTerminalId ? "active" : "inactive")"
+                <div class="terminal-dock-pane @(IsPaneActive(terminal.TerminalId) ? "active" : "inactive")"
                      @key="terminal.TerminalId">
                     @if (_detachedTerminalIds.Contains(terminal.TerminalId))
                     {
@@ -87,9 +88,18 @@
                     }
                 </div>
             }
-            @if (_terminals.Count == 0)
+            @* Rendered last so it stacks over the panes. The panes stay mounted underneath, which is what lets a
+               terminal keep its xterm buffer and its socket while the panel is on screen. *@
+            @if (IsPanelVisible)
             {
-                <div class="terminal-dock-empty">@Loc[nameof(Resources.Layout.TerminalDockEmpty)]</div>
+                <div class="terminal-dock-panel">
+                    <div class="terminal-dock-panel-card">
+                        <FluentIcon Value="@(new Icons.Regular.Size24.Window())" Color="Color.Neutral" />
+                        <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.Layout.TerminalDockPanelHeading)]</h3>
+                        <p class="terminal-dock-panel-body">@Loc[nameof(Resources.Layout.TerminalDockPanelBody)]</p>
+                        <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.Layout.TerminalDockPanelHint)]</p>
+                    </div>
+                </div>
             }
         </div>
     </div>

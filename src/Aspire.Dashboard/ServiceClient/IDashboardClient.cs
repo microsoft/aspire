@@ -85,11 +85,6 @@ public interface IDashboardClient : IResourceRepository, IAsyncDisposable
     IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Asks the AppHost to create a new dock terminal.
-    /// </summary>
-    Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken);
-
-    /// <summary>
     /// Asks the AppHost to close a terminal, terminating its workload.
     /// </summary>
     Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken);

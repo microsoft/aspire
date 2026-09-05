@@ -546,15 +546,6 @@ message WatchTerminalsUpdate {
     }
 }
 
-message CreateDockTerminalRequest {
-    // Optional title for the new terminal. The AppHost picks a default when empty.
-    string title = 1;
-}
-
-message CreateDockTerminalResponse {
-    TerminalDescriptor terminal = 1;
-}
-
 message CloseTerminalRequest {
     string terminal_id = 1;
 }
@@ -573,6 +564,5 @@ service DashboardService {
     rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
     rpc AttachTerminal(stream TerminalClientFrame) returns (stream TerminalServerFrame);
     rpc WatchTerminals(WatchTerminalsRequest) returns (stream WatchTerminalsUpdate);
-    rpc CreateDockTerminal(CreateDockTerminalRequest) returns (CreateDockTerminalResponse);
     rpc CloseTerminal(CloseTerminalRequest) returns (CloseTerminalResponse);
 }

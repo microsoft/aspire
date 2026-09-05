@@ -696,7 +696,6 @@ public class ResourceOutgoingPeerResolverTests
         public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public ResourceViewModel? GetResource(string resourceName) => null;
         public IReadOnlyList<ResourceViewModel> GetResources() => [];

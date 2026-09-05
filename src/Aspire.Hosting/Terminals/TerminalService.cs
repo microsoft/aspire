@@ -38,25 +38,13 @@ public sealed class TerminalService : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, Hex1bAspireTerminal> _terminals = new(StringComparer.Ordinal);
     private readonly ILogger<TerminalService> _logger;
-    private readonly IDockTerminalFactory _dockTerminalFactory;
     private readonly object _syncLock = new();
     private ImmutableHashSet<Channel<TerminalChange>> _outgoingChannels = [];
     private int _disposed;
-    private int _dockTerminalCount;
 
-    internal TerminalService(ILogger<TerminalService> logger, IDockTerminalFactory dockTerminalFactory)
+    internal TerminalService(ILogger<TerminalService> logger)
     {
         _logger = logger;
-        _dockTerminalFactory = dockTerminalFactory;
-    }
-
-    /// <summary>
-    /// Creates a terminal for the dashboard's terminal dock using the configured dock terminal factory.
-    /// </summary>
-    internal IAspireTerminal CreateDockTerminal(string? title = null)
-    {
-        var definition = _dockTerminalFactory.Create(title, Interlocked.Increment(ref _dockTerminalCount));
-        return CreateTerminal(definition.Title, TerminalSurface.Dock, definition.Builder);
     }
 
     /// <summary>

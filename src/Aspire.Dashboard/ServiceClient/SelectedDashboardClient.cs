@@ -79,12 +79,6 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) =>
         IsReadOnly ? EmptyTerminalsAsync() : currentClient.SubscribeTerminalsAsync(cancellationToken);
 
-    public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken)
-    {
-        EnsureWritable();
-        return currentClient.CreateDockTerminalAsync(title, cancellationToken);
-    }
-
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         EnsureWritable();

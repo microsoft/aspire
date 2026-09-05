@@ -54,7 +54,6 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
     public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
-    public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {

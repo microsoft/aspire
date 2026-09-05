@@ -103,7 +103,7 @@ public class TerminalServiceTests
     public void SubscribeDockTerminals_SnapshotExcludesInteractionTerminals()
     {
         var service = TestTerminalService.Create();
-        var dock = service.CreateDockTerminal("Dock");
+        var dock = CreateDockTerminal(service, "Dock");
         CreateInteractionTerminal(service, "Dialog");
 
         using var subscription = service.SubscribeDockTerminals();
@@ -121,7 +121,7 @@ public class TerminalServiceTests
 
         Assert.Empty(subscription.InitialState);
 
-        var dock = service.CreateDockTerminal("Dock");
+        var dock = CreateDockTerminal(service, "Dock");
 
         await using var changes = subscription.Subscription.GetAsyncEnumerator(CancellationToken.None);
         Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
@@ -137,7 +137,7 @@ public class TerminalServiceTests
         using var subscription = service.SubscribeDockTerminals();
 
         CreateInteractionTerminal(service, "Dialog");
-        var dock = service.CreateDockTerminal("Dock");
+        var dock = CreateDockTerminal(service, "Dock");
 
         // The interaction terminal was created first, so if it were published at all it would arrive first.
         await using var changes = subscription.Subscription.GetAsyncEnumerator(CancellationToken.None);
@@ -176,7 +176,7 @@ public class TerminalServiceTests
 
         for (var i = 0; i < 5; i++)
         {
-            service.CreateDockTerminal($"Dock {i}");
+            CreateDockTerminal(service, $"Dock {i}");
         }
 
         // Nothing was written to the released channel, so the fan-out no longer holds those changes anywhere.
@@ -187,7 +187,7 @@ public class TerminalServiceTests
         using var live = service.SubscribeDockTerminals();
         Assert.Equal(5, live.InitialState.Length);
 
-        var afterwards = service.CreateDockTerminal("Later");
+        var afterwards = CreateDockTerminal(service, "Later");
 
         await using var changes = live.Subscription.GetAsyncEnumerator(CancellationToken.None);
         Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
@@ -220,6 +220,14 @@ public class TerminalServiceTests
             Title = title,
             Command = new TerminalCommand("bash"),
             Surface = TerminalSurface.Interaction
+        });
+
+    private static IAspireTerminal CreateDockTerminal(TerminalService service, string title)
+        => service.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = title,
+            Command = new TerminalCommand("bash"),
+            Surface = TerminalSurface.Dock
         });
 
     /// <summary>

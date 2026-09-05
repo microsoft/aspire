@@ -96,11 +96,6 @@ public class TestDashboardClient : IDashboardClient
         yield break;
     }
 
-    public Task<TerminalDescriptor> CreateDockTerminalAsync(string? title, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
-
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         return Task.CompletedTask;

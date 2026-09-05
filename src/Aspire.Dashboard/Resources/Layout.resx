@@ -174,9 +174,6 @@
   <data name="TerminalDockCloseTab" xml:space="preserve">
     <value>Close terminal</value>
   </data>
-  <data name="TerminalDockEmpty" xml:space="preserve">
-    <value>No terminals are open.</value>
-  </data>
   <data name="TerminalDockDetach" xml:space="preserve">
     <value>Open terminal in a new window</value>
   </data>
@@ -194,6 +191,15 @@
   </data>
   <data name="TerminalDockNewTerminal" xml:space="preserve">
     <value>New terminal</value>
+  </data>
+  <data name="TerminalDockPanelBody" xml:space="preserve">
+    <value>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</value>
+  </data>
+  <data name="TerminalDockPanelHeading" xml:space="preserve">
+    <value>No terminal selected</value>
+  </data>
+  <data name="TerminalDockPanelHint" xml:space="preserve">
+    <value>Press Ctrl+` to hide this panel.</value>
   </data>
   <data name="TerminalDockReturnToDock" xml:space="preserve">
     <value>Return to panel</value>

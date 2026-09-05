@@ -32,9 +32,19 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private bool _hasBeenOpened;
     private bool _isVisible;
     private string? _activeTerminalId;
+
+    /// <summary>
+    /// Whether the user asked for the panel with the <c>+</c> button while terminals exist.
+    /// </summary>
+    /// <remarks>
+    /// Sticky on purpose. A terminal arriving on the watch stream selects itself when nothing is selected, so
+    /// without this flag any AppHost activity would yank the panel away from under the user. Only an explicit
+    /// tab click, or the AppHost revealing a terminal through <c>IAspireTerminal.Show()</c>, dismisses it.
+    /// </remarks>
+    private bool _panelRequested;
+
     private int _heightPx = DefaultHeightPx;
     private Task? _watchTask;
-    private readonly TaskCompletionSource _firstUpdateReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalDock>? _selfRef;
     private ElementReference _dockElement;
@@ -94,41 +104,25 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// <c>Ctrl+`</c> reaches the page depends on the browser, the OS window manager, and any extensions the user has
     /// installed, so the dock needs an affordance that cannot be intercepted.
     /// </remarks>
-    public async Task ToggleAsync()
+    public Task ToggleAsync()
     {
         if (_isVisible)
         {
             Hide();
-            return;
+        }
+        else
+        {
+            Show();
         }
 
-        try
-        {
-            await ShowAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
-        {
-            // The dock is already on screen; it will populate if and when the watch stream recovers.
-            Logger.LogDebug(ex, "Timed out waiting for the initial terminal list.");
-        }
+        return Task.CompletedTask;
     }
 
-    private async Task ShowAsync()
+    private void Show()
     {
         _hasBeenOpened = true;
         _isVisible = true;
         StateHasChanged();
-
-        // Wait for the first update before deciding whether the dock is empty. Terminals live in the AppHost, so a
-        // dock opened for the first time in a second browser (or after a reload) already has tabs, and creating one
-        // off a not-yet-populated list would spawn a redundant terminal.
-        await _firstUpdateReceived.Task.WaitAsync(TimeSpan.FromSeconds(5), _cts.Token).ConfigureAwait(true);
-
-        // First open with nothing running gets the built-in terminal, so the dock is never an empty shell.
-        if (_terminals.Count == 0)
-        {
-            await CreateTerminalAsync().ConfigureAwait(true);
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -163,8 +157,21 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private void Activate(string terminalId)
     {
         _activeTerminalId = terminalId;
+        _panelRequested = false;
         StateHasChanged();
     }
+
+    /// <summary>
+    /// Whether the panel is covering the terminal panes, either because the user asked for it or because there is
+    /// no terminal to show.
+    /// </summary>
+    private bool IsPanelVisible => _panelRequested || _terminals.Count == 0;
+
+    /// <summary>
+    /// Whether a terminal is the one currently on screen. False for every terminal while the panel is up, which is
+    /// what keeps the tab strip from showing a selected tab whose pane is hidden.
+    /// </summary>
+    private bool IsPaneActive(string terminalId) => !IsPanelVisible && terminalId == _activeTerminalId;
 
     private TerminalWindowLauncher WindowLauncher
         => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
@@ -252,22 +259,18 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         return Task.CompletedTask;
     }
 
-    private async Task CreateTerminalAsync()
+    /// <summary>
+    /// Shows the panel that stands in for a terminal when there is nothing to show, or nothing selected.
+    /// </summary>
+    /// <remarks>
+    /// The <c>+</c> button deliberately does not create anything. Terminals are owned by the AppHost process, not
+    /// by the browser, so there is no meaningful workload the dashboard could pick on the user's behalf; the panel
+    /// is where launch actions will go once there is something to launch.
+    /// </remarks>
+    private void ShowPanel()
     {
-        try
-        {
-            var descriptor = await DashboardClient.CreateDockTerminalAsync(title: null, _cts.Token).ConfigureAwait(true);
-
-            // Select eagerly rather than waiting for the watch stream so the new tab is focused immediately even if
-            // the notification is still in flight. Apply/Activate are both idempotent by terminal id.
-            Apply(TerminalChangeType.Added, descriptor);
-            _activeTerminalId = descriptor.TerminalId;
-            StateHasChanged();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Logger.LogWarning(ex, "Failed to create a dock terminal.");
-        }
+        _panelRequested = true;
+        StateHasChanged();
     }
 
     private async Task CloseTerminalAsync(string terminalId)
@@ -304,7 +307,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     }
                 }
 
-                _firstUpdateReceived.TrySetResult();
                 await InvokeAsync(StateHasChanged).ConfigureAwait(false);
             }
         }
@@ -315,11 +317,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Terminal dock watch stream ended unexpectedly.");
-        }
-        finally
-        {
-            // Unblocks a concurrent ShowAsync so a broken stream degrades to an empty dock rather than a hang.
-            _firstUpdateReceived.TrySetResult();
         }
     }
 
@@ -365,6 +362,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     _terminals.Add(descriptor);
                 }
                 _activeTerminalId = descriptor.TerminalId;
+                // The AppHost is asking for this terminal specifically, which outranks a panel the user opened.
+                _panelRequested = false;
                 _hasBeenOpened = true;
                 _isVisible = true;
                 break;
