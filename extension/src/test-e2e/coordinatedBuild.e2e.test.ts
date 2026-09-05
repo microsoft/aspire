@@ -70,7 +70,7 @@ suite('Aspire coordinated build E2E', function () {
         }
     });
 
-    test('honors custom run properties without rebuilding the project', async () => {
+    test('honors custom run properties without requiring project output or rebuilding', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
 
@@ -95,12 +95,8 @@ suite('Aspire coordinated build E2E', function () {
                   </Target>
                 </Project>
             `);
-            writeFileWithRetry(programPath, 'System.Console.WriteLine("coordinated");\n');
-            execFileSync('dotnet', ['build', projectPath, '--nologo'], {
-                cwd: projectDirectory,
-                stdio: 'pipe',
-            });
-
+            // ComputeRunArguments can select an unrelated launcher without producing TargetPath. Invalid
+            // source also makes the test fail if the extension attempts to replace the coordinated build.
             writeFileWithRetry(programPath, 'this does not compile\n');
             const launchConfig: ProjectLaunchConfiguration = {
                 type: 'project-with-external-build.v1',
@@ -124,6 +120,9 @@ suite('Aspire coordinated build E2E', function () {
             assert.strictEqual(debugConfiguration.program, 'custom-launcher');
             assert.strictEqual(debugConfiguration.cwd, path.join(projectDirectory, 'relative-run-directory'));
             assert.strictEqual(debugConfiguration.noDebug, true);
+            assert.strictEqual(
+                fs.existsSync(path.join(projectDirectory, 'bin', 'Debug', 'net10.0', 'CoordinatedCustomRunProject.dll')),
+                false);
         } finally {
             fs.rmSync(projectDirectory, { recursive: true, force: true });
         }

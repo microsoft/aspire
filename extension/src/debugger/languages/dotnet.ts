@@ -1318,19 +1318,28 @@ export function createProjectDebuggerExtension(
                 const projectLaunchProperties = runProperties ??
                     await dotNetService.getDotNetProjectLaunchProperties(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 const outputPath = projectLaunchProperties.targetPath;
-                const debugProgram = getProjectDebugProgram(projectLaunchProperties);
-                if (debugProgram !== outputPath) {
-                    extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
+                // A custom ComputeRunArguments target can launch an unrelated executable without producing
+                // TargetPath. Only validate project artifacts for the SDK launch forms that consume them.
+                const runCommandUsesProjectOutput = !runProperties ||
+                    canDebugResolvedProjectRunCommand(outputPath, runProperties);
+                let debugProgram = outputPath;
+                let missingOutputPath: string | undefined;
+                if (runCommandUsesProjectOutput) {
+                    debugProgram = getProjectDebugProgram(projectLaunchProperties);
+                    if (debugProgram !== outputPath) {
+                        extensionLogOutputChannel.info(`Using generated apphost executable for unpackaged WinUI project: ${debugProgram}`);
+                    }
+                    const outputExists = await doesFileExist(outputPath);
+                    const debugProgramExists = debugProgram === outputPath
+                        ? outputExists
+                        : await doesFileExist(debugProgram);
+                    missingOutputPath = !outputExists
+                        ? outputPath
+                        : !debugProgramExists
+                            ? debugProgram
+                            : undefined;
                 }
-                const outputExists = await doesFileExist(outputPath);
-                const debugProgramExists = debugProgram === outputPath
-                    ? outputExists
-                    : await doesFileExist(debugProgram);
-                const missingOutputPath = !outputExists
-                    ? outputPath
-                    : !debugProgramExists
-                        ? debugProgram
-                        : undefined;
+
                 if (missingOutputPath && suppressBuild) {
                     throw new Error(prebuiltProjectOutputMissing(projectPath, missingOutputPath));
                 }
@@ -1339,7 +1348,8 @@ export function createProjectDebuggerExtension(
                     await dotNetService.buildDotNetProject(projectPath, buildConfiguration, buildEnvironment, buildWorkingDirectory);
                 }
 
-                const frameworklessOutput = await isFrameworklessProjectOutput(outputPath);
+                const frameworklessOutput = runCommandUsesProjectOutput &&
+                    await isFrameworklessProjectOutput(outputPath);
                 if (!runProperties && frameworklessOutput) {
                     runProperties = await dotNetService.getDotNetProjectRunProperties(
                         projectPath,

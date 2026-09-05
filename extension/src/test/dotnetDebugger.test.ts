@@ -3523,12 +3523,12 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.noDebug, true);
     });
 
-    test('externally built project honors a custom run command and disables debugger attach', async () => {
+    test('externally built project honors a custom run command without requiring project output', async () => {
         const { tempRoot, projectPath, outputPath } = createRunnableProjectOutput('dotnet-debugger-custom-run-command');
         const projectDirectory = nodePath.dirname(projectPath);
 
         try {
-            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const { extension, dotNetService, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, false);
             const runWorkingDirectory = nodePath.join(projectDirectory, 'custom-working-directory');
             dotNetService.projectRunProperties = {
                 targetPath: outputPath,
@@ -3564,6 +3564,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             assert.strictEqual(dotNetService.getDotNetProjectRunPropertiesStub.callCount, 1);
             assert.strictEqual(dotNetService.getDotNetTargetPathStub.callCount, 0);
             assert.strictEqual(dotNetService.buildDotNetProjectStub.callCount, 0);
+            assert.strictEqual(doesFileExistStub.callCount, 0);
         } finally {
             removeDirectorySafely(tempRoot);
         }
