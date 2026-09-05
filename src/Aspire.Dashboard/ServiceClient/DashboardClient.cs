@@ -1150,6 +1150,58 @@ internal sealed class DashboardClient : IDashboardClient
         return response.FileId;
     }
 
+    public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        // Unlike resources and interactions, this is not fanned out through a local channel. The dock is a single
+        // consumer per browser circuit and the update rate is tiny, so a direct server stream per subscriber is both
+        // simpler and avoids having to replay snapshot state for late subscribers.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.WatchTerminals(new WatchTerminalsRequest(), headers: _headers, cancellationToken: cts.Token);
+
+        await foreach (var update in call.ResponseStream.ReadAllAsync(cts.Token).ConfigureAwait(false))
+        {
+            yield return update;
+        }
+    }
+
+    public async Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        await _client!.CloseTerminalAsync(
+            new CloseTerminalRequest { TerminalId = terminalId },
+            headers: _headers,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+    }
+
+    public async Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        // The call outlives this method, so the linked CTS cannot be scoped with `using` here. Link to the client
+        // token anyway so a dashboard-wide disconnect tears the tunnel down instead of leaking it.
+        var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var call = _client!.AttachTerminal(headers: _headers, cancellationToken: combinedTokens.Token);
+        var stream = new GrpcTerminalClientStream(call, terminalId, combinedTokens);
+
+        try
+        {
+            // The AppHost blocks on the selector frame before wiring the call to Hex1b, so send it eagerly rather than
+            // waiting for the browser's first HMP1 frame — otherwise nothing streams until the user types.
+            await stream.SendSelectorAsync(combinedTokens.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+
+        return stream;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _state, StateDisposed) is not StateDisposed)

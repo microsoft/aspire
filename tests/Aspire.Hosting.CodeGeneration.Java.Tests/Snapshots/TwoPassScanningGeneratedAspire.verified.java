@@ -17356,7 +17356,8 @@ public enum InputType implements WireValueEnum {
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
     NUMBER("Number"),
-    FILE("File");
+    FILE("File"),
+    TERMINAL("Terminal");
 
     private final String value;
 

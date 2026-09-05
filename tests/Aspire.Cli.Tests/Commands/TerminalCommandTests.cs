@@ -563,6 +563,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(120, frontend.ConfiguredColumns);
             Assert.Equal(30, frontend.ConfiguredRows);
             Assert.True(frontend.IsHostReachable);
+            Assert.Equal("resource", frontend.Owner);
+            Assert.NotNull(frontend.Replicas);
             Assert.Equal(2, frontend.Replicas.Length);
 
             var replica0 = frontend.Replicas[0];
@@ -598,6 +600,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             Assert.False(backend.IsHostReachable);
             // Per #6 fix: degraded shape still surfaces Replicas so operators
             // can diagnose which replicas the AppHost expected.
+            Assert.NotNull(backend.Replicas);
             Assert.Single(backend.Replicas);
             Assert.False(backend.Replicas[0].IsAlive);
             Assert.Null(backend.Replicas[0].CurrentColumns);
@@ -610,6 +613,170 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             Assert.Contains("\"isHostReachable\"", stdout);
             Assert.Contains("\"replicas\"", stdout);
             Assert.Contains("\"peers\"", stdout);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_ListsAppHostTerminalsAlongsideResourceTerminals()
+    {
+        // `terminal ps` answers "what terminals exist", which includes the ones the AppHost owns: dock tabs,
+        // terminals being shown in an interaction dialog, and automation-only sessions. Listing only resource
+        // terminals would hide every terminal a command opened.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals = [],
+                    AppHostTerminals =
+                    [
+                        new AppHostTerminalSummary
+                        {
+                            TerminalId = "abc123",
+                            Title = "Azure login",
+                            Placement = "Dialog",
+                        },
+                        new AppHostTerminalSummary
+                        {
+                            TerminalId = "def456",
+                            Title = "Build output",
+                            Placement = "Dock",
+                        }
+                    ]
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var stdout = string.Join("\n", capturedOutput.Logs).Trim();
+            var entries = JsonSerializer.Deserialize(stdout, TerminalPsJsonContext.Default.ListTerminalPsJsonEntry);
+
+            Assert.NotNull(entries);
+            Assert.Equal(2, entries.Count);
+            Assert.All(entries, e => Assert.Equal("apphost", e.Owner));
+
+            var dialog = entries[0];
+            Assert.Equal("abc123", dialog.TerminalId);
+            Assert.Equal("Azure login", dialog.DisplayName);
+            Assert.Equal("Dialog", dialog.Placement);
+
+            // The resource-shaped members describe replicas and terminal hosts, neither of which an AppHost
+            // terminal has. They must be omitted rather than emitted as nulls a script would have to filter.
+            Assert.Null(dialog.ResourceName);
+            Assert.Null(dialog.Replicas);
+            Assert.DoesNotContain("\"replicas\"", stdout);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenAppHostPredatesAppHostTerminals_StillListsResourceTerminals()
+    {
+        // An AppHost built before AppHost-owned terminals sends no AppHostTerminals at all. That is distinct
+        // from having none, and neither case may fault the listing.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals =
+                    [
+                        new TerminalSummary
+                        {
+                            ResourceName = "frontend",
+                            DisplayName = "Frontend",
+                            ConfiguredColumns = 120,
+                            ConfiguredRows = 30,
+                            IsHostReachable = true,
+                            Replicas =
+                            [
+                                new TerminalReplicaInfo
+                                {
+                                    ReplicaIndex = 0,
+                                    Label = "frontend-0",
+                                    ConsumerUdsPath = "/tmp/frontend-0.host.sock",
+                                    IsAlive = true,
+                                    ProducerConnected = true,
+                                    RestartCount = 0,
+                                }
+                            ]
+                        }
+                    ],
+                    AppHostTerminals = null,
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var stdout = string.Join("\n", capturedOutput.Logs).Trim();
+            var entries = JsonSerializer.Deserialize(stdout, TerminalPsJsonContext.Default.ListTerminalPsJsonEntry);
+
+            Assert.NotNull(entries);
+            var entry = Assert.Single(entries);
+            Assert.Equal("resource", entry.Owner);
+            Assert.Equal("frontend", entry.ResourceName);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenNoTerminalsOfEitherKind_ReportsEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals = [],
+                    AppHostTerminals = [],
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Equal("[]", string.Join("\n", capturedOutput.Logs).Trim());
         }
     }
 

@@ -272,6 +272,16 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Builds the WebSocket endpoint that a terminal-typed input's <c>TerminalView</c> connects to. The AppHost keys
+    /// terminal sessions by interaction id and input name, so both travel in the query string; the dashboard resolves
+    /// them into an <c>AttachTerminal</c> gRPC call server-side.
+    /// </summary>
+    private static string BuildInteractionTerminalEndpoint(InputViewModel inputModel)
+    {
+        return $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(inputModel.Input.TerminalId ?? string.Empty)}";
+    }
+
     private static Icon GetSecretTextIcon(InputViewModel inputModel)
     {
         return inputModel.IsSecretTextVisible

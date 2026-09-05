@@ -5,6 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -463,6 +464,66 @@ public sealed class InteractionInput
     /// </remarks>
     [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
     public InteractionFileCollection GetFiles() => _files;
+
+    /// <summary>
+    /// Gets the terminal to display for an <see cref="InputType.Terminal"/> input. Ignored by every other input type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The terminal is created and owned by the caller, not by the interaction. Create it with
+    /// <c>TerminalService.CreateTerminal</c> passing <see cref="TerminalPlacement.Dialog"/>, hand it to the input,
+    /// and dispose it when the caller is finished with it. The dialog is a view onto the terminal; closing the dialog
+    /// stops showing it but does not stop the workload.
+    /// </para>
+    /// <para>
+    /// Owning the terminal outside the interaction is what lets the AppHost script it through
+    /// <see cref="IAspireTerminal"/>'s automation members — before the dialog is raised, while it is open, and after
+    /// it closes — and lets the same terminal be shown by more than one dialog over its life.
+    /// </para>
+    /// <example>
+    /// <code language="csharp">
+    /// await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+    /// {
+    ///     Title = "Setup",
+    ///     Command = new TerminalCommand("./setup.sh"),
+    ///     Placement = TerminalPlacement.Dialog
+    /// });
+    ///
+    /// var dialog = interactionService.PromptInputsAsync(
+    ///     "Setup",
+    ///     "Running setup.",
+    ///     [new InteractionInput { Name = "setup", InputType = InputType.Terminal, Terminal = terminal }],
+    ///     cancellationToken: cts.Token);
+    ///
+    /// await terminal.WaitForTextAsync("Continue? ");
+    /// await terminal.SendTextAsync("y\r");
+    ///
+    /// // Dismiss the dialog from code once the automation is done.
+    /// await cts.CancelAsync();
+    /// </code>
+    /// </example>
+    /// <para>
+    /// The terminal's <see cref="IAspireTerminal.Placement"/> must be <see cref="TerminalPlacement.Dialog"/>. A dock
+    /// terminal is presented as a dock tab that outlives the code which created it, so showing one in a dialog would
+    /// render the same terminal through two competing presentations.
+    /// </para>
+    /// <para>
+    /// The workload starts lazily on the first attach or the first automation call, so a terminal created for a dialog
+    /// that is dismissed without ever being opened never spawns a process.
+    /// </para>
+    /// </remarks>
+    [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
+    public IAspireTerminal? Terminal { get; init; }
+
+    /// <summary>
+    /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the
+    /// dialog is raised and sent to the dashboard so it can open the tunnel.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately internal: this is transport addressing, not something an AppHost author sets.
+    /// </remarks>
+    internal string? TerminalId { get; set; }
 }
 
 /// <summary>
@@ -803,7 +864,15 @@ public enum InputType
     /// <summary>
     /// A file input. Allows the user to select a file using the OS/browser file picker.
     /// </summary>
-    File
+    File,
+    /// <summary>
+    /// An interactive terminal. Renders a terminal that is attached to a session owned by the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// This input type is experimental. The terminal is created and owned by the caller and supplied through
+    /// <see cref="InteractionInput.Terminal"/>; the dialog is only a view onto it.
+    /// </remarks>
+    Terminal
 }
 
 /// <summary>

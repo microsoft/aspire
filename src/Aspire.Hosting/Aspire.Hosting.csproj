@@ -73,6 +73,11 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
+    <!-- SPIKE ONLY: Hex1b is referenced so InteractionInput can expose a Hex1bTerminalBuilder for
+         InputType.Terminal. This deliberately leaks Hex1b into the Aspire.Hosting public API surface,
+         which is not something we want to ship. Before this feature graduates from a spike, the input
+         must be reshaped around an Aspire-owned abstraction so Hex1b stays an implementation detail. -->
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="KubernetesClient" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />

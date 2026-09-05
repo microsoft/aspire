@@ -116,7 +116,7 @@ public static class TerminalResourceBuilderExtensions
     /// Polyglot dispatcher for <see cref="WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
     /// Exposed to non-C# AppHosts via ATS as <c>withTerminal</c> — they cannot pass a
     /// C# <see cref="Action{T}"/>, so this overload simply applies the defaults from
-    /// <see cref="TerminalOptions"/> (120×30). Polyglot AppHosts that need to customise
+    /// <see cref="TerminalOptions"/> (132×50). Polyglot AppHosts that need to customise
     /// the terminal dimensions can wait for a future overload that accepts a DTO.
     /// </summary>
     /// <ats-summary>Adds an interactive terminal session to a resource using the default terminal options.</ats-summary>

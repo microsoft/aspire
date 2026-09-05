@@ -72,6 +72,11 @@
         <target state="translated">Impostazioni</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutToggleTerminalDock">
+        <source>Toggle terminal (Shift+`)</source>
+        <target state="new">Toggle terminal (Shift+`)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutUnhandledErrorMessage">
         <source>An unhandled error has occurred.</source>
         <target state="translated">Si è verificato un errore non gestito.</target>
@@ -140,6 +145,66 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">Visualizza filtri</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTab">
+        <source>Close terminal</source>
+        <target state="new">Close terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetach">
+        <source>Open terminal in a new window</source>
+        <target state="new">Open terminal in a new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetachBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetached">
+        <source>This terminal is running in a separate window.</source>
+        <target state="new">This terminal is running in a separate window.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockFocusWindow">
+        <source>Focus window</source>
+        <target state="new">Focus window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockHide">
+        <source>Hide terminal panel (Shift+`)</source>
+        <target state="new">Hide terminal panel (Shift+`)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockNewTerminal">
+        <source>New terminal</source>
+        <target state="new">New terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelBody">
+        <source>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</source>
+        <target state="new">Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHeading">
+        <source>No terminal selected</source>
+        <target state="new">No terminal selected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHint">
+        <source>Press Shift+` to hide this panel.</source>
+        <target state="new">Press Shift+` to hide this panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockReturnToDock">
+        <source>Return to panel</source>
+        <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowEnded">
+        <source>This terminal has ended.</source>
+        <target state="new">This terminal has ended.</target>
         <note />
       </trans-unit>
     </body>

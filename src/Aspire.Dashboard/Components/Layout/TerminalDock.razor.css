@@ -1,0 +1,185 @@
+/* The dock is fixed to the viewport bottom and taken out of layout flow so collapsing it cannot reflow the page.
+   Collapsing translates it fully off-screen instead of hiding it: the element keeps its box dimensions, so xterm's
+   measured cell metrics and column count stay valid and reopening does not need a re-fit or a repaint. */
+.terminal-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    background-color: #0d1117;
+    border-top: 1px solid var(--neutral-stroke-divider-rest);
+    transition: transform 120ms ease-out;
+    /* The dock always paints a dark terminal surface, whatever theme the rest of the dashboard is in, so it has
+       to pin the Fluent neutral ramp its descendants read. Otherwise they resolve the ambient theme: in light
+       theme `--neutral-fill-stealth-rest` is #f7f7f7, so the "stealth" tabstrip buttons paint a near-white block
+       on the dark strip, and `Color.Neutral` icons - which FluentIcon emits as an inline
+       `fill: var(--neutral-foreground-rest)` that no plain rule can override - render near-black on near-black.
+       Redefining the custom properties fixes both without !important, because the inline var() resolves here.
+       Values track the dock's own GitHub-dark palette rather than Fluent's dark theme so the buttons match the
+       surrounding surface, tabs, and accent exactly. */
+    --neutral-foreground-rest: #c9d1d9;
+    --neutral-foreground-hover: #f0f6fc;
+    --neutral-foreground-active: #8b949e;
+    /* Stealth must be genuinely transparent so the tabstrip and active-tab colours show through. */
+    --neutral-fill-stealth-rest: transparent;
+    --neutral-fill-stealth-hover: #21262d;
+    --neutral-fill-stealth-active: #30363d;
+    --neutral-fill-rest: #21262d;
+    --neutral-fill-hover: #30363d;
+    --neutral-fill-active: #282e33;
+    --neutral-stroke-divider-rest: #30363d;
+    /* Fluent's purple focus ring is close to unreadable on #0d1117; reuse the dock's own accent instead. */
+    --focus-stroke-outer: #58a6ff;
+}
+
+.terminal-dock.visible {
+    transform: translateY(0);
+}
+
+.terminal-dock.collapsed {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+.terminal-dock-tabstrip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px;
+    background-color: #161b22;
+    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    flex: 0 0 auto;
+}
+
+.terminal-dock-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 10px;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    color: #c9d1d9;
+    font-size: 12px;
+    max-width: 220px;
+}
+
+.terminal-dock-tab.active {
+    background-color: #0d1117;
+    color: #58a6ff;
+}
+
+/* The + selects the panel rather than performing an action, so it needs the same pressed affordance a tab gets.
+   ::deep because FluentButton renders the element the class lands on, and ::part(control) because the web
+   component paints an opaque background on its internal control element, which would otherwise hide anything
+   set on the host. */
+::deep .terminal-dock-new.active::part(control) {
+    background-color: #0d1117;
+    border-radius: 4px 4px 0 0;
+}
+
+.terminal-dock-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-dock-filler {
+    flex: 1 1 auto;
+}
+
+.terminal-dock-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.terminal-dock-pane {
+    position: absolute;
+    inset: 0;
+}
+
+/* visibility, not display: an inactive pane must keep real dimensions or xterm refits itself to zero columns. */
+.terminal-dock-pane.inactive {
+    visibility: hidden;
+}
+
+/* Stacked over the panes rather than replacing them, so a terminal underneath keeps its xterm buffer and socket.
+   Opaque for the same reason: the panes are only hidden with visibility, so anything translucent would show them. */
+.terminal-dock-panel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #0d1117;
+    overflow: auto;
+}
+
+.terminal-dock-panel-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 420px;
+    padding: 24px;
+    text-align: center;
+    color: #8b949e;
+}
+
+.terminal-dock-panel-heading {
+    margin: 0;
+    color: #c9d1d9;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.terminal-dock-panel-body,
+.terminal-dock-panel-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.terminal-dock-panel-hint {
+    /* Dimmer than the body copy, but not below the 4.5:1 AA floor against #0d1117 (#6e7681 measured 4.12:1). */
+    color: #7d8590;
+}
+
+.terminal-dock-resize-handle {
+    flex: 0 0 auto;
+    height: 6px;
+    cursor: ns-resize;
+    background-color: transparent;
+    touch-action: none;
+}
+
+.terminal-dock-resize-handle:hover {
+    background-color: var(--accent-fill-rest);
+}
+
+/* Shown in place of the terminal while it is running in a detached window. */
+.terminal-dock-detached {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    color: #8b949e;
+    font-size: 13px;
+}
+
+.terminal-dock-detached-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.terminal-dock-popup-blocked {
+    align-self: center;
+    padding-right: 8px;
+    color: #f0883e;
+    font-size: 12px;
+}

@@ -23,6 +23,10 @@ public class DashboardServerFixture : IAsyncLifetime
 
     protected virtual IReadOnlyList<ResourceViewModel>? Resources => null;
 
+    protected virtual void ConfigureServices(IServiceCollection services)
+    {
+    }
+
     public DashboardServerFixture()
     {
         PlaywrightFixture = new PlaywrightFixture();
@@ -59,7 +63,11 @@ public class DashboardServerFixture : IAsyncLifetime
             preConfigureBuilder: builder =>
             {
                 builder.Configuration.AddConfiguration(config);
-                builder.Services.AddSingleton<IDashboardClient>(new MockDashboardClient(Resources));
+                var dashboardClient = new MockDashboardClient(Resources);
+                builder.Services.AddSingleton<IDashboardClient>(dashboardClient);
+                builder.Services.AddSingleton<IRepositoryFactory>(
+                    services => new MockRepositoryFactory(services, dashboardClient));
+                ConfigureServices(builder.Services);
             });
 
         await DashboardApp.StartAsync();

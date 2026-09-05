@@ -5,6 +5,8 @@
 // because this playground project intentionally exercises the experimental API.
 #pragma warning disable ASPIRETERMINAL001
 
+using Terminals.AppHost;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // A multi-replica project that calls `WithTerminal()` so each replica gets its
@@ -19,7 +21,34 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
         options.Columns = 120;
         options.Rows = 32;
         options.ShowTerminalHost = true;
-    });
+    })
+    // Opens a shell owned by the AppHost rather than orchestrated by Aspire. It has nothing to do with `repl`;
+    // commands just need a host resource to hang off.
+    .WithAppHostShellCommand()
+    // Drives an interactive console program from AppHost code: the terminal is shown in a dialog, but the guesses
+    // are typed by the AppHost, which reads each reply back off the screen and bisects until it wins.
+    .WithNumberGuessCommand()
+    // Automates a terminal the AppHost does NOT own: it joins `shell`'s existing terminal as an extra viewer and
+    // types into it, which is what shelling into a resource from AppHost code looks like.
+    .WithAutomateResourceTerminalCommand("shell");
+
+// Long-running container that the "Shell into container" interaction command execs into. Aspire is not orchestrating
+// the exec — the AppHost shells out to `docker exec` — so the container needs a stable, predictable name.
+builder.AddContainer("shellbox", "alpine")
+    .WithContainerName("terminals-playground-shellbox")
+    .WithArgs("sleep", "infinity")
+    .WithContainerShellCommand()
+    // Same shell, but delivered as a tab in the dashboard's terminal dock (Shift+`) rather than a modal dialog.
+    .WithDockShellCommand();
+
+// Latest Node.js image, kept alive so the "Node REPL" interaction command can exec into it. The Node REPL is a
+// readline app, so it exercises cursor addressing, history, and tab completion across the tunnel in a way a plain
+// shell prompt does not. `sleep infinity` replaces the image's default CMD ("node") — an interactive REPL with no TTY
+// attached would exit immediately. The entrypoint (docker-entrypoint.sh) is left alone so PATH is set up normally.
+builder.AddContainer("noderepl", "node", "latest")
+    .WithContainerName("terminals-playground-noderepl")
+    .WithArgs("sleep", "infinity")
+    .WithNodeReplCommand();
 
 if (OperatingSystem.IsWindows())
 {

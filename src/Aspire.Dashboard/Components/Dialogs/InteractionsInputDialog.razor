@@ -197,6 +197,29 @@
                                 }
                             </InteractionInputField>
                             break;
+                        case InputType.Terminal:
+                            @* The terminal's process is owned by the AppHost, not by an orchestrated resource, so the
+                             * session is tunneled over the dashboard gRPC connection instead of the terminal host UDS.
+                             *
+                             * Rendered chromeless: the dialog already supplies the label and framing, so the terminal's
+                             * own titlebar and frame would be a second border around a control that is meant to line up
+                             * with the dialog's other inputs. Chromeless also makes this a fit-to-pane surface that
+                             * claims the HMP1 primary role on attach, so the grid fills the container as soon as the
+                             * dialog opens rather than staying locked to the producer's grid until the user types. The
+                             * footer is kept so the terminal can still be zoomed, minus the fixed-resolution picker —
+                             * the container is a fixed box, so there is nothing for a chosen resolution to act on. *@
+                            var terminalId = $"{localItem.InputKey}-Terminal";
+                            <InteractionInputField ForId="@terminalId"
+                                                   InputViewModel="@localItem"
+                                                   MarkdownProcessor="@_markdownProcessor"
+                                                   Context="input">
+                                <div class="interaction-terminal-container" id="@terminalId">
+                                    <TerminalView EndpointPathAndQuery="@BuildInteractionTerminalEndpoint(input.ViewModel)"
+                                                  Chromeless="true"
+                                                  ShowDimensionsPicker="false" />
+                                </div>
+                            </InteractionInputField>
+                            break;
                         default:
                             @* Ignore unexpected InputTypes *@
                             break;

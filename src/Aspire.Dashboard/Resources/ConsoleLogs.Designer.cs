@@ -218,6 +218,24 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalToolbarGridSizeAuto", resourceCulture);
             }
         }
+
+        public static string TerminalFocusControlsHint {
+            get {
+                return ResourceManager.GetString("TerminalFocusControlsHint", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarOpenInWindow {
+            get {
+                return ResourceManager.GetString("TerminalToolbarOpenInWindow", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarOpenInWindowBlocked {
+            get {
+                return ResourceManager.GetString("TerminalToolbarOpenInWindowBlocked", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsViewConsoleOption {
             get {

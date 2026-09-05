@@ -1,0 +1,25 @@
+@page "/terminal-window/apphost/{TerminalId}"
+@page "/terminal-window/resource/{ResourceName}"
+@page "/terminal-window/resource/{ResourceName}/{ReplicaIndex:int}"
+@layout EmptyLayout
+@namespace Aspire.Dashboard.Components.Pages
+@using Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Components.Layout
+
+<PageTitle>@_title</PageTitle>
+
+@* The terminal is the whole page. There is no nav, no toolbar and no terminal chrome, so the grid gets the entire
+   window and refits as the user resizes it. *@
+<div class="terminal-window">
+    @if (_ended)
+    {
+        <div class="terminal-window-ended">@Loc[nameof(Dashboard.Resources.Layout.TerminalWindowEnded)]</div>
+    }
+    else
+    {
+        <TerminalView ResourceName="@ResourceName"
+                      ReplicaIndex="@ReplicaIndex"
+                      EndpointPathAndQuery="@_endpoint"
+                      Chromeless="true" />
+    }
+</div>

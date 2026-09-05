@@ -10,6 +10,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
+using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf;
@@ -24,6 +25,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using DashboardServiceImpl = Aspire.Hosting.Dashboard.DashboardService;
 using Resource = Aspire.Hosting.ApplicationModel.Resource;
+
+#pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
@@ -1267,7 +1270,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IHostEnvironment? hostEnvironment = null,
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
-        IInteractionFileUploadStore? fileUploadStore = null)
+        IInteractionFileUploadStore? fileUploadStore = null,
+                        TerminalService? terminalService = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
@@ -1275,7 +1279,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            fileUploadStore ?? new TestInteractionFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore(),
+            terminalService ?? TestTerminalService.Create());
     }
 
     private static DashboardServiceData CreateDashboardServiceData(

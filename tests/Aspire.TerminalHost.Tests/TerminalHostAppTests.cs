@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json;
 using Aspire.Shared.TerminalHost;
+using Hex1b;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 
@@ -20,7 +22,9 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     /// producer/consumer/control UDS path triple. The replica index is opaque to the
     /// host — callers encode it however they like in the path layout.
     /// </summary>
-    private (TerminalHostArgs args, TemporaryWorkspace workspace, string controlPath) BuildArgs()
+    private (TerminalHostArgs args, TemporaryWorkspace workspace, string controlPath) BuildArgs(
+        int? columns = null,
+        int? rows = null)
     {
         var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDir = Path.Combine(workspace.Path, "dcp");
@@ -34,11 +38,22 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         var consumer = Path.Combine(hostDir, "r.sock");
         var control = Path.Combine(ctrlDir, "c.sock");
 
-        var args = TerminalHostArgs.Parse([
+        var commandLine = new List<string>
+        {
             "--producer-uds", producer,
             "--consumer-uds", consumer,
             "--control-uds", control,
-        ]);
+        };
+        if (columns is not null)
+        {
+            commandLine.AddRange(["--columns", columns.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        }
+        if (rows is not null)
+        {
+            commandLine.AddRange(["--rows", rows.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        }
+
+        var args = TerminalHostArgs.Parse([.. commandLine]);
 
         return (args, workspace, control);
     }
@@ -454,6 +469,56 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfiguredDimensionsAreAppliedUpstreamAndReportedToConsumers()
+    {
+        const int configuredWidth = 137;
+        const int configuredHeight = 41;
+        var (args, workspace, control) = BuildArgs(configuredWidth, configuredHeight);
+        using var disp = workspace;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            await using var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5));
+            await producer.SendHelloAsync(80, 24, default);
+
+            await WaitForAsync(
+                () => app.SnapshotSession().ProducerConnected,
+                TimeSpan.FromSeconds(5),
+                "ProducerConnected should flip to true after producer dials in.");
+
+            const byte FrameResize = 0x05;
+            using var frameCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var (type, payload) = await producer.ReadFrameAsync(frameCts.Token);
+
+            Assert.Equal(FrameResize, type);
+            Assert.Equal(configuredWidth, BitConverter.ToInt32(payload, 0));
+            Assert.Equal(configuredHeight, BitConverter.ToInt32(payload, 4));
+
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+            await using var consumer = await TestHmp1Consumer.ConnectAsync(
+                args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+            await consumer.SendClientHelloAsync("test-consumer", "secondary", default);
+            var helloPayload = await consumer.ReceiveHandshakeAsync(TimeSpan.FromSeconds(5));
+
+            using var hello = JsonDocument.Parse(helloPayload);
+            Assert.Equal(configuredWidth, hello.RootElement.GetProperty("width").GetInt32());
+            Assert.Equal(configuredHeight, hello.RootElement.GetProperty("height").GetInt32());
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
     public async Task DownstreamPrimaryResizeIsForwardedUpstreamAsRawResizeFrame()
     {
         // Regression: the consumer-side multi-head server fires its OnResized
@@ -503,6 +568,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             await using var consumer = await TestHmp1Consumer.ConnectAsync(
                 args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
             await consumer.SendClientHelloAsync("test-consumer", "primary", default);
+            await consumer.ReceiveHandshakeAsync(TimeSpan.FromSeconds(5));
             await consumer.SendRequestPrimaryAsync(requestedWidth, requestedHeight, default);
 
             // The frame the test producer should observe upstream:
@@ -537,6 +603,147 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             var observedHeight = payload[4] | (payload[5] << 8) | (payload[6] << 16) | (payload[7] << 24);
             Assert.Equal(requestedWidth, observedWidth);
             Assert.Equal(requestedHeight, observedHeight);
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
+    public async Task ConsumerListenerBindFailureIsReportedBeforeTerminalStarts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var parentFile = Path.Combine(workspace.Path, "not-a-directory");
+        await File.WriteAllTextAsync(parentFile, "");
+        await using var presentation = new Hmp1PresentationAdapter();
+
+        Assert.Throws<IOException>(() => new Hmp1UdsServerListenerFilter(
+            Path.Combine(parentFile, "consumer.sock"),
+            presentation,
+            NullLogger<Hmp1UdsServerListenerFilter>.Instance,
+            _ => { }));
+    }
+
+    [Fact]
+    public async Task ConsumerListenerWaitsForAcceptedClientHandshakeDuringTeardown()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var socketPath = Path.Combine(workspace.Path, "consumer.sock");
+        await using var presentation = new Hmp1PresentationAdapter();
+        var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        presentation.OnClientConnected = async (_, _) =>
+        {
+            callbackStarted.TrySetResult();
+            await releaseCallback.Task.ConfigureAwait(false);
+        };
+
+        using var listener = new Hmp1UdsServerListenerFilter(
+            socketPath,
+            presentation,
+            NullLogger<Hmp1UdsServerListenerFilter>.Instance,
+            _ => { });
+        await listener.OnSessionStartAsync(80, 24, DateTimeOffset.UtcNow);
+
+        Task? endTask = null;
+        try
+        {
+            await using var consumer = await TestHmp1Consumer.ConnectAsync(socketPath, TimeSpan.FromSeconds(5));
+            await consumer.SendClientHelloAsync("test-consumer", "secondary", default);
+            await callbackStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            endTask = listener.OnSessionEndAsync(TimeSpan.Zero).AsTask();
+            var completed = await Task.WhenAny(endTask, Task.Delay(TimeSpan.FromMilliseconds(200)));
+            Assert.NotSame(endTask, completed);
+        }
+        finally
+        {
+            releaseCallback.TrySetResult();
+            if (endTask is null)
+            {
+                await listener.OnSessionEndAsync(TimeSpan.Zero);
+            }
+            else
+            {
+                await endTask.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CurrentDimensionsArePreservedAcrossProducerRecycle()
+    {
+        const int requestedWidth = 123;
+        const int requestedHeight = 45;
+        const byte frameResize = 0x05;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            await using (var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5)))
+            {
+                await producer.SendHelloAsync(80, 24, default);
+                await WaitForAsync(
+                    () => app.SnapshotSession().ProducerConnected,
+                    TimeSpan.FromSeconds(5),
+                    "The first producer should connect.");
+
+                await using var consumer = await TestHmp1Consumer.ConnectAsync(
+                    args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+                await consumer.SendClientHelloAsync("test-consumer", "primary", default);
+                await consumer.ReceiveHandshakeAsync(TimeSpan.FromSeconds(5));
+                await consumer.SendRequestPrimaryAsync(requestedWidth, requestedHeight, default);
+
+                _ = await producer.WaitForMatchingFrameAsync(
+                    frameResize,
+                    payload => payload.Length == 8
+                        && BitConverter.ToInt32(payload, 0) == requestedWidth
+                        && BitConverter.ToInt32(payload, 4) == requestedHeight,
+                    TimeSpan.FromSeconds(10));
+                await WaitForAsync(
+                    () =>
+                    {
+                        var session = app.SnapshotSession();
+                        return session.CurrentColumns == requestedWidth && session.CurrentRows == requestedHeight;
+                    },
+                    TimeSpan.FromSeconds(5),
+                    "The resized dimensions should become authoritative.");
+            }
+
+            await WaitForAsync(
+                () => app.SnapshotSession().RestartCount >= 1,
+                TimeSpan.FromSeconds(10),
+                "The terminal should recycle after the first producer disconnects.");
+
+            await using var replacementProducer = await ConnectProducerAsync(
+                args.ProducerUdsPath, TimeSpan.FromSeconds(10));
+            await replacementProducer.SendHelloAsync(80, 24, default);
+
+            _ = await replacementProducer.WaitForMatchingFrameAsync(
+                frameResize,
+                payload => payload.Length == 8
+                    && BitConverter.ToInt32(payload, 0) == requestedWidth
+                    && BitConverter.ToInt32(payload, 4) == requestedHeight,
+                TimeSpan.FromSeconds(10));
+
+            await using var replacementConsumer = await TestHmp1Consumer.ConnectAsync(
+                args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
+            await replacementConsumer.SendClientHelloAsync("replacement-consumer", "secondary", default);
+            var helloPayload = await replacementConsumer.ReceiveHandshakeAsync(TimeSpan.FromSeconds(5));
+
+            using var hello = JsonDocument.Parse(helloPayload);
+            Assert.Equal(requestedWidth, hello.RootElement.GetProperty("width").GetInt32());
+            Assert.Equal(requestedHeight, hello.RootElement.GetProperty("height").GetInt32());
         }
         finally
         {
@@ -697,6 +904,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     /// </summary>
     private sealed class TestHmp1Consumer : IAsyncDisposable
     {
+        private const byte FrameHello = 0x01;
+        private const byte FrameStateSync = 0x02;
         private const byte FrameRequestPrimary = 0x07;
         private const byte FrameClientHello = 0x0B;
 
@@ -741,10 +950,61 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             await SendFrameAsync(FrameClientHello, System.Text.Encoding.UTF8.GetBytes(json), ct).ConfigureAwait(false);
         }
 
+        public async Task<byte[]> ReceiveHandshakeAsync(TimeSpan timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout);
+            var (helloType, helloPayload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
+            var (stateSyncType, _) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
+
+            if (helloType != FrameHello || stateSyncType != FrameStateSync)
+            {
+                throw new InvalidDataException(
+                    $"Expected Hello and StateSync frames, received 0x{helloType:X2} and 0x{stateSyncType:X2}.");
+            }
+
+            return helloPayload;
+        }
+
         public async Task SendRequestPrimaryAsync(int cols, int rows, CancellationToken ct)
         {
             var json = $"{{\"cols\":{cols},\"rows\":{rows}}}";
             await SendFrameAsync(FrameRequestPrimary, System.Text.Encoding.UTF8.GetBytes(json), ct).ConfigureAwait(false);
+        }
+
+        private async Task<(byte Type, byte[] Payload)> ReadFrameAsync(CancellationToken ct)
+        {
+            // HMP1 frames are [type:1B][length:4B LE][payload:N bytes].
+            var header = new byte[5];
+            await ReadExactlyAsync(header, ct).ConfigureAwait(false);
+
+            var length = header[1] | (header[2] << 8) | (header[3] << 16) | (header[4] << 24);
+            if (length < 0 || length > 16 * 1024 * 1024)
+            {
+                throw new InvalidDataException($"Consumer-side reader received invalid frame length {length}.");
+            }
+
+            var payload = new byte[length];
+            if (payload.Length > 0)
+            {
+                await ReadExactlyAsync(payload, ct).ConfigureAwait(false);
+            }
+
+            return (header[0], payload);
+        }
+
+        private async Task ReadExactlyAsync(byte[] buffer, CancellationToken ct)
+        {
+            var offset = 0;
+            while (offset < buffer.Length)
+            {
+                var read = await _stream.ReadAsync(buffer.AsMemory(offset), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    throw new EndOfStreamException(
+                        $"Consumer-side reader: stream EOF after {offset} of {buffer.Length} bytes.");
+                }
+                offset += read;
+            }
         }
 
         private async Task SendFrameAsync(byte type, byte[] payload, CancellationToken ct)

@@ -106,6 +106,114 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Close terminal.
+        /// </summary>
+        public static string TerminalDockCloseTab {
+            get {
+                return ResourceManager.GetString("TerminalDockCloseTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool..
+        /// </summary>
+        public static string TerminalDockPanelBody {
+            get {
+                return ResourceManager.GetString("TerminalDockPanelBody", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No terminal selected.
+        /// </summary>
+        public static string TerminalDockPanelHeading {
+            get {
+                return ResourceManager.GetString("TerminalDockPanelHeading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Press Shift+` to hide this panel..
+        /// </summary>
+        public static string TerminalDockPanelHint {
+            get {
+                return ResourceManager.GetString("TerminalDockPanelHint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The browser blocked the terminal window. Allow pop-ups for the dashboard and try again..
+        /// </summary>
+        public static string TerminalDockDetachBlocked {
+            get {
+                return ResourceManager.GetString("TerminalDockDetachBlocked", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open terminal in a new window.
+        /// </summary>
+        public static string TerminalDockDetach {
+            get {
+                return ResourceManager.GetString("TerminalDockDetach", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This terminal is running in a separate window..
+        /// </summary>
+        public static string TerminalDockDetached {
+            get {
+                return ResourceManager.GetString("TerminalDockDetached", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Focus window.
+        /// </summary>
+        public static string TerminalDockFocusWindow {
+            get {
+                return ResourceManager.GetString("TerminalDockFocusWindow", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide terminal panel (Shift+`).
+        /// </summary>
+        public static string TerminalDockHide {
+            get {
+                return ResourceManager.GetString("TerminalDockHide", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to New terminal.
+        /// </summary>
+        public static string TerminalDockNewTerminal {
+            get {
+                return ResourceManager.GetString("TerminalDockNewTerminal", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Return to panel.
+        /// </summary>
+        public static string TerminalDockReturnToDock {
+            get {
+                return ResourceManager.GetString("TerminalDockReturnToDock", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This terminal has ended..
+        /// </summary>
+        public static string TerminalWindowEnded {
+            get {
+                return ResourceManager.GetString("TerminalWindowEnded", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {
@@ -129,6 +237,15 @@ namespace Aspire.Dashboard.Resources {
         public static string MainLayoutAspireRepoLink {
             get {
                 return ResourceManager.GetString("MainLayoutAspireRepoLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle terminal (Shift+`).
+        /// </summary>
+        public static string MainLayoutToggleTerminalDock {
+            get {
+                return ResourceManager.GetString("MainLayoutToggleTerminalDock", resourceCulture);
             }
         }
         

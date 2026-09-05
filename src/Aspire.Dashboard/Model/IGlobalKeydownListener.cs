@@ -25,4 +25,6 @@ public enum AspireKeyboardShortcut
     ResetPanelSize = 320,
     IncreasePanelSize = 330,
     DecreasePanelSize = 340,
+
+    ToggleTerminalDock = 400,
 }
