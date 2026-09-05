@@ -759,6 +759,9 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
     [InlineData("17.6-bookworm", 17)]
     [InlineData("16.0", 16)]
     [InlineData("9.6", 9)]
+    [InlineData("0.8.3-pg18-trixie", 18)]
+    [InlineData("pg18-trixie", 18)]
+    [InlineData("2.28.1-pg17", 17)]
     public void TryParsePostgresMajorVersionReturnsTrueForValidTags(string tag, int expectedMajorVersion)
     {
         var result = PostgresBuilderExtensions.TryParsePostgresMajorVersion(tag, out var majorVersion);
@@ -773,6 +776,9 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
     [InlineData("")]
     [InlineData("  ")]
     [InlineData("abc")]
+    [InlineData("xpg18")]
+    [InlineData("pg180")]
+    [InlineData("pg9")]
     public void TryParsePostgresMajorVersionReturnsFalseForInvalidTags(string tag)
     {
         var result = PostgresBuilderExtensions.TryParsePostgresMajorVersion(tag, out var majorVersion);
