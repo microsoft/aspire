@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -535,15 +536,26 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void GetRuns_ReusesLazySnapshot()
+    public async Task GetRuns_DiscoversRunCreatedAfterFirstCall()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var runStore = CreateRunStore(CreateOptions(workspace));
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
 
-        var first = runStore.GetRuns();
-        var second = runStore.GetRuns();
+        Assert.Collection(currentRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
 
-        Assert.Same(first, second);
+        string historicalRunId;
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            await InitializeAndPublishRunAsync(historicalRunStore);
+        }
+
+        Assert.Collection(
+            currentRunStore.GetRuns(),
+            currentRun => Assert.True(currentRun.IsCurrent),
+            historicalRun => Assert.Equal(historicalRunId, historicalRun.RunId));
     }
 
     [Fact]
@@ -595,6 +607,123 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetRuns_IncludesPreviouslyActiveRunAfterDashboardExits()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        DashboardRunStore? activeRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1)));
+        string activeRunId;
+        try
+        {
+            activeRunId = activeRunStore.RunId;
+            await InitializeAndPublishRunAsync(activeRunStore);
+            using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+
+            Assert.Collection(currentRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
+
+            activeRunStore.Dispose();
+            activeRunStore = null;
+
+            Assert.Collection(
+                currentRunStore.GetRuns(),
+                currentRun => Assert.True(currentRun.IsCurrent),
+                historicalRun => Assert.Equal(activeRunId, historicalRun.RunId));
+        }
+        finally
+        {
+            activeRunStore?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task GetRuns_PreservesLeasedDescriptorUntilLeaseEnds()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        string historicalRunId;
+        string metadataPath;
+
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            metadataPath = Path.Combine(historicalRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(historicalRunStore);
+        }
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        var historicalRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+        var updatedEndedAtUtc = startedAt.AddMinutes(-2);
+
+        using (var runLease = currentRunStore.TryAcquireRunLease(historicalRun))
+        {
+            Assert.NotNull(runLease);
+            Assert.True(historicalRun.IsLeased);
+
+            var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+            metadata[nameof(DashboardRunDescriptor.EndedAtUtc)] = JsonValue.Create(updatedEndedAtUtc);
+            metadata[nameof(DashboardRunDescriptor.CleanShutdown)] = false;
+            File.WriteAllText(metadataPath, metadata.ToJsonString());
+
+            var leasedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+            Assert.Same(historicalRun, leasedRun);
+            Assert.True(leasedRun.IsLeased);
+        }
+
+        var refreshedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+        Assert.NotSame(historicalRun, refreshedRun);
+        Assert.Equal(updatedEndedAtUtc, refreshedRun.EndedAtUtc);
+        Assert.False(refreshedRun.CleanShutdown);
+    }
+
+    [Fact]
+    public async Task GetRuns_IgnoresNullAndDuplicateRunIds()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        string validRunId;
+        string duplicateMetadataPath;
+        string nullMetadataPath;
+
+        using (var validRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-3))))
+        {
+            validRunId = validRunStore.RunId;
+            await InitializeAndPublishRunAsync(validRunStore);
+        }
+
+        using (var duplicateRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-2))))
+        {
+            duplicateMetadataPath = Path.Combine(duplicateRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(duplicateRunStore);
+        }
+
+        using (var nullRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            nullMetadataPath = Path.Combine(nullRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(nullRunStore);
+        }
+
+        var duplicateMetadata = JsonNode.Parse(File.ReadAllText(duplicateMetadataPath))!.AsObject();
+        duplicateMetadata[nameof(DashboardRunDescriptor.RunId)] = validRunId;
+        File.WriteAllText(duplicateMetadataPath, duplicateMetadata.ToJsonString());
+
+        var nullMetadata = JsonNode.Parse(File.ReadAllText(nullMetadataPath))!.AsObject();
+        nullMetadata[nameof(DashboardRunDescriptor.RunId)] = null;
+        File.WriteAllText(nullMetadataPath, nullMetadata.ToJsonString());
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        foreach (var runs in new[] { currentRunStore.GetRuns(), currentRunStore.GetRuns() })
+        {
+            Assert.Collection(
+                runs,
+                currentRun => Assert.True(currentRun.IsCurrent),
+                historicalRun => Assert.Equal(validRunId, historicalRun.RunId));
+        }
+    }
+
+    [Fact]
     public async Task RunMode_DeletesOldestRunWhenLimitIsExceeded()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -617,6 +746,46 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.False(Directory.Exists(historicalRunDirectories[^1]));
         Assert.All(historicalRunDirectories[..^1], directory => Assert.True(Directory.Exists(directory)));
         Assert.True(Directory.Exists(currentRunStore.RunDirectory));
+    }
+
+    [Fact]
+    public async Task RunMode_DeletesOldestIncompatibleRunWhenLimitIsExceeded()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 5, 12, 34, 56, TimeSpan.Zero);
+        string incompatibleRunDirectory;
+
+        using (var incompatibleRunStore = CreateRunStore(
+            options,
+            new FixedTimeProvider(startedAt.AddDays(-DashboardRunStore.MaxRuns))))
+        {
+            incompatibleRunDirectory = incompatibleRunStore.RunDirectory;
+            await InitializeAndPublishRunWithoutPruningAsync(incompatibleRunStore);
+        }
+
+        var metadataPath = Path.Combine(incompatibleRunDirectory, "run.json");
+        var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        metadata[nameof(DashboardRunDescriptor.SchemaVersion)] = DashboardRunStore.SchemaVersion - 1;
+        File.WriteAllText(metadataPath, metadata.ToJsonString());
+
+        foreach (var index in Enumerable.Range(1, DashboardRunStore.MaxRuns - 1))
+        {
+            using var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddDays(-index)));
+            await InitializeAndPublishRunWithoutPruningAsync(historicalRunStore);
+        }
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        await InitializeAndPublishRunWithoutPruningAsync(currentRunStore);
+
+        Assert.Equal(DashboardRunStore.MaxRuns, currentRunStore.GetRuns().Count);
+        Assert.True(Directory.Exists(incompatibleRunDirectory));
+
+        currentRunStore.PruneExpiredRuns();
+
+        var runsDirectory = Path.GetDirectoryName(currentRunStore.RunDirectory)!;
+        Assert.Equal(DashboardRunStore.MaxRuns, Directory.GetDirectories(runsDirectory).Length);
+        Assert.False(Directory.Exists(incompatibleRunDirectory));
     }
 
     [Fact]
@@ -659,7 +828,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.False(File.Exists(prunedRun.DatabasePath));
 
         var selectableRuns = currentRunStore.GetRuns();
-        Assert.Equal(DashboardRunStore.MaxRuns - activeRunCount, selectableRuns.Count);
+        Assert.Equal(DashboardRunStore.MaxRuns, selectableRuns.Count);
         Assert.All(selectableRuns, run => Assert.True(File.Exists(run.DatabasePath)));
     }
 

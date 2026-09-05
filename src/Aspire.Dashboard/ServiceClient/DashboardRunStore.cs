@@ -84,7 +84,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly ILogger<DashboardRunStore> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly Action<string> _deleteRunDirectory;
-    private readonly Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
+    private IReadOnlyList<DashboardRunDescriptor> _runs;
     private readonly object _runStateLock = new();
     private bool _metadataPublished;
 
@@ -182,7 +182,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             ApplicationName = options.Value.ApplicationName,
             DatabaseFileName = Path.GetFileName(DatabasePath)
         };
-        _runs = new(LoadRuns);
+        _runs = [CreateDescriptor(_metadata, RunDirectory, isCurrent: true)];
 
         _logger.LogDebug(
             "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Run directory: '{RunDirectory}'. Database path: '{DatabasePath}'.",
@@ -230,10 +230,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IReadOnlyList<DashboardRunDescriptor> GetRuns()
     {
-        var runs = _runs.Value;
-        return runs.Any(run => run.IsPruned || !run.IsSelectable)
-            ? runs.Where(run => !run.IsPruned && run.IsSelectable).ToArray()
-            : runs;
+        lock (_runStateLock)
+        {
+            _runs = LoadRuns();
+            return _runs.Any(run => run.IsPruned || !run.IsSelectable)
+                ? _runs.Where(run => !run.IsPruned && run.IsSelectable).ToArray()
+                : _runs;
+        }
     }
 
     public DashboardRunDescriptor GetCurrentRun() => GetRuns().Single(run => run.IsCurrent);
@@ -313,15 +316,15 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var storedRun = GetRunById(run.RunId);
-        if (storedRun is null)
-        {
-            return null;
-        }
-
-        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
         lock (_runStateLock)
         {
+            var storedRun = GetRunById(run.RunId);
+            if (storedRun is null)
+            {
+                return null;
+            }
+
+            var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
             var runLock = TryOpenRunLock(runDirectory);
             if (runLock is null)
             {
@@ -335,9 +338,14 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private IReadOnlyList<DashboardRunDescriptor> LoadRuns()
     {
+        var existingRuns = _runs.ToDictionary(run => run.RunId, StringComparer.Ordinal);
+        var discoveredRunIds = new HashSet<string>(StringComparer.Ordinal) { RunId };
+        var currentRun = existingRuns.GetValueOrDefault(RunId) ?? CreateDescriptor(_metadata, RunDirectory, isCurrent: true);
+        currentRun.IsPinned = _metadata.IsPinned;
+        currentRun.IsSelectable = true;
         var runs = new List<DashboardRunDescriptor>
         {
-            CreateDescriptor(_metadata, RunDirectory, isCurrent: true)
+            currentRun
         };
 
         if (SupportsRunSelection && Directory.Exists(_runsDirectory))
@@ -353,12 +361,22 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 try
                 {
                     var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-                    if (metadata is { SchemaVersion: SchemaVersion })
+                    if (metadata is { SchemaVersion: SchemaVersion } &&
+                        !string.IsNullOrEmpty(metadata.RunId) &&
+                        string.Equals(Path.GetFileName(directory), metadata.RunId, StringComparison.Ordinal) &&
+                        discoveredRunIds.Add(metadata.RunId))
                     {
-                        var run = CreateDescriptor(metadata, directory, isCurrent: false);
+                        var discoveredRun = CreateDescriptor(metadata, directory, isCurrent: false);
+                        var run = existingRuns.TryGetValue(metadata.RunId, out var existingRun) &&
+                            // A lease owns the run lock through its descriptor. Preserve that descriptor if metadata
+                            // changed between discovery reading run.json and acquiring the lock.
+                            (existingRun.IsLeased || HasSameMetadata(existingRun, discoveredRun))
+                                ? existingRun
+                                : discoveredRun;
+                        run.IsPinned = metadata.IsPinned;
                         // Filter out in-progress runs that are owned by other Dashboard instances.
-                        using var runLock = TryOpenRunLock(directory);
-                        run.IsSelectable = runLock is not null;
+                        using var runLock = run.IsLeased ? null : TryOpenRunLock(directory);
+                        run.IsSelectable = run.IsLeased || runLock is not null;
                         runs.Add(run);
                     }
                 }
@@ -381,6 +399,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             string.Join(", ", orderedRuns.Select(run => run.RunId)));
 
         return orderedRuns;
+    }
+
+    private static bool HasSameMetadata(DashboardRunDescriptor existingRun, DashboardRunDescriptor discoveredRun)
+    {
+        return existingRun.SchemaVersion == discoveredRun.SchemaVersion &&
+            existingRun.StartedAtUtc == discoveredRun.StartedAtUtc &&
+            existingRun.EndedAtUtc == discoveredRun.EndedAtUtc &&
+            existingRun.CleanShutdown == discoveredRun.CleanShutdown &&
+            string.Equals(existingRun.ApplicationName, discoveredRun.ApplicationName, StringComparison.Ordinal) &&
+            string.Equals(existingRun.DatabasePath, discoveredRun.DatabasePath, StringComparison.Ordinal) &&
+            existingRun.IsCurrent == discoveredRun.IsCurrent;
     }
 
     public void Dispose()
@@ -439,9 +468,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private void PruneRuns(Action<string> deleteRunDirectory)
     {
-        foreach (var run in _runs.Value.Where(run => !run.IsPinned).Skip(MaxRuns))
+        // Run IDs are invariant UTC timestamps and therefore also provide the durable chronological sort order.
+        // Discover pruning candidates directly from disk so runs from older schemas are still subject to retention.
+        var runDirectories = Directory.EnumerateDirectories(_runsDirectory!)
+            .Where(directory => !IsPinnedRunDirectory(directory))
+            .OrderByDescending(directory => string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(Path.GetFileName, StringComparer.Ordinal)
+            .Skip(MaxRuns)
+            .ToArray();
+
+        foreach (var directory in runDirectories)
         {
-            var directory = Path.GetDirectoryName(run.DatabasePath)!;
             using var runLock = TryOpenRunLock(directory);
             // Pinning can happen after the candidate list is created. Recheck while holding the same lock used by
             // SetRunPinned so a successful pin always completes before pruning decides whether to delete the run.
@@ -453,7 +490,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             try
             {
                 deleteRunDirectory(directory);
-                run.IsPruned = true;
+                lock (_runStateLock)
+                {
+                    var run = _runs.SingleOrDefault(
+                        run => string.Equals(Path.GetDirectoryName(run.DatabasePath), directory, StringComparison.OrdinalIgnoreCase));
+                    run?.IsPruned = true;
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
