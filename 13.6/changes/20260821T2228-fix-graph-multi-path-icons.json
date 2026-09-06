@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Fixed a crash in the dashboard's Graph view for resources (such as Azure Blob storage) whose icon uses multiple sibling SVG paths, by combining them into a single compound path before rendering.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\uddbc\ufe0f",
+  "emoji": "🖼️",
   "firstMergedAt": "2026-08-21T22:28:04Z",
   "lastMergedAt": "2026-08-21T22:28:04Z",
   "name": "Fix Graph view crash for multi-path icons",

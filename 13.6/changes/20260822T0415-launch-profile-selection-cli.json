@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@prom3theu5"
+  ],
+  "description": "Added `--launch-profile <name>` (and the `-lp` alias) to `aspire run` and `aspire start`, letting users pick a specific launch profile. When the direct AppHost launcher can't safely reproduce the selected profile, the request is forwarded to `dotnet run` so the .NET SDK remains responsible for validation and diagnostics.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🚦",
+  "firstMergedAt": "2026-08-22T04:15:28Z",
+  "lastMergedAt": "2026-08-22T04:15:28Z",
+  "name": "Launch profile selection for aspire run and start",
+  "owner": "adamint",
+  "prs": [
+    19494
+  ]
+}

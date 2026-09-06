@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -10,7 +10,7 @@
   "description": "Calling `WaitForResourceHealthyAsync` with `WaitBehavior.StopOnResourceUnavailable` for a resource name that isn't registered in the application model used to hang indefinitely. The wait now checks the application model upfront and stops immediately when the resource doesn't exist.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\u23f1\ufe0f",
+  "emoji": "⏱️",
   "firstMergedAt": "2026-08-12T01:15:15Z",
   "lastMergedAt": "2026-08-12T01:15:15Z",
   "name": "Fix hang when waiting on an unavailable resource that doesn't exist",

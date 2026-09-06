@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added `aspire sdk export`, which emits a deterministic TypeScript API reference as JSON for `Aspire.Hosting` at the running CLI SDK version, or for an exact `PackageName@Version` supplied with `--package`. Generated TypeScript signatures and the exported documentation model now share the same projector.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📘",
+  "firstMergedAt": "2026-08-25T05:16:22Z",
+  "lastMergedAt": "2026-08-25T05:16:22Z",
+  "name": "Export canonical TypeScript API data from the CLI",
+  "owner": "adamint",
+  "prs": [
+    19032
+  ]
+}

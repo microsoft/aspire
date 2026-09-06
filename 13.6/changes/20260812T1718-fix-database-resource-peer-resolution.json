@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -10,7 +10,7 @@
     1508
   ],
   "docsRequired": false,
-  "emoji": "\ud83d\uddc4\ufe0f",
+  "emoji": "🗄️",
   "firstMergedAt": "2026-08-12T17:18:35Z",
   "lastMergedAt": "2026-08-12T17:18:35Z",
   "name": "Fix database resource peer resolution",

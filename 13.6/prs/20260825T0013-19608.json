@@ -1,0 +1,9 @@
+{
+  "author": "SankeerthNara",
+  "comment": "CI trust/security automation for extension release PRs, internal repository maintenance with no user-facing impact",
+  "mergedAt": "2026-08-25T00:13:23Z",
+  "number": 19608,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Add trusted fast path for extension release PRs"
+}

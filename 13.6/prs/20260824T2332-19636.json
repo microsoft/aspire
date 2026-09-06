@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix giving DCP initial kubeconfig discovery its own 60-second timeout to avoid startup abort",
+  "mergedAt": "2026-08-24T23:32:49Z",
+  "number": 19636,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Use separate timeout for DCP initialization"
+}

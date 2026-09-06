@@ -1,0 +1,9 @@
+{
+  "author": "vivekjm",
+  "comment": "Dashboard UX improvement disabling browser autocomplete on filter boxes",
+  "mergedAt": "2026-08-24T00:01:17Z",
+  "number": 19044,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Disable autocomplete for dashboard filters"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "DCP can take longer than 20 seconds to write its initial kubeconfig on contended CI hosts, which previously aborted AppHost startup. Initial kubeconfig discovery and client creation now get a separate 60-second timeout, while subsequent DCP API calls keep the existing 20-second timeout.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-08-24T23:32:49Z",
+  "lastMergedAt": "2026-08-24T23:32:49Z",
+  "name": "Use separate timeout for DCP initialization",
+  "owner": "adamint",
+  "prs": [
+    19636
+  ]
+}

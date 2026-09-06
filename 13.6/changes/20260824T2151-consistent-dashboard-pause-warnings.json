@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Console logs now show a localized capture-paused warning in the page footer, matching the visibility already given to structured logs and traces. The metrics pause warning has also been moved so it no longer sits below the fold inside scrollable chart content, making the active pause state harder to miss.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏸️",
+  "firstMergedAt": "2026-08-24T21:51:46Z",
+  "lastMergedAt": "2026-08-24T21:51:46Z",
+  "name": "Show consistent pause warnings across dashboard pages",
+  "owner": "ellahathaway",
+  "prs": [
+    19624
+  ]
+}

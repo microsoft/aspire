@@ -1,6 +1,6 @@
 {
   "area": "Integrations",
-  "areaEmoji": "\ud83d\udd0c",
+  "areaEmoji": "🔌",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -10,7 +10,7 @@
     1474
   ],
   "docsRequired": true,
-  "emoji": "\ud83d\udcbe",
+  "emoji": "💾",
   "firstMergedAt": "2026-08-12T02:20:03Z",
   "lastMergedAt": "2026-08-12T02:20:03Z",
   "name": "AKS persistent volume support",

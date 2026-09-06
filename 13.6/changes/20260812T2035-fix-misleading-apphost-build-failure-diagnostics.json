@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -12,7 +12,7 @@
     1523
   ],
   "docsRequired": false,
-  "emoji": "\ud83e\uddf1",
+  "emoji": "🧱",
   "firstMergedAt": "2026-08-12T20:35:17Z",
   "lastMergedAt": "2026-08-12T20:35:17Z",
   "name": "Fix misleading AppHost build failure diagnostics",

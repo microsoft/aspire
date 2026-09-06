@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Automated NuGet dependency bump, not a feature documentation change",
+  "mergedAt": "2026-08-24T13:56:12Z",
+  "number": 1516,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 5 updates"
+}

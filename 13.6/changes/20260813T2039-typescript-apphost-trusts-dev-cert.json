@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "TypeScript AppHosts now trust the ASP.NET Core development certificate when custom AppHost code opens TLS connections to Aspire-managed resources in run mode, fixing TLS handshake failures for polyglot AppHosts.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udd12",
+  "emoji": "🔒",
   "firstMergedAt": "2026-08-13T20:39:22Z",
   "lastMergedAt": "2026-08-13T20:39:22Z",
   "name": "TypeScript AppHosts now trust the dev certificate",

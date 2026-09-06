@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "CodeLens and gutter resource state now keep working when an AppHost is opened through a symlinked workspace path. The extension falls back to canonical filesystem paths when normalized paths do not match directly.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udd17",
+  "emoji": "🔗",
   "firstMergedAt": "2026-08-12T18:22:25Z",
   "lastMergedAt": "2026-08-12T18:22:25Z",
   "name": "Fix AppHost editor state in symlinked workspaces",

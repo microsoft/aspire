@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Azure provisioning could raise `ConnectionStringAvailableEvent` multiple times for a resource, causing duplicate dashboard connection metadata and duplicate-property warnings. Publishing connection metadata is now idempotent, replacing existing `resource.connectionString` and `resource.connectionProperties` values by property name instead of appending duplicates.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔁",
+  "firstMergedAt": "2026-08-24T17:14:30Z",
+  "lastMergedAt": "2026-08-24T17:14:30Z",
+  "name": "Avoid duplicate dashboard connection metadata",
+  "owner": "sebastienros",
+  "prs": [
+    19613
+  ]
+}

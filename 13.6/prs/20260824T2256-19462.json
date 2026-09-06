@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix restoring the stable FWLink for the dashboard unsecured endpoint warning",
+  "mergedAt": "2026-08-24T22:56:52Z",
+  "number": 19462,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Restore dashboard unsecured endpoint FWLink"
+}

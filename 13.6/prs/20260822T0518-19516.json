@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "CI test infrastructure change (smoke test coverage), no user-facing impact",
+  "mergedAt": "2026-08-22T05:18:38Z",
+  "number": 19516,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Run CLI smoke tests across all PR platforms"
+}

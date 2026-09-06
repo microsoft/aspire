@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix for incomplete Kubernetes values.yaml output for embedded environment parameters",
+  "mergedAt": "2026-08-24T04:19:39Z",
+  "number": 19429,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Fix Kubernetes values for embedded environment parameters"
+}

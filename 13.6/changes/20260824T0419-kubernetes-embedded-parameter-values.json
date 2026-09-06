@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Kubernetes publishing now declares embedded config and secret parameters in `values.yaml` instead of emitting Helm references without the corresponding values, fixing incomplete generated output such as `http:///test`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⎈",
+  "firstMergedAt": "2026-08-24T04:19:39Z",
+  "lastMergedAt": "2026-08-24T04:19:39Z",
+  "name": "Fix incomplete Kubernetes values for embedded parameters",
+  "owner": "mitchdenny",
+  "prs": [
+    19429
+  ]
+}

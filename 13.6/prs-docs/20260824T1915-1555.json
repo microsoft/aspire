@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Automated GitHub Actions dependency bump, not a feature documentation change",
+  "mergedAt": "2026-08-24T19:15:54Z",
+  "number": 1555,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "build(deps): bump the github-actions group with 11 updates"
+}

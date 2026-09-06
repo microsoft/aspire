@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Dashboard resource rows now reflect the state of their replica child rows, fixing the case where a deployed Azure Container Apps parent row stayed \"Scaled to zero\" even after one of its replicas reported \"Running\".",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83e\uddec",
+  "emoji": "🧬",
   "firstMergedAt": "2026-08-18T19:08:09Z",
   "lastMergedAt": "2026-08-18T19:08:09Z",
   "name": "Update parent resource state from replicas",

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The unsecured endpoint warning in the dashboard UI once again links to the stable `https://aka.ms/aspire/api-endpoint-unsecured` FWLink instead of a direct security-considerations URL, so the destination documentation can change without requiring a dashboard update.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-08-24T22:56:52Z",
+  "lastMergedAt": "2026-08-24T22:56:52Z",
+  "name": "Restore dashboard unsecured endpoint FWLink",
+  "owner": "JamesNK",
+  "prs": [
+    19462
+  ]
+}

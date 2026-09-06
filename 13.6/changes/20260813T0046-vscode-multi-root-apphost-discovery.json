@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -8,7 +8,7 @@
   "description": "The VS Code extension's AppHosts view now discovers and combines AppHosts from every open workspace root instead of only the first, so multi-root workspaces show all available AppHosts.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\uddc2\ufe0f",
+  "emoji": "🗂️",
   "firstMergedAt": "2026-08-13T00:46:37Z",
   "lastMergedAt": "2026-08-13T00:46:37Z",
   "name": "Show AppHosts from every VS Code workspace root",

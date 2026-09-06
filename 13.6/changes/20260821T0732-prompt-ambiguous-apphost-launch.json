@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -10,7 +10,7 @@
   "description": "The VS Code extension now prompts you to pick an AppHost when a debug configuration's directory contains multiple buildable AppHosts, instead of failing the launch with no way to disambiguate.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\u2753",
+  "emoji": "❓",
   "firstMergedAt": "2026-08-21T07:32:19Z",
   "lastMergedAt": "2026-08-21T07:32:19Z",
   "name": "Prompt for AppHost on ambiguous directory launch",

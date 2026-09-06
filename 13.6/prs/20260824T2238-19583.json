@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Build infrastructure change adding a NuGet feed for diagnostics dependencies, no user-facing impact",
+  "mergedAt": "2026-08-24T22:38:40Z",
+  "number": 19583,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Add dotnet-tools feed for diagnostics dependencies"
+}

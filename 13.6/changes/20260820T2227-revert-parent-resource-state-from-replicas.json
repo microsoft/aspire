@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Reverted the parent resource state derived-from-replicas change while preserving the resource subscription race fix, restoring the dashboard's previous parent resource state behavior after issues were found.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\u21a9\ufe0f",
+  "emoji": "↩️",
   "firstMergedAt": "2026-08-20T22:27:06Z",
   "lastMergedAt": "2026-08-20T22:27:06Z",
   "name": "Revert parent resource state from replicas",

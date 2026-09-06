@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Fixed the Dashboard rendering `<html lang=\"\">` when running under invariant culture, which broke accessibility tooling; invariant culture now maps to `lang=\"en\"`.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\u267f",
+  "emoji": "♿",
   "firstMergedAt": "2026-08-13T04:53:37Z",
   "lastMergedAt": "2026-08-13T04:53:37Z",
   "name": "Fix Dashboard HTML language under invariant culture",

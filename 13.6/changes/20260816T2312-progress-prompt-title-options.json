@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -8,7 +8,7 @@
   "description": "The interaction service's progress prompt title is now configurable through options rather than a fixed positional parameter, making the API more flexible and consistent across C# and polyglot AppHosts.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udcdd",
+  "emoji": "📝",
   "firstMergedAt": "2026-08-16T23:12:56Z",
   "lastMergedAt": "2026-08-16T23:12:56Z",
   "name": "Move progress prompt title to options",

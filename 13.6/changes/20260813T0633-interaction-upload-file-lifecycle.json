@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -8,7 +8,7 @@
   "description": "Uploaded interaction files are now cleaned up based on their lifecycle: files for failed or canceled interaction uploads are removed immediately, and uploads are validated against the owning interaction and input to prevent misuse.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83e\uddf9",
+  "emoji": "🧹",
   "firstMergedAt": "2026-08-13T06:33:50Z",
   "lastMergedAt": "2026-08-13T06:33:50Z",
   "name": "Lifecycle management for interaction upload files",

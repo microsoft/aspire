@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "CLI commands that emit console or debug logs now keep readable status messages without interactive spinner frames. Aspire still reports progress, but renders it as stable text so verbose logging no longer interleaves with spinner output.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udda5\ufe0f",
+  "emoji": "🖥️",
   "firstMergedAt": "2026-08-12T02:09:46Z",
   "lastMergedAt": "2026-08-12T05:16:38Z",
   "name": "Suppress CLI progress spinners when console logging is enabled",

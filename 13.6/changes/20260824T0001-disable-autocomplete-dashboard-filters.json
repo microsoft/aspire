@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@vivekjm"
+  ],
+  "description": "Disabled browser autocomplete on page-level filter boxes across Structured Logs, Traces, Console Logs, Resources, and Trace Detail, so unrelated browser-saved values no longer appear when a filter receives focus. This matches the existing behavior of the Resource, Span, and Structured Log detail filters.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-08-24T00:01:17Z",
+  "lastMergedAt": "2026-08-24T00:01:17Z",
+  "name": "Disable autocomplete on dashboard filters",
+  "owner": "JamesNK",
+  "prs": [
+    19044
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only removal of a flaky duplicate test, no user-facing impact",
+  "mergedAt": "2026-08-24T22:56:12Z",
+  "number": 19538,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Remove flaky duplicate child log path test"
+}

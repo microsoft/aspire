@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only fix for VS Code extension E2E test flakiness, no user-facing impact",
+  "mergedAt": "2026-08-24T21:56:46Z",
+  "number": 19631,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Fix consistent extension E2E failures"
+}

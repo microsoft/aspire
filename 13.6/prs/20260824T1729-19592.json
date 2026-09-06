@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only stabilization of VS Code extension E2E assertions, no user-facing impact",
+  "mergedAt": "2026-08-24T17:29:25Z",
+  "number": 19592,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Stabilize VS Code extension E2E state assertions"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New CLI feature exporting canonical TypeScript API data for the SDK",
+  "mergedAt": "2026-08-25T05:16:22Z",
+  "number": 19032,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Export canonical TypeScript API data from the CLI"
+}

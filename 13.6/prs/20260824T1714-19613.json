@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix avoiding duplicate dashboard connection metadata from repeated events",
+  "mergedAt": "2026-08-24T17:14:30Z",
+  "number": 19613,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Avoid duplicate dashboard connection metadata"
+}

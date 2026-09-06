@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "No matching product changelog entry found; documents existing telemetry limits behavior not tied to a milestone PR",
+  "mergedAt": "2026-08-24T12:40:42Z",
+  "number": 1561,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Update dashboard telemetry limit documentation"
+}

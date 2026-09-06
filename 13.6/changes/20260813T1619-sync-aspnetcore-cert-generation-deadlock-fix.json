@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Synced the vendored ASP.NET Core certificate generation source to pick up a Unix/macOS process deadlock fix, avoiding hangs when generating developer HTTPS certificates.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udd10",
+  "emoji": "🔐",
   "firstMergedAt": "2026-08-13T16:19:26Z",
   "lastMergedAt": "2026-08-13T16:19:26Z",
   "name": "Fix developer certificate generation deadlock on Unix/macOS",

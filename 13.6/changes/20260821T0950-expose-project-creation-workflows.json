@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -10,7 +10,7 @@
   "description": "The Aspire pane now offers a \"Create with Aspire...\" action to start the `aspire new` and `aspire init` project creation flows directly from the toolbar, instead of requiring the Command Palette.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\u2728",
+  "emoji": "✨",
   "firstMergedAt": "2026-08-21T09:50:56Z",
   "lastMergedAt": "2026-08-21T09:50:56Z",
   "name": "Create Aspire projects from the pane",

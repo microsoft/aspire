@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Engineering-only change to CI validation tooling for Python SDK, no user-facing impact",
+  "mergedAt": "2026-08-22T04:48:28Z",
+  "number": 19584,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Centralize Python SDK validation"
+}

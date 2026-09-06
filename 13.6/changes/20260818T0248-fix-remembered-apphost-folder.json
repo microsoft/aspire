@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "In multi-root VS Code workspaces, the extension now remembers which workspace folder's AppHost was selected instead of always resolving to the first folder on a later F5.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\uddc2\ufe0f",
+  "emoji": "🗂️",
   "firstMergedAt": "2026-08-18T02:48:08Z",
   "lastMergedAt": "2026-08-18T02:48:08Z",
   "name": "Fix remembered AppHost folder in multi-root workspaces",

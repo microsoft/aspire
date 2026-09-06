@@ -1,0 +1,9 @@
+{
+  "author": "prom3theu5",
+  "comment": "New CLI feature: --launch-profile / -lp option for aspire run and start",
+  "mergedAt": "2026-08-22T04:15:28Z",
+  "number": 19494,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Add launch profile selection to Aspire CLI"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Bug fix restoring DevTunnel endpoint URL publication in dashboard/MCP snapshots",
+  "mergedAt": "2026-08-24T17:46:05Z",
+  "number": 19590,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "Fix DevTunnel endpoint URL publication"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Issue template rendering tweak, internal repository maintenance with no product impact",
+  "mergedAt": "2026-08-24T20:35:57Z",
+  "number": 19048,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Render aspire doctor output from issue template as code block by default"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Kubernetes publishing no longer hardcodes runtime-only hostname parameter values or leaves hostless Ingress paths and Gateway routes as catch-all rules, so `WithHostname(...)` provides the documented routing scope and `publishValueAsDefault: false` is honored for these resources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-08-24T23:56:21Z",
+  "lastMergedAt": "2026-08-24T23:56:21Z",
+  "name": "Fix Kubernetes hostname publishing and routing",
+  "owner": "mitchdenny",
+  "prs": [
+    19430
+  ]
+}

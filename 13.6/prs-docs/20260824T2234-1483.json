@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #19076 (default Aspire CLI bundle opt-in); matched to existing changelog entry",
+  "mergedAt": "2026-08-24T22:34:20Z",
+  "number": 1483,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "included",
+  "title": "[docs] Default Aspire CLI bundle opt-in in new C# AppHost templates"
+}

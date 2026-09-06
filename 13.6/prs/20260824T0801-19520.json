@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only E2E coverage addition, no user-facing product change",
+  "mergedAt": "2026-08-24T08:01:56Z",
+  "number": 19520,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "Add run-mode deployment E2E coverage for role assignments under a service principal credential"
+}

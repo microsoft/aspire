@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Support page update for a patch release (13.5.2), not tied to a 13.6 milestone changelog entry",
+  "mergedAt": "2026-08-24T17:29:31Z",
+  "number": 1569,
+  "runDate": "2026-09-06T12:06:33Z",
+  "status": "excluded",
+  "title": "[support] Update support page for Aspire 13.5.2 release"
+}

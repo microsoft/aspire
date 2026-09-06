@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Debugging a specific AppHost via a `launch.json` configuration no longer silently overwrites the workspace's default AppHost in `aspire.config.json`. The default is only established or replaced through normal discovery or explicit user selection.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83c\udfaf",
+  "emoji": "🎯",
   "firstMergedAt": "2026-08-12T00:44:43Z",
   "lastMergedAt": "2026-08-12T00:44:43Z",
   "name": "Keep launch-configuration AppHost targets out of the workspace default",

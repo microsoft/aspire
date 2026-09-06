@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Fixed a VS Code extension issue where a debugger-backed dashboard browser launch could block AppHost startup completion; the browser launch now runs as observed background work instead.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83d\udc1b",
+  "emoji": "🐛",
   "firstMergedAt": "2026-08-21T21:38:56Z",
   "lastMergedAt": "2026-08-21T21:38:56Z",
   "name": "Fix dashboard launch blocking AppHost startup",

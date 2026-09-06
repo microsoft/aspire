@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -8,7 +8,7 @@
   "description": "Anonymous dashboard access and unauthenticated OTLP ingestion configuration now consistently link to documentation explaining the risks and mitigations, making it easier to understand the tradeoffs before opting in.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\ud83d\udd10",
+  "emoji": "🔐",
   "firstMergedAt": "2026-08-18T06:26:29Z",
   "lastMergedAt": "2026-08-18T06:26:29Z",
   "name": "Clearer guidance on dashboard unsecured access risks",

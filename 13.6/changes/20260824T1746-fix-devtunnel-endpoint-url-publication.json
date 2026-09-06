@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "After upgrading to Aspire 13.5, DevTunnel port resources could become Running and Healthy while the Dashboard and MCP resource snapshots still reported no URLs. The proxyless endpoint allocator's temporary localhost port assignment for `DevTunnelPortResource` is now handled correctly, restoring endpoint URL publication.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-08-24T17:46:05Z",
+  "lastMergedAt": "2026-08-24T17:46:05Z",
+  "name": "Fix DevTunnel endpoint URL publication",
+  "owner": "danegsta",
+  "prs": [
+    19590
+  ]
+}
