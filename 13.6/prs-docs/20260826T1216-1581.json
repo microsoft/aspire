@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Documents PR #18382 from a prior milestone, already shipped in 13.5",
+  "mergedAt": "2026-08-26T12:16:30Z",
+  "number": 1581,
+  "runDate": "2026-09-06T18:06:54Z",
+  "status": "excluded",
+  "title": "[docs] Document improved metrics chart filter tag rendering"
+}

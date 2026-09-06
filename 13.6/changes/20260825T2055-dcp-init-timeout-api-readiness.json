@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "AppHost startup no longer fails when DCP's kubeconfig is ready but its first API call is still slow. The startup timeout budget now extends through the first successful DCP API operation instead of ending as soon as the kubeconfig is parsed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-08-25T20:55:29Z",
+  "lastMergedAt": "2026-08-25T20:55:29Z",
+  "name": "Extend DCP startup timeout through API readiness",
+  "owner": "adamint",
+  "prs": [
+    19641
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Release-verifier tooling change, not a changelog entry",
+  "mergedAt": "2026-08-26T15:14:57Z",
+  "number": 1567,
+  "runDate": "2026-09-06T18:06:54Z",
+  "status": "excluded",
+  "title": "Add release checks for short links and diagnostics"
+}

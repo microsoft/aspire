@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Markdown links with URLs that couldn't be parsed by `System.Uri` were previously rendered instead of being blocked. These URLs are now classified as prohibited, closing a gap where browsers or registered protocol handlers could still act on them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-08-26T14:12:05Z",
+  "lastMergedAt": "2026-08-26T14:12:05Z",
+  "name": "Harden Markdown link validation",
+  "owner": "JamesNK",
+  "prs": [
+    19698
+  ]
+}

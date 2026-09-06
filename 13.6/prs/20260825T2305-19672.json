@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Hot Reload advisory now shown once per workspace with opt-out setting",
+  "mergedAt": "2026-08-25T23:05:10Z",
+  "number": 19672,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "included",
+  "title": "Prevent repeated Hot Reload advisory"
+}

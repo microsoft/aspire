@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal telemetry detection update, no user-visible behavior change",
+  "mergedAt": "2026-08-27T16:13:59Z",
+  "number": 19740,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Detect GitHub Copilot app in CLI telemetry"
+}

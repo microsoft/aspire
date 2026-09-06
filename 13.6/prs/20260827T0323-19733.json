@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Quarantines a flaky test, no user-facing change",
+  "mergedAt": "2026-08-27T03:23:54Z",
+  "number": 19733,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Quarantine failing staging self-update test"
+}

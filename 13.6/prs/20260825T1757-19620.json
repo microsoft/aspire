@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Removes unnecessary InternalsVisibleTo declarations, internal refactor",
+  "mergedAt": "2026-08-25T17:57:11Z",
+  "number": 19620,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Remove unnecessary friend assembly declarations"
+}

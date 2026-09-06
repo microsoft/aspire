@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Site infra change (URL redirects), not tied to a product PR",
+  "mergedAt": "2026-08-25T16:06:41Z",
+  "number": 1577,
+  "runDate": "2026-09-06T18:06:54Z",
+  "status": "excluded",
+  "title": "Redirect static paths to canonical casing"
+}

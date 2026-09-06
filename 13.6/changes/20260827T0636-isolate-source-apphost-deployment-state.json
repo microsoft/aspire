@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Source-file AppHosts in the same directory previously shared a directory-scoped deployment-state identity, letting one AppHost read or clear state belonging to a sibling. Each source AppHost now gets its own deployment-state identity while preserving safe access to legacy state during migration.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-08-27T06:36:52Z",
+  "lastMergedAt": "2026-08-27T06:36:52Z",
+  "name": "Isolate deployment state for source-file AppHosts",
+  "owner": "spboyer",
+  "prs": [
+    19709
+  ]
+}

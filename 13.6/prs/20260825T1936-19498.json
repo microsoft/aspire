@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal implementation swap (JsonPatch.Net to local impl), no user-visible behavior change",
+  "mergedAt": "2026-08-25T19:36:59Z",
+  "number": 19498,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Replace JsonPatch.Net with local implementation"
+}

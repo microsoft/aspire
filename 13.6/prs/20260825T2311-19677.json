@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI installer workflow fix for template package availability",
+  "mergedAt": "2026-08-25T23:11:23Z",
+  "number": 19677,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Fix broken `main` CI"
+}

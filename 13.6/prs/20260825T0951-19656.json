@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI/deployment test infrastructure fix, no user-facing product change",
+  "mergedAt": "2026-08-25T09:51:25Z",
+  "number": 19656,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Work around Azure CLI import deadlock in deployment tests"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Quarantines flaky tests, no user-facing change",
+  "mergedAt": "2026-08-26T01:06:45Z",
+  "number": 19690,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "test: Quarantine flaky CI tests"
+}

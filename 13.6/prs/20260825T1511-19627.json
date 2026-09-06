@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Removes obsolete internal exception type, internal refactor",
+  "mergedAt": "2026-08-25T15:11:01Z",
+  "number": 19627,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Remove obsolete certificate service exception"
+}

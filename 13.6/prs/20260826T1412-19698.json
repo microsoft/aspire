@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Hardens Markdown URL validation against unparseable links",
+  "mergedAt": "2026-08-26T14:12:05Z",
+  "number": 19698,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "included",
+  "title": "Harden Markdown URL validation"
+}

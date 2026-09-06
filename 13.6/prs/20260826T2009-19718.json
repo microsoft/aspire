@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Fixes internal Aspire Team App tool, not a shipped product",
+  "mergedAt": "2026-08-26T20:09:29Z",
+  "number": 19718,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Fix Azure CLI auth in Aspire Team App"
+}

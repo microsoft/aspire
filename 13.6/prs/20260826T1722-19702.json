@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI test fix for VS Code debugger E2E test",
+  "mergedAt": "2026-08-26T17:22:17Z",
+  "number": 19702,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Fix VS Code debugger guidance E2E contract"
+}

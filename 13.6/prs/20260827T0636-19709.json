@@ -1,0 +1,9 @@
+{
+  "author": "spboyer",
+  "comment": "Isolates deployment state identity for source-file AppHosts",
+  "mergedAt": "2026-08-27T06:36:52Z",
+  "number": 19709,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "included",
+  "title": "Isolate source AppHost deployment state"
+}

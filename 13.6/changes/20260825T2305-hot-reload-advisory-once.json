@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The C# Dev Kit Hot Reload advisory now appears at most once per workspace instead of reappearing after every extension-host reload. It can also be disabled entirely with the new `aspire.enableHotReloadNotification` setting.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-08-25T23:05:10Z",
+  "lastMergedAt": "2026-08-25T23:05:10Z",
+  "name": "Show Hot Reload advisory only once per workspace",
+  "owner": "adamint",
+  "prs": [
+    19672
+  ]
+}

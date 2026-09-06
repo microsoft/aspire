@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Documents PR #18211 from a prior milestone, already shipped in 13.5",
+  "mergedAt": "2026-08-26T12:14:50Z",
+  "number": 1568,
+  "runDate": "2026-09-06T18:06:54Z",
+  "status": "excluded",
+  "title": "[docs] Document stable channel nuget.config behavior for aspire new and aspire update"
+}

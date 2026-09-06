@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extends DCP startup timeout through first API readiness",
+  "mergedAt": "2026-08-25T20:55:29Z",
+  "number": 19641,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "included",
+  "title": "Extend DCP initialization timeout through API readiness"
+}

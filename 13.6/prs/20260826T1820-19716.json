@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Changes cron schedule for a workflow, engineering-only",
+  "mergedAt": "2026-08-26T18:20:12Z",
+  "number": 19716,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "excluded",
+  "title": "Change cron schedule to run weekly instead of daily"
+}

@@ -8,7 +8,8 @@
   "description": "New C# AppHost templates and `aspire init` single-file AppHosts now opt into the Aspire CLI bundle by default. Generated projects use bundled dashboard and DCP components without requiring a manual `AspireUseCliBundle` opt-in.",
   "docsPrs": [
     1483,
-    1511
+    1511,
+    1586
   ],
   "docsRequired": true,
   "emoji": "📦",

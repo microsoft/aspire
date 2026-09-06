@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New SQLite persistence and run history feature for the Dashboard",
+  "mergedAt": "2026-08-25T05:55:23Z",
+  "number": 18924,
+  "runDate": "2026-09-06T18:06:15Z",
+  "status": "included",
+  "title": "Add SQLite persistence and run history to the Dashboard"
+}
