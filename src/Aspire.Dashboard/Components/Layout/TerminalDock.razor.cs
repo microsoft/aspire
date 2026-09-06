@@ -3,9 +3,12 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Grpc.Core;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -72,6 +75,12 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     [Inject]
     public required ILogger<TerminalDock> Logger { get; init; }
+
+    [Inject]
+    public required INotificationService NotificationService { get; init; }
+
+    [Inject]
+    public required IToastService ToastService { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -285,11 +294,31 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         StateHasChanged();
     }
 
-    private async Task CloseTerminalAsync(string terminalId)
+    private async Task CloseTerminalAsync(string terminalId, string terminalTitle)
     {
         try
         {
             await DashboardClient.CloseTerminalAsync(terminalId, _cts.Token).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (_cts.IsCancellationRequested && (ex is OperationCanceledException || ex is RpcException { StatusCode: StatusCode.Cancelled }))
+        {
+            Logger.LogDebug(ex, "Stopped waiting for dock terminal {TerminalId} to close because the dashboard disconnected.", terminalId);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded && !_disposed)
+        {
+            Logger.LogWarning(ex, "Timed out waiting for dock terminal {TerminalId} to close.", terminalId);
+
+            // Removal can arrive on the watch stream before disposal times out. Keep the clicked title rather
+            // than looking it up in the remaining tabs, and retain the warning in the notification center.
+            var title = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutTitle)].Value;
+            var message = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutMessage), terminalTitle].Value;
+            NotificationService.AddNotification(new NotificationEntry
+            {
+                Title = title,
+                Body = message,
+                Intent = FluentMessageIntent.Warning
+            });
+            ToastService.ShowWarning(message);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

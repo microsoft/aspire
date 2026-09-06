@@ -14,6 +14,7 @@ internal sealed class TestAspireTerminal(string id) : IAspireTerminal
     public TerminalOwner Owner => TerminalOwner.AppHost;
     public TerminalPlacement Placement => TerminalPlacement.Dialog;
     public bool IsDisposed { get; private set; }
+    public Func<ValueTask>? OnDispose { get; set; }
 
     public void Start() => throw new NotSupportedException();
     public void Show() => throw new NotSupportedException();
@@ -30,6 +31,6 @@ internal sealed class TestAspireTerminal(string id) : IAspireTerminal
     public ValueTask DisposeAsync()
     {
         IsDisposed = true;
-        return ValueTask.CompletedTask;
+        return OnDispose?.Invoke() ?? ValueTask.CompletedTask;
     }
 }

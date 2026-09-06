@@ -44,6 +44,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     // Protobuf sends strings as UTF8. Be conservative and assume the average character byte size is 2.
     public const int LogMaxBatchCharacters = 1024 * 1024 * 2;
 
+    internal const int CloseTerminalTimeoutSeconds = 10;
+
     /// <summary>
     /// The minimum dashboard version required by this AppHost build.
     /// Bump this when a new AppHost feature requires a newer dashboard.
@@ -725,12 +727,50 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         if (terminalService.TryGetTerminal(request.TerminalId, out var terminal))
         {
-            await terminal.DisposeAsync().ConfigureAwait(false);
+            await CloseTerminalAsync(terminal, context.CancellationToken).ConfigureAwait(false);
         }
 
         // Closing an unknown terminal is not an error: the dashboard may be reacting to a tab the AppHost
         // already removed.
         return new CloseTerminalResponse();
+    }
+
+    /// <summary>
+    /// Requests disposal while bounding only the dashboard's wait for cleanup.
+    /// </summary>
+    internal async Task CloseTerminalAsync(Aspire.Hosting.Terminals.IAspireTerminal terminal, CancellationToken cancellationToken)
+    {
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeout = Task.Delay(TimeSpan.FromSeconds(CloseTerminalTimeoutSeconds), waitCts.Token);
+
+        // DisposeAsync can block synchronously in cancellation callbacks. Run it independently so even
+        // that work is bounded by the RPC's wait, without letting a disconnect cancel the disposal.
+        var disposal = Task.Run(async () => await terminal.DisposeAsync().ConfigureAwait(false), CancellationToken.None);
+        _ = disposal.ContinueWith(
+            task => logger.LogError(task.Exception, "Failed to dispose terminal {TerminalId}.", terminal.Id),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        try
+        {
+            if (await Task.WhenAny(disposal, timeout).ConfigureAwait(false) != disposal)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Only stop waiting. Cleanup still owns the attached transports until terminal teardown
+                // finishes, and the continuation observes any failure after this RPC has returned.
+                throw new RpcException(new Status(StatusCode.DeadlineExceeded,
+                    $"Terminal '{terminal.Id}' did not finish disposing within {CloseTerminalTimeoutSeconds} seconds."));
+            }
+
+            // Preserve genuine disposal failures, including TimeoutException from the workload itself.
+            await disposal.ConfigureAwait(false);
+        }
+        finally
+        {
+            waitCts.Cancel();
+        }
     }
 
     private static TerminalDescriptor ToProtoDescriptor(AppHostTerminalDescriptor descriptor)

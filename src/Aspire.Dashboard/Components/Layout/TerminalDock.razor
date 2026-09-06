@@ -20,7 +20,7 @@
                                       Class="terminal-dock-tab-close"
                                       Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
                                       aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
-                                      OnClick="@(() => CloseTerminalAsync(terminal.TerminalId))">
+                                      OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
                             <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
                         </FluentButton>
                     </span>

@@ -113,7 +113,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalDockCloseTab", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal close timed out.
+        /// </summary>
+        public static string TerminalDockCloseTimedOutTitle {
+            get {
+                return ResourceManager.GetString("TerminalDockCloseTimedOutTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background..
+        /// </summary>
+        public static string TerminalDockCloseTimedOutMessage {
+            get {
+                return ResourceManager.GetString("TerminalDockCloseTimedOutMessage", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool..
         /// </summary>

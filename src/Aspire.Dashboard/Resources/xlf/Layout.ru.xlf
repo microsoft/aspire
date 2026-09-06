@@ -152,6 +152,16 @@
         <target state="new">Close terminal</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutMessage">
+        <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
+        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <note>{0} is the terminal's display title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutTitle">
+        <source>Terminal close timed out</source>
+        <target state="new">Terminal close timed out</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
         <target state="new">Open terminal in a new window</target>

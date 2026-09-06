@@ -18,6 +18,7 @@ public class TestDashboardClient : IDashboardClient
     private readonly Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? _resourceChannelProvider;
     private readonly Func<Channel<WatchInteractionsResponseUpdate>>? _interactionChannelProvider;
     private readonly Func<Channel<WatchTerminalsUpdate>>? _terminalChannelProvider;
+    private readonly Func<string, CancellationToken, Task>? _closeTerminal;
     private readonly Channel<ResourceCommandResponseViewModel>? _resourceCommandsChannel;
     private readonly Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? _executeResourceCommand;
     private readonly Channel<WatchInteractionsRequestUpdate>? _sendInteractionUpdateChannel;
@@ -53,7 +54,8 @@ public class TestDashboardClient : IDashboardClient
         IList<ResourceViewModel>? initialResources = null,
         Task? whenConnected = null,
         bool isReadOnly = false,
-        Func<Channel<WatchTerminalsUpdate>>? terminalChannelProvider = null)
+        Func<Channel<WatchTerminalsUpdate>>? terminalChannelProvider = null,
+        Func<string, CancellationToken, Task>? closeTerminal = null)
     {
         IsEnabled = isEnabled ?? false;
         IsReadOnly = isReadOnly;
@@ -67,6 +69,7 @@ public class TestDashboardClient : IDashboardClient
         _sendInteractionUpdateChannel = sendInteractionUpdateChannel;
         _initialResources = initialResources;
         _terminalChannelProvider = terminalChannelProvider;
+        _closeTerminal = closeTerminal;
     }
 
     public ValueTask DisposeAsync()
@@ -123,7 +126,7 @@ public class TestDashboardClient : IDashboardClient
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         ClosedTerminals.Enqueue(terminalId);
-        return Task.CompletedTask;
+        return _closeTerminal?.Invoke(terminalId, cancellationToken) ?? Task.CompletedTask;
     }
 
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)

@@ -3,6 +3,8 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
+using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Text;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
@@ -16,6 +18,7 @@ using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,8 +26,10 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using DashboardServiceImpl = Aspire.Hosting.Dashboard.DashboardService;
 using Resource = Aspire.Hosting.ApplicationModel.Resource;
+using WriteContext = Microsoft.Extensions.Logging.Testing.WriteContext;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
@@ -1263,6 +1268,227 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         InteractionFileUploadStore.ValidateFileReferences(jsonValue: null, "OtherFile", result);
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task CloseTerminal_UnknownId_Succeeds()
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+
+        var response = await service.CloseTerminal(
+            new CloseTerminalRequest { TerminalId = "unknown" }, TestServerCallContext.Create()).DefaultTimeout();
+
+        Assert.NotNull(response);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CloseTerminal_DisposesTerminal_AndRepeatedCloseSucceeds(bool started)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        var output = new Pipe();
+        await using var reader = output.Reader.AsStream();
+        await using var writer = output.Writer.AsStream();
+        await using var terminal = terminalService.CreateTerminal("Close", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(reader, Stream.Null)));
+        if (started)
+        {
+            terminal.Start();
+        }
+
+        var request = new CloseTerminalRequest { TerminalId = terminal.Id };
+        var response = await service.CloseTerminal(request, TestServerCallContext.Create()).DefaultTimeout();
+
+        Assert.NotNull(response);
+        Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+        Assert.True(terminal.DisposeAsync().AsTask().IsCompletedSuccessfully);
+        Assert.NotNull(await service.CloseTerminal(request, TestServerCallContext.Create()).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CloseTerminal_PendingTransportCleanup_TimeoutOrCancellationDoesNotReleaseTransport(bool cancelRpc)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = terminalService.CreateTerminal("Closing", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+        var (serverStream, clientStream) = TestDuplexStream.CreatePair();
+        using var serverOwner = serverStream;
+        using var clientOwner = clientStream;
+        using var gated = new GatedTerminalWriteStream(serverStream);
+        using var clientCts = new CancellationTokenSource();
+        using var rpcCts = new CancellationTokenSource();
+        await using var client = Hex1bTerminal.CreateBuilder().WithHeadless().WithHmp1Stream(clientStream).Build();
+        var attachment = terminalService.AttachAsync(terminal.Id, gated, CancellationToken.None);
+        var run = client.RunAsync(clientCts.Token);
+
+        try
+        {
+            await gated.WriteStarted.DefaultTimeout();
+            var stopwatch = Stopwatch.StartNew();
+            var close = service.CloseTerminal(
+                new CloseTerminalRequest { TerminalId = terminal.Id },
+                TestServerCallContext.Create(cancellationToken: rpcCts.Token));
+            await gated.WriteCancelled.DefaultTimeout();
+            var cleanup = terminal.DisposeAsync().AsTask();
+
+            if (cancelRpc)
+            {
+                await rpcCts.CancelAsync();
+                var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => close).DefaultTimeout();
+                Assert.Equal(rpcCts.Token, exception.CancellationToken);
+            }
+            else
+            {
+                Assert.Equal(10, DashboardServiceImpl.CloseTerminalTimeoutSeconds);
+                var exception = await Assert.ThrowsAsync<RpcException>(() => close).TimeoutAfter(TimeSpan.FromSeconds(30));
+                Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+                // Allow timer granularity without accepting a shorter production timeout.
+                Assert.True(stopwatch.Elapsed >= TimeSpan.FromSeconds(9.9), $"Close timed out after {stopwatch.Elapsed}.");
+            }
+
+            Assert.False(cleanup.IsCompleted);
+            Assert.False(attachment.IsCompleted);
+            Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+            gated.ReleaseWrite();
+            await cleanup.DefaultTimeout();
+            await attachment.DefaultTimeout();
+        }
+        finally
+        {
+            gated.ReleaseWrite();
+            await terminal.DisposeAsync().AsTask().DefaultTimeout();
+            await attachment.DefaultTimeout();
+            await clientCts.CancelAsync();
+            try
+            {
+                await run.DefaultTimeout();
+            }
+            catch (OperationCanceledException) when (clientCts.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task CloseTerminal_BlockingDisposal_TimeoutOrCancellationObservesLateFailure(bool fail, bool cancelRpc)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var sink = new TestSink();
+        var logs = Channel.CreateUnbounded<WriteContext>();
+        sink.MessageLogged += log => logs.Writer.TryWrite(log);
+        var logger = new TestLogger<DashboardServiceImpl>(new TestLoggerFactory(sink, enabled: true));
+        var service = CreateDashboardService(serviceData, logger: logger, terminalService: terminalService);
+        using var rpcCts = new CancellationTokenSource();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminal = new TestAspireTerminal("blocking")
+        {
+            OnDispose = () =>
+            {
+                started.TrySetResult();
+                try
+                {
+                    // A synchronous cancellation callback can block before DisposeAsync even returns a task.
+                    release.Task.GetAwaiter().GetResult();
+                    return ValueTask.CompletedTask;
+                }
+                finally
+                {
+                    completed.TrySetResult();
+                }
+            }
+        };
+
+        try
+        {
+            // Keep the test's gate releasable even if disposal regresses to blocking the RPC synchronously.
+            var close = Task.Run(() => service.CloseTerminalAsync(terminal, rpcCts.Token));
+            await started.Task.DefaultTimeout();
+            if (cancelRpc)
+            {
+                await rpcCts.CancelAsync();
+                var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => close).DefaultTimeout();
+                Assert.Equal(rpcCts.Token, exception.CancellationToken);
+            }
+            else
+            {
+                var exception = await Assert.ThrowsAsync<RpcException>(() => close).TimeoutAfter(TimeSpan.FromSeconds(30));
+                Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+            }
+            Assert.False(completed.Task.IsCompleted);
+
+            var failure = new InvalidOperationException("Disposal callback failed.");
+            if (fail)
+            {
+                release.TrySetException(failure);
+            }
+            else
+            {
+                release.TrySetResult();
+            }
+            await completed.Task.DefaultTimeout();
+
+            if (fail)
+            {
+                var log = await logs.Reader.ReadAsync().AsTask().DefaultTimeout();
+                Assert.Equal(LogLevel.Error, log.LogLevel);
+                Assert.Equal($"Failed to dispose terminal {terminal.Id}.", log.Message);
+                var aggregate = Assert.IsType<AggregateException>(log.Exception);
+                Assert.Same(failure, Assert.Single(aggregate.Flatten().InnerExceptions));
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+            await completed.Task.DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CloseTerminal_DisposalFailure_IsLoggedAndPropagated(bool timeoutException, bool synchronous)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var sink = new TestSink();
+        var logs = Channel.CreateUnbounded<WriteContext>();
+        sink.MessageLogged += log => logs.Writer.TryWrite(log);
+        var logger = new TestLogger<DashboardServiceImpl>(new TestLoggerFactory(sink, enabled: true));
+        var service = CreateDashboardService(serviceData, logger: logger, terminalService: terminalService);
+        Exception failure = timeoutException ? new TimeoutException("Workload timeout.") : new InvalidOperationException("Disposal failed.");
+        var terminal = new TestAspireTerminal("failing")
+        {
+            OnDispose = () => synchronous ? throw failure : ValueTask.FromException(failure)
+        };
+
+        var exception = await Record.ExceptionAsync(() => service.CloseTerminalAsync(terminal, CancellationToken.None)).DefaultTimeout();
+
+        Assert.Same(failure, exception);
+        var log = await logs.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(LogLevel.Error, log.LogLevel);
+        Assert.Equal($"Failed to dispose terminal {terminal.Id}.", log.Message);
+        Assert.Same(failure, Assert.Single(Assert.IsType<AggregateException>(log.Exception).InnerExceptions));
     }
 
     private static DashboardServiceImpl CreateDashboardService(
