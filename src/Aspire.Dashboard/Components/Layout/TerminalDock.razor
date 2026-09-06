@@ -15,13 +15,15 @@
                      @key="terminal.TerminalId"
                      @onclick="@(() => Activate(terminal.TerminalId))">
                     <span class="terminal-dock-tab-title">@terminal.Title</span>
-                    <FluentButton Appearance="Appearance.Stealth"
-                                  Class="terminal-dock-tab-close"
-                                  Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
-                                  aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
-                                  OnClick="@(() => CloseTerminalAsync(terminal.TerminalId))">
-                        <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
-                    </FluentButton>
+                    <span @onclick:stopPropagation="true">
+                        <FluentButton Appearance="Appearance.Stealth"
+                                      Class="terminal-dock-tab-close"
+                                      Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
+                                      aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
+                                      OnClick="@(() => CloseTerminalAsync(terminal.TerminalId))">
+                            <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
+                        </FluentButton>
+                    </span>
                 </div>
             }
             <FluentButton Appearance="Appearance.Stealth"

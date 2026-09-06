@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
+using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -694,11 +695,7 @@ public partial class ConsoleLogsTests
         // reaching its assertions. The stubs return harmless defaults — the
         // assertions in these tests are about render-branch selection, not
         // about runtime terminal behaviour.
-        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
-        module.Setup<int>("initTerminal", _ => true).SetResult(1);
-        module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
-        module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
-        module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
+        TerminalSetupHelpers.SetupTerminalView(this);
     }
 
     private static ResourceViewModel CreateTerminalResource(string resourceName, int replicaIndex, int replicaCount, KnownResourceState state = KnownResourceState.Running)

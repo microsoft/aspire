@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -40,10 +39,12 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
     /// </remarks>
     public const string IdPrefix = "resource:";
 
-    private readonly ConcurrentDictionary<string, ResourceAspireTerminal> _handles = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ResourceAspireTerminal> _handles = new(StringComparer.Ordinal);
+    private readonly HashSet<ResourceAspireTerminal> _retiringHandles = [];
+    private readonly object _gate = new();
     private readonly DistributedApplicationModel _model;
     private readonly ILogger _logger;
-    private int _disposed;
+    private bool _disposed;
 
     public ResourceTerminalCatalog(DistributedApplicationModel model, ILogger logger)
     {
@@ -107,7 +108,7 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
     {
         terminal = null;
 
-        if (_disposed != 0 || !IsResourceTerminalId(terminalId))
+        if (!IsResourceTerminalId(terminalId))
         {
             return false;
         }
@@ -118,22 +119,52 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
             return false;
         }
 
-        terminal = _handles.GetOrAdd(
-            entry.Id,
-            static (id, state) => new ResourceAspireTerminal(id, state.Entry.Title, state.Entry.ConsumerUdsPath, state.Logger),
-            (Entry: entry, Logger: _logger));
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return false;
+            }
+
+            // Disposing a handle releases only an automation peer, not the resource terminal. A later lookup
+            // must therefore be able to acquire a fresh handle for the same still-running replica.
+            if (!_handles.TryGetValue(entry.Id, out var handle) || handle.IsDisposed)
+            {
+                if (handle is not null)
+                {
+                    // IsDisposed is set before asynchronous teardown finishes. Keep replaced peers reachable
+                    // until that teardown completes so catalog shutdown also waits for them.
+                    _retiringHandles.Add(handle);
+                    _ = RetireHandleAsync(handle);
+                }
+
+                handle = new ResourceAspireTerminal(entry.Id, entry.Title, entry.ConsumerUdsPath, _logger);
+                _handles[entry.Id] = handle;
+            }
+
+            terminal = handle;
+        }
 
         return true;
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        ResourceAspireTerminal[] handles;
+        lock (_gate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            handles = [.. _handles.Values, .. _retiringHandles];
+            _handles.Clear();
+            _retiringHandles.Clear();
         }
 
-        foreach (var handle in _handles.Values)
+        foreach (var handle in handles)
         {
             // Disposing a resource terminal handle disconnects the AppHost's automation peer; the resource's
             // own workload is unaffected, so there is nothing here that should delay shutdown.
@@ -147,7 +178,25 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
             }
         }
 
-        _handles.Clear();
+    }
+
+    private async Task RetireHandleAsync(ResourceAspireTerminal handle)
+    {
+        try
+        {
+            await handle.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Disconnecting a replaced automation peer for resource terminal {TerminalId} failed.", handle.Id);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _retiringHandles.Remove(handle);
+            }
+        }
     }
 }
 

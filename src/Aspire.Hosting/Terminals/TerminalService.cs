@@ -115,20 +115,27 @@ public sealed class TerminalService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(builder);
-        ObjectDisposedException.ThrowIf(_disposed != 0, this);
 
         // Terminal ids are opaque to the dashboard and appear in websocket query strings, so use a
         // non-guessable value rather than a sequence number.
         var id = Guid.NewGuid().ToString("n");
-        var terminal = new Hex1bAspireTerminal(this, id, title, placement, builder, _logger);
+        Hex1bAspireTerminal terminal;
 
-        _terminals[id] = terminal;
-        _logger.LogDebug("Created {Placement} terminal {TerminalId} ({Title}).", placement, id, title);
-
-        if (terminal.Placement == TerminalPlacement.Dock)
+        // Registration, publication, snapshots, and shutdown share one boundary. Otherwise a subscriber
+        // can see both a snapshot entry and its Added event, or shutdown can miss a new registration.
+        lock (_syncLock)
         {
-            Publish(new TerminalChange(TerminalChangeType.Added, terminal.Descriptor));
+            ObjectDisposedException.ThrowIf(_disposed != 0, this);
+            terminal = new Hex1bAspireTerminal(this, id, title, placement, builder, _logger);
+            _terminals[id] = terminal;
+
+            if (terminal.Placement == TerminalPlacement.Dock)
+            {
+                Publish(new TerminalChange(TerminalChangeType.Added, terminal.Descriptor));
+            }
         }
+
+        _logger.LogDebug("Created {Placement} terminal {TerminalId} ({Title}).", placement, id, title);
 
         return terminal;
     }
@@ -137,8 +144,8 @@ public sealed class TerminalService : IAsyncDisposable
     /// Attaches a viewer transport to a terminal.
     /// </summary>
     /// <returns>
-    /// A task that completes when the terminal ends or <paramref name="cancellationToken"/> is signalled.
-    /// Callers keep their transport open until it completes.
+    /// A task that completes after this viewer disconnects or the terminal ends, once all operations on the
+    /// caller's transport have finished. Cancellation disconnects only this viewer.
     /// </returns>
     internal Task AttachAsync(string terminalId, Stream clientStream, CancellationToken cancellationToken)
     {
@@ -237,7 +244,14 @@ public sealed class TerminalService : IAsyncDisposable
             var channel = Channel.CreateUnbounded<TerminalChange>(
                 new UnboundedChannelOptions { AllowSynchronousContinuations = false, SingleReader = true, SingleWriter = false });
 
-            ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Add(c), channel);
+            if (_disposed != 0)
+            {
+                channel.Writer.TryComplete();
+            }
+            else
+            {
+                ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Add(c), channel);
+            }
 
             var initial = _terminals.Values
                 .Where(t => t.Placement == TerminalPlacement.Dock)
@@ -272,7 +286,7 @@ public sealed class TerminalService : IAsyncDisposable
     }
 
     internal void NotifyActivated(Hex1bAspireTerminal terminal)
-        => Publish(new TerminalChange(TerminalChangeType.Activated, terminal.Descriptor));
+        => Notify(terminal, TerminalChangeType.Activated);
 
     /// <summary>
     /// Removes a terminal from the registry and tears its workload down without waiting for it.
@@ -306,21 +320,35 @@ public sealed class TerminalService : IAsyncDisposable
     }
 
     internal void NotifyRetitled(Hex1bAspireTerminal terminal)
-        => Publish(new TerminalChange(TerminalChangeType.Retitled, terminal.Descriptor));
+        => Notify(terminal, TerminalChangeType.Retitled);
+
+    private void Notify(Hex1bAspireTerminal terminal, TerminalChangeType changeType)
+    {
+        lock (_syncLock)
+        {
+            if (_terminals.ContainsKey(terminal.Id))
+            {
+                Publish(new TerminalChange(changeType, terminal.Descriptor));
+            }
+        }
+    }
 
     internal void Remove(Hex1bAspireTerminal terminal)
     {
-        if (!_terminals.TryRemove(terminal.Id, out _))
+        lock (_syncLock)
         {
-            return;
+            if (!_terminals.TryRemove(terminal.Id, out _))
+            {
+                return;
+            }
+
+            if (terminal.Placement == TerminalPlacement.Dock)
+            {
+                Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
+            }
         }
 
         _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
-
-        if (terminal.Placement == TerminalPlacement.Dock)
-        {
-            Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
-        }
     }
 
     private void Publish(TerminalChange change)
@@ -336,23 +364,39 @@ public sealed class TerminalService : IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        Hex1bAspireTerminal[] terminals;
+        lock (_syncLock)
         {
-            return;
+            if (_disposed != 0)
+            {
+                return;
+            }
+
+            _disposed = 1;
+            terminals = [.. _terminals.Values];
+            _terminals.Clear();
+
+            foreach (var terminal in terminals)
+            {
+                if (terminal.Placement == TerminalPlacement.Dock)
+                {
+                    Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
+                }
+            }
+
+            foreach (var channel in _outgoingChannels)
+            {
+                channel.Writer.TryComplete();
+            }
         }
 
-        foreach (var terminal in _terminals.Values)
+        foreach (var terminal in terminals)
         {
-            Remove(terminal);
+            _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
 
             // Don't await the workload winding down. AppHost shutdown should not be held up by a terminal
             // whose process ignores cancellation; the process is torn down with the AppHost regardless.
             _ = terminal.StopAsync();
-        }
-
-        foreach (var channel in _outgoingChannels)
-        {
-            channel.Writer.TryComplete();
         }
 
         if (ResourceTerminals is { } resourceTerminals)

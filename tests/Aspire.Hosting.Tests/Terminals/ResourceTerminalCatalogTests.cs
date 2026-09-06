@@ -3,9 +3,12 @@
 
 using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
@@ -20,7 +23,8 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class ResourceTerminalCatalogTests : IAsyncLifetime
 {
-    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-terminal-catalog-tests-").FullName;
+    // Leave room for the generated host socket name under macOS's 104-byte Unix socket path limit.
+    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-tc-").FullName;
 
     [Fact]
     public void BuildIdRoundTripsThroughIsResourceTerminalId()
@@ -147,6 +151,79 @@ public class ResourceTerminalCatalogTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TryGetTerminalReplacesADisposedHandle()
+    {
+        using var builder = CreateBuilder();
+        builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var catalog = await CreateCatalogAsync(builder);
+        var id = ResourceTerminalCatalog.BuildId("myapp", 0);
+
+        Assert.True(catalog.TryGetTerminal(id, out var first));
+        await first!.DisposeAsync();
+
+        Assert.True(catalog.TryGetTerminal(id, out var replacement));
+        Assert.NotSame(first, replacement);
+        Assert.Equal(id, replacement!.Id);
+        Assert.False(Assert.IsType<ResourceAspireTerminal>(replacement).IsDisposed);
+        Assert.True(catalog.TryGetTerminal(id, out var repeated));
+        Assert.Same(replacement, repeated);
+    }
+
+    [Fact]
+    public async Task ConcurrentLookupsShareTheReplacementHandle()
+    {
+        using var builder = CreateBuilder();
+        builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var catalog = await CreateCatalogAsync(builder);
+        var id = ResourceTerminalCatalog.BuildId("myapp", 0);
+        Assert.True(catalog.TryGetTerminal(id, out var first));
+        await first!.DisposeAsync();
+
+        var handles = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() =>
+        {
+            Assert.True(catalog.TryGetTerminal(id, out var handle));
+            return handle;
+        })));
+
+        Assert.NotSame(first, handles[0]);
+        Assert.All(handles, handle => Assert.Same(handles[0], handle));
+    }
+
+    [Fact]
+    public async Task CatalogDisposalWaitsForAReplacedHandleToFinishDisconnecting()
+    {
+        using var builder = CreateBuilder();
+        builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        var logger = new GatedLogger<ResourceAspireTerminal>("Connecting AppHost automation");
+        await using var catalog = await CreateCatalogAsync(builder, logger);
+        var id = ResourceTerminalCatalog.BuildId("myapp", 0);
+        Assert.True(catalog.TryGetTerminal(id, out var first));
+
+        var automation = first!.SendTextAsync("not-delivered");
+        try
+        {
+            await logger.Blocked.DefaultTimeout();
+            var firstDisposal = first.DisposeAsync().AsTask();
+            Assert.True(catalog.TryGetTerminal(id, out var replacement));
+            Assert.NotSame(first, replacement);
+            await replacement!.DisposeAsync();
+
+            // The current handle is already disposed. Only the replaced peer can keep shutdown pending.
+            var catalogDisposal = catalog.DisposeAsync().AsTask();
+            Assert.False(catalogDisposal.IsCompleted);
+            logger.Release();
+            await catalogDisposal.DefaultTimeout();
+            Assert.True(firstDisposal.IsCompleted);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => automation).DefaultTimeout();
+        }
+        finally
+        {
+            logger.Release();
+            await first.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task ResourceTerminalReportsResourceOwnership()
     {
         using var builder = CreateBuilder();
@@ -178,13 +255,16 @@ public class ResourceTerminalCatalogTests : IAsyncLifetime
     /// Builds the application and publishes <see cref="BeforeStartEvent"/>, which is the seam where
     /// <c>WithTerminal()</c> materializes the per-replica terminal hosts the catalog reads.
     /// </summary>
-    private static async Task<ResourceTerminalCatalog> CreateCatalogAsync(IDistributedApplicationTestingBuilder builder)
+    private static Task<ResourceTerminalCatalog> CreateCatalogAsync(IDistributedApplicationTestingBuilder builder)
+        => CreateCatalogAsync(builder, NullLogger.Instance);
+
+    private static async Task<ResourceTerminalCatalog> CreateCatalogAsync(IDistributedApplicationTestingBuilder builder, ILogger logger)
     {
         await using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
 
-        return new ResourceTerminalCatalog(model, NullLogger.Instance);
+        return new ResourceTerminalCatalog(model, logger);
     }
 
     private IDistributedApplicationTestingBuilder CreateBuilder()

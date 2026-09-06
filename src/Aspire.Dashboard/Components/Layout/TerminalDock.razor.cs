@@ -31,6 +31,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private bool _hasBeenOpened;
     private bool _isVisible;
+    private bool _disposed;
     private string? _activeTerminalId;
 
     /// <summary>
@@ -104,8 +105,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// suppressed whenever focus is in a terminal or any other text input, because it types <c>~</c> there, so the
     /// dock needs an affordance that works regardless of where focus happens to be.
     /// </remarks>
-    public Task ToggleAsync()
+    public Task ToggleAsync() => InvokeAsync(() =>
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (_isVisible)
         {
             Hide();
@@ -115,8 +121,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             Show();
         }
 
-        return Task.CompletedTask;
-    }
+    });
 
     private void Show()
     {
@@ -129,10 +134,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     {
         // Wiring happens on the render that first materialises the dock element, which is not the component's first
         // render — the markup is suppressed until the dock has been opened at least once.
-        if (_hasBeenOpened && _jsModule is null)
+        if (!_disposed && _hasBeenOpened && _jsModule is null)
         {
             _selfRef = DotNetObjectReference.Create(this);
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/TerminalDock.razor.js").ConfigureAwait(true);
+            if (_disposed)
+            {
+                await _jsModule.DisposeAsync().ConfigureAwait(true);
+                return;
+            }
             await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef).ConfigureAwait(true);
         }
     }
@@ -141,12 +151,16 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// Called from JS while the user drags the dock's top edge.
     /// </summary>
     [JSInvokable]
-    public Task SetHeightAsync(int heightPx)
+    public Task SetHeightAsync(int heightPx) => InvokeAsync(() =>
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _heightPx = Math.Clamp(heightPx, 120, 1200);
         StateHasChanged();
-        return Task.CompletedTask;
-    }
+    });
 
     private void Hide()
     {
@@ -249,15 +263,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// Reattaches a terminal whose window the user closed. Remounting <c>TerminalView</c> opens a fresh socket and
     /// the HMP1 state sync replays the screen, so nothing is lost by having had no viewer in between.
     /// </summary>
-    private Task OnDetachedWindowClosedAsync(string terminalId)
+    private Task OnDetachedWindowClosedAsync(string terminalId) => InvokeAsync(() =>
     {
-        if (_detachedTerminalIds.Remove(terminalId))
+        if (!_disposed && _detachedTerminalIds.Remove(terminalId))
         {
-            return InvokeAsync(StateHasChanged);
+            StateHasChanged();
         }
-
-        return Task.CompletedTask;
-    }
+    });
 
     /// <summary>
     /// Shows the panel that stands in for a terminal when there is nothing to show, or nothing selected.
@@ -291,23 +303,45 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         {
             await foreach (var update in DashboardClient.SubscribeTerminalsAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
+                // The stream runs on a worker. Dispatch the entire update, not just the render: Razor and click
+                // handlers enumerate these collections and must never race a snapshot or removal.
+                await InvokeAsync(async () =>
                 {
-                    _terminals.Clear();
-                    _terminals.AddRange(update.Snapshot.Terminals);
-                    _activeTerminalId ??= _terminals.FirstOrDefault()?.TerminalId;
-                }
-                else if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Change)
-                {
-                    if (Apply(update.Change.ChangeType, update.Change.Terminal) is { } endedTerminalId)
+                    if (_disposed)
                     {
-                        // The terminal is gone, so its window is showing a dead grid. Close it here rather than
-                        // leaving the user to notice and dismiss it.
-                        await InvokeAsync(() => CloseDetachedWindowAsync(endedTerminalId)).ConfigureAwait(false);
+                        return;
                     }
-                }
 
-                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                    List<string> endedTerminalIds = [];
+                    if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
+                    {
+                        _terminals.Clear();
+                        _terminals.AddRange(update.Snapshot.Terminals);
+                        if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
+                        {
+                            _activeTerminalId = _terminals.FirstOrDefault()?.TerminalId;
+                        }
+
+                        // Recovery snapshots replace all prior state, including terminals removed while offline.
+                        endedTerminalIds.AddRange(_detachedTerminalIds.Where(id => !_terminals.Any(t => t.TerminalId == id)));
+                        _detachedTerminalIds.ExceptWith(endedTerminalIds);
+                    }
+                    else if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Change &&
+                             Apply(update.Change.ChangeType, update.Change.Terminal) is { } endedTerminalId)
+                    {
+                        endedTerminalIds.Add(endedTerminalId);
+                    }
+
+                    StateHasChanged();
+                    foreach (var terminalId in endedTerminalIds)
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+                        await CloseDetachedWindowAsync(terminalId).ConfigureAwait(true);
+                    }
+                }).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -389,13 +423,34 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         ShortcutManager.RemoveGlobalKeydownListener(this);
+
+        // Stop updates before releasing browser-side state. A queued dispatcher callback observes _disposed and
+        // does nothing, and cancellation interrupts either the active RPC or its recovery wait.
+        await _cts.CancelAsync().ConfigureAwait(true);
+        if (_watchTask is { } watchTask)
+        {
+            try
+            {
+                await watchTask.ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when stopping the watch.
+            }
+        }
 
         if (_jsModule is { } module)
         {
             try
             {
-                await module.DisposeAsync().ConfigureAwait(false);
+                await module.DisposeAsync().ConfigureAwait(true);
             }
             catch (JSDisconnectedException)
             {
@@ -409,21 +464,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         {
             // Leaves any detached windows open: they are viewers of AppHost-owned terminals and have no reason to
             // die because this circuit went away.
-            await launcher.DisposeAsync().ConfigureAwait(false);
-        }
-
-        await _cts.CancelAsync().ConfigureAwait(false);
-
-        if (_watchTask is { } watchTask)
-        {
-            try
-            {
-                await watchTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected. We cancelled _cts immediately above, so the watch task ends by design.
-            }
+            await launcher.DisposeAsync().ConfigureAwait(true);
         }
 
         _cts.Dispose();

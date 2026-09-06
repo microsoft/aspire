@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Hosting.Terminals;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -13,9 +14,8 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests.Terminals;
 
 /// <summary>
-/// Guards <see cref="TerminalService"/>'s registry and dock change fan-out. No test here starts a workload:
-/// terminals are lazy, so creation, lookup, removal, and the dock subscription can all be exercised without a
-/// PTY, which is what keeps these tests fast and platform-independent.
+/// Guards <see cref="TerminalService"/>'s registry and dock change fan-out. Most tests leave terminals lazy,
+/// so creation, lookup, removal, and the dock subscription can be exercised without a PTY.
 /// </summary>
 [Trait("Partition", "2")]
 public class TerminalServiceTests
@@ -228,6 +228,122 @@ public class TerminalServiceTests
         await service.DisposeAsync().DefaultTimeout();
 
         Assert.Throws<ObjectDisposedException>(() => CreateInteractionTerminal(service, "Shell"));
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_DuringCreation_DoesNotReplaySnapshotAsAdded()
+    {
+        var logger = new GatedLogger<TerminalService>("Created Dock terminal");
+        await using var service = new TerminalService(logger);
+        var create = Task.Run(() => CreateDockTerminal(service, "Dock"));
+        try
+        {
+            // The log is a deterministic interleaving point. Registry mutation and publication must
+            // already agree before any other code, including a logger, can subscribe.
+            await logger.Blocked.DefaultTimeout();
+            using var subscription = service.SubscribeDockTerminals();
+            var descriptor = Assert.Single(subscription.InitialState);
+            logger.Release();
+            Assert.Equal(descriptor.Id, (await create.DefaultTimeout()).Id);
+
+            await service.DisposeAsync();
+            var changes = new List<TerminalChange>();
+            await foreach (var change in subscription.Subscription)
+            {
+                changes.Add(change);
+            }
+
+            var removed = Assert.Single(changes);
+            Assert.Equal(TerminalChangeType.Removed, removed.ChangeType);
+            Assert.Equal(descriptor.Id, removed.Terminal.Id);
+        }
+        finally
+        {
+            logger.Release();
+            await create.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_DuringRemoval_DoesNotReceiveRemovalForAnAbsentSnapshotEntry()
+    {
+        var logger = new GatedLogger<TerminalService>("Removed terminal");
+        await using var service = new TerminalService(logger);
+        var terminal = CreateDockTerminal(service, "Dock");
+        var remove = Task.Run(async () => await terminal.DisposeAsync());
+        try
+        {
+            await logger.Blocked.DefaultTimeout();
+            using var subscription = service.SubscribeDockTerminals();
+            Assert.Empty(subscription.InitialState);
+            logger.Release();
+            await remove.DefaultTimeout();
+
+            await service.DisposeAsync();
+            await using var changes = subscription.Subscription.GetAsyncEnumerator();
+            Assert.False(await changes.MoveNextAsync().AsTask().DefaultTimeout());
+        }
+        finally
+        {
+            logger.Release();
+            await remove.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task CreateTerminal_ConcurrentWithShutdown_DoesNotLeaveARegisteredTerminal()
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            await using var service = TestTerminalService.Create();
+            var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var create = Task.Run(async () =>
+            {
+                await start.Task;
+                try
+                {
+                    return CreateDockTerminal(service, "Dock");
+                }
+                catch (ObjectDisposedException)
+                {
+                    return null;
+                }
+            });
+            var shutdown = Task.Run(async () =>
+            {
+                await start.Task;
+                await service.DisposeAsync();
+            });
+            start.SetResult();
+            await Task.WhenAll(create, shutdown).DefaultTimeout();
+
+            try
+            {
+                Assert.Empty(service.ListAll());
+                Assert.Throws<ObjectDisposedException>(() => CreateDockTerminal(service, "Late"));
+            }
+            finally
+            {
+                if (await create is { } terminal)
+                {
+                    await terminal.DisposeAsync().DefaultTimeout();
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_AfterShutdown_ReturnsCompletedEmptySubscription()
+    {
+        await using var service = TestTerminalService.Create();
+        CreateDockTerminal(service, "Dock");
+        await service.DisposeAsync();
+
+        using var subscription = service.SubscribeDockTerminals();
+        Assert.Empty(subscription.InitialState);
+        Assert.Empty(GetOutgoingChannels(service));
+        await using var changes = subscription.Subscription.GetAsyncEnumerator();
+        Assert.False(await changes.MoveNextAsync().AsTask().DefaultTimeout());
     }
 
     [Fact]

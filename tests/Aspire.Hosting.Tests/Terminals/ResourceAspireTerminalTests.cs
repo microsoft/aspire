@@ -2,9 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Terminals;
-using Hex1b;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net.Sockets;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
@@ -32,7 +33,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
 
         // A shell is the workload because the round trip being proven is a human-shaped one: type a command,
         // have the workload run it, read the result off the replicated screen.
-        await using var host = await StartTerminalHostAsync("bash");
+        await using var host = await TestResourceTerminalHost.StartAsync(CreateSocketPath());
 
         await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance);
 
@@ -51,7 +52,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
 
-        await using var host = await StartTerminalHostAsync("bash");
+        await using var host = await TestResourceTerminalHost.StartAsync(CreateSocketPath());
 
         await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance);
 
@@ -84,77 +85,74 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
         await terminal.DisposeAsync().AsTask().DefaultTimeout();
     }
 
-    /// <summary>
-    /// Stands up a terminal serving an HMP1 Unix domain socket, standing in for a replica's terminal host.
-    /// </summary>
-    private async Task<TerminalHostStub> StartTerminalHostAsync(string shell)
+    [Fact]
+    public async Task AutomationRetriesAfterTheTerminalHostStarts()
     {
-        // Socket paths have a low length limit (around 104 bytes on macOS), so keep the file name short.
-        var socketPath = Path.Combine(_socketDirectory, $"{Guid.NewGuid().ToString("N")[..8]}.sock");
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
 
-        var terminal = Hex1bTerminal.CreateBuilder()
-            // The test host has no controlling terminal either, so it is headless for the same reason the
-            // AppHost's client is.
-            .WithHeadless()
-            .WithDimensions(120, 40)
-            .WithPtyProcess(shell)
-            .WithHmp1UdsServer(socketPath)
-            .Build();
+        var socketPath = CreateSocketPath();
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
 
-        var cts = new CancellationTokenSource();
-        var runTask = terminal.RunAsync(cts.Token);
+        await Assert.ThrowsAnyAsync<Exception>(() => terminal.SendTextAsync("not-delivered")).DefaultTimeout();
 
-        // The socket file appears when the listener binds, which is what a client can dial.
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!File.Exists(socketPath) && DateTime.UtcNow < deadline)
-        {
-            if (runTask.IsFaulted)
-            {
-                await runTask;
-            }
-
-            await Task.Delay(25);
-        }
-
-        Assert.True(File.Exists(socketPath), $"The terminal host did not begin listening on '{socketPath}'.");
-
-        return new TerminalHostStub(socketPath, terminal, cts, runTask);
+        await using var host = await TestResourceTerminalHost.StartAsync(socketPath);
+        await terminal.SendTextAsync("echo recovered\"\"-connection\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("recovered-connection").DefaultTimeout();
+        Assert.Contains("recovered-connection", terminal.GetScreenText());
     }
+
+    [Fact]
+    public async Task AutomationReconnectsAfterTheTerminalHostRestarts()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
+
+        var socketPath = CreateSocketPath();
+        await using var firstHost = await TestResourceTerminalHost.StartAsync(socketPath);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
+
+        await terminal.SendTextAsync("echo first\"\"-host\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("first-host").DefaultTimeout();
+        await firstHost.DisposeAsync().AsTask().DefaultTimeout();
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => terminal.GetScreenText() == string.Empty, "The old automation screen was not invalidated.");
+
+        await using var secondHost = await TestResourceTerminalHost.StartAsync(socketPath);
+        await terminal.SendTextAsync("echo replacement\"\"-host\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("replacement-host").DefaultTimeout();
+        Assert.Contains("replacement-host", terminal.GetScreenText());
+    }
+
+    [Fact]
+    public async Task CancelingOneCallerDoesNotCancelTheSharedConnectionAttempt()
+    {
+        var socketPath = CreateSocketPath();
+        using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+        listener.Listen();
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
+        using var cts = new CancellationTokenSource();
+
+        // Accept the transport but withhold the HMP1 handshake so cancellation occurs during connection setup.
+        var canceledCall = terminal.SendTextAsync("first", cts.Token);
+        using var peer = await listener.AcceptAsync().DefaultTimeout();
+        var otherCall = terminal.SendTextAsync("second");
+
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledCall).DefaultTimeout();
+        Assert.False(otherCall.IsCompleted);
+
+        await terminal.DisposeAsync().AsTask().DefaultTimeout();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => otherCall).DefaultTimeout();
+    }
+
+    private string CreateSocketPath()
+        // Socket paths have a low length limit (around 104 bytes on macOS), so keep the file name short.
+        => Path.Combine(_socketDirectory, $"{Guid.NewGuid().ToString("N")[..8]}.sock");
 
     public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     public ValueTask DisposeAsync()
     {
-        try
-        {
-            Directory.Delete(_socketDirectory, recursive: true);
-        }
-        catch (IOException)
-        {
-            // A socket file that the runtime still holds open is not worth failing a test over.
-        }
-
+        Directory.Delete(_socketDirectory, recursive: true);
         return ValueTask.CompletedTask;
-    }
-
-    private sealed class TerminalHostStub(string socketPath, Hex1bTerminal terminal, CancellationTokenSource cts, Task runTask) : IAsyncDisposable
-    {
-        public string SocketPath { get; } = socketPath;
-
-        public async ValueTask DisposeAsync()
-        {
-            await cts.CancelAsync();
-
-            try
-            {
-                await runTask;
-            }
-            catch (OperationCanceledException)
-            {
-            }
-
-            await terminal.DisposeAsync();
-            cts.Dispose();
-        }
     }
 }

@@ -28,6 +28,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     private string? _endpoint;
     private string _title = string.Empty;
     private bool _ended;
+    private bool _disposed;
     private Task? _watchTask;
 
     /// <summary>
@@ -83,17 +84,25 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         {
             await foreach (var update in DashboardClient.SubscribeTerminalsAsync(cancellationToken).ConfigureAwait(false))
             {
-                var changed = update.KindCase switch
+                await InvokeAsync(() =>
                 {
-                    WatchTerminalsUpdate.KindOneofCase.Snapshot => ApplySnapshot(terminalId, update.Snapshot),
-                    WatchTerminalsUpdate.KindOneofCase.Change => ApplyChange(terminalId, update.Change),
-                    _ => false
-                };
+                    if (_disposed)
+                    {
+                        return;
+                    }
 
-                if (changed)
-                {
-                    await InvokeAsync(StateHasChanged).ConfigureAwait(false);
-                }
+                    var changed = update.KindCase switch
+                    {
+                        WatchTerminalsUpdate.KindOneofCase.Snapshot => ApplySnapshot(terminalId, update.Snapshot),
+                        WatchTerminalsUpdate.KindOneofCase.Change => ApplyChange(terminalId, update.Change),
+                        _ => false
+                    };
+
+                    if (changed)
+                    {
+                        StateHasChanged();
+                    }
+                }).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -102,7 +111,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            // A broken stream only costs the window its title updates; the terminal itself is on a separate socket.
+            // Transport failures are retried by the client. Log unexpected failures without failing the circuit.
             Logger.LogWarning(ex, "Terminal window watch stream ended unexpectedly.");
         }
     }
@@ -156,6 +165,12 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         await _cts.CancelAsync().ConfigureAwait(false);
 
         if (_watchTask is { } watchTask)

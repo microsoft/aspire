@@ -96,26 +96,25 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     /// Attaches a viewer, starting the workload if this is the first thing to need it.
     /// </summary>
     /// <returns>
-    /// A task that completes once the terminal has fully torn down, or once <paramref name="cancellationToken"/>
-    /// is signalled. Callers keep their transport open until it completes.
+    /// A task that completes once this viewer disconnects or the terminal ends, and all operations on the
+    /// caller's transport have finished. Callers keep their transport open until it completes.
     /// </returns>
-    public Task AttachAsync(Stream clientStream, CancellationToken cancellationToken)
+    public async Task AttachAsync(Stream clientStream, CancellationToken cancellationToken)
     {
         EnsureStarted();
 
-        if (!_clients.Writer.TryWrite(clientStream))
+        // Hex1b owns and disposes the wrapper, never the gRPC stream. Closing it cancels only this viewer's
+        // I/O and waits for outstanding accesses, even when Hex1b's other pump is still winding down.
+        var attachment = new TerminalClientStream(clientStream);
+        await using var _ = attachment.ConfigureAwait(false);
+        if (!_clients.Writer.TryWrite(attachment))
         {
             throw new InvalidOperationException($"Terminal '{Id}' is no longer accepting clients.");
         }
 
-        return WaitForSessionEndAsync(cancellationToken);
-    }
-
-    private async Task WaitForSessionEndAsync(CancellationToken cancellationToken)
-    {
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), cancelled);
-        await Task.WhenAny(_sessionEnded.Task, cancelled.Task).ConfigureAwait(false);
+        await Task.WhenAny(_sessionEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
     }
 
     /// <summary>

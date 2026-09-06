@@ -176,7 +176,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             }
 
             var currentEndpoint = ResolveEndpoint();
-            if (!string.Equals(currentEndpoint, _connectedEndpoint, StringComparison.Ordinal))
+            while (!string.Equals(currentEndpoint, _connectedEndpoint, StringComparison.Ordinal))
             {
                 try
                 {
@@ -191,17 +191,19 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                     return;
                 }
 
-                _connectedEndpoint = currentEndpoint;
+                _connectedEndpoint = _terminalId != 0 ? currentEndpoint : null;
+                if (_terminalId == 0)
+                {
+                    break;
+                }
+
+                currentEndpoint = ResolveEndpoint();
             }
             return;
         }
 
-        // If a re-render fires while the very first initTerminal call is still
-        // in flight, do nothing here. Once that call completes the firstRender
-        // path will set _connectedEndpoint and any future rebind needed will be
-        // caught on the next render after that. Without this guard the rebind
-        // branch below would re-enter initialization and stack a second xterm
-        // onto the same container — see the comment on _initStarted.
+        // Initialization and its retries can yield while parameters change. Let the active operation reconcile
+        // the latest endpoint when it resumes rather than creating a second xterm in the same container.
         if (_initStarted && _terminalId == 0)
         {
             return;
@@ -218,7 +220,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         // the SignalR circuit and tear down the entire dashboard tab. Failing
         // to switch terminals is a localized, recoverable issue (the JS side
         // will keep retrying or the user can reload); a circuit failure is not.
-        if (!string.Equals(endpoint, _connectedEndpoint, StringComparison.Ordinal))
+        while (!string.Equals(endpoint, _connectedEndpoint, StringComparison.Ordinal))
         {
             try
             {
@@ -236,7 +238,15 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 // side keeps retrying so a transient hiccup heals itself.
                 return;
             }
-            _connectedEndpoint = endpoint;
+            _connectedEndpoint = _terminalId != 0 ? endpoint : null;
+            if (_terminalId == 0)
+            {
+                break;
+            }
+
+            // OnAfterRenderAsync completion does not cause a render. Apply selections that arrived while JS
+            // initialization was pending now, including removing the endpoint entirely.
+            endpoint = ResolveEndpoint();
         }
     }
 
@@ -261,6 +271,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     private async Task InitializeTerminalAsync(string endpoint)
     {
+        // Retries need the same reentrancy guard as the first render while JS creates the terminal.
+        _initStarted = true;
         try
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
@@ -328,6 +340,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             {
                 await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
                 _terminalId = 0;
+                _initStarted = false;
                 _connectedGeneration = -1;
                 return;
             }

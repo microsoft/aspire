@@ -17,18 +17,25 @@ public class TestDashboardClient : IDashboardClient
     private readonly Func<string, Channel<IReadOnlyList<ResourceLogLine>>>? _consoleLogsChannelProvider;
     private readonly Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? _resourceChannelProvider;
     private readonly Func<Channel<WatchInteractionsResponseUpdate>>? _interactionChannelProvider;
+    private readonly Func<Channel<WatchTerminalsUpdate>>? _terminalChannelProvider;
     private readonly Channel<ResourceCommandResponseViewModel>? _resourceCommandsChannel;
     private readonly Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? _executeResourceCommand;
     private readonly Channel<WatchInteractionsRequestUpdate>? _sendInteractionUpdateChannel;
     private readonly IList<ResourceViewModel>? _initialResources;
+    private int _terminalSubscriptionCount;
+    private int _activeTerminalSubscriptionCount;
 
     public bool IsEnabled { get; }
-    public bool IsReadOnly { get; }
+    public bool IsReadOnly { get; set; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
     public string? MinRequiredVersion => null;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
     public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
+    public ConcurrentQueue<string> ClosedTerminals { get; } = new();
+    public Action? OnTerminalSubscriptionDisposed { get; set; }
+    public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
+    public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
 #pragma warning restore CS0067
@@ -45,7 +52,8 @@ public class TestDashboardClient : IDashboardClient
         Channel<WatchInteractionsRequestUpdate>? sendInteractionUpdateChannel = null,
         IList<ResourceViewModel>? initialResources = null,
         Task? whenConnected = null,
-        bool isReadOnly = false)
+        bool isReadOnly = false,
+        Func<Channel<WatchTerminalsUpdate>>? terminalChannelProvider = null)
     {
         IsEnabled = isEnabled ?? false;
         IsReadOnly = isReadOnly;
@@ -58,6 +66,7 @@ public class TestDashboardClient : IDashboardClient
         _executeResourceCommand = executeResourceCommand;
         _sendInteractionUpdateChannel = sendInteractionUpdateChannel;
         _initialResources = initialResources;
+        _terminalChannelProvider = terminalChannelProvider;
     }
 
     public ValueTask DisposeAsync()
@@ -92,12 +101,28 @@ public class TestDashboardClient : IDashboardClient
 
     public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-        yield break;
+        Interlocked.Increment(ref _terminalSubscriptionCount);
+        Interlocked.Increment(ref _activeTerminalSubscriptionCount);
+        try
+        {
+            if (_terminalChannelProvider is { } provider)
+            {
+                await foreach (var update in provider().Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return update;
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeTerminalSubscriptionCount);
+            OnTerminalSubscriptionDisposed?.Invoke();
+        }
     }
 
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
+        ClosedTerminals.Enqueue(terminalId);
         return Task.CompletedTask;
     }
 

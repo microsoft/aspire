@@ -52,14 +52,17 @@
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
                 </FluentButton>
             }
-            <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@ToggleTerminalDockAsync"
-                          Title="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]" aria-label="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]">
-                @* WindowConsole only ships at Size20 in this Fluent version, so it is scaled to 24px to line up with
-                   the rest of the header cluster. The Size24 alternatives (WindowDevTools, Code) read as "developer
-                   tools" rather than "terminal". *@
-                <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Neutral"/>
-            </FluentButton>
+            @if (!_isSwitchingRuns && !DashboardClient.IsReadOnly)
+            {
+                <FluentButton Class="header-button"
+                              Appearance="Appearance.Stealth" OnClick="@ToggleTerminalDockAsync"
+                              Title="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]" aria-label="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]">
+                    @* WindowConsole only ships at Size20 in this Fluent version, so it is scaled to 24px to line up with
+                       the rest of the header cluster. The Size24 alternatives (WindowDevTools, Code) read as "developer
+                       tools" rather than "terminal". *@
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Neutral"/>
+                </FluentButton>
+            }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
@@ -156,7 +159,12 @@
     <FluentTooltipProvider />
     <FluentMenuProvider />
     <InteractionsProvider />
-    <TerminalDock @ref="_terminalDock" />
+    @if (!_isSwitchingRuns && !DashboardClient.IsReadOnly)
+    {
+        @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
+           new subscription rather than reusing the stream chosen for a previous selection. *@
+        <TerminalDock @key="RunSelection.SelectedRun.RunId" @ref="_terminalDock" />
+    }
     <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]

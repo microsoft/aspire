@@ -45,12 +45,11 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
 
     private readonly string _consumerUdsPath;
     private readonly ILogger _logger;
-    private readonly CancellationTokenSource _clientCts = new();
+    private readonly CancellationTokenSource _disposalCts = new();
     private readonly object _gate = new();
 
-    private Task<TerminalConnection>? _connectTask;
-    private Task? _runTask;
-    private Hex1bTerminalAutomator? _automator;
+    private ConnectionAttempt? _connection;
+    private Task? _disposeTask;
     private bool _disposed;
 
     public ResourceAspireTerminal(string id, string title, string consumerUdsPath, ILogger logger)
@@ -68,6 +67,17 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
     public TerminalOwner Owner => TerminalOwner.Resource;
 
     public TerminalPlacement Placement => TerminalPlacement.ResourceView;
+
+    internal bool IsDisposed
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _disposed;
+            }
+        }
+    }
 
     /// <remarks>
     /// The workload is started by the resource it belongs to, so there is nothing for the AppHost to start.
@@ -111,206 +121,260 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
         Hex1bTerminalAutomator? automator;
         lock (_gate)
         {
-            automator = _automator;
+            automator = _connection?.Automator;
         }
 
         return TerminalAutomation.GetScreenText(automator);
     }
 
     /// <summary>
-    /// Connects to the replica's terminal host on first use, and returns the same connection thereafter.
+    /// Shares a live connection, replacing failed or disconnected peers on a later automation call.
     /// </summary>
-    private Task<TerminalConnection> EnsureConnectedAsync(CancellationToken cancellationToken)
+    private async Task<TerminalConnection> EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        Task<TerminalConnection> connectTask;
-        lock (_gate)
+        while (true)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            // Cache the task rather than the result so concurrent callers share one connection attempt, and a
-            // failed attempt is not retried behind the back of the caller that observed the failure.
-            connectTask = _connectTask ??= ConnectAsync();
+            ConnectionAttempt connection;
+            bool disconnected;
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
+                if (_connection is null)
+                {
+                    _connection = new ConnectionAttempt(_disposalCts.Token);
+                    _connection.Completion = RunConnectionAsync(_connection);
+                }
+
+                connection = _connection;
+                disconnected = connection.Disconnected;
+            }
+
+            if (!disconnected)
+            {
+                // A caller's cancellation only abandons its wait, not the connection shared by other callers.
+                // Never replay an automation command: a failed attempt is surfaced to its original caller.
+                return await connection.Ready.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Finish releasing the old peer before opening another. Keeping it registered until cleanup ends
+            // also lets DisposeAsync await every peer, including a connection that failed during startup.
+            await connection.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (ReferenceEquals(_connection, connection))
+                {
+                    _connection = null;
+                }
+            }
         }
-
-        return connectTask.WaitAsync(cancellationToken);
     }
 
-    private async Task<TerminalConnection> ConnectAsync()
+    private async Task RunConnectionAsync(ConnectionAttempt connection)
     {
-        // Never run the connect inline under _gate.
+        // Building and running Hex1b must not happen inline under _gate.
         await Task.Yield();
 
+        var cancellationToken = connection.Cancellation.Token;
         var connected = new TaskCompletionSource<(int Width, int Height)>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // The handshake can be failed after the connect timeout has already given up on it — by the pump
-        // ending, or by a disconnect callback. Nothing would await it by then, and an unobserved faulted task
-        // surfaces on TaskScheduler.UnobservedTaskException, which is a process-wide event an AppHost may
-        // treat as fatal. Observing it here is harmless: an awaiter still sees the exception.
-        _ = connected.Task.ContinueWith(
-            static t => _ = t.Exception,
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
         Hex1bTerminal? terminal = null;
-
-        terminal = Hex1bTerminal.CreateBuilder()
-            // The AppHost has no controlling terminal, so the client must not try to drive one. Headless
-            // discards output at the adapter and supplies no input; the screen buffer automation reads is
-            // still maintained, because it is built from the remote's output before presentation.
-            .WithHeadless()
-            // An arbitrary opener. The handshake reports the producer's real grid and the terminal is resized
-            // to match before the automator is handed out, so nothing ever reads this size.
-            .WithDimensions(80, 24)
-            .WithHmp1UdsClient(_consumerUdsPath, options =>
-            {
-                // Named so a human running `aspire terminal ps --verbose` can tell an automation peer apart
-                // from a dashboard tab or an attached CLI.
-                options.DisplayName = $"apphost-automation:{Id}";
-                options.DefaultRole = Hmp1Role.Secondary;
-
-                options.OnConnected = (e, _) =>
-                {
-                    Resize(terminal, e.Width, e.Height);
-                    connected.TrySetResult((e.Width, e.Height));
-                    return Task.CompletedTask;
-                };
-
-                // Follow the producer's grid when another peer resizes it, so a screen read after a human
-                // resizes their dashboard tab is not silently clipped to the old dimensions.
-                options.OnRemoteResized = (e, _) =>
-                {
-                    Resize(terminal, e.Width, e.Height);
-                    return Task.CompletedTask;
-                };
-
-                options.OnDisconnected = _ =>
-                {
-                    // The terminal host went away. Fail a handshake still in flight rather than letting it
-                    // sit until the connect timeout.
-                    connected.TrySetException(new InvalidOperationException(
-                        $"The terminal host for terminal '{Id}' disconnected before the connection was established."));
-                    return Task.CompletedTask;
-                };
-            })
-            .Build();
-
-        _logger.LogDebug("Connecting AppHost automation to resource terminal {TerminalId} at '{ConsumerPath}'.", Id, _consumerUdsPath);
-
-        _runTask = RunClientAsync(terminal, connected);
+        Task? runTask = null;
+        Exception? failure = null;
+        var expectedCancellation = false;
 
         try
         {
-            var (width, height) = await connected.Task.WaitAsync(s_connectTimeout).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            terminal = Hex1bTerminal.CreateBuilder()
+                // The AppHost has no controlling terminal. Headless suppresses local console I/O but still
+                // maintains the replicated screen used by automation.
+                .WithHeadless()
+                .WithDimensions(80, 24)
+                .WithHmp1UdsClient(_consumerUdsPath, options =>
+                {
+                    options.DisplayName = $"apphost-automation:{Id}";
+                    options.DefaultRole = Hmp1Role.Secondary;
+
+                    options.OnConnected = (e, _) =>
+                    {
+                        Resize(terminal, e.Width, e.Height);
+                        connected.TrySetResult((e.Width, e.Height));
+                        return Task.CompletedTask;
+                    };
+
+                    options.OnRemoteResized = (e, _) =>
+                    {
+                        Resize(terminal, e.Width, e.Height);
+                        return Task.CompletedTask;
+                    };
+
+                    options.OnDisconnected = _ =>
+                    {
+                        MarkDisconnected(connection);
+                        connection.Cancellation.Cancel();
+                        return Task.CompletedTask;
+                    };
+                })
+                .Build();
+
+            _logger.LogDebug("Connecting AppHost automation to resource terminal {TerminalId} at '{ConsumerPath}'.", Id, _consumerUdsPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            runTask = terminal.RunAsync(cancellationToken);
+
+            // A missing socket faults the pump before the handshake. Observe either result so an immediate
+            // transport failure is not reported as a ten-second handshake timeout.
+            var completed = await Task.WhenAny(connected.Task, runTask).WaitAsync(s_connectTimeout, cancellationToken).ConfigureAwait(false);
+            if (completed == runTask)
+            {
+                await runTask.ConfigureAwait(false);
+                throw new InvalidOperationException(
+                    $"The connection to the terminal host for terminal '{Id}' closed before the terminal was ready.");
+            }
+
+            var (width, height) = await connected.Task.ConfigureAwait(false);
+            var automator = new Hex1bTerminalAutomator(terminal, TerminalAutomation.DefaultTimeout);
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (connection.Disconnected)
+                {
+                    throw new InvalidOperationException($"The terminal host for terminal '{Id}' disconnected during initialization.");
+                }
+
+                connection.Automator = automator;
+                connection.Ready.TrySetResult(new TerminalConnection(terminal, automator));
+            }
+
             _logger.LogDebug("Connected to resource terminal {TerminalId} ({Width}x{Height}).", Id, width, height);
+            await runTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            // The pump owns the terminal once RunClientAsync is running, so tear it down through the same
-            // path rather than disposing the terminal here and racing the pump.
-            _clientCts.Cancel();
-
-            if (ex is TimeoutException)
+            failure = ex;
+            expectedCancellation = ex is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        }
+        finally
+        {
+            MarkDisconnected(connection);
+            await connection.Cancellation.CancelAsync().ConfigureAwait(false);
+            if (runTask is not null)
             {
-                throw new InvalidOperationException(
-                    $"Timed out connecting to the terminal host for terminal '{Id}' at '{_consumerUdsPath}'. The resource replica may not be running.", ex);
+                try
+                {
+                    await runTask.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // Preserve the handshake failure if one already occurred; otherwise report the pump's
+                    // failure below. In both cases the task is observed before disposing its terminal.
+                    failure ??= ex;
+                }
             }
 
-            throw;
+            if (terminal is not null)
+            {
+                try
+                {
+                    await terminal.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Disposing the automation peer for resource terminal {TerminalId} failed unexpectedly.", Id);
+                    failure ??= ex;
+                }
+            }
+
+            connection.Cancellation.Dispose();
         }
 
-        var automator = new Hex1bTerminalAutomator(terminal, TerminalAutomation.DefaultTimeout);
-
-        lock (_gate)
+        if (expectedCancellation)
         {
-            _automator = automator;
+            _logger.LogDebug("AppHost automation peer for resource terminal {TerminalId} stopped after disposal or a terminal host disconnect.", Id);
+            connection.Ready.TrySetCanceled(cancellationToken);
         }
+        else if (failure is not null)
+        {
+            if (failure is TimeoutException)
+            {
+                failure = new InvalidOperationException(
+                    $"Timed out connecting to the terminal host for terminal '{Id}' at '{_consumerUdsPath}'. The resource replica may not be running.", failure);
+            }
 
-        return new TerminalConnection(terminal, automator);
+            if (connection.Ready.TrySetException(failure))
+            {
+                _logger.LogDebug(failure, "Connecting the AppHost automation peer to resource terminal {TerminalId} failed; a later call can retry.", Id);
+            }
+            else
+            {
+                _logger.LogWarning(failure, "AppHost automation peer for resource terminal {TerminalId} ended unexpectedly; a later call can reconnect.", Id);
+            }
+        }
 
         static void Resize(Hex1bTerminal? target, int width, int height)
             => target?.Resize(Math.Max(1, width), Math.Max(1, height));
     }
 
-    private async Task RunClientAsync(Hex1bTerminal terminal, TaskCompletionSource<(int Width, int Height)> connected)
+    private void MarkDisconnected(ConnectionAttempt connection)
     {
-        try
+        lock (_gate)
         {
-            await terminal.RunAsync(_clientCts.Token).ConfigureAwait(false);
-
-            // The pump returning without the handshake having completed means the transport closed before the
-            // terminal was usable. Nothing else would fail the handshake in that case, so it would otherwise
-            // sit until the connect timeout.
-            connected.TrySetException(new InvalidOperationException(
-                $"The connection to the terminal host for terminal '{Id}' closed before the terminal was ready."));
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected: the handle was disposed, or the connect attempt was abandoned.
-            _logger.LogDebug("AppHost automation peer for resource terminal {TerminalId} was cancelled.", Id);
-        }
-        catch (Exception ex)
-        {
-            // Surface the real transport error to a handshake still in flight. A replica that is not running
-            // leaves no socket to dial, which fails here immediately, and reporting it now is both faster and
-            // more specific than letting the connect timeout elapse.
-            if (connected.TrySetException(ex))
-            {
-                _logger.LogDebug(ex, "Connecting the AppHost automation peer to resource terminal {TerminalId} failed.", Id);
-                return;
-            }
-
-            // Unexpected. The workload itself is unaffected — only this process's view of it is lost — so this
-            // is a warning rather than an error, but it does mean subsequent automation calls read a dead screen.
-            _logger.LogWarning(ex, "AppHost automation peer for resource terminal {TerminalId} ended unexpectedly.", Id);
-        }
-        finally
-        {
-            try
-            {
-                await terminal.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Disposing the automation peer for resource terminal {TerminalId} failed.", Id);
-            }
+            connection.Disconnected = true;
+            connection.Automator = null;
         }
     }
 
     /// <summary>
     /// Disconnects the AppHost's automation peer. The resource's workload is unaffected.
     /// </summary>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        Task? runTask;
         lock (_gate)
         {
-            if (_disposed)
-            {
-                return;
-            }
-
             _disposed = true;
-            runTask = _runTask;
-            _automator = null;
+            if (_connection is { } connection)
+            {
+                connection.Automator = null;
+            }
+
+            return new ValueTask(_disposeTask ??= DisposeCoreAsync(_connection));
         }
+    }
 
-        await _clientCts.CancelAsync().ConfigureAwait(false);
+    private async Task DisposeCoreAsync(ConnectionAttempt? connection)
+    {
+        await Task.Yield();
+        await _disposalCts.CancelAsync().ConfigureAwait(false);
 
-        if (runTask is not null)
+        if (connection is not null)
         {
-            try
-            {
-                await runTask.ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                // RunClientAsync already logs and swallows; this only guards against a fault escaping the pump
-                // itself, which must not turn disposal into a throwing operation.
-                _logger.LogDebug(ex, "The automation peer for resource terminal {TerminalId} faulted while disconnecting.", Id);
-            }
+            await connection.Completion.ConfigureAwait(false);
         }
 
-        _clientCts.Dispose();
+        _disposalCts.Dispose();
+    }
+
+    private sealed class ConnectionAttempt
+    {
+        public ConnectionAttempt(CancellationToken disposalToken)
+        {
+            Cancellation = CancellationTokenSource.CreateLinkedTokenSource(disposalToken);
+            // Every caller may abandon its wait before connection fails. Observe that failure even when
+            // nobody remains to await Ready; future calls still replace the failed attempt.
+            _ = Ready.Task.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        public CancellationTokenSource Cancellation { get; }
+        public TaskCompletionSource<TerminalConnection> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task Completion { get; set; } = Task.CompletedTask;
+        public Hex1bTerminalAutomator? Automator { get; set; }
+        public bool Disconnected { get; set; }
     }
 
     private sealed record TerminalConnection(Hex1bTerminal Terminal, Hex1bTerminalAutomator Automator);

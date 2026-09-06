@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
@@ -592,6 +593,125 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         Assert.Equal(response.Message, response.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubscribeTerminals_StreamEnds_ResubscribesWithSnapshot(bool failStream)
+    {
+        var first = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var second = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var disposed = Channel.CreateUnbounded<bool>();
+        var subscriptions = 0;
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => Interlocked.Increment(ref subscriptions) == 1 ? first.Reader : second.Reader,
+            OnTerminalWatchDisposed = () => disposed.Writer.TryWrite(true)
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        var initial = new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() };
+        await first.Writer.WriteAsync(initial);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(initial, updates.Current);
+
+        first.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Disconnected")) : null);
+        var replacement = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "replacement", Title = "Replacement" } }
+            }
+        };
+        await second.Writer.WriteAsync(replacement);
+
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(replacement, updates.Current);
+        Assert.Equal(2, Volatile.Read(ref subscriptions));
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+        await updates.DisposeAsync().DefaultTimeout();
+        Assert.True(await disposed.Reader.ReadAsync().AsTask().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SubscribeTerminals_Cancellation_StopsActiveStreamOrRecovery(bool disposeClient, bool duringRecovery)
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var streamDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () => channel.Reader,
+            OnTerminalWatchDisposed = () => streamDisposed.TrySetResult()
+        };
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(service);
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+        await channel.Writer.WriteAsync(new WatchTerminalsUpdate { Snapshot = new TerminalDescriptorList() });
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+
+        var next = updates.MoveNextAsync().AsTask();
+        if (duringRecovery)
+        {
+            channel.Writer.Complete();
+            await streamDisposed.Task.DefaultTimeout();
+        }
+
+        if (disposeClient)
+        {
+            await client.DisposeAsync().DefaultTimeout();
+        }
+        else
+        {
+            await cts.CancelAsync();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        await streamDisposed.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Cancellation_StopsConnectionWait()
+    {
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
+        using var cts = new CancellationTokenSource();
+        await using var updates = client.SubscribeTerminalsAsync(cts.Token).GetAsyncEnumerator();
+
+        var next = updates.MoveNextAsync().AsTask();
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SubscribeTerminals_Unimplemented_CompletesWithoutRetry()
+    {
+        var channel = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        channel.Writer.Complete(new RpcException(new Status(StatusCode.Unimplemented, "Older AppHost")));
+        var subscriptions = 0;
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdatesChannel = Channel.CreateUnbounded<WatchResourcesUpdate>().Reader,
+            TerminalUpdatesProvider = () =>
+            {
+                Interlocked.Increment(ref subscriptions);
+                return channel.Reader;
+            }
+        });
+        await using var updates = client.SubscribeTerminalsAsync(CancellationToken.None).GetAsyncEnumerator();
+
+        Assert.False(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
@@ -601,8 +721,21 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
+        public ChannelReader<WatchResourcesUpdate>? ResourceUpdatesChannel { get; init; }
+        public Func<ChannelReader<WatchTerminalsUpdate>>? TerminalUpdatesProvider { get; init; }
+        public Action? OnTerminalWatchDisposed { get; init; }
         public Activity? ActivityOnGetApplicationInformation { get; private set; }
         private int _resourceUpdatesReturned;
+
+        public override AsyncServerStreamingCall<WatchTerminalsUpdate> WatchTerminals(WatchTerminalsRequest request, CallOptions options)
+        {
+            return new AsyncServerStreamingCall<WatchTerminalsUpdate>(
+                new AsyncStreamReader<WatchTerminalsUpdate>(channel: TerminalUpdatesProvider?.Invoke()),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => OnTerminalWatchDisposed?.Invoke());
+        }
 
         public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
         {
@@ -701,7 +834,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         {
             var reader = FailOnWatchResources
                 ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>(Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : []);
+                : new AsyncStreamReader<WatchResourcesUpdate>(
+                    Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : [],
+                    ResourceUpdatesChannel);
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,
@@ -725,23 +860,37 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private sealed class AsyncStreamReader<T> : IAsyncStreamReader<T>
     {
         private readonly Queue<T> _items;
+        private readonly ChannelReader<T>? _channel;
 
-        public AsyncStreamReader(IEnumerable<T>? items = null)
+        public AsyncStreamReader(IEnumerable<T>? items = null, ChannelReader<T>? channel = null)
         {
             _items = new Queue<T>(items ?? []);
+            _channel = channel;
         }
 
         public T Current { get; private set; } = default!;
 
-        public Task<bool> MoveNext(CancellationToken cancellationToken)
+        public async Task<bool> MoveNext(CancellationToken cancellationToken)
         {
             if (_items.TryDequeue(out var item))
             {
                 Current = item;
-                return Task.FromResult(true);
+                return true;
             }
 
-            return Task.FromResult(false);
+            if (_channel is { } channel)
+            {
+                while (await channel.WaitToReadAsync(cancellationToken))
+                {
+                    if (channel.TryRead(out var update))
+                    {
+                        Current = update;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 
