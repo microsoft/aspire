@@ -96,6 +96,109 @@ public class InteractionServiceTerminalTests
     }
 
     [Fact]
+    public async Task PromptInputsAsync_TerminalFromAnotherService_ThrowsBeforePublishing()
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var otherService = TestTerminalService.Create();
+        await using var terminal = CreateTerminal(otherService, TerminalPlacement.Dialog);
+        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+
+        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
+
+        Assert.True(otherService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+        Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_DisposedTerminal_ThrowsBeforePublishing()
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        await terminal.DisposeAsync();
+        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+
+        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
+
+        Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptInputsAsync_UnregisteredTerminal_ThrowsBeforePublishing(bool useRegisteredId)
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var registeredTerminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        await using var unregisteredTerminal = new TestAspireTerminal(useRegisteredId ? registeredTerminal.Id : "unregistered");
+        var validInput = new InteractionInput { Name = "valid", InputType = InputType.Terminal, Terminal = registeredTerminal };
+        var invalidInput = new InteractionInput { Name = "invalid", InputType = InputType.Terminal, Terminal = unregisteredTerminal };
+        Assert.Equal(useRegisteredId, unregisteredTerminal.Equals(registeredTerminal));
+
+        await AssertTerminalRejectedAsync(interactionService, [validInput, invalidInput], invalidInput.Name);
+
+        Assert.False(unregisteredTerminal.IsDisposed);
+        Assert.True(terminalService.TryGetTerminal(registeredTerminal.Id, out var registered));
+        Assert.Same(registeredTerminal, registered);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_NoTerminalService_ThrowsBeforePublishing()
+    {
+        var (interactionService, terminalService) = CreateInteractionService(registerTerminalService: false);
+        await using var serviceOwner = terminalService;
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+
+        await AssertTerminalRejectedAsync(interactionService, [input], input.Name);
+
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_TextInput_DoesNotRequireTerminalService()
+    {
+        var (interactionService, terminalService) = CreateInteractionService(registerTerminalService: false);
+        await using var serviceOwner = terminalService;
+        var input = new InteractionInput { Name = "text", InputType = InputType.Text };
+
+        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input]);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await CancelInteractionAsync(interactionService, interaction.InteractionId).DefaultTimeout();
+        var result = await prompt.DefaultTimeout();
+
+        Assert.True(result.Canceled);
+        Assert.Null(input.TerminalId);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_TerminalDisposedAfterPublishing_AttachmentStillRejectsIt()
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        var input = new InteractionInput { Name = "shell", InputType = InputType.Terminal, Terminal = terminal };
+        using var cts = new CancellationTokenSource();
+
+        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input], cancellationToken: cts.Token);
+        Assert.Single(interactionService.GetCurrentInteractions());
+        await terminal.DisposeAsync();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => terminalService.AttachAsync(terminal.Id, Stream.Null, CancellationToken.None)).DefaultTimeout();
+        Assert.Equal($"There is no terminal with id '{terminal.Id}'.", ex.Message);
+        cts.Cancel();
+        var result = await prompt.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
     public async Task PromptInputsAsync_TerminalOnTheDockSurface_Throws()
     {
         var (interactionService, terminalService) = CreateInteractionService();
@@ -259,13 +362,36 @@ public class InteractionServiceTerminalTests
             Placement = placement
         });
 
-    private static (InteractionService InteractionService, TerminalService TerminalService) CreateInteractionService()
+    private static async Task AssertTerminalRejectedAsync(InteractionService interactionService, IReadOnlyList<InteractionInput> inputs, string invalidInputName)
+    {
+        using var cts = new CancellationTokenSource();
+        var prompt = interactionService.PromptInputsAsync("Title", "Message", inputs, cancellationToken: cts.Token);
+        try
+        {
+            Assert.Empty(interactionService.GetCurrentInteractions());
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => prompt).DefaultTimeout();
+            Assert.Equal($"The input '{invalidInputName}' must reference the terminal instance registered with this AppHost's TerminalService.", ex.Message);
+            Assert.All(inputs, input => Assert.Null(input.TerminalId));
+        }
+        finally
+        {
+            // Unwind any incorrectly published prompt too, so a regression cannot leave an interaction pending.
+            cts.Cancel();
+        }
+    }
+
+    private static (InteractionService InteractionService, TerminalService TerminalService) CreateInteractionService(bool registerTerminalService = true)
     {
         var terminalService = TestTerminalService.Create();
+        var services = new ServiceCollection();
+        if (registerTerminalService)
+        {
+            services.AddSingleton(terminalService);
+        }
         var interactionService = new InteractionService(
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
-            new ServiceCollection().BuildServiceProvider(),
+            services.BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
             new TestInteractionFileUploadStore());
 

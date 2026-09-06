@@ -479,6 +479,11 @@ public sealed class InteractionInput
     /// stops showing it but does not stop the workload.
     /// </para>
     /// <para>
+    /// The supplied instance must still be registered with the <see cref="TerminalService"/> resolved from the
+    /// current AppHost's service provider. Disposed terminals, terminals from another AppHost, and unregistered
+    /// implementations are rejected before the dialog is shown; matching a registered terminal's ID is not enough.
+    /// </para>
+    /// <para>
     /// Owning the terminal outside the interaction is what lets the AppHost script it through
     /// <see cref="IAspireTerminal"/>'s automation members — before the dialog is raised, while it is open, and after
     /// it closes — and lets the same terminal be shown by more than one dialog over its life.

@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
@@ -188,6 +189,17 @@ internal class InteractionService : IInteractionService
                 if (input.Terminal.Placement != TerminalPlacement.Dialog)
                 {
                     throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(IAspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
+                }
+
+                // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.
+                // Require identity as well as registration; dialog placement above excludes resource-owned handles.
+                // Resolve the service only here so ordinary prompts do not require terminal infrastructure.
+                // Callers can still dispose after this check, so attachment must continue to validate availability.
+                if (_serviceProvider.GetService<TerminalService>() is not { } terminalService ||
+                    !terminalService.TryGetTerminal(input.Terminal.Id, out var registeredTerminal) ||
+                    !ReferenceEquals(input.Terminal, registeredTerminal))
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' must reference the terminal instance registered with this AppHost's {nameof(TerminalService)}.");
                 }
             }
 
