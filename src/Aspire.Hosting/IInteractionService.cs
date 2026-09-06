@@ -339,6 +339,9 @@ public sealed class InteractionInput
     /// <summary>
     /// Gets or sets a value indicating whether the input is required.
     /// </summary>
+    /// <remarks>
+    /// Must be <see langword="false"/> for <see cref="InputType.Terminal"/> inputs because they do not produce a value.
+    /// </remarks>
     public bool Required
     {
         get => _required;

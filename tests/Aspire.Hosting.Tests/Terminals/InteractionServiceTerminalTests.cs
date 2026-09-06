@@ -21,6 +21,67 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class InteractionServiceTerminalTests
 {
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "supplied-value")]
+    [InlineData(true, null)]
+    [InlineData(true, "supplied-value")]
+    public async Task PromptInputsAsync_RequiredTerminalInput_ThrowsBeforePublishing(bool singleInput, string? value)
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        var input = new InteractionInput
+        {
+            Name = "shell",
+            InputType = InputType.Terminal,
+            Terminal = terminal,
+            Required = true,
+            Value = value
+        };
+
+        Func<Task> prompt = singleInput
+            ? () => interactionService.PromptInputAsync("Title", "Message", input)
+            : () => interactionService.PromptInputsAsync("Title", "Message", [input]);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(prompt).DefaultTimeout();
+
+        Assert.Equal("The input 'shell' has Required set to true, but Terminal inputs do not produce a value and cannot be required.", ex.Message);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+        Assert.Null(input.TerminalId);
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_OptionalTerminalInput_SubmitsWithoutAValue()
+    {
+        var (interactionService, terminalService) = CreateInteractionService();
+        await using var serviceOwner = terminalService;
+        await using var terminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
+        var input = new InteractionInput
+        {
+            Name = "shell",
+            InputType = InputType.Terminal,
+            Terminal = terminal,
+            Required = false
+        };
+
+        var prompt = interactionService.PromptInputsAsync("Title", "Message", [input]);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await interactionService.ProcessInteractionFromClientAsync(
+            interaction.InteractionId,
+            (_, _, _) => new InteractionCompletionState { Complete = true, State = new[] { input } },
+            CancellationToken.None).DefaultTimeout();
+        var result = await prompt.DefaultTimeout();
+
+        Assert.False(result.Canceled);
+        Assert.Same(input, Assert.Single(result.Data));
+        Assert.Null(input.Value);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+    }
+
     [Fact]
     public async Task PromptInputsAsync_TerminalInputWithoutATerminal_Throws()
     {

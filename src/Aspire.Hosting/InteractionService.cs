@@ -171,6 +171,11 @@ internal class InteractionService : IInteractionService
             var input = inputs[i];
             if (input.InputType == InputType.Terminal)
             {
+                if (input.Required)
+                {
+                    throw new InvalidOperationException($"The input '{input.Name}' has {nameof(InteractionInput.Required)} set to true, but {nameof(InputType.Terminal)} inputs do not produce a value and cannot be required.");
+                }
+
                 if (input.Terminal is null)
                 {
                     throw new InvalidOperationException($"The input '{input.Name}' is a {nameof(InputType.Terminal)} input, so {nameof(InteractionInput.Terminal)} must be set to a terminal created by the caller.");
