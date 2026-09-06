@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard now validates the Origin header on Blazor Server WebSocket upgrade requests, rejecting cross-origin or malformed connection attempts with 403 Forbidden to prevent unauthorized pages from hijacking a dashboard session.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd12",
+  "firstMergedAt": "2026-08-21T05:04:34Z",
+  "lastMergedAt": "2026-08-21T05:04:34Z",
+  "name": "Harden dashboard WebSocket origin validation",
+  "owner": "JamesNK",
+  "prs": [
+    19484
+  ]
+}

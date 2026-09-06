@@ -1,0 +1,9 @@
+{
+  "author": "flojon",
+  "comment": "Fixes TypeScript AppHost codegen dropping Promise wrappers",
+  "mergedAt": "2026-08-22T04:05:13Z",
+  "number": 19577,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Fix TypeScript codegen dropping Promise wrapper for zero-capability resource builders"
+}

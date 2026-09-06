@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "General docs infrastructure improvement, no matching changelog entry",
+  "mergedAt": "2026-08-21T14:55:09Z",
+  "number": 1545,
+  "runDate": "2026-09-06T06:08:13Z",
+  "status": "excluded",
+  "title": "Add ContainerImages component and surface container images across hosting docs"
+}

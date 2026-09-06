@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated API surface sync, NO-MERGE label",
+  "mergedAt": "2026-08-21T19:02:32Z",
+  "number": 18339,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "excluded",
+  "title": "[Automated] Update ATS API Surface Area"
+}

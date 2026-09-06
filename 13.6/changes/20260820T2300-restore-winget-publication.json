@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Restored WinGet package publication by installing the .NET 9 runtime required by the latest wingetcreate tool, fixing failed release publication to WinGet.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-08-20T23:00:41Z",
+  "lastMergedAt": "2026-08-20T23:00:41Z",
+  "name": "Restore WinGet publication",
+  "owner": "radical",
+  "prs": [
+    19551
+  ]
+}

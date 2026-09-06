@@ -1,0 +1,9 @@
+{
+  "author": "SankeerthNara",
+  "comment": "VS Code extension new deploy/publish/pipeline actions",
+  "mergedAt": "2026-08-21T10:33:28Z",
+  "number": 19466,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Surface deploy, publish, and pipeline actions in Aspire pane"
+}

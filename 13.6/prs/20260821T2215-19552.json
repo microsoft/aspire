@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Internal refactor of ExecutableCreator with no public API or behavior change",
+  "mergedAt": "2026-08-21T22:15:00Z",
+  "number": 19552,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "excluded",
+  "title": "Simplify and improve Executable launch argument computation"
+}

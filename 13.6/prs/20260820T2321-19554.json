@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Routine packaging cleanup with no functional behavior change",
+  "mergedAt": "2026-08-20T23:21:00Z",
+  "number": 19554,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "excluded",
+  "title": "Exclude unused hex1bpty.exe from published CLI archives"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The Aspire CLI now records its install channel in a sidecar file that is updated on self-update, so `aspire update --channel staging` no longer falls back to resolving stable after a subsequent update.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd04",
+  "firstMergedAt": "2026-08-21T04:58:21Z",
+  "lastMergedAt": "2026-08-21T04:58:21Z",
+  "name": "Persist CLI channel across self-updates",
+  "owner": "mitchdenny",
+  "prs": [
+    19469
+  ]
+}

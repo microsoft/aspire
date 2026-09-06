@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Fixes broken WinGet package publication affecting CLI availability via WinGet",
+  "mergedAt": "2026-08-20T23:00:41Z",
+  "number": 19551,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "fix(release): Restore WinGet publication with .NET 9 wingetcreate"
+}

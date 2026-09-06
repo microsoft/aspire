@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The VS Code extension now shows setup guidance when a running resource supports debugging (Python, Go, Bun, Rust, Java, .NET MAUI, Azure Functions) but the required language extension isn't installed.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udee0\ufe0f",
+  "firstMergedAt": "2026-08-22T01:33:03Z",
+  "lastMergedAt": "2026-08-22T01:33:03Z",
+  "name": "Debugger setup hints for missing extensions",
+  "owner": "adamint",
+  "prs": [
+    19131
+  ]
+}

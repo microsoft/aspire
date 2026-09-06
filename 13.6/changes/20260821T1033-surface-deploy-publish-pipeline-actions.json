@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@SankeerthNara"
+  ],
+  "description": "AppHost items in the Aspire pane now expose Deploy, Publish, Run pipeline step, and Debug pipeline step actions directly, so these operations no longer require finding the matching Command Palette command.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\ude80",
+  "firstMergedAt": "2026-08-21T10:33:28Z",
+  "lastMergedAt": "2026-08-21T10:33:28Z",
+  "name": "Deploy, publish, and pipeline actions in Aspire pane",
+  "owner": "adamint",
+  "prs": [
+    19466
+  ]
+}

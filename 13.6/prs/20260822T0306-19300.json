@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extension project-creation retry plus deterministic local template resolution",
+  "mergedAt": "2026-08-22T03:06:29Z",
+  "number": 19300,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Retry invalid project locations and require matching local templates"
+}

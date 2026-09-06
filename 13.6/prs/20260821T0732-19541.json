@@ -1,0 +1,9 @@
+{
+  "author": "SankeerthNara",
+  "comment": "VS Code extension improvement for ambiguous AppHost directory launches",
+  "mergedAt": "2026-08-21T07:32:19Z",
+  "number": 19541,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Prompt for an AppHost when a directory launch is ambiguous"
+}

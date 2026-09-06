@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@flojon"
+  ],
+  "description": "Fixed TypeScript AppHost codegen so exported methods returning a zero-capability resource builder still generate the `*Promise` wrapper, preventing `TS2552` compile errors for undeclared references such as `ResourceWithServiceDiscoveryPromise`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf5",
+  "firstMergedAt": "2026-08-22T04:05:13Z",
+  "lastMergedAt": "2026-08-22T04:05:13Z",
+  "name": "Fix TypeScript codegen Promise wrapper for zero-capability builders",
+  "owner": "adamint",
+  "prs": [
+    19577
+  ]
+}

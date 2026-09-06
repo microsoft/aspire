@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Security hardening for dashboard Blazor WebSocket origin validation",
+  "mergedAt": "2026-08-21T05:04:34Z",
+  "number": 19484,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Harden dashboard Blazor WebSocket origin validation"
+}

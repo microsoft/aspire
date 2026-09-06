@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts (Python, Go, Java, TypeScript, Rust) can now call the `DotnetProjectResource`-backed Blazor gateway APIs, which were previously only usable from C# AppHosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf0d",
+  "firstMergedAt": "2026-08-21T17:01:39Z",
+  "lastMergedAt": "2026-08-21T17:01:39Z",
+  "name": "Blazor gateway APIs for polyglot AppHosts",
+  "owner": "karolz-ms",
+  "prs": [
+    19026
+  ]
+}

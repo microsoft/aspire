@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Exposes Blazor gateway APIs to polyglot AppHosts",
+  "mergedAt": "2026-08-21T17:01:39Z",
+  "number": 19026,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Export Dotnet Blazor gateway APIs to polyglot AppHosts"
+}

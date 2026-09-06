@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Reverts parent resource state change from #18642; captured as a new changelog entry noting the revert",
+  "mergedAt": "2026-08-20T22:27:06Z",
+  "number": 19545,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Revert \"Update parent resource state from replicas (#18642)\""
+}

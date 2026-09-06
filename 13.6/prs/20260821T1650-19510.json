@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Breaking change: Cosmos DB emulator defaults now use vNext image",
+  "mergedAt": "2026-08-21T16:50:46Z",
+  "number": 19510,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Update Cosmos DB emulator defaults"
+}

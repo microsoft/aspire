@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixes dashboard Graph view crash for multi-path SVG icons",
+  "mergedAt": "2026-08-21T22:28:04Z",
+  "number": 19579,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Fix dashboard graph rendering for multi-path icons"
+}

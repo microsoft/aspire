@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes VS Code extension dashboard browser launch blocking AppHost startup",
+  "mergedAt": "2026-08-21T21:38:56Z",
+  "number": 19559,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Fix dashboard browser launch blocking AppHost startup"
+}

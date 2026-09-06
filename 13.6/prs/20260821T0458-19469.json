@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Fixes CLI channel identity not persisting across self-updates",
+  "mergedAt": "2026-08-21T04:58:21Z",
+  "number": 19469,
+  "runDate": "2026-09-06T06:07:29Z",
+  "status": "included",
+  "title": "Persist CLI channel across installs and self-updates"
+}

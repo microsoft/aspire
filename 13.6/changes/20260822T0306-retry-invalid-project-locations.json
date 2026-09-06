@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`Aspire: New Aspire Project` now reopens the folder picker instead of aborting when the chosen destination is invalid, and unqualified local template resolution now deterministically selects the `Aspire.ProjectTemplates` package matching the running CLI version.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd01",
+  "firstMergedAt": "2026-08-22T03:06:29Z",
+  "lastMergedAt": "2026-08-22T03:06:29Z",
+  "name": "Retry invalid project creation destinations",
+  "owner": "adamint",
+  "prs": [
+    19300
+  ]
+}
