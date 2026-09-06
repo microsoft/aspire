@@ -1,0 +1,9 @@
+{
+  "author": "thomhurst",
+  "comment": "Cosmos DB health check for community contribution",
+  "mergedAt": "2026-08-18T20:14:18Z",
+  "number": 18554,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Add health check to Azure Cosmos DB client integration"
+}

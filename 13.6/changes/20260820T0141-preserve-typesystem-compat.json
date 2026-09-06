@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "TypeScript and Java AppHost codegen now probe for newer Aspire.TypeSystem members before using them, fixing a MissingMethodException/TypeLoadException when a newer SDK's generated code runs against an older installed CLI.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-08-20T01:42:41Z",
+  "lastMergedAt": "2026-08-20T01:42:41Z",
+  "name": "Preserve TypeSystem compatibility with older CLIs",
+  "owner": "adamint",
+  "prs": [
+    19506
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Hardens Azure Functions VS Code launch lifecycle with user-visible error handling",
+  "mergedAt": "2026-08-19T19:34:29Z",
+  "number": 19205,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Harden Azure Functions VS Code launch lifecycle"
+}

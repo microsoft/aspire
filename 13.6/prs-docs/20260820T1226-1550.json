@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Documents a known 13.4/13.5 package compatibility issue, not a specific PR in this batch",
+  "mergedAt": "2026-08-20T12:26:44Z",
+  "number": 1550,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Document Aspire 13.5 package compatibility issue"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Adds an internal docs authoring skill, not a product documentation change",
+  "mergedAt": "2026-08-20T15:25:15Z",
+  "number": 1538,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Add /whatsnew release-notes authoring skill"
+}

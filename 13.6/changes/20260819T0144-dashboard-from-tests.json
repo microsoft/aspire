@@ -1,0 +1,19 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "DistributedApplicationTestingBuilderOptions now supports EnableDashboard, allowing an application test to start the Aspire dashboard alongside the app under test and retrieve its login URL.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-08-19T01:44:10Z",
+  "lastMergedAt": "2026-08-19T01:44:10Z",
+  "name": "Run the dashboard from tests",
+  "owner": "adamint",
+  "prs": [
+    19135
+  ]
+}

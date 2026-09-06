@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@thomhurst"
+  ],
+  "description": "The Azure Cosmos DB client integration now registers a health check, so /health and readiness probes correctly report unhealthy when Cosmos DB is unreachable instead of falsely reporting healthy.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-08-18T20:14:18Z",
+  "lastMergedAt": "2026-08-18T20:14:18Z",
+  "name": "Cosmos DB health check",
+  "owner": "thomhurst",
+  "prs": [
+    18554
+  ]
+}

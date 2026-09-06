@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test infrastructure stabilization for VS Code extension E2E, no user-facing change",
+  "mergedAt": "2026-08-19T01:42:24Z",
+  "number": 19474,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Stabilize the Java extension E2E shards: cache the Maven distribution, bound the recorder install, and fix a cleanup race"
+}

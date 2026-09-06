@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #19488 interaction file upload API changes",
+  "mergedAt": "2026-08-20T10:06:01Z",
+  "number": 1554,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "[docs] Update interaction file upload docs for GetFiles() and upload limits"
+}

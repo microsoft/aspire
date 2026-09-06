@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@maraf"
+  ],
+  "description": "Blazor hosting now supports opt-in browser debugging for WebAssembly client apps, laying the groundwork for attaching a debugger to Blazor WebAssembly resources launched by the AppHost.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-08-20T14:03:37Z",
+  "lastMergedAt": "2026-08-20T14:03:37Z",
+  "name": "Blazor WebAssembly debugging support",
+  "owner": "maraf",
+  "prs": [
+    18928
+  ]
+}

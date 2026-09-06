@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes dashboard resource subscription race condition",
+  "mergedAt": "2026-08-20T17:33:00Z",
+  "number": 19534,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Fix dashboard resource subscription race"
+}

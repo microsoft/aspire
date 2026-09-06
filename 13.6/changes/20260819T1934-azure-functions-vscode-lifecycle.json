@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Hardened the Azure Functions VS Code launch lifecycle: launch arguments are validated and quoted before building, more POSIX shells (dash, ash, zsh, fish, ksh) are supported, and malformed Core Tools output or invalid worker PIDs are reported with a clear error instead of failing silently.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-08-19T19:34:29Z",
+  "lastMergedAt": "2026-08-19T19:34:29Z",
+  "name": "Harden Azure Functions VS Code launch lifecycle",
+  "owner": "ellahathaway",
+  "prs": [
+    19205
+  ]
+}

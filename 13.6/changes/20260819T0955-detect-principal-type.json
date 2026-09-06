@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@denisivan0v"
+  ],
+  "description": "The Bicep provisioner now detects the actual principal type from the Azure credential instead of hardcoding \"User\", fixing role-assignment failures when the AppHost runs under a service principal or federated workload identity (e.g., CI/CD pipelines, Codespaces).",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪪",
+  "firstMergedAt": "2026-08-19T09:55:45Z",
+  "lastMergedAt": "2026-08-19T09:55:45Z",
+  "name": "Detect principal type from credential",
+  "owner": "denisivan0v",
+  "prs": [
+    18063
+  ]
+}

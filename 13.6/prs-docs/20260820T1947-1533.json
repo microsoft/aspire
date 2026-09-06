@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents existing Eventing.Subscribe<T> behavior, no matching changelog entry",
+  "mergedAt": "2026-08-20T19:47:09Z",
+  "number": 1533,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "[docs] Document concrete Eventing.Subscribe<T> requirement"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "File uploads in interactions are now consistently enforced across the Dashboard, CLI, and custom clients: upload counts respect AllowMultipleFiles, uploads are bounded instead of unbounded, and client-provided filenames are sanitized before use.",
+  "docsPrs": [
+    1554
+  ],
+  "docsRequired": true,
+  "emoji": "📎",
+  "firstMergedAt": "2026-08-20T08:29:48Z",
+  "lastMergedAt": "2026-08-20T08:29:48Z",
+  "name": "Harden interaction file uploads",
+  "owner": "JamesNK",
+  "prs": [
+    19488
+  ]
+}

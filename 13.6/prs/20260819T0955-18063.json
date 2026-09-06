@@ -1,0 +1,9 @@
+{
+  "author": "denisivan0v",
+  "comment": "Detects principal type from credential in BicepProvisioner",
+  "mergedAt": "2026-08-19T09:55:45Z",
+  "number": 18063,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Detect principal type from credential in BicepProvisioner"
+}

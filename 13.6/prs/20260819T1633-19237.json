@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only fix for Azure Functions E2E polling, no user-facing change",
+  "mergedAt": "2026-08-19T16:33:09Z",
+  "number": 19237,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Fix Azure Functions E2E polling after reload"
+}

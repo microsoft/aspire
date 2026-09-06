@@ -1,0 +1,9 @@
+{
+  "author": "danfiedler-msft",
+  "comment": "Engineering security hardening of CI workflows, no user-facing change",
+  "mergedAt": "2026-08-19T23:08:27Z",
+  "number": 19501,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Pin GitHub Actions to full-length commit SHAs"
+}

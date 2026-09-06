@@ -1,0 +1,9 @@
+{
+  "author": "maraf",
+  "comment": "Adds opt-in Blazor WebAssembly browser debugging support",
+  "mergedAt": "2026-08-20T14:03:37Z",
+  "number": 18928,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Blazor hosting changes for WebAssembly debugging"
+}

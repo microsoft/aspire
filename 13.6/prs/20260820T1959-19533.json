@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Release pipeline configuration change, no user-facing product impact",
+  "mergedAt": "2026-08-20T19:59:47Z",
+  "number": 19533,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "[automated] Enable WinGet publishing by default in release pipeline"
+}

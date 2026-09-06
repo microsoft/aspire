@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New EnableDashboard testing option",
+  "mergedAt": "2026-08-19T01:44:10Z",
+  "number": 19135,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Support running the Aspire dashboard from tests"
+}

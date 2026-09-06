@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Automated VS Code extension release process, not a product change",
+  "mergedAt": "2026-08-19T01:52:16Z",
+  "number": 19479,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Prepare VS Code extension release v1.18.0"
+}

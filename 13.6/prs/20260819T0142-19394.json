@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Preserves default AppHost across explicit runs",
+  "mergedAt": "2026-08-19T01:42:32Z",
+  "number": 19394,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Preserve the default AppHost for explicit runs"
+}

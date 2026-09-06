@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs formatting fix for code line highlights, not tied to a milestone product change",
+  "mergedAt": "2026-08-20T13:15:44Z",
+  "number": 1551,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Fix misaligned code line highlights in secure communications docs"
+}

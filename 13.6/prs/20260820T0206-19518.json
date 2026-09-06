@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Internal pipeline configuration change, no user-facing impact",
+  "mergedAt": "2026-08-20T02:06:34Z",
+  "number": 19518,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Remove pipeline-scoped Publish-Build-Assets group"
+}

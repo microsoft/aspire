@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a race between applying a resource update and notifying dashboard subscribers that could cause a newly-registered subscriber to receive both a stale in-flight change and the updated snapshot.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏁",
+  "firstMergedAt": "2026-08-20T17:33:00Z",
+  "lastMergedAt": "2026-08-20T17:33:00Z",
+  "name": "Fix dashboard resource subscription race",
+  "owner": "JamesNK",
+  "prs": [
+    19534
+  ]
+}

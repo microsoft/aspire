@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dismissing the unresolved-parameters notification no longer causes it to immediately reappear; parameters remain unresolved but can still be set from their resource commands.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-08-20T03:48:13Z",
+  "lastMergedAt": "2026-08-20T03:48:13Z",
+  "name": "Stop redisplaying dismissed parameters notification",
+  "owner": "JamesNK",
+  "prs": [
+    19336
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "E2E test infrastructure determinism fix, no user-facing change",
+  "mergedAt": "2026-08-19T23:08:15Z",
+  "number": 19508,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "excluded",
+  "title": "Make AppHost tree E2E startup deterministic under CI contention"
+}

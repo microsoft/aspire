@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Preserves TypeSystem compatibility with older CLIs",
+  "mergedAt": "2026-08-20T01:42:41Z",
+  "number": 19506,
+  "runDate": "2026-09-06T00:09:16Z",
+  "status": "included",
+  "title": "Preserve TypeSystem compatibility with older CLIs"
+}
