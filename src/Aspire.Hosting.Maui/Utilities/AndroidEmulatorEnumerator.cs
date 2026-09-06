@@ -89,10 +89,19 @@ internal static class AndroidEmulatorEnumerator
 
             // The emulator process stays alive for the lifetime of the virtual device. Drain both
             // redirected streams so a full pipe cannot block emulator startup.
-            _ = DrainProcessOutputAsync(emulatorProcess.StandardOutput, logger, LogLevel.Information, CancellationToken.None);
-            _ = DrainProcessOutputAsync(emulatorProcess.StandardError, logger, LogLevel.Warning, CancellationToken.None);
+            var emulatorOutput = new ProcessOutputBuffer();
+            _ = DrainProcessOutputAsync(emulatorProcess.StandardOutput, logger, LogLevel.Information, emulatorOutput, CancellationToken.None);
+            _ = DrainProcessOutputAsync(emulatorProcess.StandardError, logger, LogLevel.Warning, emulatorOutput, CancellationToken.None);
 
-            var serial = await WaitForEmulatorSerialAsync(adbPath, avdName, logger, cancellationToken).ConfigureAwait(false);
+            var serial = await WaitForEmulatorSerialAsync(
+                avdName,
+                token => GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, token),
+                () => emulatorProcess.HasExited
+                    ? FormatEmulatorExitMessage(avdName, emulatorProcess.ExitCode, emulatorOutput.GetOutput())
+                    : null,
+                s_serialWaitTimeout,
+                s_pollInterval,
+                cancellationToken).ConfigureAwait(false);
             await WaitForEmulatorBootAsync(adbPath, serial, logger, cancellationToken).ConfigureAwait(false);
 
             logger.LogInformation("Android emulator '{AvdName}' is ready as {Serial}.", avdName, serial);
@@ -124,17 +133,29 @@ internal static class AndroidEmulatorEnumerator
         return existingSerial;
     }
 
-    private static async Task<string> WaitForEmulatorSerialAsync(string adbPath, string avdName, ILogger logger, CancellationToken cancellationToken)
+    internal static async Task<string> WaitForEmulatorSerialAsync(
+        string avdName,
+        Func<CancellationToken, Task<string?>> getRunningEmulatorSerialAsync,
+        Func<string?> getEmulatorProcessExitMessage,
+        TimeSpan timeout,
+        TimeSpan pollInterval,
+        CancellationToken cancellationToken)
     {
         string? serial = null;
         await WaitForAndroidToolingAsync(
             async token =>
             {
-                serial = await GetRunningEmulatorSerialForAvdAsync(adbPath, avdName, logger, token).ConfigureAwait(false);
+                var processExitMessage = getEmulatorProcessExitMessage();
+                if (processExitMessage is not null)
+                {
+                    throw new DistributedApplicationException(processExitMessage);
+                }
+
+                serial = await getRunningEmulatorSerialAsync(token).ConfigureAwait(false);
                 return serial is not null;
             },
-            s_serialWaitTimeout,
-            s_pollInterval,
+            timeout,
+            pollInterval,
             $"Timed out waiting for Android emulator '{avdName}' to appear in adb. Try starting the emulator manually from Android Studio Device Manager and then start the Aspire resource again.",
             cancellationToken).ConfigureAwait(false);
 
@@ -274,7 +295,7 @@ internal static class AndroidEmulatorEnumerator
             return false;
         }
 
-        return !line.Contains(' ');
+        return true;
     }
 
     internal static string FindAndroidToolPath(string executableName, string androidSdkRelativePath)
@@ -392,12 +413,13 @@ internal static class AndroidEmulatorEnumerator
         }
     }
 
-    private static async Task DrainProcessOutputAsync(StreamReader reader, ILogger logger, LogLevel logLevel, CancellationToken cancellationToken)
+    private static async Task DrainProcessOutputAsync(StreamReader reader, ILogger logger, LogLevel logLevel, ProcessOutputBuffer? outputBuffer, CancellationToken cancellationToken)
     {
         try
         {
             while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
             {
+                outputBuffer?.AddLine(line);
                 logger.Log(logLevel, "{Line}", line);
             }
         }
@@ -413,6 +435,13 @@ internal static class AndroidEmulatorEnumerator
     private static string FormatDetails(string details)
     {
         return string.IsNullOrWhiteSpace(details) ? string.Empty : $" Details: {details}";
+    }
+
+    private static string FormatEmulatorExitMessage(string avdName, int exitCode, string details)
+    {
+        return $"Android emulator '{avdName}' exited with code {exitCode} before it appeared in adb. " +
+            "Verify the Android Virtual Device exists and can start from Android Studio Device Manager." +
+            FormatDetails(details);
     }
 
     private static void TryKillProcess(Process? process, ILogger logger)
@@ -431,6 +460,33 @@ internal static class AndroidEmulatorEnumerator
     }
 
     private sealed record ToolResult(string StandardOutput, string StandardError);
+
+    private sealed class ProcessOutputBuffer
+    {
+        private const int MaxLines = 20;
+        private readonly Queue<string> _lines = new();
+
+        public void AddLine(string line)
+        {
+            lock (_lines)
+            {
+                if (_lines.Count == MaxLines)
+                {
+                    _lines.Dequeue();
+                }
+
+                _lines.Enqueue(line);
+            }
+        }
+
+        public string GetOutput()
+        {
+            lock (_lines)
+            {
+                return string.Join(Environment.NewLine, _lines);
+            }
+        }
+    }
 }
 
 internal sealed record EmulatorOption(string Id, string DisplayName);

@@ -79,17 +79,13 @@ internal static class IOSSimulatorEnumerator
 
         try
         {
-            // `xcrun simctl list devices available -j` should emit pure JSON, but some
-            // toolchain setups prepend diagnostics. Keep parsing resilient by extracting
-            // the first JSON object instead of treating surrounding noise as no devices.
-            var start = json.IndexOf('{', StringComparison.Ordinal);
-            var end = json.LastIndexOf('}');
-            if (start < 0 || end < start)
+            var simctlJson = GetSimctlJsonDocument(json);
+            if (simctlJson is null)
             {
                 return results;
             }
 
-            using var doc = JsonDocument.Parse(json[start..(end + 1)]);
+            using var doc = JsonDocument.Parse(simctlJson);
 
             if (!doc.RootElement.TryGetProperty("devices", out var devicesElement))
             {
@@ -125,6 +121,83 @@ internal static class IOSSimulatorEnumerator
         }
 
         return results;
+    }
+
+    private static string? GetSimctlJsonDocument(string output)
+    {
+        // `xcrun simctl list devices available -j` should emit pure JSON, but some toolchain
+        // setups prepend or append diagnostics, including JSON-like payloads:
+        //   diagnostic {not JSON}
+        //   { "devices": { "com.apple.CoreSimulator.SimRuntime.iOS-18-2": [...] } }
+        //   trailing diagnostic {"ignored": true}
+        // Use the first balanced, parseable JSON object that has the simctl "devices" shape.
+        foreach (var jsonObject in EnumerateJsonObjects(output))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonObject);
+                if (doc.RootElement.TryGetProperty("devices", out _))
+                {
+                    return jsonObject;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateJsonObjects(string output)
+    {
+        for (var start = output.IndexOf('{', StringComparison.Ordinal); start >= 0; start = output.IndexOf('{', start + 1))
+        {
+            var depth = 0;
+            var inString = false;
+            var escaped = false;
+
+            for (var i = start; i < output.Length; i++)
+            {
+                var ch = output[i];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (ch == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (ch == '"')
+                    {
+                        inString = false;
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    inString = true;
+                }
+                else if (ch == '{')
+                {
+                    depth++;
+                }
+                else if (ch == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        yield return output[start..(i + 1)];
+                        start = i;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     internal static string FormatRuntimeName(string runtimeId)

@@ -195,7 +195,7 @@ internal sealed class MauiEmulatorSelectionEventSubscriber(
         {
             MauiTargetSelectionKind.AndroidEmulator =>
                 "Multiple Android emulators are available, but interactive selection is not available. " +
-                "Run the AppHost in an interactive terminal to choose an Android Virtual Device, or start the desired emulator manually and pass its adb serial from 'adb devices' to AddAndroidEmulator(...). " +
+                "Start the resource from the Aspire Dashboard to choose an Android Virtual Device, or start the desired emulator manually and pass its adb serial from 'adb devices' to AddAndroidEmulator(...). " +
                 $"Available Android Virtual Devices: {availableTargets}",
 
             MauiTargetSelectionKind.IOSSimulator =>

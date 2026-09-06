@@ -51,12 +51,18 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             WARNING | unexpected diagnostic
             Pixel_5_API_35
             Pixel.Tablet_API_36
+            Pixel Tablet API 36
             """);
 
         Assert.Collection(
             result,
             option => Assert.Equal("Pixel_5_API_35", option.Id),
-            option => Assert.Equal("Pixel.Tablet_API_36", option.Id));
+            option => Assert.Equal("Pixel.Tablet_API_36", option.Id),
+            option =>
+            {
+                Assert.Equal("Pixel Tablet API 36", option.Id);
+                Assert.Equal("Pixel Tablet API 36", option.DisplayName);
+            });
     }
 
     [Fact]
@@ -159,19 +165,20 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
     public void ParseSimctlOutput_WithNoisyOutput_ParsesJsonPayload()
     {
         var result = IOSSimulatorEnumerator.ParseSimctlOutput("""
-            2026-06-29 10:00:00.000 simctl[1234:5678] diagnostic noise
+            2026-06-29 10:00:00.000 simctl[1234:5678] diagnostic noise {not JSON}
             {
               "devices": {
                 "com.apple.CoreSimulator.SimRuntime.iOS-18-2": [
-                  { "udid": "AAAA-BBBB", "name": "iPhone 16 Pro", "state": "Shutdown", "isAvailable": true }
+                  { "udid": "AAAA-BBBB", "name": "iPhone {16} Pro", "state": "Shutdown", "isAvailable": true }
                 ]
               }
             }
-            trailing noise
+            trailing noise {"ignored": true}
             """, NullLogger.Instance);
 
         var option = Assert.Single(result);
         Assert.Equal("AAAA-BBBB", option.Id);
+        Assert.Equal("iPhone {16} Pro - iOS 18.2", option.DisplayName);
     }
 
     [Fact]
@@ -340,6 +347,7 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
             () => env.PublishBeforeResourceStartedAsync(env.Android));
 
         Assert.Contains("interactive selection is not available", ex.Message);
+        Assert.Contains("Aspire Dashboard", ex.Message);
         Assert.Contains("adb serial", ex.Message);
         Assert.Contains("Available Android Virtual Devices", ex.Message);
         Assert.Contains("Pixel_5_API_35", ex.Message);
@@ -460,6 +468,21 @@ public class MauiEmulatorSelectionTests(ITestOutputHelper outputHelper)
                 TimeSpan.FromSeconds(30),
                 "Timed out waiting for Android emulator.",
                 cts.Token));
+    }
+
+    [Fact]
+    public async Task AndroidEmulatorProcessExitBeforeSerial_ThrowsActionableError()
+    {
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            AndroidEmulatorEnumerator.WaitForEmulatorSerialAsync(
+                "Pixel Tablet API 36",
+                _ => Task.FromResult<string?>(null),
+                () => "Android emulator 'Pixel Tablet API 36' exited with code 1 before it appeared in adb. Details: emulator output",
+                TimeSpan.FromMinutes(1),
+                TimeSpan.FromSeconds(30),
+                CancellationToken.None));
+
+        Assert.Equal("Android emulator 'Pixel Tablet API 36' exited with code 1 before it appeared in adb. Details: emulator output", ex.Message);
     }
 
     [Fact]
