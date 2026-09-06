@@ -171,6 +171,8 @@ internal class InteractionService : IInteractionService
             var input = inputs[i];
             if (input.InputType == InputType.Terminal)
             {
+                // The input only borrows a terminal for presentation. Its caller-owned lifetime is independent
+                // of the dialog, so reusing the same terminal in later interactions is valid.
                 if (input.Required)
                 {
                     throw new InvalidOperationException($"The input '{input.Name}' has {nameof(InteractionInput.Required)} set to true, but {nameof(InputType.Terminal)} inputs do not produce a value and cannot be required.");
