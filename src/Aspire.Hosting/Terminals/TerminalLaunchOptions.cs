@@ -25,5 +25,10 @@ public sealed class TerminalLaunchOptions
     /// <summary>
     /// Gets or sets where the terminal is displayed. Defaults to <see cref="TerminalPlacement.Dock"/>.
     /// </summary>
+    /// <remarks>
+    /// AppHost-owned terminals support <see cref="TerminalPlacement.Dock"/>, <see cref="TerminalPlacement.Dialog"/>,
+    /// and <see cref="TerminalPlacement.None"/>. <see cref="TerminalPlacement.ResourceView"/> is reserved for
+    /// terminals owned by resources and cannot be used when creating an AppHost-owned terminal.
+    /// </remarks>
     public TerminalPlacement Placement { get; set; } = TerminalPlacement.Dock;
 }

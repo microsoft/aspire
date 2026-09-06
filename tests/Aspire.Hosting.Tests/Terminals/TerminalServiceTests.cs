@@ -7,6 +7,7 @@ using System.Threading.Channels;
 using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Utils;
+using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
@@ -38,6 +39,54 @@ public class TerminalServiceTests
             Title = "Shell",
             Command = null!
         }));
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.ResourceView, false)]
+    [InlineData(TerminalPlacement.ResourceView, true)]
+    [InlineData((TerminalPlacement)(-1), false)]
+    [InlineData((TerminalPlacement)(-1), true)]
+    [InlineData((TerminalPlacement)4, false)]
+    [InlineData((TerminalPlacement)4, true)]
+    public async Task CreateTerminal_UnsupportedPlacement_ThrowsBeforeRegistration(TerminalPlacement placement, bool useBuilder)
+    {
+        await using var service = TestTerminalService.Create();
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(nameof(placement), () => CreateTerminal(service, placement, useBuilder));
+
+        Assert.Equal(placement, ex.ActualValue);
+        Assert.Empty(service.ListAll());
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.Dock, false)]
+    [InlineData(TerminalPlacement.Dock, true)]
+    [InlineData(TerminalPlacement.Dialog, false)]
+    [InlineData(TerminalPlacement.Dialog, true)]
+    [InlineData(TerminalPlacement.None, false)]
+    [InlineData(TerminalPlacement.None, true)]
+    public async Task CreateTerminal_SupportedPlacement_RegistersTerminal(TerminalPlacement placement, bool useBuilder)
+    {
+        await using var service = TestTerminalService.Create();
+        await using var terminal = CreateTerminal(service, placement, useBuilder);
+
+        Assert.Equal(TerminalOwner.AppHost, terminal.Owner);
+        Assert.Equal(placement, terminal.Placement);
+        Assert.True(service.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+        var listing = Assert.Single(service.ListAll());
+        Assert.Equal(terminal.Id, listing.Id);
+        Assert.Equal(placement, listing.Placement);
+
+        using var subscription = service.SubscribeDockTerminals();
+        if (placement == TerminalPlacement.Dock)
+        {
+            Assert.Equal(terminal.Id, Assert.Single(subscription.InitialState).Id);
+        }
+        else
+        {
+            Assert.Empty(subscription.InitialState);
+        }
     }
 
     [Fact]
@@ -404,6 +453,16 @@ public class TerminalServiceTests
         Assert.Null(service.ResourceTerminals);
         Assert.Single(service.ListAll());
     }
+
+    private static IAspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder)
+        => useBuilder
+            ? service.CreateTerminal("Shell", placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"))
+            : service.CreateTerminal(new TerminalLaunchOptions
+            {
+                Title = "Shell",
+                Command = new TerminalCommand("bash"),
+                Placement = placement
+            });
 
     private static IAspireTerminal CreateInteractionTerminal(TerminalService service, string title)
         => service.CreateTerminal(new TerminalLaunchOptions

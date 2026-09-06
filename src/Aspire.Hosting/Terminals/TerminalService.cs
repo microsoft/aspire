@@ -67,6 +67,10 @@ public sealed class TerminalService : IAsyncDisposable
     /// terminal that is meant to outlive the call that created it should be left undisposed, and is torn down
     /// when the AppHost shuts down.
     /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The placement in <paramref name="options"/> is not <see cref="TerminalPlacement.Dock"/>,
+    /// <see cref="TerminalPlacement.Dialog"/>, or <see cref="TerminalPlacement.None"/>.
+    /// </exception>
     public IAspireTerminal CreateTerminal(TerminalLaunchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -115,6 +119,14 @@ public sealed class TerminalService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(builder);
+
+        // AppHost-owned terminals have no resource view. Validate both creation paths here before registration,
+        // while retaining None for terminals driven only through automation.
+        if (placement is not (TerminalPlacement.Dock or TerminalPlacement.Dialog or TerminalPlacement.None))
+        {
+            throw new ArgumentOutOfRangeException(nameof(placement), placement,
+                $"AppHost-owned terminals must use {nameof(TerminalPlacement.Dock)}, {nameof(TerminalPlacement.Dialog)}, or {nameof(TerminalPlacement.None)} placement.");
+        }
 
         // Terminal ids are opaque to the dashboard and appear in websocket query strings, so use a
         // non-guessable value rather than a sequence number.
