@@ -27,6 +27,7 @@ internal static class TerminalSetupHelpers
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
+        module.SetupVoid("setReadOnly", _ => true).SetVoidResult();
     }
 
     public static void SetupTerminalDock(TestContext context)

@@ -4,6 +4,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Terminal;
@@ -14,6 +15,7 @@ internal enum TestHmp1FrameType : byte
 {
     Hello = 0x01,
     StateSync = 0x02,
+    Output = 0x03,
     Input = 0x04,
     RequestPrimary = 0x07,
     ClientHello = 0x0B,
@@ -135,6 +137,11 @@ internal sealed class TestTerminalConnection : IAsyncDisposable
     public Task SendStateSyncAsync(CancellationToken cancellationToken)
     {
         return SendFrameAsync(TestHmp1FrameType.StateSync, [], cancellationToken);
+    }
+
+    public Task SendOutputAsync(string output, CancellationToken cancellationToken)
+    {
+        return SendFrameAsync(TestHmp1FrameType.Output, Encoding.UTF8.GetBytes(output), cancellationToken);
     }
 
     private async Task SendFrameAsync(TestHmp1FrameType type, byte[] payload, CancellationToken cancellationToken)

@@ -13,6 +13,98 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class TerminalViewTests : DashboardTestContext
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReadOnly_InitialAndUpdatedStatePreservesConnection(bool initialReadOnly)
+    {
+        Services.AddLocalization();
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var init = module.Setup<int>("initTerminal", _ => true);
+        init.SetResult(1);
+        var update = module.SetupVoid("setReadOnly", _ => true);
+        update.SetVoidResult();
+        var reconnect = module.Setup<int>("reconnectTerminal", _ => true);
+        reconnect.SetResult(2);
+        var dispose = module.SetupVoid("disposeTerminal", _ => true);
+        dispose.SetVoidResult();
+
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal")
+            .Add(p => p.ReadOnly, initialReadOnly));
+
+        var options = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]);
+        Assert.Equal(initialReadOnly, options.ReadOnly);
+        Assert.Empty(update.Invocations);
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, !initialReadOnly));
+        cut.WaitForAssertion(() =>
+            Assert.Equal(new object?[] { 1, !initialReadOnly }, Assert.Single(update.Invocations).Arguments));
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, initialReadOnly));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Collection(update.Invocations,
+                invocation => Assert.Equal(new object?[] { 1, !initialReadOnly }, invocation.Arguments),
+                invocation => Assert.Equal(new object?[] { 1, initialReadOnly }, invocation.Arguments));
+        });
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, initialReadOnly));
+        Assert.Equal(2, update.Invocations.Count);
+        Assert.Single(init.Invocations);
+        Assert.Empty(reconnect.Invocations);
+        Assert.Empty(dispose.Invocations);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReadOnly_ChangedDuringInitializationAppliesLatestState(bool initialReadOnly)
+    {
+        Services.AddLocalization();
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var init = module.Setup<int>("initTerminal", _ => true);
+        var update = module.SetupVoid("setReadOnly", _ => true);
+        update.SetVoidResult();
+        module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal")
+            .Add(p => p.ReadOnly, initialReadOnly));
+        Assert.Single(init.Invocations);
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, !initialReadOnly));
+        init.SetResult(1);
+
+        cut.WaitForAssertion(() =>
+            Assert.Equal(new object?[] { 1, !initialReadOnly }, Assert.Single(update.Invocations).Arguments));
+        Assert.Single(init.Invocations);
+    }
+
+    [Fact]
+    public void ReadOnly_ChangedDuringUpdateAppliesLatestState()
+    {
+        Services.AddLocalization();
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var update = module.SetupVoid("setReadOnly", _ => true);
+        module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+
+        var cut = RenderComponent<TerminalView>(builder =>
+            builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal"));
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, true));
+        cut.WaitForAssertion(() => Assert.Single(update.Invocations));
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, false));
+        Assert.Single(update.Invocations);
+        update.SetVoidResult();
+
+        cut.WaitForAssertion(() =>
+            Assert.Collection(update.Invocations,
+                invocation => Assert.Equal(new object?[] { 1, true }, invocation.Arguments),
+                invocation => Assert.Equal(new object?[] { 1, false }, invocation.Arguments)));
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void FailedInitialization_SameEndpointRenderRetries(bool endpointOnFirstRender)

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model.Interaction;
@@ -17,6 +18,56 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public sealed class InteractionsInputDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Render_TerminalRespectsDisabledAndLoading(bool disabled, bool loading)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = SetUpDialog(out var dialogService);
+        var input = new InteractionInput
+        {
+            Name = "shell",
+            InputType = InputType.Terminal,
+            TerminalId = "terminal",
+            Disabled = disabled,
+            Loading = loading
+        };
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = new WatchInteractionsResponseUpdate
+            {
+                InteractionId = 1,
+                InputsDialog = new InteractionInputsDialog { InputItems = { input } }
+            },
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters { Title = "Shell" });
+        cut.WaitForAssertion(() => Assert.Equal(disabled || loading, cut.FindComponent<TerminalView>().Instance.ReadOnly));
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+
+        foreach (var state in new (bool Disabled, bool Loading)[] { (false, false), (true, false), (true, true), (false, true), (false, false) })
+        {
+            var update = viewModel.Interaction.Clone();
+            update.InputsDialog.InputItems[0].Disabled = state.Disabled;
+            update.InputsDialog.InputItems[0].Loading = state.Loading;
+            await cut.InvokeAsync(() => viewModel.UpdateInteractionAsync(update));
+
+            cut.WaitForAssertion(() =>
+            {
+                var current = cut.FindComponent<TerminalView>().Instance;
+                Assert.Same(terminal, current);
+                Assert.Equal(state.Disabled || state.Loading, current.ReadOnly);
+                Assert.Equal("/api/apphost-terminal?terminalId=terminal", current.EndpointPathAndQuery);
+            });
+        }
+    }
+
     [Fact]
     public async Task Render_FileUsesFallbackPlaceholderAndScopedBrowseLabel()
     {

@@ -1350,6 +1350,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
         },
         // Layout / sizing state (per-instance — we never use globals).
         chromeless,
+        readOnly: !!options?.readOnly,
         // Whether the footer's fixed-resolution picker is offered. Dock panes
         // are sized by the dock splitter and always fit, so they get the font
         // stepper but not the picker.
@@ -1416,6 +1417,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
     const FitAddon = window.FitAddon.FitAddon;
     const fitAddon = new FitAddon();
     const term = new window.Terminal({
+        disableStdin: state.readOnly,
         cursorBlink: true,
         fontSize: state.currentFontPx,
         fontFamily: '"Cascadia Mono NF", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace',
@@ -1442,6 +1444,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
     attachTerminalFocusNavigation(state, term);
 
     const helperTextArea = state.terminalBody.querySelector('.xterm-helper-textarea');
+    helperTextArea?.setAttribute('aria-readonly', String(state.readOnly));
     if (helperTextArea && state.terminalFocusHint) {
         helperTextArea.setAttribute('aria-keyshortcuts', 'F6 Shift+F6');
         helperTextArea.setAttribute('aria-describedby', state.terminalFocusHint.id);
@@ -1516,7 +1519,9 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
     // promoting first ensures the keystroke lands. No-ops when we're already
     // primary or the client isn't connected yet.
     term.onData((data) => {
-        if (!state.client) return;
+        // Keep the transport open for output and other peers' automation. Gate the forwarding path as well as
+        // xterm's keyboard/paste handling so no input can promote this viewer while it is read-only.
+        if (state.readOnly || !state.client) return;
         maybeAutoPromote(state);
         state.client.sendInput(textEncoder.encode(data));
     });
@@ -1812,6 +1817,18 @@ export function getSizePresets() {
     return SIZE_PRESETS.map((p) => ({ value: p.value, label: p.label, cols: p.cols, rows: p.rows }));
 }
 
+export function setReadOnly(id, readOnly) {
+    const state = terminals.get(id);
+    if (!state) return;
+
+    state.readOnly = readOnly;
+    state.term.options.disableStdin = readOnly;
+    state.terminalBody.querySelector('.xterm-helper-textarea')?.setAttribute('aria-readonly', String(readOnly));
+    if (!readOnly && state.chromeless) {
+        maybeAutoPromote(state);
+    }
+}
+
 export function setFontSizeFromHost(id, newSize) {
     const state = terminals.get(id);
     if (!state || typeof newSize !== 'number') return;
@@ -1844,6 +1861,7 @@ export function setSizeModeFromHost(id, sizeKey) {
 }
 
 function maybeAutoPromote(state) {
+    if (state.readOnly) return;
     const client = state.client;
     if (!client || client.peerId === null) return;
     if (client.isPrimary) return;

@@ -215,6 +215,7 @@
                                                    Context="input">
                                 <div class="interaction-terminal-container" id="@terminalId">
                                     <TerminalView EndpointPathAndQuery="@BuildInteractionTerminalEndpoint(input.ViewModel)"
+                                                  ReadOnly="@input.ViewModel.InputDisabled"
                                                   Chromeless="true"
                                                   ShowDimensionsPicker="false" />
                                 </div>

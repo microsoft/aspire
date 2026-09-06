@@ -30,6 +30,105 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         _dashboardServerFixture = dashboardServerFixture;
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ReadOnly_BlocksKeyboardAndPasteWithoutInterruptingOutput(bool initialReadOnly, bool chromeless)
+    {
+        await RunTestAsync(async page =>
+        {
+            await _dashboardServerFixture.TerminalResolver.DiscardPendingConnectionsAsync();
+            await page.GotoAsync("/").DefaultTimeout();
+            var terminalId = await page.EvaluateAsync<int>("""
+                async ({ resourceName, initialReadOnly, chromeless }) => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    const container = document.createElement('div');
+                    container.style.cssText = 'position:fixed;inset:0;z-index:10000';
+                    document.body.appendChild(container);
+                    const endpoint = new URL('/api/terminal', location.href);
+                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    endpoint.searchParams.set('resource', resourceName);
+                    endpoint.searchParams.set('replica', '0');
+                    return await module.initTerminal(container, endpoint.href, null, { readOnly: initialReadOnly, chromeless });
+                }
+                """, new { resourceName = ResourceName, initialReadOnly, chromeless });
+
+            await using var connection = await _dashboardServerFixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+            await connection.ReadUntilFrameAsync(TestHmp1FrameType.ClientHello, CancellationToken.None).DefaultTimeout();
+            await connection.SendHelloAsync(ProducerColumns, ProducerRows, CancellationToken.None).DefaultTimeout();
+            await connection.SendStateSyncAsync(CancellationToken.None).DefaultTimeout();
+            await page.WaitForFunctionAsync("""
+                async id => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    return module.getToolbarState(id)?.role === 'secondary';
+                }
+                """, terminalId).DefaultTimeout();
+            if (chromeless && !initialReadOnly)
+            {
+                Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
+            }
+
+            var terminalInput = page.Locator(".xterm-helper-textarea");
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", initialReadOnly ? "true" : "false");
+            if (!initialReadOnly)
+            {
+                await SetReadOnlyAsync(page, terminalId, true);
+            }
+
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
+            await connection.SendOutputAsync("Output while read-only\r\n", CancellationToken.None).DefaultTimeout();
+            await Assertions.Expect(page.Locator(".xterm-rows")).ToContainTextAsync("Output while read-only");
+
+            await terminalInput.FocusAsync();
+            await page.Keyboard.TypeAsync("blocked-keyboard");
+            await PasteAsync(terminalInput, "blocked-paste");
+            await page.Keyboard.PressAsync("F6");
+            await Assertions.Expect(page.Locator("#font-minus")).ToBeFocusedAsync();
+            await page.Locator("#font-plus").ClickAsync();
+
+            await SetReadOnlyAsync(page, terminalId, false);
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "false");
+            await terminalInput.FocusAsync();
+            await page.Keyboard.TypeAsync("x");
+            await PasteAsync(terminalInput, "allowed-paste");
+
+            // HMP preserves frame ordering. Only enabling a chromeless viewer and enabled input can request primary.
+            // Disabled typing, paste and font controls must not claim control from an automation peer.
+            if (chromeless)
+            {
+                Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
+            }
+            Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
+            var keyboard = await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout();
+            Assert.Equal(TestHmp1FrameType.Input, keyboard.Type);
+            Assert.Equal(TestHmp1FrameType.RequestPrimary, (await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout()).Type);
+            var paste = await connection.ReadFrameAsync(CancellationToken.None).DefaultTimeout();
+            Assert.Equal(TestHmp1FrameType.Input, paste.Type);
+            Assert.Equal("x", Encoding.UTF8.GetString(keyboard.Payload));
+            Assert.Equal("allowed-paste", Encoding.UTF8.GetString(paste.Payload));
+        });
+    }
+
+    private static Task SetReadOnlyAsync(IPage page, int terminalId, bool readOnly) =>
+        page.EvaluateAsync("""
+            async ({ terminalId, readOnly }) => {
+                const module = await import('/Components/Controls/TerminalView.razor.js');
+                module.setReadOnly(terminalId, readOnly);
+            }
+            """, new { terminalId, readOnly });
+
+    private static Task PasteAsync(ILocator terminalInput, string text) =>
+        terminalInput.EvaluateAsync("""
+            (element, text) => {
+                const data = new DataTransfer();
+                data.setData('text/plain', text);
+                element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+            }
+            """, text);
+
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task TerminalFocusNavigation_MovesToExpectedControlsWithoutForwardingInput()

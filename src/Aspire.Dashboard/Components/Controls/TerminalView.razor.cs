@@ -44,6 +44,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     // on a resource stop+restart where the dashboard fires a burst of
     // resource-snapshot-driven re-renders right after the page mounts.
     private bool _initStarted;
+    private bool _appliedReadOnly;
+    private bool _readOnlyUpdatePending;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -96,6 +98,15 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// </remarks>
     [Parameter]
     public string? EndpointPathAndQuery { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether user input is blocked while terminal output continues to display.
+    /// </summary>
+    /// <remarks>
+    /// Changing this value does not reconnect the terminal or change the lifetime of its process.
+    /// </remarks>
+    [Parameter]
+    public bool ReadOnly { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the terminal renders without its surrounding chrome — no card border,
@@ -199,6 +210,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
                 currentEndpoint = ResolveEndpoint();
             }
+            await UpdateReadOnlyAsync();
             return;
         }
 
@@ -248,6 +260,37 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             // initialization was pending now, including removing the endpoint entirely.
             endpoint = ResolveEndpoint();
         }
+
+        await UpdateReadOnlyAsync();
+    }
+
+    private async Task UpdateReadOnlyAsync()
+    {
+        if (_readOnlyUpdatePending || _jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+
+        _readOnlyUpdatePending = true;
+        try
+        {
+            // A render can arrive while JS interop is pending. Reconcile the latest value here because completing
+            // OnAfterRenderAsync does not trigger another render.
+            while (_appliedReadOnly != ReadOnly)
+            {
+                var readOnly = ReadOnly;
+                await _jsModule.InvokeVoidAsync("setReadOnly", _terminalId, readOnly);
+                _appliedReadOnly = readOnly;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser disconnected while the presentation state was being updated.
+        }
+        finally
+        {
+            _readOnlyUpdatePending = false;
+        }
     }
 
     /// <summary>
@@ -284,9 +327,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             }
 
             _connectedGeneration = -1;
+            var readOnly = ReadOnly;
             _terminalId = await _jsModule.InvokeAsync<int>(
                 "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions
                 {
+                    ReadOnly = readOnly,
                     Chromeless = Chromeless,
                     ShowDimensions = ShowDimensionsPicker,
                     SizeMemoryKey = SizeMemoryKey,
@@ -296,6 +341,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                     Fit = FitLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
                     FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalFocusControlsHint)],
                 });
+            _appliedReadOnly = readOnly;
         }
         catch (JSDisconnectedException)
         {
@@ -539,6 +585,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 /// </summary>
 public sealed record TerminalViewOptions
 {
+    /// <summary>Whether user input is blocked without interrupting terminal output.</summary>
+    public bool ReadOnly { get; init; }
+
     /// <summary>Whether to render without the card border, titlebar and internal padding.</summary>
     public bool Chromeless { get; init; }
 
