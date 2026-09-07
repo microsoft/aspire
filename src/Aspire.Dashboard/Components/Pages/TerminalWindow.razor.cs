@@ -23,13 +23,15 @@ namespace Aspire.Dashboard.Components.Pages;
 /// </remarks>
 public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
 {
-    private readonly CancellationTokenSource _cts = new();
-
     private string? _endpoint;
     private string _title = string.Empty;
     private bool _ended;
     private bool _disposed;
-    private Task? _watchTask;
+    private (string? TerminalId, string? ResourceName, int ReplicaIndex)? _routeIdentity;
+    private int _watchGeneration;
+    private CancellationTokenSource? _watchCts;
+    // Also tracks in-flight cancellation so overlapping route changes and disposal join the same cleanup.
+    private Task _watchTask = Task.CompletedTask;
 
     /// <summary>
     /// Gets or sets the id of an AppHost-owned dock terminal to attach to.
@@ -58,27 +60,39 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     [Inject]
     public required ILogger<TerminalWindow> Logger { get; init; }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        if (TerminalId is { Length: > 0 } terminalId)
+        var terminalId = TerminalId is { Length: > 0 } ? TerminalId : null;
+        var resourceName = terminalId is null && ResourceName is { Length: > 0 } ? ResourceName : null;
+        var replicaIndex = resourceName is not null ? ReplicaIndex : 0;
+        var routeIdentity = (terminalId, resourceName, replicaIndex);
+        if (_disposed || _routeIdentity == routeIdentity)
         {
-            _endpoint = $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}";
+            return;
+        }
 
-            // The title of an AppHost terminal is owned by the AppHost and can change while the window is open, and
-            // the terminal can also be closed out from under it. Both arrive on the watch stream, so the window
-            // follows it rather than showing a stale name or a dead grid.
-            _title = terminalId;
-            _watchTask ??= Task.Run(() => WatchTerminalsAsync(terminalId, _cts.Token), _cts.Token);
-        }
-        else if (ResourceName is { Length: > 0 } resourceName)
+        _routeIdentity = routeIdentity;
+        var generation = ++_watchGeneration;
+        _ended = false;
+        _endpoint = terminalId is not null ? $"/api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}" : null;
+        _title = terminalId ?? (resourceName is not null
+            ? replicaIndex > 0 ? $"{resourceName} #{replicaIndex}" : resourceName
+            : string.Empty);
+
+        await StopWatchingAsync();
+        if (_disposed || generation != _watchGeneration || terminalId is null)
         {
-            // Resource terminals are named by the resource, which does not change for the life of the window.
-            _endpoint = null;
-            _title = ReplicaIndex > 0 ? $"{resourceName} #{ReplicaIndex}" : resourceName;
+            return;
         }
+
+        // Only AppHost terminals need metadata updates. A newer route may have replaced this one while
+        // cancellation was awaiting an old watch, so don't start a subscription until its identity is rechecked.
+        _watchCts = new CancellationTokenSource();
+        var cancellationToken = _watchCts.Token;
+        _watchTask = Task.Run(() => WatchTerminalsAsync(terminalId, generation, cancellationToken), cancellationToken);
     }
 
-    private async Task WatchTerminalsAsync(string terminalId, CancellationToken cancellationToken)
+    private async Task WatchTerminalsAsync(string terminalId, int generation, CancellationToken cancellationToken)
     {
         try
         {
@@ -86,7 +100,9 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
             {
                 await InvokeAsync(() =>
                 {
-                    if (_disposed)
+                    // An update can already be queued on the renderer when its subscription is cancelled.
+                    // Compare generations, not just IDs: navigating away and back also replaces the watch.
+                    if (_disposed || generation != _watchGeneration || cancellationToken.IsCancellationRequested)
                     {
                         return;
                     }
@@ -105,9 +121,9 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
                 }).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The window is closing.
+            // The window is closing or has switched to another terminal.
         }
         catch (Exception ex)
         {
@@ -162,6 +178,34 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         return true;
     }
 
+    private Task StopWatchingAsync()
+    {
+        if (_watchCts is { } cts)
+        {
+            _watchCts = null;
+            _watchTask = CancelWatchAsync(cts, _watchTask);
+        }
+
+        return _watchTask;
+    }
+
+    private static async Task CancelWatchAsync(CancellationTokenSource cts, Task watchTask)
+    {
+        try
+        {
+            await cts.CancelAsync().ConfigureAwait(false);
+            await watchTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Task.Run can be cancelled before the watch delegate starts.
+        }
+        finally
+        {
+            cts.Dispose();
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -171,20 +215,6 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         }
 
         _disposed = true;
-        await _cts.CancelAsync().ConfigureAwait(false);
-
-        if (_watchTask is { } watchTask)
-        {
-            try
-            {
-                await watchTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected. We cancelled _cts immediately above, so the watch task ends by design.
-            }
-        }
-
-        _cts.Dispose();
+        await StopWatchingAsync().ConfigureAwait(false);
     }
 }

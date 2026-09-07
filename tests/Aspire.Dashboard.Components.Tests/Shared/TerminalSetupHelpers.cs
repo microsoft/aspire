@@ -16,6 +16,7 @@ internal static class TerminalSetupHelpers
         FluentUISetupHelpers.SetupFluentUIComponents(context);
         FluentUISetupHelpers.SetupFluentButton(context);
         context.Services.AddSingleton<IDashboardClient>(client);
+        context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
         SetupTerminalView(context);
         SetupTerminalDock(context);
     }

@@ -36,6 +36,7 @@ public class TestDashboardClient : IDashboardClient
     public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
     public ConcurrentQueue<string> ClosedTerminals { get; } = new();
     public Action? OnTerminalSubscriptionDisposed { get; set; }
+    public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
     public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
     public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
 #pragma warning disable CS0067 // Event is never used - required by interface
@@ -115,6 +116,12 @@ public class TestDashboardClient : IDashboardClient
             {
                 await foreach (var update in provider().Reader.ReadAllAsync(cancellationToken))
                 {
+                    // Allow a test to hold an already-received update while its subscriber is being replaced.
+                    if (BeforeTerminalUpdateAsync is { } beforeUpdate)
+                    {
+                        await beforeUpdate(update);
+                    }
+
                     yield return update;
                 }
             }
