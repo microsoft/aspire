@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@timritzer"
+  ],
+  "description": "`VolumeV1` in `Aspire.Hosting.Kubernetes` now supports the `csi` volume source, enabling inline ephemeral CSI volumes such as those projected by the Secrets Store CSI driver.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗃️",
+  "firstMergedAt": "2026-09-01T09:47:04Z",
+  "lastMergedAt": "2026-09-01T09:47:04Z",
+  "name": "Add CSI volume source to Kubernetes VolumeV1",
+  "owner": "mitchdenny",
+  "prs": [
+    19826
+  ]
+}

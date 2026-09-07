@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Grouped with #19008 Azure Sandboxes entry - fixes deployment principal binding.",
+  "mergedAt": "2026-08-31T04:54:29Z",
+  "number": 19801,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Fix Azure Sandbox deployment principal binding"
+}

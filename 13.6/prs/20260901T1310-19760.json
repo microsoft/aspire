@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI reliability change for flaky Azure Functions E2E shard, not user-facing.",
+  "mergedAt": "2026-09-01T13:10:00Z",
+  "number": 19760,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "ci(vscode): Keep CI green when Azure Functions E2E flakes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Test-only stabilization of AppHost lifecycle and workspace terminal E2E tests, no product change.",
+  "mergedAt": "2026-08-27T17:35:49Z",
+  "number": 19710,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "Stabilize AppHost lifecycle and workspace terminal E2E tests"
+}

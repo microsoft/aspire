@@ -1,0 +1,9 @@
+{
+  "author": "copilot",
+  "comment": "Documents copilot-app coding agent detection telemetry addition; not matched to a distinct changelog entry (PR #19740 not in this batch).",
+  "mergedAt": "2026-09-01T03:05:24Z",
+  "number": 1589,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "[docs] Document copilot-app coding agent detection"
+}

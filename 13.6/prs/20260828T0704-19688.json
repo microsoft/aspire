@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal CI test-selection enforcement change, not user-facing.",
+  "mergedAt": "2026-08-28T07:04:12Z",
+  "number": 19688,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "[automated] ci: run only tests affected by pull request changes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Cosmos DB preview emulator now emits OpenTelemetry by default.",
+  "mergedAt": "2026-09-01T01:18:33Z",
+  "number": 15671,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Emit otel from Cosmos Db Preview Emulator"
+}

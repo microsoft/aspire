@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New portable volume path environment variables for projects/executables.",
+  "mergedAt": "2026-08-31T03:36:13Z",
+  "number": 19404,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Add portable volume path environment variables"
+}

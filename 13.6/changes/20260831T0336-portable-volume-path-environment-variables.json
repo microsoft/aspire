@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Volume mount paths can now be resolved through environment variables, so the same volume configuration works whether a project or executable runs locally on the host filesystem or in a container under Docker Compose, Kubernetes, or Azure Container Apps.",
+  "docsPrs": [
+    1593
+  ],
+  "docsRequired": true,
+  "emoji": "📂",
+  "firstMergedAt": "2026-08-31T03:36:13Z",
+  "lastMergedAt": "2026-08-31T03:36:13Z",
+  "name": "Portable volume path environment variables",
+  "owner": "mitchdenny",
+  "prs": [
+    19404
+  ]
+}

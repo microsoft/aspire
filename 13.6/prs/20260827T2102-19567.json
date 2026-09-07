@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Reusable resource observation for CLI describe/wait commands.",
+  "mergedAt": "2026-08-27T21:02:58Z",
+  "number": 19567,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Make CLI resource observation reusable"
+}

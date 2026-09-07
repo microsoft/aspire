@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixes polyglot AppHost settings discovery from project root.",
+  "mergedAt": "2026-08-31T19:02:11Z",
+  "number": 19719,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Load polyglot AppHost settings from project root"
+}

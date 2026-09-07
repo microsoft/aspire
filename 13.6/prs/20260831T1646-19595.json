@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Updates CLI Sigstore/TUF dependencies, hardens trust root verification.",
+  "mergedAt": "2026-08-31T16:46:34Z",
+  "number": 19595,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Update Tuf and Sigstore to 1.0.1"
+}

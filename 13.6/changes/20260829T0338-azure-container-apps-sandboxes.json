@@ -1,0 +1,20 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added an experimental `Aspire.Hosting.Azure.Sandboxes` deployment target so Aspire applications can publish container-backed compute resources to Azure Container Apps Sandboxes.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📦",
+  "firstMergedAt": "2026-08-29T03:38:25Z",
+  "lastMergedAt": "2026-08-31T04:54:29Z",
+  "name": "Azure Container Apps Sandboxes deployment target",
+  "owner": "spboyer",
+  "prs": [
+    19008,
+    19801
+  ]
+}

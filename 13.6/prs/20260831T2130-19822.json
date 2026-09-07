@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes ephemeral executable target port collision affecting DCP allocation.",
+  "mergedAt": "2026-08-31T21:30:03Z",
+  "number": 19822,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Avoid ephemeral executable target port collisions"
+}

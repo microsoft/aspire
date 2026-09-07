@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updated the Aspire CLI's Sigstore and TUF dependencies to 1.0.1, refreshing the embedded TUF trust root and hardening sequential trust-root rotation verification used for CLI provenance checks.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-08-31T16:46:34Z",
+  "lastMergedAt": "2026-08-31T16:46:34Z",
+  "name": "Harden CLI Sigstore/TUF trust root verification",
+  "owner": "mitchdenny",
+  "prs": [
+    19595
+  ]
+}

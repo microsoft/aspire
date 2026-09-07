@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Changes CLI executable signing certificate identity, user-visible publisher change.",
+  "mergedAt": "2026-08-27T21:26:29Z",
+  "number": 19686,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Use Microsoft certificate for Aspire CLI executable"
+}

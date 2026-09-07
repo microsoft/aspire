@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fixes Aspire view stealing sidebar focus in VS Code.",
+  "mergedAt": "2026-08-31T19:26:49Z",
+  "number": 19754,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Prevent Aspire view from stealing sidebar focus"
+}

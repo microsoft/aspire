@@ -1,0 +1,9 @@
+{
+  "author": "copilot",
+  "comment": "Documents #19754 Aspire view sidebar focus fix.",
+  "mergedAt": "2026-09-01T11:42:45Z",
+  "number": 1598,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "[docs] Note Aspire view no longer steals sidebar focus on reload"
+}

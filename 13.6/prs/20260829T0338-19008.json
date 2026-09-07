@@ -1,0 +1,9 @@
+{
+  "author": "spboyer",
+  "comment": "New experimental Azure Container Apps Sandboxes deployment target.",
+  "mergedAt": "2026-08-29T03:38:25Z",
+  "number": 19008,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Add Azure Container Apps Sandboxes deployment target"
+}

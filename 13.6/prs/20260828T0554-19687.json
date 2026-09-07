@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal CI test-selection engineering change, not user-facing.",
+  "mergedAt": "2026-08-28T05:54:43Z",
+  "number": 19687,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "[automated] fix(ci): select installer jobs and loose CI dependencies correctly"
+}

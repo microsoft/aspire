@@ -1,0 +1,9 @@
+{
+  "author": "timritzer",
+  "comment": "Adds csi volume source support to Kubernetes VolumeV1.",
+  "mergedAt": "2026-09-01T09:47:04Z",
+  "number": 19826,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Add a csi volume source to VolumeV1 (Aspire.Hosting.Kubernetes)"
+}

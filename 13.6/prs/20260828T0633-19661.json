@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes dashboard telemetry filter behavior by unifying on SQLite.",
+  "mergedAt": "2026-08-28T06:33:57Z",
+  "number": 19661,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Use SQLite for dashboard telemetry filtering"
+}

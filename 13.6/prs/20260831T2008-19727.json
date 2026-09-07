@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Test-only fix to self-update E2E test, no product change.",
+  "mergedAt": "2026-08-31T20:08:51Z",
+  "number": 19727,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "Fix self-update channel persistence test"
+}

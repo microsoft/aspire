@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Windows and Linux Aspire CLI executables are now signed with Arcade's general Microsoft first-party certificate instead of the .NET-specific certificate, so the publisher identity shown to users reflects Microsoft.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔏",
+  "firstMergedAt": "2026-08-27T21:26:29Z",
+  "lastMergedAt": "2026-08-27T21:26:29Z",
+  "name": "Aspire CLI executables signed with Microsoft certificate",
+  "owner": "DamianEdwards",
+  "prs": [
+    19686
+  ]
+}

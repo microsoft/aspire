@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire describe --follow` now streams from a single resource snapshot subscription for both initial state and later updates, and `aspire wait` uses a shared typed wait service with consistent timeout, cancellation, and failure handling.",
+  "docsPrs": [
+    1591
+  ],
+  "docsRequired": true,
+  "emoji": "🔭",
+  "firstMergedAt": "2026-08-27T21:02:58Z",
+  "lastMergedAt": "2026-08-27T21:02:58Z",
+  "name": "Reusable CLI resource observation for describe and wait",
+  "owner": "adamint",
+  "prs": [
+    19567
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts now load `appsettings.json` and other configuration files from the guest AppHost's project root instead of the CLI-owned server directory, so configuration files placed next to `apphost.mts` are discovered correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📁",
+  "firstMergedAt": "2026-08-31T19:02:11Z",
+  "lastMergedAt": "2026-08-31T19:02:11Z",
+  "name": "Fix polyglot AppHost settings discovery from project root",
+  "owner": "sebastienros",
+  "prs": [
+    19719
+  ]
+}

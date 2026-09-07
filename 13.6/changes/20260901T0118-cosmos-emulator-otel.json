@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "The Cosmos DB preview emulator now emits OpenTelemetry traces by default, giving visibility into emulator activity in the dashboard alongside the rest of the application.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-09-01T01:18:33Z",
+  "lastMergedAt": "2026-09-01T01:18:33Z",
+  "name": "Emit OpenTelemetry from Cosmos DB preview emulator",
+  "owner": "davidfowl",
+  "prs": [
+    15671
+  ]
+}

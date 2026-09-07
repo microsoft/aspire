@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard telemetry filtering now runs entirely through SQLite for both production and tests, fixing incorrect negative service-name filtering and stale asynchronous filter results clearing a newer structured-log selection.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🗄️",
+  "firstMergedAt": "2026-08-28T06:33:57Z",
+  "lastMergedAt": "2026-08-28T06:33:57Z",
+  "name": "Fix SQLite-backed dashboard telemetry filtering",
+  "owner": "JamesNK",
+  "prs": [
+    19661
+  ]
+}

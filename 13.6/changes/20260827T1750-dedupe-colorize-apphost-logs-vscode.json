@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AppHost logs shown in the VS Code debug console are now deduplicated across the CLI backchannel, console logger, and .NET debug logger paths and color-coded, making output easier to read.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪵",
+  "firstMergedAt": "2026-08-27T17:50:33Z",
+  "lastMergedAt": "2026-08-27T17:50:33Z",
+  "name": "Deduplicate and colorize AppHost logs in VS Code",
+  "owner": "adamint",
+  "prs": [
+    19129
+  ]
+}

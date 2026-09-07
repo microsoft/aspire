@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "DCP no longer briefly releases an ephemeral port between reservation and use when allocating executable target ports, closing a window where an unrelated outbound connection could claim the port and cause workloads like the dashboard to fail binding.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-08-31T21:30:03Z",
+  "lastMergedAt": "2026-08-31T21:30:03Z",
+  "name": "Avoid ephemeral executable target port collisions",
+  "owner": "danegsta",
+  "prs": [
+    19822
+  ]
+}

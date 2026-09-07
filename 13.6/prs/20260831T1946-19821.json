@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Automated VS Code extension release version bump PR, not user-facing.",
+  "mergedAt": "2026-08-31T19:46:35Z",
+  "number": 19821,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "excluded",
+  "title": "Prepare VS Code extension release v1.21.0"
+}

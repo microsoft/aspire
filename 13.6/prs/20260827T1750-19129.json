@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Deduplicates and colorizes AppHost logs in VS Code debug console.",
+  "mergedAt": "2026-08-27T17:50:33Z",
+  "number": 19129,
+  "runDate": "2026-09-07T00:09:37Z",
+  "status": "included",
+  "title": "Deduplicate and colorize AppHost logs in the VS Code debug console"
+}
