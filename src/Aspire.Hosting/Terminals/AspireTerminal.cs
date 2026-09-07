@@ -105,7 +105,11 @@ public sealed class AspireTerminal : IAsyncDisposable
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="key"/> is not a supported key.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
-        => Backend.SendKeyAsync(key, cancellationToken);
+    {
+        // Reject invalid keys before the backend can start a workload or connect to a resource terminal.
+        _ = AspireTerminalKeySequences.Get(key);
+        return Backend.SendKeyAsync(key, cancellationToken);
+    }
 
     /// <summary>
     /// Waits until <paramref name="text"/> appears on the terminal screen.

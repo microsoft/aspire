@@ -248,6 +248,14 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
 
     function calculateShortcut(e) {
         if (modifierKeysExceptShiftNotPressed(e)) {
+            // Match the physical Shift+Backquote gesture across keyboard layouts, not the produced character.
+            // The focused-input guard runs before this, so terminal and text inputs still receive their keys.
+            // To toggle from terminal input, press F6 first to focus its controls.
+            // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+            if (e.shiftKey && e.code === "Backquote") {
+                return 400;
+            }
+
             /* general shortcuts */
             switch (e.key) {
                 case "?": // help
@@ -267,14 +275,6 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                 case "_": // decrease panel size
                 case "-":
                     return 340;
-
-                // Shift+` toggles the terminal dock. Deliberately handled here, below the isActiveElementInput guard,
-                // rather than as a special case above it: Shift+` is `~`, which users legitimately type in a terminal
-                // (~/ for home) and in any text field, so it must reach the focused element instead of being claimed
-                // as a shortcut. To toggle the dock from a focused terminal, press F6 first to move focus to the
-                // terminal controls. Ctrl+` would not need that, but window managers and desktop apps intercept it.
-                case "~":
-                    return 400;
             }
         }
 

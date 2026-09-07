@@ -15,11 +15,13 @@ internal sealed class TestTerminalBackend(string id) : ITerminalBackend
     public TerminalPlacement Placement => TerminalPlacement.Dialog;
     public bool IsDisposed { get; private set; }
     public Func<ValueTask>? OnDispose { get; set; }
+    public Func<AspireTerminalKey, CancellationToken, Task>? OnSendKey { get; set; }
 
     public void Start() => throw new NotSupportedException();
     public void Show() => throw new NotSupportedException();
     public Task SendTextAsync(string text, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
+        => OnSendKey?.Invoke(key, cancellationToken) ?? throw new NotSupportedException();
     public Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public string GetScreenText() => throw new NotSupportedException();
 

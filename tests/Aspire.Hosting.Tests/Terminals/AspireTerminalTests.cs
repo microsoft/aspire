@@ -12,6 +12,64 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class AspireTerminalTests
 {
+    [Theory]
+    [InlineData(-1, false)]
+    [InlineData(-1, true)]
+    [InlineData(int.MaxValue, false)]
+    [InlineData(int.MaxValue, true)]
+    public async Task SendKeyAsync_InvalidKey_DoesNotInvokeBackend(int value, bool canceled)
+    {
+        var invoked = false;
+        var backend = new TestTerminalBackend("invalid-key")
+        {
+            OnSendKey = (_, _) =>
+            {
+                invoked = true;
+                return Task.CompletedTask;
+            }
+        };
+        await using var terminal = new AspireTerminal(backend);
+        using var cts = new CancellationTokenSource();
+        if (canceled)
+        {
+            cts.Cancel();
+        }
+
+        var key = (AspireTerminalKey)value;
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            _ = terminal.SendKeyAsync(key, cts.Token);
+        });
+
+        Assert.Equal("key", exception.ParamName);
+        Assert.Equal(key, exception.ActualValue);
+        Assert.False(invoked);
+    }
+
+    [Fact]
+    public async Task SendKeyAsync_DeclaredKeys_ForwardKeyAndCancellationToken()
+    {
+        List<(AspireTerminalKey Key, CancellationToken Token)> calls = [];
+        var backend = new TestTerminalBackend("valid-key")
+        {
+            OnSendKey = (key, token) =>
+            {
+                calls.Add((key, token));
+                return Task.CompletedTask;
+            }
+        };
+        await using var terminal = new AspireTerminal(backend);
+        using var cts = new CancellationTokenSource();
+        var keys = Enum.GetValues<AspireTerminalKey>();
+
+        foreach (var key in keys)
+        {
+            await terminal.SendKeyAsync(key, cts.Token);
+        }
+
+        Assert.Equal(keys.Select(key => (key, cts.Token)), calls);
+    }
+
     [Fact]
     public void PublicHandleIsSealedWithOnlyAnInternalConstructor()
     {
