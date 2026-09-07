@@ -347,6 +347,18 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                                 : null;
                         }
 
+                        if (!string.IsNullOrEmpty(update.Snapshot.ActivatedTerminalId))
+                        {
+                            // An overflow snapshot retains the latest Show() request even if its terminal has
+                            // since been removed. Reveal the dock, but never resurrect a removed terminal's tab.
+                            _hasBeenOpened = true;
+                            _isVisible = true;
+                            if (_terminals.Any(t => t.TerminalId == update.Snapshot.ActivatedTerminalId))
+                            {
+                                _activeTerminalId = update.Snapshot.ActivatedTerminalId;
+                            }
+                        }
+
                         // Recovery snapshots replace all prior state, including terminals removed while offline.
                         endedTerminalIds.AddRange(_detachedTerminalIds.Where(id => !_terminals.Any(t => t.TerminalId == id)));
                         _detachedTerminalIds.ExceptWith(endedTerminalIds);

@@ -18,8 +18,10 @@ using static Aspire.Hosting.Interaction;
 // Aspire.Hosting.Terminals cannot be imported wholesale: it declares TerminalDescriptor and TerminalChangeType,
 // which collide with the identically named proto types this file converts them into. Alias the individual types
 // instead, so the AppHost-side names read cleanly and the proto names stay unqualified.
+using AppHostTerminalChange = Aspire.Hosting.Terminals.TerminalChange;
 using AppHostTerminalChangeType = Aspire.Hosting.Terminals.TerminalChangeType;
 using AppHostTerminalDescriptor = Aspire.Hosting.Terminals.TerminalDescriptor;
+using AppHostTerminalSnapshot = Aspire.Hosting.Terminals.TerminalSnapshot;
 using TerminalService = Aspire.Hosting.Terminals.TerminalService;
 
 namespace Aspire.Hosting.Dashboard;
@@ -696,14 +698,18 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             // The snapshot write belongs inside the try: if the dashboard disconnects in the window between
             // subscribing and the first write, this throws, and letting it escape would skip the disposal above.
-            var snapshot = new TerminalDescriptorList();
-            snapshot.Terminals.AddRange(subscription.InitialState.Select(ToProtoDescriptor));
+            var snapshot = ToProtoTerminalSnapshot(subscription.InitialState, activatedTerminalId: null);
             await responseStream.WriteAsync(new WatchTerminalsUpdate { Snapshot = snapshot }, cancellationToken).ConfigureAwait(false);
 
-            await foreach (var change in subscription.Subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
+            await foreach (var update in subscription.Subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                await responseStream.WriteAsync(
-                    new WatchTerminalsUpdate
+                var message = update switch
+                {
+                    AppHostTerminalSnapshot recovery => new WatchTerminalsUpdate
+                    {
+                        Snapshot = ToProtoTerminalSnapshot(recovery.Terminals, recovery.ActivatedTerminalId)
+                    },
+                    AppHostTerminalChange change => new WatchTerminalsUpdate
                     {
                         Change = new TerminalChangeNotification
                         {
@@ -711,7 +717,9 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                             Terminal = ToProtoDescriptor(change.Terminal)
                         }
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    _ => throw new InvalidOperationException("Unknown terminal watch update.")
+                };
+                await responseStream.WriteAsync(message, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -783,6 +791,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     private static TerminalDescriptor ToProtoDescriptor(AppHostTerminalDescriptor descriptor)
         => new() { TerminalId = descriptor.Id, Title = descriptor.Title };
+
+    private static TerminalDescriptorList ToProtoTerminalSnapshot(
+        IEnumerable<AppHostTerminalDescriptor> terminals, string? activatedTerminalId)
+        => new()
+        {
+            Terminals = { terminals.Select(ToProtoDescriptor) },
+            ActivatedTerminalId = activatedTerminalId ?? string.Empty
+        };
 
     private static TerminalChangeType ToProtoChangeType(AppHostTerminalChangeType changeType) => changeType switch
     {

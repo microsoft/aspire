@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Terminals;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
@@ -22,5 +23,8 @@ namespace Aspire.Hosting.Utils;
 internal static class TestTerminalService
 {
     public static TerminalService Create()
-        => new(NullLogger<TerminalService>.Instance);
+        => Create(new ConfigurationBuilder().Build());
+
+    public static TerminalService Create(IConfiguration configuration)
+        => new(NullLogger<TerminalService>.Instance, configuration);
 }

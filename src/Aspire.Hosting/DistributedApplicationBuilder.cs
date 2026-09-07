@@ -475,7 +475,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             var logger = sp.GetRequiredService<ILogger<Terminals.TerminalService>>();
 
-            return new Terminals.TerminalService(logger)
+            return new Terminals.TerminalService(logger, sp.GetRequiredService<IConfiguration>())
             {
                 // Terminals belonging to resources are discovered from the model rather than registered, so the
                 // service is given a catalog to consult instead of owning their lifetime.

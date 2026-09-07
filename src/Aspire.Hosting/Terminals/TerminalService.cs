@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Hex1b;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRETERMINAL002 // Internal consumer of the experimental AppHost terminal API.
@@ -32,19 +33,33 @@ namespace Aspire.Hosting.Terminals;
 /// the members the dashboard uses to attach transports and watch the dock's tab list are internal, because
 /// they are transport plumbing rather than something an AppHost author calls.
 /// </para>
+/// <para>
+/// Each dashboard metadata watcher buffers up to 64 updates by default. Set
+/// <c>ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY</c> to a positive integer in the AppHost's configuration
+/// before starting the application to tune this limit. Overflow replaces queued changes with a current
+/// snapshot while preserving the latest pending request to show the dock.
+/// </para>
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalService : IAsyncDisposable
 {
+    internal const int DefaultDockUpdateBufferCapacity = 64;
+
     private readonly ConcurrentDictionary<string, Hex1bAspireTerminal> _terminals = new(StringComparer.Ordinal);
     private readonly ILogger<TerminalService> _logger;
+    private readonly int _dockUpdateBufferCapacity;
     private readonly object _syncLock = new();
-    private ImmutableHashSet<Channel<TerminalChange>> _outgoingChannels = [];
+    private ImmutableHashSet<Channel<TerminalUpdate>> _outgoingChannels = [];
     private int _disposed;
 
-    internal TerminalService(ILogger<TerminalService> logger)
+    internal TerminalService(ILogger<TerminalService> logger, IConfiguration configuration)
     {
         _logger = logger;
+        _dockUpdateBufferCapacity = configuration.GetValue(KnownConfigNames.TerminalWatchBufferCapacity, DefaultDockUpdateBufferCapacity);
+        if (_dockUpdateBufferCapacity <= 0)
+        {
+            throw new InvalidOperationException($"Configuration '{KnownConfigNames.TerminalWatchBufferCapacity}' must be greater than zero.");
+        }
     }
 
     /// <summary>
@@ -243,7 +258,7 @@ public sealed class TerminalService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Subscribes to the dock's terminal list, returning the current set followed by a stream of changes.
+    /// Subscribes to the dock's terminal list, returning the current set followed by changes or recovery snapshots.
     /// </summary>
     /// <remarks>
     /// The snapshot and the subscription are produced under the same lock so a terminal created concurrently
@@ -253,8 +268,14 @@ public sealed class TerminalService : IAsyncDisposable
     {
         lock (_syncLock)
         {
-            var channel = Channel.CreateUnbounded<TerminalChange>(
-                new UnboundedChannelOptions { AllowSynchronousContinuations = false, SingleReader = true, SingleWriter = false });
+            var channel = Channel.CreateBounded<TerminalUpdate>(new BoundedChannelOptions(_dockUpdateBufferCapacity)
+            {
+                AllowSynchronousContinuations = false,
+                // Publish also drains a full queue before replacing it with a snapshot.
+                SingleReader = false,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
 
             if (_disposed != 0)
             {
@@ -265,35 +286,56 @@ public sealed class TerminalService : IAsyncDisposable
                 ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Add(c), channel);
             }
 
-            var initial = _terminals.Values
-                .Where(t => t.Placement == TerminalPlacement.Dock)
-                .Select(t => t.Descriptor)
-                .ToImmutableArray();
+            var initial = GetDockSnapshot();
 
             return new TerminalSubscription(initial, StreamChanges())
             {
                 // The channel is registered above, before the caller has a chance to enumerate. StreamChanges is an
-                // async iterator, so its finally only runs once someone calls MoveNextAsync -- a caller that faults
-                // before it starts enumerating would otherwise leave the channel registered forever, and because it
-                // is unbounded every later change would accumulate in it. Unsubscribe gives callers a deterministic
-                // way to release the registration on that path. Removing twice is harmless.
-                Unsubscribe = () => ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Remove(c), channel)
+                // async iterator, so its finally only runs once someone calls MoveNextAsync. A caller that faults
+                // during the initial snapshot write must still be able to release the channel and its buffer.
+                Unsubscribe = () => Unsubscribe(channel)
             };
 
-            async IAsyncEnumerable<TerminalChange> StreamChanges([EnumeratorCancellation] CancellationToken cancellationToken = default)
+            async IAsyncEnumerable<TerminalUpdate> StreamChanges([EnumeratorCancellation] CancellationToken cancellationToken = default)
             {
                 try
                 {
-                    await foreach (var change in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+                    while (await channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                     {
-                        yield return change;
+                        TerminalUpdate? change;
+                        lock (_syncLock)
+                        {
+                            // Do not let the reader take a newer activation between entries drained by Publish,
+                            // then receive a recovery snapshot that replays an older activation.
+                            channel.Reader.TryRead(out change);
+                        }
+
+                        if (change is not null)
+                        {
+                            yield return change;
+                        }
                     }
                 }
                 finally
                 {
-                    ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Remove(c), channel);
+                    Unsubscribe(channel);
                 }
             }
+        }
+    }
+
+    private ImmutableArray<TerminalDescriptor> GetDockSnapshot()
+        => _terminals.Values
+            .Where(t => t.Placement == TerminalPlacement.Dock)
+            .Select(t => t.Descriptor)
+            .ToImmutableArray();
+
+    private void Unsubscribe(Channel<TerminalUpdate> channel)
+    {
+        lock (_syncLock)
+        {
+            ImmutableInterlocked.Update(ref _outgoingChannels, static (set, c) => set.Remove(c), channel);
+            channel.Writer.TryComplete();
         }
     }
 
@@ -338,7 +380,7 @@ public sealed class TerminalService : IAsyncDisposable
     {
         lock (_syncLock)
         {
-            if (_terminals.ContainsKey(terminal.Id))
+            if (terminal.Placement == TerminalPlacement.Dock && _terminals.ContainsKey(terminal.Id))
             {
                 Publish(new TerminalChange(changeType, terminal.Descriptor));
             }
@@ -365,9 +407,40 @@ public sealed class TerminalService : IAsyncDisposable
 
     private void Publish(TerminalChange change)
     {
+        ImmutableArray<TerminalDescriptor> snapshot = default;
         foreach (var channel in _outgoingChannels)
         {
-            channel.Writer.TryWrite(change);
+            if (channel.Writer.TryWrite(change))
+            {
+                continue;
+            }
+
+            // All publishers, registration and completion share _syncLock. A slow gRPC writer must neither block
+            // AppHost operations nor retain unlimited history. Replace its backlog with state captured under that
+            // same lock, so later deltas always follow the snapshot they extend. Readers may still finish sending
+            // an older dequeued update first; the replacement snapshot supersedes it.
+            string? activatedTerminalId = null;
+            while (channel.Reader.TryRead(out var pending))
+            {
+                activatedTerminalId = pending switch
+                {
+                    TerminalChange { ChangeType: TerminalChangeType.Activated } activation => activation.Terminal.Id,
+                    TerminalSnapshot recovery => recovery.ActivatedTerminalId,
+                    _ => activatedTerminalId
+                };
+            }
+
+            if (change.ChangeType == TerminalChangeType.Activated)
+            {
+                activatedTerminalId = change.Terminal.Id;
+            }
+
+            // Share the immutable inventory when several subscribers overflow on the same publication.
+            if (snapshot.IsDefault)
+            {
+                snapshot = GetDockSnapshot();
+            }
+            channel.Writer.TryWrite(new TerminalSnapshot(snapshot, activatedTerminalId));
         }
     }
 
@@ -419,16 +492,15 @@ public sealed class TerminalService : IAsyncDisposable
 }
 
 /// <summary>
-/// The current set of dock terminals plus a stream of subsequent changes.
+/// The current set of dock terminals plus a stream of subsequent changes or recovery snapshots.
 /// </summary>
 /// <remarks>
-/// Dispose when the subscription is no longer needed. Enumerating <see cref="Subscription"/> to completion also
-/// releases the registration, so disposing only matters on paths that abandon the subscription without ever
-/// starting to enumerate it.
+/// Dispose when the subscription is no longer needed, including paths that abandon it before enumeration starts.
+/// Disposal completes the stream, and enumerating <see cref="Subscription"/> to completion also releases its registration.
 /// </remarks>
 internal sealed record TerminalSubscription(
     ImmutableArray<TerminalDescriptor> InitialState,
-    IAsyncEnumerable<TerminalChange> Subscription) : IDisposable
+    IAsyncEnumerable<TerminalUpdate> Subscription) : IDisposable
 {
     /// <summary>
     /// Releases the change-stream registration held by this subscription. Safe to call more than once.

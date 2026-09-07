@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Hosting.Terminals;
@@ -9,6 +10,8 @@ using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Utils;
 using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRETERMINAL002 // Test consumer of the experimental AppHost terminal API.
 
@@ -21,6 +24,49 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class TerminalServiceTests
 {
+    [Theory]
+    [InlineData(1)]
+    [InlineData(8)]
+    [InlineData(128)]
+    public async Task SubscribeDockTerminals_UsesConfiguredCapacityFromAppHost(int capacity)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration[KnownConfigNames.TerminalWatchBufferCapacity] = capacity.ToString(CultureInfo.InvariantCulture);
+        await using var app = builder.Build();
+        var service = app.Services.GetRequiredService<TerminalService>();
+        var terminal = CreateDockTerminal(service, "Terminal");
+        using var subscription = service.SubscribeDockTerminals();
+        var channel = Assert.Single(GetOutgoingChannels(service));
+        terminal.Show();
+        for (var i = 1; i < capacity; i++)
+        {
+            terminal.Retitle($"Revision {i}");
+        }
+        Assert.Equal(capacity, channel.Reader.Count);
+
+        terminal.Retitle("Recovered");
+        Assert.Equal(1, channel.Reader.Count);
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        var snapshot = Assert.IsType<TerminalSnapshot>(updates.Current);
+        Assert.Equal(terminal.Id, snapshot.ActivatedTerminalId);
+        Assert.Equal(new TerminalDescriptor(terminal.Id, "Recovered"), Assert.Single(snapshot.Terminals));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("invalid")]
+    [InlineData("2147483648")]
+    [InlineData("")]
+    public void Constructor_InvalidWatchBufferCapacity_Throws(string capacity)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration[KnownConfigNames.TerminalWatchBufferCapacity] = capacity;
+
+        Assert.Throws<InvalidOperationException>(() => TestTerminalService.Create(configuration));
+    }
+
     [Fact]
     public void CreateTerminal_NullOptions_Throws()
     {
@@ -191,8 +237,7 @@ public class TerminalServiceTests
         await using var changes = subscription.Subscription.GetAsyncEnumerator(CancellationToken.None);
         Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
 
-        Assert.Equal(TerminalChangeType.Added, changes.Current.ChangeType);
-        Assert.Equal(dock.Id, changes.Current.Terminal.Id);
+        Assert.Equal(new TerminalChange(TerminalChangeType.Added, new(dock.Id, "Dock")), changes.Current);
     }
 
     [Fact]
@@ -201,14 +246,208 @@ public class TerminalServiceTests
         var service = TestTerminalService.Create();
         using var subscription = service.SubscribeDockTerminals();
 
-        CreateInteractionTerminal(service, "Dialog");
+        var dialog = Assert.IsType<Hex1bAspireTerminal>(CreateInteractionTerminal(service, "Dialog"));
+        dialog.Retitle("Updated dialog");
+        dialog.Show();
         var dock = CreateDockTerminal(service, "Dock");
 
         // The interaction terminal was created first, so if it were published at all it would arrive first.
         await using var changes = subscription.Subscription.GetAsyncEnumerator(CancellationToken.None);
         Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
 
-        Assert.Equal(dock.Id, changes.Current.Terminal.Id);
+        Assert.Equal(new TerminalChange(TerminalChangeType.Added, new(dock.Id, "Dock")), changes.Current);
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_OverflowReplacesBacklogWithCurrentSnapshot()
+    {
+        await using var service = TestTerminalService.Create();
+        var first = CreateDockTerminal(service, "First");
+        var removed = CreateDockTerminal(service, "Removed");
+        CreateInteractionTerminal(service, "Dialog");
+        using var subscription = service.SubscribeDockTerminals();
+        var channel = Assert.Single(GetOutgoingChannels(service));
+
+        first.Retitle("Updated");
+        await removed.DisposeAsync();
+        var added = CreateDockTerminal(service, "Added");
+        for (var i = 3; i < TerminalService.DefaultDockUpdateBufferCapacity; i++)
+        {
+            first.Retitle($"Revision {i}");
+        }
+        Assert.Equal(TerminalService.DefaultDockUpdateBufferCapacity, channel.Reader.Count);
+
+        first.Retitle("Latest");
+        Assert.Equal(1, channel.Reader.Count);
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        var snapshot = Assert.IsType<TerminalSnapshot>(updates.Current);
+        Assert.Null(snapshot.ActivatedTerminalId);
+        Assert.Equal(
+            new[] { new TerminalDescriptor(first.Id, "Latest"), new TerminalDescriptor(added.Id, "Added") }.OrderBy(t => t.Id),
+            snapshot.Terminals.OrderBy(t => t.Id));
+
+        added.Retitle("After recovery");
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(new TerminalChange(TerminalChangeType.Retitled, new(added.Id, "After recovery")), updates.Current);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubscribeDockTerminals_RepeatedOverflowPreservesLatestPendingActivation(bool activateAgain)
+    {
+        await using var service = TestTerminalService.Create();
+        var first = CreateDockTerminal(service, "First");
+        var second = CreateDockTerminal(service, "Second");
+        using var subscription = service.SubscribeDockTerminals();
+        var channel = Assert.Single(GetOutgoingChannels(service));
+        first.Show();
+        second.Show();
+
+        for (var i = 0; i < TerminalService.DefaultDockUpdateBufferCapacity * 4; i++)
+        {
+            first.Retitle($"Revision {i}");
+            if (activateAgain && i == TerminalService.DefaultDockUpdateBufferCapacity + 3)
+            {
+                first.Show();
+            }
+            Assert.InRange(channel.Reader.Count, 1, TerminalService.DefaultDockUpdateBufferCapacity);
+        }
+
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        var snapshot = Assert.IsType<TerminalSnapshot>(updates.Current);
+        Assert.Equal(activateAgain ? first.Id : second.Id, snapshot.ActivatedTerminalId);
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_ActivationThatOverflowsIsIncludedInSnapshot()
+    {
+        await using var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Terminal");
+        using var subscription = service.SubscribeDockTerminals();
+        for (var i = 0; i < TerminalService.DefaultDockUpdateBufferCapacity; i++)
+        {
+            terminal.Retitle($"Revision {i}");
+        }
+
+        terminal.Show();
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(terminal.Id, Assert.IsType<TerminalSnapshot>(updates.Current).ActivatedTerminalId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SubscribeDockTerminals_OverflowRetainsRevealIntentWhenActivatedTerminalWasRemoved(bool keepAnotherTerminal)
+    {
+        await using var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Activated");
+        var remaining = keepAnotherTerminal ? CreateDockTerminal(service, "Remaining") : null;
+        using var subscription = service.SubscribeDockTerminals();
+        terminal.Show();
+        for (var i = 1; i < TerminalService.DefaultDockUpdateBufferCapacity; i++)
+        {
+            terminal.Retitle($"Revision {i}");
+        }
+
+        await terminal.DisposeAsync();
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        var snapshot = Assert.IsType<TerminalSnapshot>(updates.Current);
+        Assert.Equal(terminal.Id, snapshot.ActivatedTerminalId);
+        Assert.Equal(remaining is null ? [] : new[] { new TerminalDescriptor(remaining.Id, "Remaining") }, snapshot.Terminals);
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_SlowSubscriberDoesNotDisruptFastSubscriber()
+    {
+        await using var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Terminal");
+        using var slow = service.SubscribeDockTerminals();
+        using var fast = service.SubscribeDockTerminals();
+        await using var fastUpdates = fast.Subscription.GetAsyncEnumerator();
+
+        for (var i = 0; i < TerminalService.DefaultDockUpdateBufferCapacity * 4; i++)
+        {
+            var title = $"Revision {i}";
+            terminal.Retitle(title);
+            Assert.True(await fastUpdates.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Equal(new TerminalChange(TerminalChangeType.Retitled, new(terminal.Id, title)), fastUpdates.Current);
+            Assert.All(GetOutgoingChannels(service),
+                channel => Assert.InRange(channel.Reader.Count, 0, TerminalService.DefaultDockUpdateBufferCapacity));
+        }
+
+        await using var slowUpdates = slow.Subscription.GetAsyncEnumerator();
+        Assert.True(await slowUpdates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.IsType<TerminalSnapshot>(slowUpdates.Current);
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_CancellationAfterOverflowReleasesRegistration()
+    {
+        await using var service = TestTerminalService.Create();
+        var terminal = CreateDockTerminal(service, "Terminal");
+        using var subscription = service.SubscribeDockTerminals();
+        for (var i = 0; i <= TerminalService.DefaultDockUpdateBufferCapacity; i++)
+        {
+            terminal.Show();
+        }
+
+        using var cts = new CancellationTokenSource();
+        await using var updates = subscription.Subscription.GetAsyncEnumerator(cts.Token);
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => updates.MoveNextAsync().AsTask()).DefaultTimeout();
+        Assert.Empty(GetOutgoingChannels(service));
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_DisposalCompletesPendingRead()
+    {
+        await using var service = TestTerminalService.Create();
+        using var subscription = service.SubscribeDockTerminals();
+        await using var updates = subscription.Subscription.GetAsyncEnumerator();
+        var next = updates.MoveNextAsync().AsTask();
+        subscription.Dispose();
+
+        Assert.False(await next.DefaultTimeout());
+        Assert.Empty(GetOutgoingChannels(service));
+    }
+
+    [Fact]
+    public async Task SubscribeDockTerminals_ShutdownWithBacklogStaysBoundedAndClearsInventory()
+    {
+        await using var service = TestTerminalService.Create();
+        for (var i = 0; i < TerminalService.DefaultDockUpdateBufferCapacity + 5; i++)
+        {
+            CreateDockTerminal(service, $"Terminal {i}");
+        }
+        using var subscription = service.SubscribeDockTerminals();
+        var channel = Assert.Single(GetOutgoingChannels(service));
+        var inventory = subscription.InitialState.ToDictionary(t => t.Id);
+
+        await service.DisposeAsync();
+        Assert.InRange(channel.Reader.Count, 1, TerminalService.DefaultDockUpdateBufferCapacity);
+        var recovered = false;
+        await foreach (var update in subscription.Subscription)
+        {
+            if (update is TerminalSnapshot snapshot)
+            {
+                recovered = true;
+                inventory = snapshot.Terminals.ToDictionary(t => t.Id);
+            }
+            else
+            {
+                var change = Assert.IsType<TerminalChange>(update);
+                Assert.Equal(TerminalChangeType.Removed, change.ChangeType);
+                inventory.Remove(change.Terminal.Id);
+            }
+        }
+        Assert.True(recovered);
+        Assert.Empty(inventory);
+        Assert.Empty(GetOutgoingChannels(service));
     }
 
     [Fact]
@@ -216,10 +455,10 @@ public class TerminalServiceTests
     {
         var service = TestTerminalService.Create();
 
-        // The subscription registers an unbounded channel eagerly, but StreamChanges is an async iterator whose
+        // The subscription registers its channel eagerly, but StreamChanges is an async iterator whose
         // finally only runs once someone calls MoveNextAsync. A caller that faults before it starts enumerating --
         // a viewer that disconnects while the snapshot is being written, for example -- would otherwise leave a
-        // channel registered that every subsequent change accumulates into for the lifetime of the AppHost.
+        // channel and its buffer registered for the lifetime of the AppHost.
         var subscription = service.SubscribeDockTerminals();
         Assert.Single(GetOutgoingChannels(service));
 
@@ -256,7 +495,7 @@ public class TerminalServiceTests
 
         await using var changes = live.Subscription.GetAsyncEnumerator(CancellationToken.None);
         Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
-        Assert.Equal(afterwards.Id, changes.Current.Terminal.Id);
+        Assert.Equal(new TerminalChange(TerminalChangeType.Added, new(afterwards.Id, "Later")), changes.Current);
     }
 
     [Fact]
@@ -283,7 +522,7 @@ public class TerminalServiceTests
     public async Task SubscribeDockTerminals_DuringCreation_DoesNotReplaySnapshotAsAdded()
     {
         var logger = new GatedLogger<TerminalService>("Created Dock terminal");
-        await using var service = new TerminalService(logger);
+        await using var service = new TerminalService(logger, new ConfigurationBuilder().Build());
         var create = Task.Run(() => CreateDockTerminal(service, "Dock"));
         try
         {
@@ -296,13 +535,13 @@ public class TerminalServiceTests
             Assert.Equal(descriptor.Id, (await create.DefaultTimeout()).Id);
 
             await service.DisposeAsync();
-            var changes = new List<TerminalChange>();
+            var changes = new List<TerminalUpdate>();
             await foreach (var change in subscription.Subscription)
             {
                 changes.Add(change);
             }
 
-            var removed = Assert.Single(changes);
+            var removed = Assert.IsType<TerminalChange>(Assert.Single(changes));
             Assert.Equal(TerminalChangeType.Removed, removed.ChangeType);
             Assert.Equal(descriptor.Id, removed.Terminal.Id);
         }
@@ -317,7 +556,7 @@ public class TerminalServiceTests
     public async Task SubscribeDockTerminals_DuringRemoval_DoesNotReceiveRemovalForAnAbsentSnapshotEntry()
     {
         var logger = new GatedLogger<TerminalService>("Removed terminal");
-        await using var service = new TerminalService(logger);
+        await using var service = new TerminalService(logger, new ConfigurationBuilder().Build());
         var terminal = CreateDockTerminal(service, "Dock");
         var remove = Task.Run(async () => await terminal.DisposeAsync());
         try
@@ -472,28 +711,28 @@ public class TerminalServiceTests
             Placement = TerminalPlacement.Dialog
         });
 
-    private static IAspireTerminal CreateDockTerminal(TerminalService service, string title)
-        => service.CreateTerminal(new TerminalLaunchOptions
+    private static Hex1bAspireTerminal CreateDockTerminal(TerminalService service, string title)
+        => Assert.IsType<Hex1bAspireTerminal>(service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
             Command = new TerminalCommand("bash"),
             Placement = TerminalPlacement.Dock
-        });
+        }));
 
     /// <summary>
     /// Reads the private channel set the dock fan-out writes to.
     /// </summary>
     /// <remarks>
     /// Registration is deliberately invisible from the public surface: a leaked channel is silent, and the only
-    /// observable symptom is unbounded memory growth over the AppHost's lifetime. Asserting on the set directly is
+    /// observable symptom is retained buffers as abandoned subscriptions accumulate. Asserting on the set directly is
     /// what makes the leak regression detectable at all -- a test that only checks a later subscription still
     /// receives changes passes whether or not the abandoned channel was released.
     /// </remarks>
-    private static ImmutableHashSet<Channel<TerminalChange>> GetOutgoingChannels(TerminalService service)
+    private static ImmutableHashSet<Channel<TerminalUpdate>> GetOutgoingChannels(TerminalService service)
     {
         var field = typeof(TerminalService).GetField("_outgoingChannels", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(field);
 
-        return (ImmutableHashSet<Channel<TerminalChange>>)field.GetValue(service)!;
+        return (ImmutableHashSet<Channel<TerminalUpdate>>)field.GetValue(service)!;
     }
 }

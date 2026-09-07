@@ -1273,6 +1273,116 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task WatchTerminals_StalledWriteRecoversInventoryAndPendingActivation(bool removeActivatedTerminal)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var terminal = Assert.IsType<Hex1bAspireTerminal>(terminalService.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Before",
+            Placement = TerminalPlacement.Dock,
+            Command = new TerminalCommand("bash")
+        }));
+        terminal.Show();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        using var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var responses = new TestServerStreamWriter<WatchTerminalsUpdate>(context)
+        {
+            BeforeWriteAsync = (_, cancellationToken) =>
+            {
+                writing.TrySetResult();
+                return resume.Task.WaitAsync(cancellationToken);
+            }
+        };
+        var watch = service.WatchTerminals(new(), responses, context);
+        try
+        {
+            await writing.Task.DefaultTimeout();
+            terminal.Show();
+            for (var i = 1; i < TerminalService.DefaultDockUpdateBufferCapacity; i++)
+            {
+                terminal.Retitle($"Revision {i}");
+            }
+            if (removeActivatedTerminal)
+            {
+                await terminal.DisposeAsync();
+            }
+            else
+            {
+                terminal.Retitle("Recovered");
+            }
+            resume.SetResult();
+
+            var initial = await responses.ReadNextAsync().DefaultTimeout();
+            Assert.Equal("Before", Assert.Single(initial.Snapshot.Terminals).Title);
+            Assert.Equal(string.Empty, initial.Snapshot.ActivatedTerminalId);
+
+            var recovery = WatchTerminalsUpdate.Parser.ParseFrom((await responses.ReadNextAsync().DefaultTimeout()).ToByteArray());
+            Assert.Equal(terminal.Id, recovery.Snapshot.ActivatedTerminalId);
+            if (removeActivatedTerminal)
+            {
+                Assert.Empty(recovery.Snapshot.Terminals);
+            }
+            else
+            {
+                var descriptor = Assert.Single(recovery.Snapshot.Terminals);
+                Assert.Equal(terminal.Id, descriptor.TerminalId);
+                Assert.Equal("Recovered", descriptor.Title);
+            }
+
+            var added = terminalService.CreateTerminal(new TerminalLaunchOptions
+            {
+                Title = "After recovery",
+                Placement = TerminalPlacement.Dock,
+                Command = new TerminalCommand("bash")
+            });
+            var change = await responses.ReadNextAsync().DefaultTimeout();
+            Assert.Equal(Aspire.DashboardService.Proto.V1.TerminalChangeType.Added, change.Change.ChangeType);
+            Assert.Equal(added.Id, change.Change.Terminal.TerminalId);
+            Assert.Equal("After recovery", change.Change.Terminal.Title);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await watch.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task WatchTerminals_CancellationDuringStalledWriteCompletesWatch()
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        using var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var responses = new TestServerStreamWriter<WatchTerminalsUpdate>(context)
+        {
+            BeforeWriteAsync = (_, cancellationToken) =>
+            {
+                writing.TrySetResult();
+                return Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+        };
+        var watch = service.WatchTerminals(new(), responses, context);
+        try
+        {
+            await writing.Task.DefaultTimeout();
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await watch.DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task AttachTerminal_WorkloadEndedReportsStatusWithoutHmpHandshake(bool endedBeforeAttach)
     {
         using var serviceData = CreateDashboardServiceData();

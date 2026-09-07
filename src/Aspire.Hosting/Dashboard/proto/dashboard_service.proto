@@ -535,6 +535,10 @@ message WatchTerminalsRequest {
 
 message TerminalDescriptorList {
     repeated TerminalDescriptor terminals = 1;
+    // A recovery snapshot can coalesce a pending Show() request. A nonempty id reveals
+    // the dock and selects that terminal if it is still listed. The id can refer to a
+    // terminal removed before recovery; reveal the dock without recreating its tab.
+    string activated_terminal_id = 2;
 }
 
 message TerminalChangeNotification {
@@ -544,7 +548,7 @@ message TerminalChangeNotification {
 
 message WatchTerminalsUpdate {
     oneof kind {
-        // Sent once, first, carrying the terminals that already exist.
+        // Sent first, and again to replace buffered changes when a watcher falls behind.
         TerminalDescriptorList snapshot = 1;
         TerminalChangeNotification change = 2;
     }

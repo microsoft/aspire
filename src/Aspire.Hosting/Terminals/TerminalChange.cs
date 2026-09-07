@@ -1,7 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
+
 namespace Aspire.Hosting.Terminals;
+
+/// <summary>
+/// An incremental change or a replacement snapshot for a terminal watcher.
+/// </summary>
+internal abstract record TerminalUpdate;
 
 /// <summary>
 /// The dashboard-visible description of a terminal.
@@ -32,4 +39,11 @@ internal enum TerminalChangeType
 /// <summary>
 /// A change to the set of dock terminals, broadcast to every connected dashboard.
 /// </summary>
-internal sealed record TerminalChange(TerminalChangeType ChangeType, TerminalDescriptor Terminal);
+internal sealed record TerminalChange(TerminalChangeType ChangeType, TerminalDescriptor Terminal) : TerminalUpdate;
+
+/// <summary>
+/// Replaces buffered changes while retaining the most recent undelivered request to show the dock.
+/// </summary>
+internal sealed record TerminalSnapshot(
+    ImmutableArray<TerminalDescriptor> Terminals,
+    string? ActivatedTerminalId) : TerminalUpdate;

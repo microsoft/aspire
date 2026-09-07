@@ -715,6 +715,19 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
         Assert.Same(initial, updates.Current);
 
+        var recovery = new WatchTerminalsUpdate
+        {
+            Snapshot = new TerminalDescriptorList
+            {
+                Terminals = { new TerminalDescriptor { TerminalId = "recovered", Title = "Recovered" } },
+                ActivatedTerminalId = "recovered"
+            }
+        };
+        await first.Writer.WriteAsync(recovery);
+        Assert.True(await updates.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Same(recovery, updates.Current);
+        Assert.Equal(1, Volatile.Read(ref subscriptions));
+
         first.Writer.Complete(failStream ? new RpcException(new Status(StatusCode.Unavailable, "Disconnected")) : null);
         var replacement = new WatchTerminalsUpdate
         {

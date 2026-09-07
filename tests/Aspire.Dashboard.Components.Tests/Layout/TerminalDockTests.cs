@@ -120,6 +120,84 @@ public class TerminalDockTests : DashboardTestContext
         await Services.GetRequiredService<ShortcutManager>().OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock);
     }
 
+    [Theory]
+    [InlineData(false, "second", new[] { "first", "second" }, "second")]
+    [InlineData(true, "second", new[] { "first", "second" }, "second")]
+    [InlineData(false, "removed", new[] { "first" }, "first")]
+    [InlineData(true, "removed", new[] { "first" }, "first")]
+    [InlineData(false, "removed", new string[0], null)]
+    [InlineData(true, "removed", new string[0], null)]
+    public async Task RecoverySnapshot_RevealsDockWithoutResurrectingRemovedTerminals(
+        bool previouslyOpened, string activatedId, string[] ids, string? selectedId)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        if (previouslyOpened)
+        {
+            await cut.InvokeAsync(cut.Instance.ToggleAsync);
+            await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "removed"));
+            cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[role=tab]").Count));
+            await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        }
+
+        var recovery = TerminalSetupHelpers.Snapshot(ids);
+        recovery.Snapshot.ActivatedTerminalId = activatedId;
+        await updates.Writer.WriteAsync(recovery);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(cut.Find(".terminal-dock").HasAttribute("inert"));
+            Assert.Empty(cut.FindAll(".terminal-dock.collapsed"));
+            Assert.Equal(ids, cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+            Assert.Equal(ids.Length, cut.FindComponents<TerminalView>().Count);
+            if (selectedId is null)
+            {
+                Assert.Equal("No terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
+            }
+            else
+            {
+                Assert.Equal(selectedId, cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
+            }
+        });
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Added, "later"));
+        cut.WaitForAssertion(() => Assert.Equal(ids.Append("later"), cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
+        Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RecoverySnapshot_WithoutActivationDoesNotRevealDock(bool previouslyOpened)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        if (previouslyOpened)
+        {
+            await cut.InvokeAsync(cut.Instance.ToggleAsync);
+            await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        }
+
+        var renderCount = cut.RenderCount;
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("replacement"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.RenderCount > renderCount);
+            if (previouslyOpened)
+            {
+                Assert.True(cut.Find(".terminal-dock.collapsed").HasAttribute("inert"));
+                Assert.Equal("replacement", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
+            }
+            else
+            {
+                Assert.Empty(cut.FindAll(".terminal-dock"));
+            }
+        });
+    }
+
     [Fact]
     public async Task SelectTab_UpdatesAccessibleSelectionWithoutRemountingPanes()
     {
