@@ -22,6 +22,62 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class TerminalDockTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(400, 900, 120, 900, 400)]
+    [InlineData(-1, 900, 120, 900, 120)]
+    [InlineData(1400, 1600, 120, 1200, 1200)]
+    [InlineData(1200, 600, 120, 600, 600)]
+    [InlineData(320, 90, 90, 90, 90)]
+    public async Task ResizeDock_UpdatesAccessibleBoundsWithoutRemountingTerminals(
+        int requestedHeight, int viewportHeight, int minimum, int maximum, int expectedHeight)
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var terminals = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+
+        await cut.InvokeAsync(() => cut.Instance.SetHeightAsync(requestedHeight, viewportHeight));
+        var dock = cut.Find(".terminal-dock");
+        var handle = cut.Find("[role=separator]");
+        Assert.Equal($"height: {expectedHeight}px;", dock.GetAttribute("style"));
+        Assert.Equal("0", handle.GetAttribute("tabindex"));
+        Assert.Equal("horizontal", handle.GetAttribute("aria-orientation"));
+        Assert.Equal("Terminals", handle.GetAttribute("aria-label"));
+        Assert.Equal(dock.Id, handle.GetAttribute("aria-controls"));
+        Assert.Equal(minimum.ToString(), handle.GetAttribute("aria-valuemin"));
+        Assert.Equal(maximum.ToString(), handle.GetAttribute("aria-valuemax"));
+        Assert.Equal(expectedHeight.ToString(), handle.GetAttribute("aria-valuenow"));
+        Assert.Equal($"{expectedHeight} pixels high", handle.GetAttribute("aria-valuetext"));
+        Assert.Equal("ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End", handle.GetAttribute("aria-keyshortcuts"));
+        Assert.Equal("Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.",
+            cut.Find($"#{handle.GetAttribute("aria-describedby")}").TextContent);
+        Assert.Equal(terminals, cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray());
+        Assert.Equal("first", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
+        Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Fact]
+    public async Task ResizeDock_AfterDisposal_DoesNotUpdateState()
+    {
+        var client = new TestDashboardClient();
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = RenderComponent<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        var height = cut.Find(".terminal-dock").GetAttribute("style");
+
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
+        await cut.InvokeAsync(() => cut.Instance.SetHeightAsync(500, 800));
+
+        Assert.Equal(height, cut.Find(".terminal-dock").GetAttribute("style"));
+        Assert.Equal(["registerResizeHandle", "unregisterResizeHandle"], JSInterop.Invocations
+            .Where(invocation => invocation.Identifier is "registerResizeHandle" or "unregisterResizeHandle")
+            .Select(invocation => invocation.Identifier));
+    }
+
     [Fact]
     public async Task WatchUpdates_ReplaceSnapshotAndSelectAppHostTerminals()
     {

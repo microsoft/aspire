@@ -203,6 +203,24 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalDockHide", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} pixels high.
+        /// </summary>
+        public static string TerminalDockHeight {
+            get {
+                return ResourceManager.GetString("TerminalDockHeight", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height..
+        /// </summary>
+        public static string TerminalDockResizeHelp {
+            get {
+                return ResourceManager.GetString("TerminalDockResizeHelp", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Terminals.

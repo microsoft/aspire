@@ -28,6 +28,8 @@ namespace Aspire.Dashboard.Components.Layout;
 public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener, IAsyncDisposable
 {
     private const int DefaultHeightPx = 320;
+    private const int MinimumHeightPx = 120;
+    private const int MaximumHeightPx = 1200;
 
     private readonly List<TerminalDescriptor> _terminals = [];
     private readonly CancellationTokenSource _cts = new();
@@ -39,6 +41,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private string? _activeTerminalId;
 
     private int _heightPx = DefaultHeightPx;
+    private int _maximumHeightPx = MaximumHeightPx;
     private Task? _watchTask;
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalDock>? _selfRef;
@@ -143,7 +146,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 await _jsModule.DisposeAsync().ConfigureAwait(true);
                 return;
             }
-            await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef).ConfigureAwait(true);
+            await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef, MinimumHeightPx, MaximumHeightPx).ConfigureAwait(true);
             if (!_disposed)
             {
                 await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
@@ -152,19 +155,25 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     }
 
     /// <summary>
-    /// Called from JS while the user drags the dock's top edge.
+    /// Updates the dock height after pointer or keyboard resizing, or a viewport size change.
     /// </summary>
+    /// <param name="heightPx">The requested dock height in CSS pixels.</param>
+    /// <param name="viewportHeightPx">The browser viewport height in CSS pixels.</param>
+    /// <returns>A task that completes after the dock state is updated.</returns>
     [JSInvokable]
-    public Task SetHeightAsync(int heightPx) => InvokeAsync(() =>
+    public Task SetHeightAsync(int heightPx, int viewportHeightPx) => InvokeAsync(() =>
     {
         if (_disposed)
         {
             return;
         }
 
-        _heightPx = Math.Clamp(heightPx, 120, 1200);
+        _maximumHeightPx = Math.Clamp(viewportHeightPx, 1, MaximumHeightPx);
+        _heightPx = Math.Clamp(heightPx, EffectiveMinimumHeightPx, _maximumHeightPx);
         StateHasChanged();
     });
+
+    private int EffectiveMinimumHeightPx => Math.Min(MinimumHeightPx, _maximumHeightPx);
 
     private void Hide()
     {
@@ -464,6 +473,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         {
             try
             {
+                await module.InvokeVoidAsync("unregisterResizeHandle", _dockElement).ConfigureAwait(true);
                 await module.InvokeVoidAsync("unregisterTabNavigation", _dockElement).ConfigureAwait(true);
                 await module.DisposeAsync().ConfigureAwait(true);
             }

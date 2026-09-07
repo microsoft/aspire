@@ -35,6 +35,7 @@ internal static class TerminalSetupHelpers
     {
         var dock = context.JSInterop.SetupModule("./Components/Layout/TerminalDock.razor.js");
         dock.SetupVoid("registerResizeHandle", _ => true).SetVoidResult();
+        dock.SetupVoid("unregisterResizeHandle", _ => true).SetVoidResult();
         dock.SetupVoid("registerTabNavigation", _ => true).SetVoidResult();
         dock.SetupVoid("unregisterTabNavigation", _ => true).SetVoidResult();
 

@@ -19,6 +19,99 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
 {
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResizeHandle_KeyboardAndPointerResizingRespectFocusAndBounds()
+    {
+        await RunTestAsync(async page =>
+        {
+            await OpenDockAsync(page);
+            var terminals = await page.Locator(".terminal-dock .xterm").ElementHandlesAsync();
+            var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
+            var viewportHeight = await page.EvaluateAsync<int>("window.innerHeight");
+            var maximum = Math.Min(1200, viewportHeight);
+            await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuemax", maximum.ToString());
+            await handle.FocusAsync();
+
+            foreach (var (key, expected) in new[]
+            {
+                ("ArrowUp", 330),
+                ("ArrowDown", 320),
+                ("Shift+ArrowUp", 370),
+                ("Shift+ArrowDown", 320),
+                ("Home", 120),
+                ("End", maximum),
+                ("ArrowUp", maximum),
+                ("Home", 120),
+                ("ArrowDown", 120)
+            })
+            {
+                await page.Keyboard.PressAsync(key);
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", expected.ToString());
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuetext", $"{expected} pixels high");
+                await Assertions.Expect(handle).ToBeFocusedAsync();
+                var dockBox = await page.Locator(".terminal-dock").BoundingBoxAsync();
+                Assert.NotNull(dockBox);
+                Assert.InRange(dockBox.Y, 0, viewportHeight);
+                Assert.InRange(dockBox.Height, 120, maximum);
+            }
+
+            var handleBox = await handle.BoundingBoxAsync();
+            Assert.NotNull(handleBox);
+            var x = handleBox.X + 100;
+            var y = handleBox.Y + handleBox.Height / 2;
+            await page.Mouse.MoveAsync(x, y);
+            await page.Mouse.DownAsync();
+            await page.Mouse.MoveAsync(x, y - 60);
+            await page.Mouse.UpAsync();
+            var draggedHeight = (int)Math.Round(viewportHeight - (y - 60));
+            await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", draggedHeight.ToString());
+            await Assertions.Expect(handle).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("ArrowUp");
+            await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", (draggedHeight + 10).ToString());
+
+            var input = page.Locator(".terminal-dock-pane.active .xterm-helper-textarea");
+            await input.FocusAsync();
+            foreach (var key in new[] { "ArrowUp", "ArrowDown", "Shift+ArrowUp", "Shift+ArrowDown", "Home", "End" })
+            {
+                await page.Keyboard.PressAsync(key);
+                await Assertions.Expect(input).ToBeFocusedAsync();
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", (draggedHeight + 10).ToString());
+            }
+
+            Assert.Empty(fixture.Client.ClosedTerminals);
+            foreach (var terminal in terminals)
+            {
+                Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResizeHandle_ViewportChangesKeepTheHandleReachable()
+    {
+        await RunTestAsync(async page =>
+        {
+            await OpenDockAsync(page);
+            var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
+            await handle.FocusAsync();
+            await page.Keyboard.PressAsync("End");
+
+            foreach (var viewportHeight in new[] { 240, 800 })
+            {
+                await page.SetViewportSizeAsync(1280, viewportHeight);
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuemax", viewportHeight.ToString());
+                await page.Keyboard.PressAsync("End");
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", viewportHeight.ToString());
+                await Assertions.Expect(handle).ToBeFocusedAsync();
+                var box = await handle.BoundingBoxAsync();
+                Assert.NotNull(box);
+                Assert.InRange(box.Y, 0, viewportHeight - box.Height);
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task KeyboardNavigation_SelectsTabsWithoutInterceptingTerminalInput()
     {
         await RunTestAsync(async page =>

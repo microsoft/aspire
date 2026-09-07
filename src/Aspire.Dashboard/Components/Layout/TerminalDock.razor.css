@@ -9,6 +9,8 @@
     z-index: 900;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
+    max-height: 100vh;
     background-color: #0d1117;
     border-top: 1px solid var(--neutral-stroke-divider-rest);
     transition: transform 120ms ease-out;
@@ -171,6 +173,12 @@
 
 .terminal-dock-resize-handle:hover {
     background-color: var(--accent-fill-rest);
+}
+
+.terminal-dock-resize-handle:focus-visible {
+    background-color: var(--focus-stroke-outer);
+    outline: 2px solid var(--focus-stroke-outer);
+    outline-offset: -2px;
 }
 
 /* Shown in place of the terminal while it is running in a detached window. */

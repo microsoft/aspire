@@ -7,11 +7,25 @@
 @if (_hasBeenOpened)
 {
     <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
+         id="@_elementIdPrefix"
          style="height: @(_heightPx)px;"
          inert="@(!_isVisible)"
          aria-hidden="@(_isVisible ? "false" : "true")"
          @ref="_dockElement">
-        <div class="terminal-dock-resize-handle"></div>
+        <div class="terminal-dock-resize-handle"
+             role="separator"
+             tabindex="0"
+             aria-orientation="horizontal"
+             aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]"
+             aria-controls="@_elementIdPrefix"
+             aria-valuemin="@EffectiveMinimumHeightPx"
+             aria-valuemax="@_maximumHeightPx"
+             aria-valuenow="@_heightPx"
+             aria-valuetext="@Loc[nameof(Resources.Layout.TerminalDockHeight), _heightPx]"
+             aria-describedby="@($"{_elementIdPrefix}-resize-help")"
+             aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End"
+             title="@Loc[nameof(Resources.Layout.TerminalDockResizeHelp)]"></div>
+        <span id="@($"{_elementIdPrefix}-resize-help")" class="visually-hidden">@Loc[nameof(Resources.Layout.TerminalDockResizeHelp)]</span>
         <div class="terminal-dock-tabstrip">
             @* FluentTabs resets selection when closing an inactive tab (https://github.com/microsoft/fluentui-blazor/issues/3392).
                Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@

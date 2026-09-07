@@ -197,6 +197,13 @@
   <data name="TerminalDockHide" xml:space="preserve">
     <value>Hide terminal panel (Shift+`)</value>
   </data>
+  <data name="TerminalDockHeight" xml:space="preserve">
+    <value>{0} pixels high</value>
+    <comment>{0} is the terminal dock height in CSS pixels.</comment>
+  </data>
+  <data name="TerminalDockResizeHelp" xml:space="preserve">
+    <value>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</value>
+  </data>
   <data name="TerminalDockTabs" xml:space="preserve">
     <value>Terminals</value>
   </data>

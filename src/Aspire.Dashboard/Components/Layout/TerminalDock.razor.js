@@ -1,4 +1,4 @@
-// Drag-to-resize for the terminal dock's top edge.
+// Pointer and keyboard resizing for the terminal dock's top edge.
 //
 // The dock is bottom-anchored (position: fixed; bottom: 0), so a taller dock means a *smaller* Y coordinate for its
 // top edge. Height is therefore derived from the pointer's distance to the bottom of the viewport rather than from a
@@ -7,43 +7,160 @@
 // Pointer capture is used so the drag survives the pointer leaving the 6px grabber, which is otherwise trivially easy
 // at normal mouse speeds.
 
-export function registerResizeHandle(dockElement, dotNetRef) {
+const resizeRegistrations = new WeakMap();
+
+export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maximumHeight) {
+    unregisterResizeHandle(dockElement);
     const grabber = dockElement.querySelector('.terminal-dock-resize-handle');
     if (!grabber) {
-        return;
+        throw new Error('The terminal dock resize handle was not found.');
     }
 
-    let dragging = false;
+    let pointerId = null;
+    let height = Math.round(dockElement.getBoundingClientRect().height);
+    let viewportHeight = Math.max(1, window.innerHeight);
+    let frame = null;
+    let inFlight = false;
+    let pending = false;
+    let disposed = false;
 
-    grabber.addEventListener('pointerdown', (e) => {
-        dragging = true;
-        grabber.setPointerCapture(e.pointerId);
-        e.preventDefault();
-    });
+    const bounds = () => {
+        const max = Math.min(maximumHeight, viewportHeight);
+        return { min: Math.min(minimumHeight, max), max };
+    };
 
-    grabber.addEventListener('pointermove', (e) => {
-        if (!dragging) {
+    // Coalesce a held key or pointer movement into at most one circuit call per frame, with only one call in
+    // flight. Accumulate the requested height locally so delayed renders cannot lose repeated arrow-key steps.
+    const scheduleUpdate = () => {
+        pending = true;
+        if (disposed || inFlight || frame !== null) {
             return;
         }
+        frame = requestAnimationFrame(() => {
+            frame = null;
+            pending = false;
+            inFlight = true;
+            dotNetRef.invokeMethodAsync('SetHeightAsync', height, viewportHeight)
+                .catch(error => {
+                    if (!disposed) {
+                        console.error('Failed to resize the terminal dock.', error);
+                    }
+                })
+                .finally(() => {
+                    inFlight = false;
+                    if (pending && !disposed) {
+                        scheduleUpdate();
+                    }
+                });
+        });
+    };
 
-        const height = Math.round(window.innerHeight - e.clientY);
-        dotNetRef.invokeMethodAsync('SetHeightAsync', height);
-    });
-
-    const end = (e) => {
-        if (!dragging) {
-            return;
-        }
-        dragging = false;
-        try {
-            grabber.releasePointerCapture(e.pointerId);
-        } catch {
-            // The pointer may already have been released by the browser (e.g. the tab lost focus mid-drag).
+    const resizeTo = requestedHeight => {
+        const { min, max } = bounds();
+        const nextHeight = Math.max(min, Math.min(max, Math.round(requestedHeight)));
+        if (height !== nextHeight) {
+            height = nextHeight;
+            scheduleUpdate();
         }
     };
 
+    const onPointerDown = e => {
+        if (e.button !== 0 || !e.isPrimary || dockElement.inert) {
+            return;
+        }
+        pointerId = e.pointerId;
+        grabber.setPointerCapture(e.pointerId);
+        grabber.focus({ preventScroll: true });
+        e.preventDefault();
+    };
+
+    const onPointerMove = e => {
+        if (pointerId !== e.pointerId || dockElement.inert) {
+            return;
+        }
+        resizeTo(viewportHeight - e.clientY);
+    };
+
+    const end = e => {
+        if (pointerId !== e.pointerId) {
+            return;
+        }
+        pointerId = null;
+        if (grabber.hasPointerCapture(e.pointerId)) {
+            grabber.releasePointerCapture(e.pointerId);
+        }
+    };
+
+    // Follow the focused window-splitter pattern: https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/.
+    // The dock is the bottom pane, so moving the separator up increases its height. Shift adds coarse adjustment;
+    // no modifier shortcut is registered on the dock or the terminal input itself.
+    const onKeyDown = e => {
+        if (dockElement.inert || e.target !== grabber || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) {
+            return;
+        }
+        const step = e.shiftKey ? 50 : 10;
+        const { min, max } = bounds();
+        let nextHeight;
+        switch (e.key) {
+            case 'ArrowUp':
+                nextHeight = height + step;
+                break;
+            case 'ArrowDown':
+                nextHeight = height - step;
+                break;
+            case 'Home':
+                if (e.shiftKey) return;
+                nextHeight = min;
+                break;
+            case 'End':
+                if (e.shiftKey) return;
+                nextHeight = max;
+                break;
+            default:
+                return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        resizeTo(nextHeight);
+    };
+
+    const onViewportResize = () => {
+        viewportHeight = Math.max(1, window.innerHeight);
+        resizeTo(height);
+        // Bounds can change even if the current height still fits.
+        scheduleUpdate();
+    };
+
+    grabber.addEventListener('pointerdown', onPointerDown);
+    grabber.addEventListener('pointermove', onPointerMove);
     grabber.addEventListener('pointerup', end);
     grabber.addEventListener('pointercancel', end);
+    grabber.addEventListener('lostpointercapture', end);
+    grabber.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onViewportResize);
+    onViewportResize();
+
+    resizeRegistrations.set(dockElement, () => {
+        disposed = true;
+        if (frame !== null) {
+            cancelAnimationFrame(frame);
+        }
+        grabber.removeEventListener('pointerdown', onPointerDown);
+        grabber.removeEventListener('pointermove', onPointerMove);
+        grabber.removeEventListener('pointerup', end);
+        grabber.removeEventListener('pointercancel', end);
+        grabber.removeEventListener('lostpointercapture', end);
+        grabber.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('resize', onViewportResize);
+        if (pointerId !== null && grabber.hasPointerCapture(pointerId)) {
+            grabber.releasePointerCapture(pointerId);
+        }
+    });
+}
+
+export function unregisterResizeHandle(dockElement) {
+    resizeRegistrations.get(dockElement)?.();
+    resizeRegistrations.delete(dockElement);
 }
 
 const tabNavigationRegistrations = new WeakMap();
