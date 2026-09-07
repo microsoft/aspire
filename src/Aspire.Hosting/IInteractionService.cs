@@ -480,12 +480,12 @@ public sealed class InteractionInput
     /// </para>
     /// <para>
     /// The supplied instance must still be registered with the <see cref="TerminalService"/> resolved from the
-    /// current AppHost's service provider. Disposed terminals, terminals from another AppHost, and unregistered
-    /// implementations are rejected before the dialog is shown; matching a registered terminal's ID is not enough.
+    /// current AppHost's service provider. Disposed handles and handles from another AppHost are rejected
+    /// before the dialog is shown.
     /// </para>
     /// <para>
     /// Owning the terminal outside the interaction is what lets the AppHost script it through
-    /// <see cref="IAspireTerminal"/>'s automation members — before the dialog is raised, while it is open, and after
+    /// <see cref="AspireTerminal"/>'s automation members — before the dialog is raised, while it is open, and after
     /// it closes — and lets the same terminal be shown by more than one dialog over its life.
     /// </para>
     /// <example>
@@ -511,7 +511,7 @@ public sealed class InteractionInput
     /// </code>
     /// </example>
     /// <para>
-    /// The terminal's <see cref="IAspireTerminal.Placement"/> must be <see cref="TerminalPlacement.Dialog"/>. A dock
+    /// The terminal's <see cref="AspireTerminal.Placement"/> must be <see cref="TerminalPlacement.Dialog"/>. A dock
     /// terminal is presented as a dock tab that outlives the code which created it, so showing one in a dialog would
     /// render the same terminal through two competing presentations.
     /// </para>
@@ -522,7 +522,7 @@ public sealed class InteractionInput
     /// </remarks>
     [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
     [AspireExportIgnore(Reason = "A terminal is a live local process attached to the AppHost; it cannot be serialized to polyglot app hosts.")]
-    public IAspireTerminal? Terminal { get; init; }
+    public AspireTerminal? Terminal { get; init; }
 
     /// <summary>
     /// Identifies the AppHost-owned terminal created for this input. Stamped by the interaction service when the

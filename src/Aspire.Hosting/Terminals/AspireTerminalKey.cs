@@ -8,13 +8,13 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// The non-printable keys that can be sent to a terminal through <see cref="IAspireTerminal.SendKeyAsync"/>.
+/// The non-printable keys that can be sent to a terminal through <see cref="AspireTerminal.SendKeyAsync"/>.
 /// </summary>
 /// <remarks>
 /// This is deliberately a small, Aspire-owned enum rather than a projection of the underlying terminal
 /// library's key enum. Each value maps to a raw byte sequence in <see cref="AspireTerminalKeySequences"/>,
 /// which keeps the mapping under Aspire's control and avoids leaking a third-party enum through
-/// <see cref="IAspireTerminal"/>.
+/// <see cref="AspireTerminal"/>.
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum AspireTerminalKey

@@ -246,7 +246,7 @@ public class TerminalServiceTests
         var service = TestTerminalService.Create();
         using var subscription = service.SubscribeDockTerminals();
 
-        var dialog = Assert.IsType<Hex1bAspireTerminal>(CreateInteractionTerminal(service, "Dialog"));
+        var dialog = Assert.IsType<Hex1bAspireTerminal>(CreateInteractionTerminal(service, "Dialog").Backend);
         dialog.Retitle("Updated dialog");
         dialog.Show();
         var dock = CreateDockTerminal(service, "Dock");
@@ -693,7 +693,7 @@ public class TerminalServiceTests
         Assert.Single(service.ListAll());
     }
 
-    private static IAspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder)
+    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder)
         => useBuilder
             ? service.CreateTerminal("Shell", placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"))
             : service.CreateTerminal(new TerminalLaunchOptions
@@ -703,7 +703,7 @@ public class TerminalServiceTests
                 Placement = placement
             });
 
-    private static IAspireTerminal CreateInteractionTerminal(TerminalService service, string title)
+    private static AspireTerminal CreateInteractionTerminal(TerminalService service, string title)
         => service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = title,
@@ -717,7 +717,7 @@ public class TerminalServiceTests
             Title = title,
             Command = new TerminalCommand("bash"),
             Placement = TerminalPlacement.Dock
-        }));
+        }).Backend);
 
     /// <summary>
     /// Reads the private channel set the dock fan-out writes to.

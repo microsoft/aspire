@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Terminals;
 internal static class TerminalDiagnostics
 {
     /// <summary>
-    /// Terminals owned by the AppHost process — <see cref="TerminalService"/>, <see cref="IAspireTerminal"/>
+    /// Terminals owned by the AppHost process — <see cref="TerminalService"/>, <see cref="AspireTerminal"/>
     /// and the types they take.
     /// </summary>
     /// <remarks>

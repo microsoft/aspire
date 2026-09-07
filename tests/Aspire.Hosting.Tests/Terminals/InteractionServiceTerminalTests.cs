@@ -133,14 +133,16 @@ public class InteractionServiceTerminalTests
         var (interactionService, terminalService) = CreateInteractionService();
         await using var serviceOwner = terminalService;
         await using var registeredTerminal = CreateTerminal(terminalService, TerminalPlacement.Dialog);
-        await using var unregisteredTerminal = new TestAspireTerminal(useRegisteredId ? registeredTerminal.Id : "unregistered");
+        var backend = new TestTerminalBackend(useRegisteredId ? registeredTerminal.Id : "unregistered");
+        await using var unregisteredTerminal = new AspireTerminal(backend);
         var validInput = new InteractionInput { Name = "valid", InputType = InputType.Terminal, Terminal = registeredTerminal };
         var invalidInput = new InteractionInput { Name = "invalid", InputType = InputType.Terminal, Terminal = unregisteredTerminal };
-        Assert.Equal(useRegisteredId, unregisteredTerminal.Equals(registeredTerminal));
+        Assert.Equal(useRegisteredId, backend.Equals(registeredTerminal.Backend));
+        Assert.NotEqual(registeredTerminal, unregisteredTerminal);
 
         await AssertTerminalRejectedAsync(interactionService, [validInput, invalidInput], invalidInput.Name);
 
-        Assert.False(unregisteredTerminal.IsDisposed);
+        Assert.False(backend.IsDisposed);
         Assert.True(terminalService.TryGetTerminal(registeredTerminal.Id, out var registered));
         Assert.Same(registeredTerminal, registered);
     }
@@ -354,7 +356,7 @@ public class InteractionServiceTerminalTests
             (_, _, _) => new InteractionCompletionState { Complete = true },
             CancellationToken.None);
 
-    private static IAspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement)
+    private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement)
         => service.CreateTerminal(new TerminalLaunchOptions
         {
             Title = "Terminal",

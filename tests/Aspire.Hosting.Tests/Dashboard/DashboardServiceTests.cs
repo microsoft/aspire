@@ -1282,7 +1282,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             Title = "Before",
             Placement = TerminalPlacement.Dock,
             Command = new TerminalCommand("bash")
-        }));
+        }).Backend);
         terminal.Show();
         var service = CreateDashboardService(serviceData, terminalService: terminalService);
         using var cts = new CancellationTokenSource();
@@ -1401,7 +1401,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         if (endedBeforeAttach)
         {
             workload.SignalDisconnected();
-            await Assert.IsType<Hex1bAspireTerminal>(terminal).WorkloadEnded.DefaultTimeout();
+            await Assert.IsType<Hex1bAspireTerminal>(terminal.Backend).WorkloadEnded.DefaultTimeout();
         }
 
         using var cts = new CancellationTokenSource();
@@ -1559,7 +1559,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var terminal = new TestAspireTerminal("blocking")
+        var terminal = new AspireTerminal(new TestTerminalBackend("blocking")
         {
             OnDispose = () =>
             {
@@ -1575,7 +1575,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                     completed.TrySetResult();
                 }
             }
-        };
+        });
 
         try
         {
@@ -1637,10 +1637,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var logger = new TestLogger<DashboardServiceImpl>(new TestLoggerFactory(sink, enabled: true));
         var service = CreateDashboardService(serviceData, logger: logger, terminalService: terminalService);
         Exception failure = timeoutException ? new TimeoutException("Workload timeout.") : new InvalidOperationException("Disposal failed.");
-        var terminal = new TestAspireTerminal("failing")
+        var terminal = new AspireTerminal(new TestTerminalBackend("failing")
         {
             OnDispose = () => synchronous ? throw failure : ValueTask.FromException(failure)
-        };
+        });
 
         var exception = await Record.ExceptionAsync(() => service.CloseTerminalAsync(terminal, CancellationToken.None)).DefaultTimeout();
 

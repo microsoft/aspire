@@ -754,7 +754,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     /// <summary>
     /// Requests disposal while bounding only the dashboard's wait for cleanup.
     /// </summary>
-    internal async Task CloseTerminalAsync(Aspire.Hosting.Terminals.IAspireTerminal terminal, CancellationToken cancellationToken)
+    internal async Task CloseTerminalAsync(Aspire.Hosting.Terminals.AspireTerminal terminal, CancellationToken cancellationToken)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var timeout = Task.Delay(TimeSpan.FromSeconds(CloseTerminalTimeoutSeconds), waitCts.Token);

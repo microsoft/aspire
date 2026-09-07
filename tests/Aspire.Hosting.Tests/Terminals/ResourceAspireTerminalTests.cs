@@ -35,12 +35,13 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
         // have the workload run it, read the result off the replicated screen.
         await using var host = await TestResourceTerminalHost.StartAsync(CreateSocketPath());
 
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance).Handle;
 
         // The shell echoes the command line before its output, so a fixed marker would match the echo of the
         // input rather than the result. Splitting the literal across a quote means the typed line and the
         // output line differ, and only the output line contains the marker.
-        await terminal.SendTextAsync("echo apphost-was\"\"-here\r").DefaultTimeout();
+        await terminal.SendTextAsync("echo apphost-was\"\"-here").DefaultTimeout();
+        await terminal.SendKeyAsync(AspireTerminalKey.Enter).DefaultTimeout();
 
         await terminal.WaitForTextAsync("apphost-was-here", TimeSpan.FromSeconds(30)).DefaultTimeout();
 
@@ -54,7 +55,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
 
         await using var host = await TestResourceTerminalHost.StartAsync(CreateSocketPath());
 
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", host.SocketPath, NullLogger.Instance).Handle;
 
         // Establish the connection first so the timeout under test is the wait, not the handshake.
         await terminal.SendTextAsync("\r").DefaultTimeout();
@@ -68,7 +69,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
     {
         var missingSocket = Path.Combine(_socketDirectory, "not-listening.sock");
 
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", missingSocket, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", missingSocket, NullLogger.Instance).Handle;
 
         // A replica whose terminal host is gone must surface as a failed automation call rather than hanging
         // until the connect timeout expires on every subsequent call.
@@ -78,7 +79,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
     [Fact]
     public async Task DisposeIsSafeWhenNothingEverConnected()
     {
-        var terminal = new ResourceAspireTerminal("resource:test:0", "test", Path.Combine(_socketDirectory, "unused.sock"), NullLogger.Instance);
+        var terminal = new ResourceAspireTerminal("resource:test:0", "test", Path.Combine(_socketDirectory, "unused.sock"), NullLogger.Instance).Handle;
 
         // Listing terminals hands out handles that are never automated, so disposing an unconnected handle is
         // the common case rather than an edge case.
@@ -91,7 +92,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload is a POSIX shell.");
 
         var socketPath = CreateSocketPath();
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance).Handle;
 
         await Assert.ThrowsAnyAsync<Exception>(() => terminal.SendTextAsync("not-delivered")).DefaultTimeout();
 
@@ -108,7 +109,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
 
         var socketPath = CreateSocketPath();
         await using var firstHost = await TestResourceTerminalHost.StartAsync(socketPath);
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance).Handle;
 
         await terminal.SendTextAsync("echo first\"\"-host\r").DefaultTimeout();
         await terminal.WaitForTextAsync("first-host").DefaultTimeout();
@@ -128,7 +129,7 @@ public class ResourceAspireTerminalTests : IAsyncLifetime
         using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(socketPath));
         listener.Listen();
-        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance);
+        await using var terminal = new ResourceAspireTerminal("resource:test:0", "test", socketPath, NullLogger.Instance).Handle;
         using var cts = new CancellationTokenSource();
 
         // Accept the transport but withhold the HMP1 handshake so cancellation occurs during connection setup.

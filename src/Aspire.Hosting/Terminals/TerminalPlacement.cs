@@ -37,7 +37,7 @@ public enum TerminalPlacement
     /// The terminal is not displayed anywhere.
     /// </summary>
     /// <remarks>
-    /// Terminals driven purely through the automation members of <see cref="IAspireTerminal"/> never need a
+    /// Terminals driven purely through the automation members of <see cref="AspireTerminal"/> never need a
     /// viewer. Giving that case its own value keeps it out of the dock's tab list without having to pretend it
     /// belongs to a dialog or a resource.
     /// </remarks>

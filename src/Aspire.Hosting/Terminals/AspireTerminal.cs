@@ -6,19 +6,13 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// A terminal surfaced in the dashboard and driveable from AppHost code.
+/// An Aspire-owned terminal handle for dashboard interaction and automation from AppHost code.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is deliberately a thin, Aspire-shaped abstraction over the underlying terminal implementation
-/// (currently Hex1b). Keeping the implementation type out of this interface is what lets terminals be
-/// used from Aspire APIs without dragging Hex1b's very large surface area into Aspire's own.
-/// </para>
-/// <para>
-/// The automation members are an intentionally small subset. Hex1b exposes a rich cell-pattern matching
-/// DSL (<c>CellPatternSearcher</c> and around sixty supporting types); none of it is projected here.
-/// "Send some input, wait for some text, read the screen" covers the scenarios a spike needs, and the
-/// surface can grow later if real usage demands it.
+/// Obtain a handle from <see cref="TerminalService.CreateTerminal(TerminalLaunchOptions)"/> or
+/// <see cref="TerminalService.TryGetTerminal"/>. Handles cannot be constructed or extended by callers;
+/// Aspire manages their registration and connection to the underlying terminal implementation.
 /// </para>
 /// <para>
 /// What disposal means depends on <see cref="Owner"/>. For <see cref="TerminalOwner.AppHost"/> the workload
@@ -34,27 +28,34 @@ namespace Aspire.Hosting.Terminals;
 /// </para>
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
-public interface IAspireTerminal : IAsyncDisposable
+public sealed class AspireTerminal : IAsyncDisposable
 {
+    internal AspireTerminal(ITerminalBackend backend)
+    {
+        Backend = backend;
+    }
+
+    internal ITerminalBackend Backend { get; }
+
     /// <summary>
     /// Gets the opaque identifier used to address this terminal over the dashboard connection.
     /// </summary>
-    string Id { get; }
+    public string Id => Backend.Id;
 
     /// <summary>
     /// Gets the title shown on the terminal's dock tab.
     /// </summary>
-    string Title { get; }
+    public string Title => Backend.Title;
 
     /// <summary>
     /// Gets the process that owns this terminal's workload.
     /// </summary>
-    TerminalOwner Owner { get; }
+    public TerminalOwner Owner => Backend.Owner;
 
     /// <summary>
     /// Gets where this terminal is displayed in the dashboard.
     /// </summary>
-    TerminalPlacement Placement { get; }
+    public TerminalPlacement Placement => Backend.Placement;
 
     /// <summary>
     /// Starts the terminal's workload if it is not already running.
@@ -73,7 +74,7 @@ public interface IAspireTerminal : IAsyncDisposable
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">The terminal has already stopped.</exception>
-    void Start();
+    public void Start() => Backend.Start();
 
     /// <summary>
     /// Reveals the terminal dock in every connected dashboard and switches to this terminal's tab.
@@ -82,19 +83,29 @@ public interface IAspireTerminal : IAsyncDisposable
     /// Only meaningful for <see cref="TerminalPlacement.Dock"/> terminals. Terminals in a dialog are revealed
     /// by that dialog, so this is a no-op for them.
     /// </remarks>
-    void Show();
+    public void Show() => Backend.Show();
 
     /// <summary>
     /// Sends text to the terminal's workload as though it had been typed.
     /// </summary>
+    /// <param name="text">The text to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the input operation.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
-    Task SendTextAsync(string text, CancellationToken cancellationToken = default);
+    public Task SendTextAsync(string text, CancellationToken cancellationToken = default)
+        => Backend.SendTextAsync(text, cancellationToken);
 
     /// <summary>
     /// Sends a single non-printable key to the terminal's workload.
     /// </summary>
+    /// <param name="key">The key to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the input operation.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="key"/> is not a supported key.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
-    Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default);
+    public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
+        => Backend.SendKeyAsync(key, cancellationToken);
 
     /// <summary>
     /// Waits until <paramref name="text"/> appears on the terminal screen.
@@ -102,13 +113,23 @@ public interface IAspireTerminal : IAsyncDisposable
     /// <param name="text">The text to wait for.</param>
     /// <param name="timeout">How long to wait before giving up. Defaults to 30 seconds.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the text appears on the terminal screen.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.</exception>
     /// <exception cref="TimeoutException">The text did not appear before <paramref name="timeout"/> elapsed.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
-    Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
+    public Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        => Backend.WaitForTextAsync(text, timeout, cancellationToken);
 
     /// <summary>
     /// Gets the current contents of the terminal screen, with lines separated by newlines.
     /// </summary>
+    /// <returns>The current terminal screen text.</returns>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
-    string GetScreenText();
+    public string GetScreenText() => Backend.GetScreenText();
+
+    /// <summary>
+    /// Releases the handle, stopping the workload only when it is owned by the AppHost.
+    /// </summary>
+    /// <returns>A task representing the terminal cleanup operation.</returns>
+    public ValueTask DisposeAsync() => Backend.DisposeAsync();
 }

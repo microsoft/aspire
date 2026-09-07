@@ -10,7 +10,7 @@ using Hex1b.Automation;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// The shared implementation of <see cref="IAspireTerminal"/>'s automation members.
+/// The shared implementation of <see cref="AspireTerminal"/>'s automation members.
 /// </summary>
 /// <remarks>
 /// Every terminal Aspire exposes is ultimately a <see cref="Hex1bTerminal"/>, whether its workload runs in the

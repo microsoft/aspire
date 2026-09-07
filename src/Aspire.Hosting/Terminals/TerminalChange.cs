@@ -30,7 +30,7 @@ internal enum TerminalChangeType
     Retitled,
 
     /// <summary>
-    /// <see cref="IAspireTerminal.Show"/> was called. Dashboards should reveal the dock and switch to
+    /// <see cref="AspireTerminal.Show"/> was called. Dashboards should reveal the dock and switch to
     /// this terminal's tab.
     /// </summary>
     Activated

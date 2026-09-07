@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// The Hex1b-backed implementation of <see cref="IAspireTerminal"/>.
+/// The Hex1b-backed implementation of <see cref="AspireTerminal"/>.
 /// </summary>
 /// <remarks>
 /// Clients are handed to Hex1b's HMP1 server through a channel, which lets a single terminal serve several
@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Terminals;
 /// using HMP1's multi-head support. The workload lives in the AppHost, so terminal state survives a viewer
 /// disconnecting entirely.
 /// </remarks>
-internal sealed class Hex1bAspireTerminal : IAspireTerminal
+internal sealed class Hex1bAspireTerminal : ITerminalBackend
 {
     // Unbounded because the producer is a viewer attaching; the queue depth is realistically 0 or 1 and
     // dropping or blocking an attach would strand the RPC that is waiting to be served.
@@ -52,7 +52,11 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         Id = id;
         Title = title;
         Placement = placement;
+        Handle = new(this);
     }
+
+    // Creation and lookup must return the same handle because interaction validation checks instance identity.
+    public AspireTerminal Handle { get; }
 
     public string Id { get; }
 

@@ -86,7 +86,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// The placement in <paramref name="options"/> is not <see cref="TerminalPlacement.Dock"/>,
     /// <see cref="TerminalPlacement.Dialog"/>, or <see cref="TerminalPlacement.None"/>.
     /// </exception>
-    public IAspireTerminal CreateTerminal(TerminalLaunchOptions options)
+    public AspireTerminal CreateTerminal(TerminalLaunchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.Command);
@@ -130,7 +130,7 @@ public sealed class TerminalService : IAsyncDisposable
     /// <see cref="TerminalCommand"/> cannot describe — notably the dock's built-in terminal, which runs an
     /// in-process Hex1b app rather than a child process.
     /// </remarks>
-    internal IAspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)
+    internal AspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(builder);
@@ -164,7 +164,7 @@ public sealed class TerminalService : IAsyncDisposable
 
         _logger.LogDebug("Created {Placement} terminal {TerminalId} ({Title}).", placement, id, title);
 
-        return terminal;
+        return terminal.Handle;
     }
 
     /// <summary>
@@ -187,20 +187,20 @@ public sealed class TerminalService : IAsyncDisposable
     /// <summary>
     /// Gets a terminal by id.
     /// </summary>
-    /// <param name="terminalId">The <see cref="IAspireTerminal.Id"/> of the terminal to find.</param>
+    /// <param name="terminalId">The <see cref="AspireTerminal.Id"/> of the terminal to find.</param>
     /// <param name="terminal">The terminal, if one with that id exists.</param>
     /// <returns><see langword="true"/> if the terminal was found.</returns>
     /// <remarks>
     /// Resolves terminals the AppHost owns as well as those belonging to resources, so automation code can
     /// drive either kind through the same handle without knowing which it has.
     /// </remarks>
-    public bool TryGetTerminal(string terminalId, [NotNullWhen(true)] out IAspireTerminal? terminal)
+    public bool TryGetTerminal(string terminalId, [NotNullWhen(true)] out AspireTerminal? terminal)
     {
         ArgumentNullException.ThrowIfNull(terminalId);
 
         if (_terminals.TryGetValue(terminalId, out var found))
         {
-            terminal = found;
+            terminal = found.Handle;
             return true;
         }
 

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 // InputType.Terminal is an experimental spike. PromptInputsAsync is also experimental.
 #pragma warning disable ASPIREINTERACTION001
 
-// AppHost-owned terminals - TerminalService, IAspireTerminal, TerminalCommand - are experimental.
+// AppHost-owned terminals - TerminalService, AspireTerminal, TerminalCommand - are experimental.
 #pragma warning disable ASPIRETERMINAL002
 
 namespace Terminals.AppHost;
@@ -181,7 +181,7 @@ internal static class TerminalInteractionCommands
     /// <remarks>
     /// This is the counterpart to the interaction-input commands above. Instead of a modal dialog bound to a single
     /// dialog lifetime, the terminal becomes a tab in the dashboard's terminal dock (Shift+`) that outlives the command
-    /// that created it. It also exercises <c>IAspireTerminal</c>'s automation surface — send input, wait for output,
+    /// that created it. It also exercises <c>AspireTerminal</c>'s automation surface — send input, wait for output,
     /// read the screen — which is how AppHost code can script a terminal it owns.
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses TerminalService and command handlers that are not ATS-compatible.")]
@@ -234,7 +234,7 @@ internal static class TerminalInteractionCommands
     /// This is the "automate an interactive prompt" scenario. Plenty of tools an AppHost needs to invoke are only
     /// available as interactive console programs — they log in, prompt for confirmation, ask which subscription to
     /// use — and there is no API to call instead. An <see cref="InputType.Terminal"/> input plus
-    /// <see cref="IAspireTerminal"/>'s automation members lets AppHost code answer those prompts itself while the
+    /// <see cref="AspireTerminal"/>'s automation members lets AppHost code answer those prompts itself while the
     /// human watches it happen, and step in whenever it cannot.
     /// </para>
     /// <para>
@@ -429,7 +429,7 @@ internal static class TerminalInteractionCommands
     /// Bisection needs at most ceil(log2(limit)) guesses, so the loop is bounded by construction. The guard on an
     /// exhausted range only fires if the game stops answering consistently, which would otherwise spin forever.
     /// </remarks>
-    private static async Task<(int Number, int Attempts)> PlayNumberGuessAsync(IAspireTerminal terminal, int limit, CancellationToken cancellationToken)
+    private static async Task<(int Number, int Attempts)> PlayNumberGuessAsync(AspireTerminal terminal, int limit, CancellationToken cancellationToken)
     {
         // Generous: this is the first automation call, so it is what starts the workload, and a cold
         // `dotnet run --file` has to compile the script before the game prints anything.
@@ -473,7 +473,7 @@ internal static class TerminalInteractionCommands
     /// would race the rest of the line being written. Polling for one of the three complete replies has no such race,
     /// and the attempt number keeps an earlier reply still on screen from being misread as this one.
     /// </remarks>
-    private static async Task<NumberGuessReply> ReadReplyAsync(IAspireTerminal terminal, int attempt, int guess, CancellationToken cancellationToken)
+    private static async Task<NumberGuessReply> ReadReplyAsync(AspireTerminal terminal, int attempt, int guess, CancellationToken cancellationToken)
     {
         var prefix = $">> #{attempt.ToString(CultureInfo.InvariantCulture)}: {guess.ToString(CultureInfo.InvariantCulture)} is ";
         var deadline = DateTime.UtcNow + s_promptTimeout;

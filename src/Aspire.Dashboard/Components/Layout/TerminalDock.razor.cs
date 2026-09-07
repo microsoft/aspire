@@ -92,7 +92,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         ShortcutManager.AddGlobalKeydownListener(this);
 
         // Watched eagerly rather than on first open: an `activated` notification is how AppHost code reveals a
-        // terminal it created (IAspireTerminal.Show()), and that has to work in a browser that has never opened the
+        // terminal it created (AspireTerminal.Show()), and that has to work in a browser that has never opened the
         // dock. One idle server stream per circuit is the price of that.
         _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
     }
@@ -427,7 +427,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 return _detachedTerminalIds.Remove(descriptor.TerminalId) ? descriptor.TerminalId : null;
 
             case TerminalChangeType.Activated:
-                // Raised by IAspireTerminal.Show() in the AppHost, so AppHost code can reveal its own terminal.
+                // Raised by AspireTerminal.Show() in the AppHost, so AppHost code can reveal its own terminal.
                 if (index < 0)
                 {
                     _terminals.Add(descriptor);

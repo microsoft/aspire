@@ -7,7 +7,7 @@ using Aspire.Hosting.Terminals;
 
 namespace Aspire.Hosting.Utils;
 
-internal sealed class TestAspireTerminal(string id) : IAspireTerminal
+internal sealed class TestTerminalBackend(string id) : ITerminalBackend
 {
     public string Id { get; } = id;
     public string Title => "Test terminal";
@@ -23,9 +23,8 @@ internal sealed class TestAspireTerminal(string id) : IAspireTerminal
     public Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public string GetScreenText() => throw new NotSupportedException();
 
-    // An implementation may compare terminals by ID, but that must not make it interchangeable with the
-    // registered instance: the dashboard attaches to the registered object, not the supplied implementation.
-    public override bool Equals(object? obj) => obj is IAspireTerminal other && string.Equals(Id, other.Id, StringComparison.Ordinal);
+    // Backend equality must not make distinct public handles interchangeable.
+    public override bool Equals(object? obj) => obj is ITerminalBackend other && string.Equals(Id, other.Id, StringComparison.Ordinal);
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Id);
 
     public ValueTask DisposeAsync()

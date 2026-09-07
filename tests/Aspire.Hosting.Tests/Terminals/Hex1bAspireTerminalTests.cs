@@ -35,7 +35,7 @@ public class Hex1bAspireTerminalTests
         // Raw stream workloads report disconnection explicitly. Observe output first; Hex1b's completion is
         // not an output-drain barrier, and this test makes no claim about preserving the final screen.
         workload.SignalDisconnected();
-        await Assert.IsType<Hex1bAspireTerminal>(terminal).WorkloadEnded.DefaultTimeout();
+        await Assert.IsType<Hex1bAspireTerminal>(terminal.Backend).WorkloadEnded.DefaultTimeout();
 
         Assert.True(service.TryGetTerminal(terminal.Id, out var registered));
         Assert.Same(terminal, registered);
@@ -101,6 +101,11 @@ public class Hex1bAspireTerminalTests
         bytes = new byte["automation-input"u8.Length];
         await inputReader.ReadExactlyAsync(bytes).AsTask().DefaultTimeout();
         Assert.Equal("automation-input"u8.ToArray(), bytes);
+
+        await terminal.SendKeyAsync(AspireTerminalKey.Enter).DefaultTimeout();
+        bytes = new byte[1];
+        await inputReader.ReadExactlyAsync(bytes).AsTask().DefaultTimeout();
+        Assert.Equal("\r"u8.ToArray(), bytes);
 
         await outputWriter.WriteAsync("after-disconnect\r\n"u8.ToArray());
         await Task.WhenAll(

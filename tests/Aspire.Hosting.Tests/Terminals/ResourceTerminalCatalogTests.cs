@@ -164,7 +164,7 @@ public class ResourceTerminalCatalogTests : IAsyncLifetime
         Assert.True(catalog.TryGetTerminal(id, out var replacement));
         Assert.NotSame(first, replacement);
         Assert.Equal(id, replacement!.Id);
-        Assert.False(Assert.IsType<ResourceAspireTerminal>(replacement).IsDisposed);
+        Assert.False(Assert.IsType<ResourceAspireTerminal>(replacement.Backend).IsDisposed);
         Assert.True(catalog.TryGetTerminal(id, out var repeated));
         Assert.Same(replacement, repeated);
     }

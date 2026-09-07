@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Terminals;
 
 /// <summary>
 /// Discovers the terminals that belong to resources in the application model, and hands out
-/// <see cref="IAspireTerminal"/> handles for them.
+/// <see cref="AspireTerminal"/> handles for them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -104,7 +104,7 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
     /// <summary>
     /// Gets a handle for a resource terminal by its stable id.
     /// </summary>
-    public bool TryGetTerminal(string terminalId, out IAspireTerminal? terminal)
+    public bool TryGetTerminal(string terminalId, out AspireTerminal? terminal)
     {
         terminal = null;
 
@@ -142,7 +142,7 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
                 _handles[entry.Id] = handle;
             }
 
-            terminal = handle;
+            terminal = handle.Handle;
         }
 
         return true;

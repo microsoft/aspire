@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Terminals;
 
 /// <summary>
-/// An <see cref="IAspireTerminal"/> over a terminal that belongs to a resource replica.
+/// The resource-backed implementation of <see cref="AspireTerminal"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -31,7 +31,7 @@ namespace Aspire.Hosting.Terminals;
 /// resizing the grid out from under a human who is watching the same terminal.
 /// </para>
 /// </remarks>
-internal sealed class ResourceAspireTerminal : IAspireTerminal
+internal sealed class ResourceAspireTerminal : ITerminalBackend
 {
     /// <summary>
     /// How long to wait for the HMP1 handshake before treating the terminal host as unreachable.
@@ -58,7 +58,11 @@ internal sealed class ResourceAspireTerminal : IAspireTerminal
         Title = title;
         _consumerUdsPath = consumerUdsPath;
         _logger = logger;
+        Handle = new(this);
     }
+
+    // Repeated catalog lookups share this handle for as long as its cached automation peer is live.
+    public AspireTerminal Handle { get; }
 
     public string Id { get; }
 

@@ -188,7 +188,7 @@ internal class InteractionService : IInteractionService
                 // dialog as well would render the same terminal through two competing presentations.
                 if (input.Terminal.Placement != TerminalPlacement.Dialog)
                 {
-                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(IAspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
+                    throw new InvalidOperationException($"The input '{input.Name}' sets {nameof(InteractionInput.Terminal)} to a terminal whose {nameof(AspireTerminal.Placement)} is {input.Terminal.Placement}. Terminals shown by an interaction must be created with {nameof(TerminalPlacement)}.{nameof(TerminalPlacement.Dialog)}.");
                 }
 
                 // The dashboard resolves IDs in this AppHost's registry rather than using the supplied object.

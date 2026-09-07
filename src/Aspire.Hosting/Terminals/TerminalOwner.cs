@@ -26,7 +26,7 @@ public enum TerminalOwner
     /// </summary>
     /// <remarks>
     /// These terminals run out-of-process in a per-replica terminal host rather than in the AppHost, so
-    /// disposing the <see cref="IAspireTerminal"/> releases Aspire's handle on the terminal without stopping
+    /// disposing the <see cref="AspireTerminal"/> releases Aspire's handle on the terminal without stopping
     /// the underlying workload.
     /// </remarks>
     Resource
