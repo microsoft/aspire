@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Hosting.Dcp;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -221,6 +222,11 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         GetAllocatedEndpoint()
         ?? throw new InvalidOperationException($"The endpoint `{EndpointName}` is not allocated for the resource `{Resource.Name}`.");
 
+    // The endpoint annotation, or null when the endpoint is not defined on the resource. Unlike
+    // EndpointAnnotation this never throws, so callers that only want to inspect the endpoint can do so
+    // without turning a missing endpoint into an exception.
+    internal EndpointAnnotation? EndpointAnnotationOrDefault => GetEndpointAnnotation();
+
     private EndpointAnnotation? GetEndpointAnnotation()
     {
         if (_endpointAnnotation is not null)
@@ -364,10 +370,30 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
         {
             EndpointProperty.Scheme => new(Endpoint.Scheme),
             EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
-            EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork => "127.0.0.1",
+            EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork && BindsToLocalhost() => "127.0.0.1",
             EndpointProperty.TargetPort when Endpoint.TargetPort is int port => new(port.ToString(CultureInfo.InvariantCulture)),
             _ => await ResolveValueWithAllocatedAddress().ConfigureAwait(false)
         };
+
+        // IPV4Host exists so that consumers which cannot use a hostname (SQL Server, the Azure emulators) get an
+        // IPv4 literal rather than "localhost", which may resolve to ::1. That substitution is only correct while the
+        // endpoint address is "localhost" - the default, a *.localhost TLD, a wildcard bind, or an arbitrary machine
+        // name, all of which NormalizeTargetHost maps to localhost. When TargetHost names one specific address
+        // instead ("[::1]", a LAN address), the endpoint is not reachable on 127.0.0.1, so fall through and use the
+        // address the orchestrator allocated, the same value EndpointProperty.Host resolves to.
+        bool BindsToLocalhost()
+        {
+            // A null annotation means the endpoint is not defined. Keep answering immediately rather than letting
+            // the fall-through path surface the missing-endpoint exception for a property that never needed it.
+            var targetHost = Endpoint.EndpointAnnotationOrDefault?.TargetHost;
+            if (targetHost is null)
+            {
+                return true;
+            }
+
+            var (address, _) = DcpModelUtilities.NormalizeTargetHost(targetHost);
+            return string.Equals(address, KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase);
+        }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
