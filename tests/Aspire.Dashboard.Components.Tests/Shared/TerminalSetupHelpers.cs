@@ -35,6 +35,8 @@ internal static class TerminalSetupHelpers
     {
         var dock = context.JSInterop.SetupModule("./Components/Layout/TerminalDock.razor.js");
         dock.SetupVoid("registerResizeHandle", _ => true).SetVoidResult();
+        dock.SetupVoid("registerTabNavigation", _ => true).SetVoidResult();
+        dock.SetupVoid("unregisterTabNavigation", _ => true).SetVoidResult();
 
         var windows = context.JSInterop.SetupModule("/js/app-terminalwindow.js");
         windows.Setup<string>("openTerminalWindow", _ => true).SetResult("opened");

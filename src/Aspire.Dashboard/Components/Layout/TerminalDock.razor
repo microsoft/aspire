@@ -13,31 +13,37 @@
          @ref="_dockElement">
         <div class="terminal-dock-resize-handle"></div>
         <div class="terminal-dock-tabstrip">
-            @foreach (var terminal in _terminals)
+            @* FluentTabs resets selection when closing an inactive tab (https://github.com/microsoft/fluentui-blazor/issues/3392).
+               Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
+            @if (_terminals.Count > 0)
             {
-                <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
-                     @key="terminal.TerminalId"
-                     @onclick="@(() => Activate(terminal.TerminalId))">
-                    <span class="terminal-dock-tab-title">@terminal.Title</span>
-                    <span @onclick:stopPropagation="true">
-                        <FluentButton Appearance="Appearance.Stealth"
-                                      Class="terminal-dock-tab-close"
-                                      Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
-                                      aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab)]"
-                                      OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
-                            <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
-                        </FluentButton>
-                    </span>
+                <div class="terminal-dock-tablist" role="tablist" aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]">
+                    @foreach (var terminal in _terminals)
+                    {
+                        <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
+                             @key="terminal.TerminalId">
+                            <button type="button"
+                                    role="tab"
+                                    class="terminal-dock-tab-select"
+                                    id="@GetTabId(terminal.TerminalId)"
+                                    aria-controls="@GetPaneId(terminal.TerminalId)"
+                                    aria-selected="@(IsPaneActive(terminal.TerminalId) ? "true" : "false")"
+                                    tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                    @onclick="@(() => Activate(terminal.TerminalId))">
+                                <span class="terminal-dock-tab-title">@terminal.Title</span>
+                            </button>
+                            <FluentButton Appearance="Appearance.Stealth"
+                                          Class="terminal-dock-tab-close"
+                                          Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
+                                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
+                                          tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                          OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
+                                <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Neutral" />
+                            </FluentButton>
+                        </div>
+                    }
                 </div>
             }
-            <FluentButton Appearance="Appearance.Stealth"
-                          Class="@(IsPanelVisible ? "terminal-dock-new active" : "terminal-dock-new")"
-                          Title="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
-                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockNewTerminal)]"
-                          aria-pressed="@(IsPanelVisible ? "true" : "false")"
-                          OnClick="@ShowPanel">
-                <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
-            </FluentButton>
             <div class="terminal-dock-filler"></div>
             @if (_popupBlocked)
             {
@@ -65,6 +71,11 @@
                 @* Inactive panes use visibility rather than display so they keep real dimensions — xterm measures
                    its grid from the element box, and a display:none pane would refit to zero columns. *@
                 <div class="terminal-dock-pane @(IsPaneActive(terminal.TerminalId) ? "active" : "inactive")"
+                     id="@GetPaneId(terminal.TerminalId)"
+                     role="tabpanel"
+                     aria-labelledby="@GetTabId(terminal.TerminalId)"
+                     aria-hidden="@(IsPaneActive(terminal.TerminalId) ? "false" : "true")"
+                     inert="@(!IsPaneActive(terminal.TerminalId))"
                      @key="terminal.TerminalId">
                     @if (_detachedTerminalIds.Contains(terminal.TerminalId))
                     {
@@ -94,8 +105,6 @@
                     }
                 </div>
             }
-            @* Rendered last so it stacks over the panes. The panes stay mounted underneath, which is what lets a
-               terminal keep its xterm buffer and its socket while the panel is on screen. *@
             @if (IsPanelVisible)
             {
                 <div class="terminal-dock-panel">

@@ -148,9 +148,9 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockCloseTab">
-        <source>Close terminal</source>
-        <target state="new">Close terminal</target>
-        <note />
+        <source>Close terminal '{0}'</source>
+        <target state="new">Close terminal '{0}'</target>
+        <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
@@ -187,19 +187,14 @@
         <target state="new">Hide terminal panel (Shift+`)</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalDockNewTerminal">
-        <source>New terminal</source>
-        <target state="new">New terminal</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalDockPanelBody">
         <source>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</source>
         <target state="new">Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
-        <source>No terminal selected</source>
-        <target state="new">No terminal selected</target>
+        <source>No terminals</source>
+        <target state="new">No terminals</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
@@ -210,6 +205,11 @@
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
         <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockTabs">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">

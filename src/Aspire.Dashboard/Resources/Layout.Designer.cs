@@ -106,7 +106,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Close terminal.
+        ///   Looks up a localized string similar to Close terminal '{0}'.
         /// </summary>
         public static string TerminalDockCloseTab {
             get {
@@ -142,7 +142,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No terminal selected.
+        ///   Looks up a localized string similar to No terminals.
         /// </summary>
         public static string TerminalDockPanelHeading {
             get {
@@ -205,11 +205,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to New terminal.
+        ///   Looks up a localized string similar to Terminals.
         /// </summary>
-        public static string TerminalDockNewTerminal {
+        public static string TerminalDockTabs {
             get {
-                return ResourceManager.GetString("TerminalDockNewTerminal", resourceCulture);
+                return ResourceManager.GetString("TerminalDockTabs", resourceCulture);
             }
         }
         

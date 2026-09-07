@@ -31,21 +31,12 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private readonly List<TerminalDescriptor> _terminals = [];
     private readonly CancellationTokenSource _cts = new();
+    private readonly string _elementIdPrefix = $"terminal-dock-{Guid.NewGuid():N}";
 
     private bool _hasBeenOpened;
     private bool _isVisible;
     private bool _disposed;
     private string? _activeTerminalId;
-
-    /// <summary>
-    /// Whether the user asked for the panel with the <c>+</c> button while terminals exist.
-    /// </summary>
-    /// <remarks>
-    /// Sticky on purpose. A terminal arriving on the watch stream selects itself when nothing is selected, so
-    /// without this flag any AppHost activity would yank the panel away from under the user. Only an explicit
-    /// tab click, or the AppHost revealing a terminal through <c>IAspireTerminal.Show()</c>, dismisses it.
-    /// </remarks>
-    private bool _panelRequested;
 
     private int _heightPx = DefaultHeightPx;
     private Task? _watchTask;
@@ -153,6 +144,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 return;
             }
             await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef).ConfigureAwait(true);
+            if (!_disposed)
+            {
+                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
+            }
         }
     }
 
@@ -179,22 +174,24 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private void Activate(string terminalId)
     {
+        if (!_terminals.Any(t => t.TerminalId == terminalId))
+        {
+            // A queued click can arrive after the watch stream removes its tab.
+            Logger.LogDebug("Ignored selection of removed dock terminal {TerminalId}.", terminalId);
+            return;
+        }
+
         _activeTerminalId = terminalId;
-        _panelRequested = false;
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Whether the panel is covering the terminal panes, either because the user asked for it or because there is
-    /// no terminal to show.
-    /// </summary>
-    private bool IsPanelVisible => _panelRequested || _terminals.Count == 0;
+    private bool IsPanelVisible => _terminals.Count == 0;
 
-    /// <summary>
-    /// Whether a terminal is the one currently on screen. False for every terminal while the panel is up, which is
-    /// what keeps the tab strip from showing a selected tab whose pane is hidden.
-    /// </summary>
-    private bool IsPaneActive(string terminalId) => !IsPanelVisible && terminalId == _activeTerminalId;
+    private bool IsPaneActive(string terminalId) => terminalId == _activeTerminalId;
+
+    private string GetTabId(string terminalId) => $"{_elementIdPrefix}-tab-{terminalId}";
+
+    private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
 
     private TerminalWindowLauncher WindowLauncher
         => _windowLauncher ??= new TerminalWindowLauncher(JS, OnDetachedWindowClosedAsync);
@@ -280,20 +277,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     });
 
-    /// <summary>
-    /// Shows the panel that stands in for a terminal when there is nothing to show, or nothing selected.
-    /// </summary>
-    /// <remarks>
-    /// The <c>+</c> button deliberately does not create anything. Terminals are owned by the AppHost process, not
-    /// by the browser, so there is no meaningful workload the dashboard could pick on the user's behalf; the panel
-    /// is where launch actions will go once there is something to launch.
-    /// </remarks>
-    private void ShowPanel()
-    {
-        _panelRequested = true;
-        StateHasChanged();
-    }
-
     private async Task CloseTerminalAsync(string terminalId, string terminalTitle)
     {
         try
@@ -344,11 +327,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     List<string> endedTerminalIds = [];
                     if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
                     {
+                        var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
                         _terminals.Clear();
                         _terminals.AddRange(update.Snapshot.Terminals);
                         if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
                         {
-                            _activeTerminalId = _terminals.FirstOrDefault()?.TerminalId;
+                            // Snapshots can also remove the active tab; use the same adjacent fallback as removal.
+                            _activeTerminalId = _terminals.Count > 0
+                                ? _terminals[Math.Clamp(previousActiveIndex, 0, _terminals.Count - 1)].TerminalId
+                                : null;
                         }
 
                         // Recovery snapshots replace all prior state, including terminals removed while offline.
@@ -425,8 +412,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     _terminals.Add(descriptor);
                 }
                 _activeTerminalId = descriptor.TerminalId;
-                // The AppHost is asking for this terminal specifically, which outranks a panel the user opened.
-                _panelRequested = false;
                 _hasBeenOpened = true;
                 _isVisible = true;
                 break;
@@ -479,6 +464,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         {
             try
             {
+                await module.InvokeVoidAsync("unregisterTabNavigation", _dockElement).ConfigureAwait(true);
                 await module.DisposeAsync().ConfigureAwait(true);
             }
             catch (JSDisconnectedException)

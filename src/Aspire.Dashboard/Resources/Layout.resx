@@ -172,7 +172,8 @@
     <value>Aspire</value>
   </data>
   <data name="TerminalDockCloseTab" xml:space="preserve">
-    <value>Close terminal</value>
+    <value>Close terminal '{0}'</value>
+    <comment>{0} is the terminal's display title.</comment>
   </data>
   <data name="TerminalDockCloseTimedOutTitle" xml:space="preserve">
     <value>Terminal close timed out</value>
@@ -196,14 +197,14 @@
   <data name="TerminalDockHide" xml:space="preserve">
     <value>Hide terminal panel (Shift+`)</value>
   </data>
-  <data name="TerminalDockNewTerminal" xml:space="preserve">
-    <value>New terminal</value>
+  <data name="TerminalDockTabs" xml:space="preserve">
+    <value>Terminals</value>
   </data>
   <data name="TerminalDockPanelBody" xml:space="preserve">
     <value>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</value>
   </data>
   <data name="TerminalDockPanelHeading" xml:space="preserve">
-    <value>No terminal selected</value>
+    <value>No terminals</value>
   </data>
   <data name="TerminalDockPanelHint" xml:space="preserve">
     <value>Press Shift+` to hide this panel.</value>

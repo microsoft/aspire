@@ -704,8 +704,14 @@ function moveFocusFromTerminal(state, reverse) {
         return true;
     }
 
+    // Inactive dock panes retain their dimensions for xterm, so a nonempty rectangle does not imply that an
+    // element can take focus. Skip inert/hidden panes and nonselected tabs in a roving-tabindex strip.
     const focusableElements = Array.from(document.querySelectorAll(FOCUSABLE_ELEMENT_SELECTOR))
-        .filter((element) => element.getClientRects().length > 0);
+        .filter((element) => element.tabIndex >= 0
+            && !element.disabled
+            && !element.closest('[inert]')
+            && element.getClientRects().length > 0
+            && getComputedStyle(element).visibility === 'visible');
     const activeIndex = focusableElements.indexOf(document.activeElement);
     for (let index = activeIndex - 1; index >= 0; index--) {
         const candidate = focusableElements[index];
