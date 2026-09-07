@@ -6,7 +6,11 @@
    rather than unmounting it so xterm keeps its buffer, its measured cell metrics, and its WebSocket. *@
 @if (_hasBeenOpened)
 {
-    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")" style="height: @(_heightPx)px;" @ref="_dockElement">
+    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
+         style="height: @(_heightPx)px;"
+         inert="@(!_isVisible)"
+         aria-hidden="@(_isVisible ? "false" : "true")"
+         @ref="_dockElement">
         <div class="terminal-dock-resize-handle"></div>
         <div class="terminal-dock-tabstrip">
             @foreach (var terminal in _terminals)

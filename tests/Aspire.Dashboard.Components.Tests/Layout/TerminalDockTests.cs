@@ -128,8 +128,12 @@ public class TerminalDockTests : DashboardTestContext
         Assert.Equal(1, notifications.UnreadCount);
     }
 
-    [Fact]
-    public async Task HideDock_DoesNotCloseTerminals()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task HideDock_IsInertWithoutClosingOrRemountingTerminals(bool hideWithShortcut, bool reopenFromAppHost)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(terminalChannelProvider: () => updates);
@@ -138,15 +142,52 @@ public class TerminalDockTests : DashboardTestContext
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".terminal-dock-tab").Count));
+        var terminals = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+        var height = cut.Find(".terminal-dock").GetAttribute("style");
+        Assert.False(cut.Find(".terminal-dock").HasAttribute("inert"));
+        Assert.Equal("false", cut.Find(".terminal-dock").GetAttribute("aria-hidden"));
 
-        await cut.Find(".terminal-dock-collapse").ClickAsync(new());
+        if (hideWithShortcut)
+        {
+            await Services.GetRequiredService<ShortcutManager>().OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock);
+        }
+        else
+        {
+            await cut.Find(".terminal-dock-collapse").ClickAsync(new());
+        }
 
-        Assert.Single(cut.FindAll(".terminal-dock.collapsed"));
+        var collapsed = Assert.Single(cut.FindAll(".terminal-dock.collapsed"));
+        Assert.True(collapsed.HasAttribute("inert"));
+        Assert.Equal("true", collapsed.GetAttribute("aria-hidden"));
+        Assert.Equal(height, collapsed.GetAttribute("style"));
+        Assert.Equal(terminals, cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray());
         Assert.Empty(client.ClosedTerminals);
         Assert.Empty(Services.GetRequiredService<INotificationService>().GetNotifications());
-        await cut.InvokeAsync(cut.Instance.ToggleAsync);
-        Assert.Single(cut.FindAll(".terminal-dock.visible"));
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "first", "Updated while hidden"));
+        cut.WaitForAssertion(() => Assert.Equal("Updated while hidden", cut.Find(".terminal-dock-tab-title").TextContent));
+        Assert.True(cut.Find(".terminal-dock").HasAttribute("inert"));
+
+        if (reopenFromAppHost)
+        {
+            await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "second"));
+            cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock.visible")));
+        }
+        else
+        {
+            await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        }
+
+        var visible = Assert.Single(cut.FindAll(".terminal-dock.visible"));
+        Assert.False(visible.HasAttribute("inert"));
+        Assert.Equal("false", visible.GetAttribute("aria-hidden"));
+        Assert.Equal(height, visible.GetAttribute("style"));
         Assert.Equal(2, cut.FindAll(".terminal-dock-tab").Count);
+        Assert.Equal(terminals, cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray());
+        Assert.Equal(["initTerminal", "initTerminal"], JSInterop.Invocations
+            .Where(invocation => invocation.Identifier is "initTerminal" or "disposeTerminal" or "reconnectTerminal")
+            .Select(invocation => invocation.Identifier));
+        Assert.Empty(client.ClosedTerminals);
     }
 
     [Fact]
