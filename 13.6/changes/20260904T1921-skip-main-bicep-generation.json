@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AzurePublishingContext can now skip building and writing the root main.bicep for publishers that deploy each resource module directly, avoiding unnecessary compilation failures for models that don't need the root template.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📂",
+  "firstMergedAt": "2026-09-04T19:21:50Z",
+  "lastMergedAt": "2026-09-04T19:21:50Z",
+  "name": "Allow skipping main.bicep generation",
+  "owner": "eerhardt",
+  "prs": [
+    19914
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource nodes in the dashboard Graph view now show a cog icon on hover to open the resource's context menu, making its actions easier to discover than right-click alone.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🕸️",
+  "firstMergedAt": "2026-09-04T12:16:06Z",
+  "lastMergedAt": "2026-09-04T12:16:06Z",
+  "name": "Improve resource graph action discoverability",
+  "owner": "IEvangelist",
+  "prs": [
+    19905
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Allow skipping main.bicep generation in AzurePublishingContext",
+  "mergedAt": "2026-09-04T19:21:50Z",
+  "number": 19914,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Allow skipping main.bicep generation in AzurePublishingContext"
+}

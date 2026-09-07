@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "The CLI now compares AppHost identities using a filesystem-canonical path, so it correctly discovers and reconnects to a running AppHost even when it's referenced through paths that differ by Windows casing, Unix symbolic links, or macOS `/var` firmlinks.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83e\udded",
+  "emoji": "🧭",
   "firstMergedAt": "2026-09-02T02:28:15Z",
   "lastMergedAt": "2026-09-02T02:28:15Z",
   "name": "Match AppHosts across equivalent filesystem paths",

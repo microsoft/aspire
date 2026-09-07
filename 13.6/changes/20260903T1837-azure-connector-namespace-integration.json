@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added the Aspire.Hosting.Azure.ConnectorNamespace integration for provisioning Azure Connector Namespace resources.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-09-03T18:37:27Z",
+  "lastMergedAt": "2026-09-03T18:37:27Z",
+  "name": "Azure Connector Namespace integration",
+  "owner": "spboyer",
+  "prs": [
+    19024
+  ]
+}

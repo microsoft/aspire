@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fix Python callback handle wrapping",
+  "mergedAt": "2026-09-03T21:18:25Z",
+  "number": 19870,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Fix Python callback handle wrapping"
+}

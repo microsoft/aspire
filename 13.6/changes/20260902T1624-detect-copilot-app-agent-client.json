@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -8,7 +8,7 @@
   "description": "`aspire agent init` now detects and configures the GitHub Copilot App as an agent client, not just Copilot CLI, since both share the Copilot runtime, MCP configuration, skills, and hooks.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\ud83e\udd16",
+  "emoji": "🤖",
   "firstMergedAt": "2026-09-02T16:24:11Z",
   "lastMergedAt": "2026-09-02T16:24:11Z",
   "name": "Detect GitHub Copilot App as an agent client",

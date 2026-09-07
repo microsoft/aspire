@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,7 +8,7 @@
   "description": "Fixed Rust AppHosts launched through CodeLLDB or cppvsdbg sometimes leaving a resource stuck at PID 0 with no logs or proxy, caused by an empty run-session ID being sent to DCP before the Rust resource started.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "\ud83e\udd80",
+  "emoji": "🦀",
   "firstMergedAt": "2026-09-01T22:09:14Z",
   "lastMergedAt": "2026-09-01T22:09:14Z",
   "name": "Fix Rust AppHost run-session notification routing",

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fix Helm cleanup ordering for AKS destroy",
+  "mergedAt": "2026-09-04T17:52:02Z",
+  "number": 19243,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Fix Helm cleanup ordering for AKS destroy"
+}

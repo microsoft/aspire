@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an inconsistency in the Aspire CLI notification claim timestamps used by the VS Code extension's cross-window suppression handshake.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🕒",
+  "firstMergedAt": "2026-09-03T18:19:20Z",
+  "lastMergedAt": "2026-09-03T18:19:20Z",
+  "name": "Consistent CLI notification claim timestamps",
+  "owner": "ellahathaway",
+  "prs": [
+    19854
+  ]
+}

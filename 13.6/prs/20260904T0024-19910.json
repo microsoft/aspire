@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "Bot PR fixing internal CI workflow validation, engineering-only",
+  "mergedAt": "2026-09-04T00:24:09Z",
+  "number": 19910,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "excluded",
+  "title": "Fix Copilot setup workflow validation"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@aradalvand"
+  ],
+  "description": "Introduced a new MongoDBReplicaSetResource meta-resource type for modeling a MongoDB replica set as a single Aspire resource.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🍃",
+  "firstMergedAt": "2026-09-04T19:35:43Z",
+  "lastMergedAt": "2026-09-04T19:35:43Z",
+  "name": "MongoDB replica set resource",
+  "owner": "sebastienros",
+  "prs": [
+    18196
+  ]
+}

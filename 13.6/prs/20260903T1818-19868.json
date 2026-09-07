@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Documentation-only clarification of CLI debug log location, no product change",
+  "mergedAt": "2026-09-03T18:18:41Z",
+  "number": 19868,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "excluded",
+  "title": "Clarify VS Code CLI debug log location"
+}

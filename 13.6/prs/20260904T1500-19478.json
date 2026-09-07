@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Don't count AppHost builds against CLI startup timeout",
+  "mergedAt": "2026-09-04T15:00:36Z",
+  "number": 19478,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Don't count AppHost builds against CLI startup timeout"
+}

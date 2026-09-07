@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "Bot PR gating CI test jobs, engineering-only change",
+  "mergedAt": "2026-09-03T03:19:26Z",
+  "number": 19807,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "excluded",
+  "title": "Gate the CLI starter validation jobs on the test selector"
+}

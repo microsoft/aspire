@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Avoid live CLI rendering when stdout is redirected",
+  "mergedAt": "2026-09-03T20:28:25Z",
+  "number": 19673,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Avoid live CLI rendering when stdout is redirected"
+}

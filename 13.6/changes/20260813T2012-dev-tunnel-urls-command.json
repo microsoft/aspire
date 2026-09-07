@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "Dev tunnel port resources now publish their public tunnel, inspect, and local endpoint URLs as highlighted resource properties, and add a **Show tunnel URLs** dashboard action to view them.",
-  "docsPrs": [],
+  "docsPrs": [
+    1492
+  ],
   "docsRequired": true,
   "emoji": "🌐",
   "firstMergedAt": "2026-08-13T20:12:18Z",

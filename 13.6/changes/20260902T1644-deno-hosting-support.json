@@ -1,6 +1,6 @@
 {
   "area": "Integrations",
-  "areaEmoji": "\ud83d\udd0c",
+  "areaEmoji": "🔌",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -10,7 +10,7 @@
   "description": "`Aspire.Hosting.JavaScript` now supports first-class Deno application hosting via `AddDenoApp` / `DenoAppResource`, running `deno run`, named `deno task` tasks, or `deno serve` handlers alongside the existing Node and Bun support.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\ud83e\udd95",
+  "emoji": "🦕",
   "firstMergedAt": "2026-09-02T16:44:43Z",
   "lastMergedAt": "2026-09-02T16:44:43Z",
   "name": "Add Deno hosting support",

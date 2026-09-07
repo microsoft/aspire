@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal team-app PR triage tooling change, not user-facing",
+  "mergedAt": "2026-09-03T22:10:33Z",
+  "number": 19918,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "excluded",
+  "title": "Measure PR age from ready-for-review time"
+}

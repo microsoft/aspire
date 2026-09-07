@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire destroy no longer fails for AKS deployments when the cluster isn't already selected in the ambient kubeconfig; a dedicated credential step now runs before Helm cleanup so it doesn't race resource-group deletion.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-09-04T17:52:02Z",
+  "lastMergedAt": "2026-09-04T17:52:02Z",
+  "name": "Fix Helm cleanup ordering for AKS destroy",
+  "owner": "sebastienros",
+  "prs": [
+    19243
+  ]
+}

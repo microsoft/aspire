@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI no longer enters live Spectre rendering when stdout is redirected (e.g. in a Remote SSH session), fixing a crash that could also stop the AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-09-03T20:28:25Z",
+  "lastMergedAt": "2026-09-03T20:28:25Z",
+  "name": "Avoid live CLI rendering when stdout is redirected",
+  "owner": "adamint",
+  "prs": [
+    19673
+  ]
+}

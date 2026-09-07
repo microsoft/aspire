@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering fix to internal docs safe-output workflow, not user-facing",
+  "mergedAt": "2026-09-03T17:08:20Z",
+  "number": 19465,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "excluded",
+  "title": "Fix docs safe-output base fallback"
+}

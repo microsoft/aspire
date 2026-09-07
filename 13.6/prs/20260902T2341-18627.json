@@ -1,0 +1,9 @@
+{
+  "author": "rickylabs",
+  "comment": "Deno support for TypeScript AppHost toolchain resolver",
+  "mergedAt": "2026-09-02T23:41:12Z",
+  "number": 18627,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Add Deno support to the TypeScript AppHost toolchain resolver"
+}

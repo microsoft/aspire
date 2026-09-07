@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed Python callbacks exported as resource builder actions receiving the wrong handle type, which caused calls like with_host_port to fail at runtime.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐍",
+  "firstMergedAt": "2026-09-03T21:18:25Z",
+  "lastMergedAt": "2026-09-03T21:18:25Z",
+  "name": "Fix Python callback handle wrapping",
+  "owner": "sebastienros",
+  "prs": [
+    19870
+  ]
+}

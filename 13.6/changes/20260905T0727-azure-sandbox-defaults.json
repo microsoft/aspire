@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Azure Sandbox groups now work as compute environments without requiring every workload to opt in through PublishAsAzureSandbox, automatically assigning and deploying projects while keeping endpoints private by default.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-09-05T07:27:36Z",
+  "lastMergedAt": "2026-09-05T07:27:36Z",
+  "name": "Improve Azure Sandbox defaults",
+  "owner": "mitchdenny",
+  "prs": [
+    19810
+  ]
+}

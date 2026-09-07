@@ -1,0 +1,9 @@
+{
+  "author": "aradalvand",
+  "comment": "MongoDB replica set resource",
+  "mergedAt": "2026-09-04T19:35:43Z",
+  "number": 18196,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Introduce MongoDBReplicaSetResource"
+}

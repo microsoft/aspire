@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Hide Azure environment when all resources use emulators",
+  "mergedAt": "2026-09-04T14:01:39Z",
+  "number": 19843,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Hide Azure environment when all resources use emulators"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fix unpackaged WinUI debugging in VS Code",
+  "mergedAt": "2026-09-03T22:46:58Z",
+  "number": 19877,
+  "runDate": "2026-09-07T12:08:22Z",
+  "status": "included",
+  "title": "Fix unpackaged WinUI debugging in VS Code"
+}

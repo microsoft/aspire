@@ -1,6 +1,6 @@
 {
   "area": "Extensions",
-  "areaEmoji": "\ud83e\udde9",
+  "areaEmoji": "🧩",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -10,7 +10,7 @@
     1605
   ],
   "docsRequired": true,
-  "emoji": "\ud83d\udee0\ufe0f",
+  "emoji": "🛠️",
   "firstMergedAt": "2026-09-01T18:53:08Z",
   "lastMergedAt": "2026-09-01T18:53:08Z",
   "name": "Consolidated VS Code AppHost build failure notifications",
