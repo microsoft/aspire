@@ -506,6 +506,10 @@ message TerminalClientFrame {
 message TerminalServerFrame {
     // A chunk of the HMP1 byte stream flowing from the AppHost to the browser.
     bytes data = 1;
+
+    // The workload has ended. Sent separately from HMP1 bytes so it also works before
+    // the HMP1 handshake and does not depend on Hex1b delivering its Exit frame.
+    bool ended = 2;
 }
 
 ////////////////////////////////////////////

@@ -102,7 +102,7 @@ function pickReconnectDelay(attempt) {
 }
 
 function scheduleReconnect(state) {
-    if (!state.reconnect.enabled) {
+    if (!state.reconnect.enabled || state.ended) {
         return;
     }
     if (state.reconnect.timer !== null) {
@@ -120,7 +120,7 @@ function scheduleReconnect(state) {
     dbg(state, 'scheduleReconnect: scheduled', { attempt: state.reconnect.attempts, delayMs: delay });
     state.reconnect.timer = setTimeout(() => {
         state.reconnect.timer = null;
-        if (!state.reconnect.enabled) {
+        if (!state.reconnect.enabled || state.ended) {
             return;
         }
         connectClient(state, state.wsUrl);
@@ -180,6 +180,7 @@ const DEFAULT_CONTROL_LABELS = {
     terminalDimensions: "Terminal dimensions",
     fit: "Fit",
     focusControlsHint: "F6: Focus terminal controls",
+    terminalEnded: "This terminal has ended.",
 };
 
 // Inject the WebMuxerDemo terminal-frame styles into <head> exactly once
@@ -1231,7 +1232,9 @@ function buildToolbarSnapshot(state) {
     let canTakeControl = false;
     let isPrimary = false;
 
-    if (!client || client.peerId === null) {
+    if (state.ended) {
+        status = 'ended';
+    } else if (!client || client.peerId === null) {
         status = 'connecting';
     } else if (client.isPrimary) {
         status = 'primary';
@@ -1254,7 +1257,7 @@ function buildToolbarSnapshot(state) {
         // after the JS terminal was disposed / replaced by another resource.
         generation: state.reconnect.generation,
         status,
-        connected: !!client && client.peerId !== null,
+        connected: !state.ended && !!client && client.peerId !== null,
         isPrimary,
         canTakeControl,
         sizeMode: state.sizeMode,
@@ -1351,6 +1354,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
         // Layout / sizing state (per-instance — we never use globals).
         chromeless,
         readOnly: !!options?.readOnly,
+        ended: false,
         // Whether the footer's fixed-resolution picker is offered. Dock panes
         // are sized by the dock splitter and always fit, so they get the font
         // stepper but not the picker.
@@ -1503,7 +1507,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
     // a cellWRatio ~half of the true value. That in turn made the Fit
     // dimensions report roughly double the real cols×rows.
     term.onResize(({ cols, rows }) => {
-        if (state.client) state.client.sendResize(cols, rows);
+        if (state.client && !state.ended) state.client.sendResize(cols, rows);
         updateTerminalControls(state);
         requestAnimationFrame(() => {
             if (state.term !== term) return;
@@ -1521,7 +1525,7 @@ export async function initTerminal(element, wsUrl, dotNetRef, options) {
     term.onData((data) => {
         // Keep the transport open for output and other peers' automation. Gate the forwarding path as well as
         // xterm's keyboard/paste handling so no input can promote this viewer while it is read-only.
-        if (state.readOnly || !state.client) return;
+        if (state.readOnly || state.ended || !state.client) return;
         maybeAutoPromote(state);
         state.client.sendInput(textEncoder.encode(data));
     });
@@ -1550,6 +1554,11 @@ function connectClient(state, wsUrl) {
     state.reconnect.generation++;
     const myGeneration = state.reconnect.generation;
     state.wsUrl = wsUrl;
+    state.ended = false;
+    updateReadOnly(state);
+    state.term.options.cursorBlink = true;
+    state.terminalFocusHint.textContent = state.labels.focusControlsHint;
+    state.terminalFocusHint.removeAttribute('role');
 
     dbg(state, 'connectClient', { generation: myGeneration, attempts: state.reconnect.attempts, hadPriorClient: !!state.client });
 
@@ -1566,6 +1575,7 @@ function connectClient(state, wsUrl) {
         stale.onPeerLeave = null;
         stale.onResize = null;
         stale.onExit = null;
+        stale.onTerminalEnded = null;
         stale.onClose = null;
         try { stale.close(); } catch { /* ignore */ }
         state.client = null;
@@ -1699,6 +1709,18 @@ function connectClient(state, wsUrl) {
         } catch { /* ignore */ }
     };
 
+    client.onTerminalEnded = () => {
+        if (myGeneration !== state.reconnect.generation) return;
+        state.ended = true;
+        cancelPendingReconnect(state);
+        updateReadOnly(state);
+        state.term.options.cursorBlink = false;
+        state.terminalFocusHint.setAttribute('role', 'status');
+        state.terminalFocusHint.textContent = state.labels.terminalEnded;
+        client.close();
+        notifyToolbar(state);
+    };
+
     client.onClose = (ev) => {
         // Always log close events — this is the key forensic signal for
         // periodic-reconnect investigations. code/reason/wasClean tell
@@ -1727,7 +1749,7 @@ function connectClient(state, wsUrl) {
         if (myGeneration !== state.reconnect.generation) {
             return;
         }
-        if (!state.reconnect.enabled) {
+        if (!state.reconnect.enabled || state.ended) {
             return;
         }
         notifyToolbar(state); // back to "connecting"
@@ -1792,6 +1814,7 @@ export function disposeTerminal(id) {
         stale.onPeerLeave = null;
         stale.onResize = null;
         stale.onExit = null;
+        stale.onTerminalEnded = null;
         stale.onClose = null;
         try { stale.close(); } catch { /* ignore */ }
         state.client = null;
@@ -1822,11 +1845,16 @@ export function setReadOnly(id, readOnly) {
     if (!state) return;
 
     state.readOnly = readOnly;
-    state.term.options.disableStdin = readOnly;
-    state.terminalBody.querySelector('.xterm-helper-textarea')?.setAttribute('aria-readonly', String(readOnly));
+    updateReadOnly(state);
     if (!readOnly && state.chromeless) {
         maybeAutoPromote(state);
     }
+}
+
+function updateReadOnly(state) {
+    const readOnly = state.readOnly || state.ended;
+    state.term.options.disableStdin = readOnly;
+    state.terminalBody.querySelector('.xterm-helper-textarea')?.setAttribute('aria-readonly', String(readOnly));
 }
 
 export function setFontSizeFromHost(id, newSize) {
@@ -1861,7 +1889,7 @@ export function setSizeModeFromHost(id, sizeKey) {
 }
 
 function maybeAutoPromote(state) {
-    if (state.readOnly) return;
+    if (state.readOnly || state.ended) return;
     const client = state.client;
     if (!client || client.peerId === null) return;
     if (client.isPrimary) return;

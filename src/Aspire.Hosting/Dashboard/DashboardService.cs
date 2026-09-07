@@ -645,7 +645,15 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
             // Returns once the terminal ends or the caller disconnects. Holding the call open for that whole time is
             // what keeps the tunnel alive, so this must not be fire-and-forget.
-            await terminalService.AttachAsync(selector.TerminalId, stream, cancellationToken).ConfigureAwait(false);
+            await terminalService.AttachAsync(selector.TerminalId, stream, async ct =>
+            {
+                await stream.WriteEndedAsync(ct).ConfigureAwait(false);
+
+                // Let the dashboard consume the ended notification and close the tunnel. Returning immediately
+                // can fail a concurrent ClientHello write, cancelling the proxy's reader before it sees the status.
+                // This retains only the viewer's RPC, not the completed Hex1b workload.
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
         {

@@ -86,6 +86,14 @@ internal sealed class GrpcTerminalStream : Stream
         // and gRPC does not guarantee the payload is serialized before the write task completes.
         var frame = new TerminalServerFrame { Data = ByteString.CopyFrom(buffer.Span) };
 
+        await WriteFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task WriteEndedAsync(CancellationToken cancellationToken)
+        => WriteFrameAsync(new TerminalServerFrame { Ended = true }, cancellationToken);
+
+    private async Task WriteFrameAsync(TerminalServerFrame frame, CancellationToken cancellationToken)
+    {
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

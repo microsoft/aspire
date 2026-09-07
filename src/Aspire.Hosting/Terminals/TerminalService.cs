@@ -159,14 +159,14 @@ public sealed class TerminalService : IAsyncDisposable
     /// A task that completes after this viewer disconnects or the terminal ends, once all operations on the
     /// caller's transport have finished. Cancellation disconnects only this viewer.
     /// </returns>
-    internal Task AttachAsync(string terminalId, Stream clientStream, CancellationToken cancellationToken)
+    internal Task AttachAsync(string terminalId, Stream clientStream, Func<CancellationToken, Task> onEnded, CancellationToken cancellationToken)
     {
         if (!_terminals.TryGetValue(terminalId, out var terminal))
         {
             throw new InvalidOperationException($"There is no terminal with id '{terminalId}'.");
         }
 
-        return terminal.AttachAsync(clientStream, cancellationToken);
+        return terminal.AttachAsync(clientStream, onEnded, cancellationToken);
     }
 
     /// <summary>

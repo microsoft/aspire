@@ -161,7 +161,7 @@ public class TerminalServiceTests
         using var stream = new MemoryStream();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.AttachAsync("does-not-exist", stream, CancellationToken.None)).DefaultTimeout();
+            () => service.AttachAsync("does-not-exist", stream, _ => Task.CompletedTask, CancellationToken.None)).DefaultTimeout();
     }
 
     [Fact]

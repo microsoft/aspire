@@ -3,17 +3,27 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.WebSockets;
+using System.Text;
 using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Terminal;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Semver;
@@ -24,6 +34,94 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    [Fact]
+    public async Task TerminalStream_ProxySendsEndedMessageBeforeClosingWebSocket()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => disposed.TrySetResult());
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
+        using var server = new TestServer(new WebHostBuilder().Configure(app =>
+        {
+            app.UseWebSockets();
+            app.Run(context =>
+            {
+                context.Request.Scheme = "https";
+                context.Request.Host = new HostString("dashboard.example.com");
+                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, NullLogger.Instance, "test");
+            });
+        }));
+        var client = server.CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+        using var socket = await client.ConnectAsync(
+            new Uri("wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal"), CancellationToken.None).DefaultTimeout();
+        var buffer = new byte[64];
+
+        var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None).DefaultTimeout();
+        Assert.Equal(WebSocketMessageType.Text, message.MessageType);
+        Assert.True(message.EndOfMessage);
+        Assert.Equal("terminal-ended", Encoding.UTF8.GetString(buffer, 0, message.Count));
+        await disposed.Task.DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalStream_EndedFrameIsDistinctFromTransportEof(bool ended)
+    {
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(
+            [
+                new TerminalServerFrame(),
+                new TerminalServerFrame { Data = ByteString.CopyFromUtf8("output") },
+                new TerminalServerFrame { Ended = ended }
+            ]),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+        var buffer = new byte[3];
+
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("out"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(3, await stream.ReadAsync(buffer));
+        Assert.Equal("put"u8.ToArray(), buffer);
+        Assert.False(stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+        Assert.Equal(ended, stream.TerminalEnded);
+        Assert.Equal(0, await stream.ReadAsync(buffer));
+    }
+
+    [Fact]
+    public async Task TerminalStream_EndedBeforeHandshakeDoesNotWaitForMoreFrames()
+    {
+        var channel = Channel.CreateUnbounded<TerminalServerFrame>();
+        channel.Writer.TryWrite(new TerminalServerFrame { Ended = true });
+        using var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
+            new ClientStreamWriter<TerminalClientFrame>(),
+            new AsyncStreamReader<TerminalServerFrame>(channel: channel.Reader),
+            Task.FromResult(new Metadata()),
+            () => Status.DefaultSuccess,
+            () => new Metadata(),
+            () => { });
+        using var stream = new GrpcTerminalClientStream(call, "terminal");
+
+        // The server keeps the RPC open until the proxy consumes this status and disconnects.
+        Assert.Equal(0, await stream.ReadAsync(new byte[1]).AsTask().DefaultTimeout());
+        Assert.True(stream.TerminalEnded);
+    }
+
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);

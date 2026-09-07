@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -28,6 +30,88 @@ public sealed class TerminalTests : PlaywrightTestsBase<TerminalTests.TerminalDa
         : base(dashboardServerFixture)
     {
         _dashboardServerFixture = dashboardServerFixture;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task AppHostWorkloadEnded_DisablesInputAndReconnectUntilEndpointChanges(bool beforeHandshake)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.GotoAsync("/").DefaultTimeout();
+            await page.Clock.InstallAsync();
+            var connections = Channel.CreateUnbounded<IWebSocketRoute>();
+            var connectionCount = 0;
+            await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
+            {
+                Interlocked.Increment(ref connectionCount);
+                connections.Writer.TryWrite(route);
+            });
+            var terminalId = await page.EvaluateAsync<int>("""
+                async () => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    const container = document.createElement('div');
+                    container.style.cssText = 'position:fixed;inset:0;z-index:10000';
+                    document.body.appendChild(container);
+                    const endpoint = new URL('/api/apphost-terminal?terminalId=ended', location.href);
+                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    return await module.initTerminal(container, endpoint.href, null, {
+                        chromeless: true,
+                        terminalEnded: 'Terminal ended'
+                    });
+                }
+                """);
+            var connection = await connections.Reader.ReadAsync().AsTask().DefaultTimeout();
+            if (!beforeHandshake)
+            {
+                var payload = JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    peerId = "viewer",
+                    width = ProducerColumns,
+                    height = ProducerRows
+                });
+                var hello = new byte[5 + payload.Length];
+                hello[0] = (byte)TestHmp1FrameType.Hello;
+                BinaryPrimitives.WriteInt32LittleEndian(hello.AsSpan(1), payload.Length);
+                payload.CopyTo(hello.AsSpan(5));
+                connection.Send(hello);
+                await page.WaitForFunctionAsync("""
+                    async id => {
+                        const module = await import('/Components/Controls/TerminalView.razor.js');
+                        return module.getToolbarState(id)?.connected === true;
+                    }
+                    """, terminalId).DefaultTimeout();
+            }
+
+            connection.Send("terminal-ended");
+            var terminalInput = page.Locator(".xterm-helper-textarea");
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
+            await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Terminal ended" }))
+                .ToBeVisibleAsync();
+            await SetReadOnlyAsync(page, terminalId, false);
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "true");
+            await page.Clock.RunForAsync(5_000);
+            Assert.Equal(1, Volatile.Read(ref connectionCount));
+            Assert.Equal("ended", await page.EvaluateAsync<string>("""
+                async id => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    return module.getToolbarState(id).status;
+                }
+                """, terminalId));
+
+            await page.EvaluateAsync("""
+                async id => {
+                    const module = await import('/Components/Controls/TerminalView.razor.js');
+                    const endpoint = new URL('/api/apphost-terminal?terminalId=next', location.href);
+                    endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    module.reconnectTerminal(id, endpoint.href);
+                }
+                """, terminalId);
+            await connections.Reader.ReadAsync().AsTask().DefaultTimeout();
+            await Assertions.Expect(terminalInput).ToHaveAttributeAsync("aria-readonly", "false");
+        });
     }
 
     [Theory]

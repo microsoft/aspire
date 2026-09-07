@@ -212,6 +212,7 @@ export class Hmp1Client {
     this.onPeerLeave = null;
     this.onResize = null;
     this.onExit = null;
+    this.onTerminalEnded = null;
     this.onClose = null;
   }
 
@@ -233,6 +234,12 @@ export class Hmp1Client {
     });
 
     ws.addEventListener("message", (ev) => {
+      // Aspire's AppHost tunnel sends the text control message "terminal-ended" independently
+      // of binary HMP1 frames, including when the workload ended before the HMP1 handshake.
+      if (ev.data === "terminal-ended") {
+        if (this.onTerminalEnded) this.onTerminalEnded();
+        return;
+      }
       this._buffer.push(ev.data);
       try {
         for (const frame of this._buffer.drain()) {

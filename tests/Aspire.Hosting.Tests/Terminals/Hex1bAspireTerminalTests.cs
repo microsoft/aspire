@@ -15,6 +15,56 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class Hex1bAspireTerminalTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorkloadExit_EndsAutomationAndKeepsTabUntilDisposed(bool attachViewer)
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        var workload = new StreamWorkloadAdapter(outputReader, Stream.Null);
+        await using var terminal = service.CreateTerminal("Ended", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+        await using var viewer = attachViewer ? await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id) : null;
+        terminal.Start();
+        await outputWriter.WriteAsync("ready\r\n"u8.ToArray());
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+
+        // Raw stream workloads report disconnection explicitly. Observe output first; Hex1b's completion is
+        // not an output-drain barrier, and this test makes no claim about preserving the final screen.
+        workload.SignalDisconnected();
+        await Assert.IsType<Hex1bAspireTerminal>(terminal).WorkloadEnded.DefaultTimeout();
+
+        Assert.True(service.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+        using var subscription = service.SubscribeDockTerminals();
+        Assert.Equal(terminal.Id, Assert.Single(subscription.InitialState).Id);
+        Assert.Throws<InvalidOperationException>(terminal.Start);
+        Assert.Throws<InvalidOperationException>(terminal.GetScreenText);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => terminal.SendTextAsync("input"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => terminal.SendKeyAsync(AspireTerminalKey.Enter));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => terminal.WaitForTextAsync("never"));
+
+        // Reopening an ended tab must report completion without queuing a client for Hex1b's disposed server.
+        // In particular, it must not need a ClientHello or restart the workload.
+        using var reconnected = new MemoryStream();
+        var endedNotifications = 0;
+        await service.AttachAsync(terminal.Id, reconnected, _ =>
+        {
+            endedNotifications++;
+            return Task.CompletedTask;
+        }, CancellationToken.None).DefaultTimeout();
+        Assert.Equal(1, endedNotifications);
+        Assert.Equal(0, reconnected.Length);
+
+        await terminal.DisposeAsync().AsTask().DefaultTimeout();
+        Assert.False(service.TryGetTerminal(terminal.Id, out _));
+        using var afterClose = service.SubscribeDockTerminals();
+        Assert.Empty(afterClose.InitialState);
+    }
+
     [Fact]
     public async Task AttachAsync_MultipleViewersCanDisconnectAndReconnectWithoutStoppingTheWorkload()
     {
@@ -80,7 +130,7 @@ public class Hex1bAspireTerminalTests
         using var attachmentCts = new CancellationTokenSource();
         using var clientCts = new CancellationTokenSource();
         await using var client = Hex1bTerminal.CreateBuilder().WithHeadless().WithHmp1Stream(clientStream).Build();
-        var attachment = service.AttachAsync(terminal.Id, gated, attachmentCts.Token);
+        var attachment = service.AttachAsync(terminal.Id, gated, _ => Task.CompletedTask, attachmentCts.Token);
         var run = client.RunAsync(clientCts.Token);
 
         try

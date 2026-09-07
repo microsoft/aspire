@@ -39,7 +39,7 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
             })
             .Build();
 
-        _attachment = service.AttachAsync(terminalId, _serverStream, _attachmentCts.Token);
+        _attachment = service.AttachAsync(terminalId, _serverStream, _ => Task.CompletedTask, _attachmentCts.Token);
         _run = _client.RunAsync(_clientCts.Token);
     }
 

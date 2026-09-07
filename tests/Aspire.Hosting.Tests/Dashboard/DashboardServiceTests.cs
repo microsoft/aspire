@@ -1270,6 +1270,56 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Empty(result);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AttachTerminal_WorkloadEndedReportsStatusWithoutHmpHandshake(bool endedBeforeAttach)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        var output = new Pipe();
+        await using var reader = output.Reader.AsStream();
+        await using var writer = output.Writer.AsStream();
+        var workload = new StreamWorkloadAdapter(reader, Stream.Null);
+        await using var terminal = terminalService.CreateTerminal("Ended", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+        terminal.Start();
+        await writer.WriteAsync("ready\r\n"u8.ToArray());
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+
+        if (endedBeforeAttach)
+        {
+            workload.SignalDisconnected();
+            await Assert.IsType<Hex1bAspireTerminal>(terminal).WorkloadEnded.DefaultTimeout();
+        }
+
+        using var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var requests = new TestAsyncStreamReader<TerminalClientFrame>(context);
+        var responses = new TestServerStreamWriter<TerminalServerFrame>(context);
+        requests.AddMessage(new TerminalClientFrame { TerminalId = terminal.Id });
+        var attachment = service.AttachTerminal(requests, responses, context);
+        try
+        {
+            if (!endedBeforeAttach)
+            {
+                workload.SignalDisconnected();
+            }
+
+            var status = await responses.ReadNextAsync().DefaultTimeout();
+            Assert.True(status.Ended);
+            Assert.True(status.Data.IsEmpty);
+            Assert.False(attachment.IsCompleted);
+            Assert.True(terminalService.TryGetTerminal(terminal.Id, out _));
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await attachment.DefaultTimeout();
+        }
+    }
+
     [Fact]
     public async Task CloseTerminal_UnknownId_Succeeds()
     {
@@ -1330,7 +1380,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var clientCts = new CancellationTokenSource();
         using var rpcCts = new CancellationTokenSource();
         await using var client = Hex1bTerminal.CreateBuilder().WithHeadless().WithHmp1Stream(clientStream).Build();
-        var attachment = terminalService.AttachAsync(terminal.Id, gated, CancellationToken.None);
+        var attachment = terminalService.AttachAsync(terminal.Id, gated, _ => Task.CompletedTask, CancellationToken.None);
         var run = client.RunAsync(clientCts.Token);
 
         try

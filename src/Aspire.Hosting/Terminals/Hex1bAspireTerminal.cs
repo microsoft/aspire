@@ -25,10 +25,11 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     // dropping or blocking an attach would strand the RPC that is waiting to be served.
     private readonly Channel<Stream> _clients = Channel.CreateUnbounded<Stream>();
 
-    // Two distinct signals, deliberately. _workloadCts stops the workload; _sessionEnded reports that
-    // teardown has *finished*. Collapsing them into one token releases attached clients while Hex1b is
-    // still disposing, which lets a gRPC handler return and dispose the transport out from under it.
+    // Cancellation requests a stop; workload completion updates viewers; session completion reports that
+    // teardown has finished. Keeping these separate lets viewers display an ended state without allowing
+    // the gRPC handler to dispose a transport that Hex1b is still accessing.
     private readonly CancellationTokenSource _workloadCts = new();
+    private readonly TaskCompletionSource _workloadEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _sessionEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // Aspire.Hosting targets net8.0, which predates System.Threading.Lock, so this is a plain monitor gate.
@@ -62,6 +63,8 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     public TerminalPlacement Placement { get; }
 
     public TerminalDescriptor Descriptor => new(Id, Title);
+
+    internal Task WorkloadEnded => _workloadEnded.Task;
 
     public void Start() => EnsureStarted();
 
@@ -99,21 +102,33 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     /// A task that completes once this viewer disconnects or the terminal ends, and all operations on the
     /// caller's transport have finished. Callers keep their transport open until it completes.
     /// </returns>
-    public async Task AttachAsync(Stream clientStream, CancellationToken cancellationToken)
+    public async Task AttachAsync(Stream clientStream, Func<CancellationToken, Task> onEnded, CancellationToken cancellationToken)
     {
-        EnsureStarted();
-
         // Hex1b owns and disposes the wrapper, never the gRPC stream. Closing it cancels only this viewer's
         // I/O and waits for outstanding accesses, even when Hex1b's other pump is still winding down.
         var attachment = new TerminalClientStream(clientStream);
         await using var _ = attachment.ConfigureAwait(false);
-        if (!_clients.Writer.TryWrite(attachment))
+        lock (_gate)
         {
-            throw new InvalidOperationException($"Terminal '{Id}' is no longer accepting clients.");
+            if (!_workloadEnded.Task.IsCompleted)
+            {
+                EnsureStarted();
+                if (!_clients.Writer.TryWrite(attachment))
+                {
+                    throw new InvalidOperationException($"Terminal '{Id}' is no longer accepting clients.");
+                }
+            }
         }
 
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), cancelled);
+        await Task.WhenAny(_workloadEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
+        if (_workloadEnded.Task.IsCompleted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await onEnded(cancellationToken).ConfigureAwait(false);
+        }
+
         await Task.WhenAny(_sessionEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
     }
 
@@ -129,7 +144,7 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     {
         lock (_gate)
         {
-            if (_stopped)
+            if (_stopped || _workloadEnded.Task.IsCompleted)
             {
                 throw new InvalidOperationException($"Terminal '{Id}' has already stopped.");
             }
@@ -177,9 +192,18 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
         }
         finally
         {
-            // Dispose *before* releasing attached clients. Hex1b may still write to the attached transports
-            // while it tears the terminal down; signalling completion first would let an attach caller return
-            // and dispose its transport out from under Hex1b.
+            lock (_gate)
+            {
+                // Hex1b cannot serve completion to later HMP clients. Keep Aspire's registry entry (and dock tab),
+                // but report completion ourselves rather than attaching to the disposed terminal.
+                // Replace the separate notification when native ended-session support is available:
+                // https://github.com/mitchdenny/hex1b/issues/483.
+                _clients.Writer.TryComplete();
+                _workloadEnded.TrySetResult();
+            }
+
+            // Complete _sessionEnded only after disposal. Unlike _workloadEnded's UI notification, this signal
+            // releases attached clients; Hex1b may still write to their transports during teardown.
             try
             {
                 await terminal.DisposeAsync().ConfigureAwait(false);
@@ -219,6 +243,11 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
     {
         lock (_gate)
         {
+            if (_stopped || _workloadEnded.Task.IsCompleted)
+            {
+                throw new InvalidOperationException($"Terminal '{Id}' has already stopped.");
+            }
+
             return TerminalAutomation.GetScreenText(_automator);
         }
     }
@@ -243,6 +272,7 @@ internal sealed class Hex1bAspireTerminal : IAspireTerminal
                 // Registered but never started, so there is nothing to wind down.
                 _workloadCts.Cancel();
                 _workloadCts.Dispose();
+                _workloadEnded.TrySetResult();
                 _sessionEnded.TrySetResult();
                 return _sessionEnded.Task;
             }

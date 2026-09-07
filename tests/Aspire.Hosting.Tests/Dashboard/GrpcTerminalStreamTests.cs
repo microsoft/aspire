@@ -11,6 +11,25 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class GrpcTerminalStreamTests
 {
     [Fact]
+    public async Task WriteEndedAsync_WritesLifecycleFrameSeparatelyFromHmpBytes()
+    {
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<TerminalClientFrame>(context);
+        var responseStream = new TestServerStreamWriter<TerminalServerFrame>(context);
+        await using var stream = new GrpcTerminalStream(requestStream, responseStream);
+
+        await stream.WriteAsync("output"u8.ToArray());
+        await stream.WriteEndedAsync(CancellationToken.None);
+
+        var output = await responseStream.ReadNextAsync();
+        Assert.Equal("output", output.Data.ToStringUtf8());
+        Assert.False(output.Ended);
+        var ended = await responseStream.ReadNextAsync();
+        Assert.True(ended.Ended);
+        Assert.True(ended.Data.IsEmpty);
+    }
+
+    [Fact]
     public async Task ReadAsync_SplitsSingleFrameAcrossReads()
     {
         var context = TestServerCallContext.Create();

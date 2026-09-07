@@ -159,6 +159,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -340,6 +343,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                     TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
                     Fit = FitLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
                     FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalFocusControlsHint)],
+                    TerminalEnded = LayoutLoc[nameof(Dashboard.Resources.Layout.TerminalWindowEnded)],
                 });
             _appliedReadOnly = readOnly;
         }
@@ -611,6 +615,9 @@ public sealed record TerminalViewOptions
 
     /// <summary>Hint describing how to move focus from the terminal to its controls.</summary>
     public required string FocusControlsHint { get; init; }
+
+    /// <summary>Message displayed when the AppHost terminal's workload has ended.</summary>
+    public required string TerminalEnded { get; init; }
 }
 
 /// <summary>
@@ -625,7 +632,7 @@ public sealed record TerminalToolbarState
     public int Generation { get; init; }
 
     /// <summary>
-    /// One of <c>connecting</c>, <c>primary</c>, <c>viewer</c>, <c>no-primary</c>.
+    /// One of <c>connecting</c>, <c>primary</c>, <c>viewer</c>, <c>no-primary</c>, <c>ended</c>.
     /// </summary>
     public string Status { get; init; } = "connecting";
 

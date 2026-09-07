@@ -19,6 +19,7 @@ public class TestDashboardClient : IDashboardClient
     private readonly Func<Channel<WatchInteractionsResponseUpdate>>? _interactionChannelProvider;
     private readonly Func<Channel<WatchTerminalsUpdate>>? _terminalChannelProvider;
     private readonly Func<string, CancellationToken, Task>? _closeTerminal;
+    private readonly Func<string, CancellationToken, Task<Stream>>? _attachTerminal;
     private readonly Channel<ResourceCommandResponseViewModel>? _resourceCommandsChannel;
     private readonly Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? _executeResourceCommand;
     private readonly Channel<WatchInteractionsRequestUpdate>? _sendInteractionUpdateChannel;
@@ -55,7 +56,8 @@ public class TestDashboardClient : IDashboardClient
         Task? whenConnected = null,
         bool isReadOnly = false,
         Func<Channel<WatchTerminalsUpdate>>? terminalChannelProvider = null,
-        Func<string, CancellationToken, Task>? closeTerminal = null)
+        Func<string, CancellationToken, Task>? closeTerminal = null,
+        Func<string, CancellationToken, Task<Stream>>? attachTerminal = null)
     {
         IsEnabled = isEnabled ?? false;
         IsReadOnly = isReadOnly;
@@ -70,6 +72,7 @@ public class TestDashboardClient : IDashboardClient
         _initialResources = initialResources;
         _terminalChannelProvider = terminalChannelProvider;
         _closeTerminal = closeTerminal;
+        _attachTerminal = attachTerminal;
     }
 
     public ValueTask DisposeAsync()
@@ -99,7 +102,7 @@ public class TestDashboardClient : IDashboardClient
 
     public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
-        return Task.FromResult<Stream>(new MemoryStream());
+        return _attachTerminal?.Invoke(terminalId, cancellationToken) ?? Task.FromResult<Stream>(new MemoryStream());
     }
 
     public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)

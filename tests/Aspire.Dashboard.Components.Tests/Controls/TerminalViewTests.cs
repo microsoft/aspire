@@ -34,6 +34,7 @@ public class TerminalViewTests : DashboardTestContext
 
         var options = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]);
         Assert.Equal(initialReadOnly, options.ReadOnly);
+        Assert.Equal(Dashboard.Resources.Layout.TerminalWindowEnded, options.TerminalEnded);
         Assert.Empty(update.Invocations);
 
         cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, !initialReadOnly));

@@ -190,7 +190,7 @@ public class InteractionServiceTerminalTests
         await terminal.DisposeAsync();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => terminalService.AttachAsync(terminal.Id, Stream.Null, CancellationToken.None)).DefaultTimeout();
+            () => terminalService.AttachAsync(terminal.Id, Stream.Null, _ => Task.CompletedTask, CancellationToken.None)).DefaultTimeout();
         Assert.Equal($"There is no terminal with id '{terminal.Id}'.", ex.Message);
         cts.Cancel();
         var result = await prompt.DefaultTimeout();

@@ -29,6 +29,8 @@ internal sealed class GrpcTerminalClientStream : Stream
     private bool _completed;
     private bool _disposed;
 
+    public bool TerminalEnded { get; private set; }
+
     public GrpcTerminalClientStream(
         AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame> call,
         string terminalId,
@@ -79,6 +81,13 @@ internal sealed class GrpcTerminalClientStream : Stream
 
             if (!await _call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
+                _completed = true;
+                return 0;
+            }
+
+            if (_call.ResponseStream.Current.Ended)
+            {
+                TerminalEnded = true;
                 _completed = true;
                 return 0;
             }

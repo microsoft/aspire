@@ -492,6 +492,15 @@ internal static class TerminalWebSocketProxy
                     var read = await upstream.ReadAsync(buffer.AsMemory(0, OutboundBufferSize), token).ConfigureAwait(false);
                     if (read == 0)
                     {
+                        if (upstream is GrpcTerminalClientStream { TerminalEnded: true })
+                        {
+                            // Binary messages remain opaque HMP1. The text control message "terminal-ended"
+                            // distinguishes workload completion from a retryable transport disconnect, including
+                            // terminals that ended before the browser could send its HMP1 ClientHello.
+                            await ws.SendAsync("terminal-ended"u8.ToArray(), WebSocketMessageType.Text,
+                                endOfMessage: true, token).ConfigureAwait(false);
+                        }
+
                         // Upstream EOF — terminal host process died, the
                         // replica recycled, or the host evicted this peer
                         // (e.g. slow-consumer policy). Tear the WS down so

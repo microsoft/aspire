@@ -28,6 +28,10 @@ namespace Aspire.Hosting.Terminals;
 /// <see cref="TerminalOwner.Resource"/> the workload belongs to the resource, so disposing only releases
 /// Aspire's handle and leaves the workload running.
 /// </para>
+/// <para>
+/// When an AppHost-owned workload ends, its terminal remains in the dashboard until disposed, but no longer
+/// accepts input or automation. Reopening an ended terminal displays its ended state rather than replaying output.
+/// </para>
 /// </remarks>
 [Experimental(TerminalDiagnostics.AppHostTerminals, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public interface IAspireTerminal : IAsyncDisposable
@@ -83,11 +87,13 @@ public interface IAspireTerminal : IAsyncDisposable
     /// <summary>
     /// Sends text to the terminal's workload as though it had been typed.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     Task SendTextAsync(string text, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a single non-printable key to the terminal's workload.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -97,10 +103,12 @@ public interface IAspireTerminal : IAsyncDisposable
     /// <param name="timeout">How long to wait before giving up. Defaults to 30 seconds.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="TimeoutException">The text did not appear before <paramref name="timeout"/> elapsed.</exception>
+    /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the current contents of the terminal screen, with lines separated by newlines.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     string GetScreenText();
 }
