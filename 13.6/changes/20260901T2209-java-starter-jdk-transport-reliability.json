@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the Java starter using the wrong JDK (Java 21 from the ambient process instead of the modeled Java 25 toolchain) and tightened the surrounding Java AppHost path, including Maven wrapper/module resolution and JSON-RPC response routing reliability.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2615",
+  "firstMergedAt": "2026-09-01T22:09:32Z",
+  "lastMergedAt": "2026-09-01T22:09:32Z",
+  "name": "Fix Java starter JDK and transport reliability",
+  "owner": "adamint",
+  "prs": [
+    19635
+  ]
+}

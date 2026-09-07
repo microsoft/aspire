@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Removes an already-unused internal helper command with no production caller",
+  "mergedAt": "2026-09-01T18:00:00Z",
+  "number": 19846,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "Remove obsolete NuGet layout command"
+}

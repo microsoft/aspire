@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New agent client detection for GitHub Copilot App in aspire agent init",
+  "mergedAt": "2026-09-02T16:24:11Z",
+  "number": 19820,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Detect GitHub Copilot App as an agent client"
+}

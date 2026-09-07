@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-writing skill/guidance update, not documenting a specific product change",
+  "mergedAt": "2026-09-02T16:02:42Z",
+  "number": 1600,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "Keep docs versions current and default to TypeScript AppHosts"
+}

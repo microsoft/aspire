@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AppHost build failures in VS Code now surface as a single consolidated error notification with **Open CLI Log** and **Open AppHost Log** actions, instead of separate error and log-path notifications that had to be copied manually.",
+  "docsPrs": [
+    1605
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udee0\ufe0f",
+  "firstMergedAt": "2026-09-01T18:53:08Z",
+  "lastMergedAt": "2026-09-01T18:53:08Z",
+  "name": "Consolidated VS Code AppHost build failure notifications",
+  "owner": "ellahathaway",
+  "prs": [
+    19755
+  ]
+}

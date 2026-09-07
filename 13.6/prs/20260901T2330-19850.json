@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal repo/solution fix (launchSettings.json, .slnx), not user-facing",
+  "mergedAt": "2026-09-01T23:30:00Z",
+  "number": 19850,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "Fix opening Visual Studio"
+}

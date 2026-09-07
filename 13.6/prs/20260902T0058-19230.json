@@ -1,0 +1,9 @@
+{
+  "author": "Vladipz",
+  "comment": "Fixes DevTunnel health check failures with auto-selected regions",
+  "mergedAt": "2026-09-02T00:58:45Z",
+  "number": 19230,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Fix DevTunnel health check for auto-selected regions"
+}

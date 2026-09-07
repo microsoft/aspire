@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes Java starter using wrong JDK and various transport reliability issues",
+  "mergedAt": "2026-09-01T22:09:32Z",
+  "number": 19635,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Fix Java starter JDK and transport reliability"
+}

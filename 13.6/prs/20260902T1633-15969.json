@@ -1,0 +1,9 @@
+{
+  "author": "Formatted",
+  "comment": "Fixes silently-disabled health checks for Azure AI Inference clients",
+  "mergedAt": "2026-09-02T16:33:15Z",
+  "number": 15969,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Implement health checks for Azure AI Inference ChatCompletionsClient and EmbeddingsClient"
+}

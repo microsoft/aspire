@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/build infrastructure change, no user-facing product impact",
+  "mergedAt": "2026-09-02T18:00:00Z",
+  "number": 19761,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "[automated] ci: streamline test job fan-out"
+}

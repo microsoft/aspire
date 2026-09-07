@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Prevents CLI hangs when AppHost handshake never responds",
+  "mergedAt": "2026-09-01T22:07:54Z",
+  "number": 19832,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Bound AppHost auxiliary backchannel handshake"
+}

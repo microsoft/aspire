@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-site tooling fix, not documenting a product changelog entry",
+  "mergedAt": "2026-09-01T16:42:36Z",
+  "number": 1596,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "fix: harden integration updater type collision handling"
+}

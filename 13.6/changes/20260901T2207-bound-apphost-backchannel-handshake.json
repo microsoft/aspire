@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "An AppHost that accepts its auxiliary socket but never answers JSON-RPC can no longer hang `aspire run`, `aspire ps`, `aspire stop`, or other backchannel-scanning commands indefinitely \u2014 a 10-second deadline is now enforced around the handshake.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-09-01T22:07:54Z",
+  "lastMergedAt": "2026-09-01T22:07:54Z",
+  "name": "Bound AppHost auxiliary backchannel handshake",
+  "owner": "adamint",
+  "prs": [
+    19832
+  ]
+}

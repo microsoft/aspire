@@ -1,0 +1,9 @@
+{
+  "author": "air-hand",
+  "comment": "Fixes dropped enum values (e.g. HttpVersionPolicy) in YARP env config generation",
+  "mergedAt": "2026-09-02T19:09:44Z",
+  "number": 19403,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Fix enum values in YARP environment configuration"
+}

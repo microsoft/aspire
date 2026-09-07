@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Consolidated VS Code AppHost build failure notification UX",
+  "mergedAt": "2026-09-01T18:53:08Z",
+  "number": 19755,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Improve VS Code AppHost build failure notifications"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "rickylabs",
+  "comment": "New Deno application hosting support in Aspire.Hosting.JavaScript",
+  "mergedAt": "2026-09-02T16:44:43Z",
+  "number": 18628,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Add Deno hosting: AddDenoApp / DenoAppResource in Aspire.Hosting.JavaScript"
+}

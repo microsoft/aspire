@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes CLI failing to match AppHosts referenced via different path spellings",
+  "mergedAt": "2026-09-02T02:28:15Z",
+  "number": 19762,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Match AppHosts across equivalent filesystem paths"
+}

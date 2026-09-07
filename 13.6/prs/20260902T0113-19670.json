@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New VS Code warning when the selected Aspire CLI is outdated",
+  "mergedAt": "2026-09-02T01:13:26Z",
+  "number": 19670,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Warn when VS Code uses an outdated Aspire CLI"
+}

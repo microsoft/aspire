@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Reduces generated TypeScript SDK size and compile time via shared FluentPromise<T> dispatcher",
+  "mergedAt": "2026-09-02T19:35:18Z",
+  "number": 19728,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Reuse generated TypeScript fluent promise implementations"
+}

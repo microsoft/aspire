@@ -1,0 +1,9 @@
+{
+  "author": "missymessa",
+  "comment": "Internal engineering/build pipeline cleanup, no user impact",
+  "mergedAt": "2026-09-02T16:35:00Z",
+  "number": 19092,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "Remove Publish-Build-Assets variable group from main"
+}

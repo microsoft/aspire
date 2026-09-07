@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes Rust AppHost resources getting stuck at PID 0 in VS Code",
+  "mergedAt": "2026-09-01T22:09:14Z",
+  "number": 19831,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "included",
+  "title": "Fix Rust AppHost run-session notification routing"
+}

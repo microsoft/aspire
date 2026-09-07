@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal test/playground fix for CI, no user-facing behavior change",
+  "mergedAt": "2026-09-01T15:03:18Z",
+  "number": 19837,
+  "runDate": "2026-09-07T06:09:12Z",
+  "status": "excluded",
+  "title": "Use supported Cosmos emulator API in consumers"
+}

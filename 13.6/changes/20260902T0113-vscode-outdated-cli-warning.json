@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "VS Code now warns when the Aspire CLI selected for an active extension operation is outdated for its installed published release lane, for example when a stable CLI is older than the latest stable release.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u26a0\ufe0f",
+  "firstMergedAt": "2026-09-02T01:13:26Z",
+  "lastMergedAt": "2026-09-02T01:13:26Z",
+  "name": "Warn when VS Code uses an outdated Aspire CLI",
+  "owner": "ellahathaway",
+  "prs": [
+    19670
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Generated TypeScript SDKs for provisioning proxy packages are now smaller and compile faster: a shared `FluentPromise<T>` runtime dispatcher replaces hundreds of repeated fluent forwarding implementations, cutting generated SDK size by roughly 10% and clean build time by up to 17% in measured fixtures, with no change to public TypeScript APIs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26a1",
+  "firstMergedAt": "2026-09-02T19:35:18Z",
+  "lastMergedAt": "2026-09-02T19:35:18Z",
+  "name": "Reuse generated TypeScript fluent promise implementations",
+  "owner": "sebastienros",
+  "prs": [
+    19728
+  ]
+}

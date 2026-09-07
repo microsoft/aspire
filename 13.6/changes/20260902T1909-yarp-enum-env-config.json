@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@air-hand"
+  ],
+  "description": "Fixed `WithForwarderRequestConfig` enum values such as `HttpVersionPolicy.RequestVersionExact` being dropped when YARP configuration was flattened to environment variables, which prevented HTTPS-terminating proxies from forwarding gRPC traffic to h2c backends correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd00",
+  "firstMergedAt": "2026-09-02T19:09:44Z",
+  "lastMergedAt": "2026-09-02T19:09:44Z",
+  "name": "Fix enum values in YARP environment configuration",
+  "owner": "IEvangelist",
+  "prs": [
+    19403
+  ]
+}
