@@ -331,7 +331,7 @@ public class ToolboxTests
     {
         var tool = new FoundryToolboxWebSearchToolDefinition("web-search");
 
-        var projectTool = await tool.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await tool.ResolveAsync(CancellationToken.None)).Tool;
 
         Assert.NotNull(projectTool);
         var json = ModelReaderWriter.Write(
@@ -348,7 +348,7 @@ public class ToolboxTests
             "web-search",
             "Search the public web.");
 
-        var projectTool = await tool.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await tool.ResolveAsync(CancellationToken.None)).Tool;
 
         var json = ModelReaderWriter.Write(
             projectTool,
@@ -379,7 +379,7 @@ public class ToolboxTests
         var def = Assert.IsType<FoundryToolboxAzureAISearchToolDefinition>(toolbox.Resource.Tools[0]);
         def.Connection.Outputs["id"] = "/subscriptions/sub/resourceGroups/rg/connections/search";
 
-        var projectTool = await def.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await def.ResolveAsync(CancellationToken.None)).Tool;
 
         var aiSearch = Assert.IsType<AzureAISearchTool>(projectTool);
         var index = Assert.Single(aiSearch.Options.Indexes);
@@ -486,7 +486,7 @@ public class ToolboxTests
 
         var def = Assert.IsType<FoundryToolboxMcpToolDefinition>(toolbox.Resource.Tools[0]);
 
-        var projectTool = await def.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await def.ResolveAsync(CancellationToken.None)).Tool;
 
         var json = ModelReaderWriter.Write(
             projectTool,
@@ -519,7 +519,7 @@ public class ToolboxTests
         var definition = Assert.IsType<FoundryToolboxMcpToolDefinition>(
             Assert.Single(toolbox.Resource.Tools));
 
-        var projectTool = await definition.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await definition.ResolveAsync(CancellationToken.None)).Tool;
 
         var json = ModelReaderWriter.Write(
             projectTool,
@@ -559,7 +559,7 @@ public class ToolboxTests
         var definition = Assert.IsType<FoundryToolboxMcpToolDefinition>(
             Assert.Single(toolbox.Resource.Tools));
 
-        var projectTool = await definition.ToProjectsAgentToolAsync(CancellationToken.None);
+        var projectTool = (await definition.ResolveAsync(CancellationToken.None)).Tool;
 
         var json = ModelReaderWriter.Write(
             projectTool,
@@ -640,7 +640,7 @@ public class ToolboxTests
             ReferenceExpression.Create($"{empty.Resource}"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+            async () => await def.ResolveAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -653,7 +653,7 @@ public class ToolboxTests
             ReferenceExpression.Create($"http://inventory.example.com/mcp"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+            async () => await def.ResolveAsync(CancellationToken.None));
         Assert.Contains("Foundry-reachable absolute HTTPS endpoint", ex.Message, StringComparison.Ordinal);
     }
 
@@ -665,7 +665,7 @@ public class ToolboxTests
             ReferenceExpression.Create($"https://localhost:7443/mcp"));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+            async () => await def.ResolveAsync(CancellationToken.None));
 
         Assert.Contains("Foundry-reachable", exception.Message, StringComparison.Ordinal);
     }
@@ -680,7 +680,7 @@ public class ToolboxTests
             ReferenceExpression.Create($"{endpoint}"));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+            async () => await def.ResolveAsync(CancellationToken.None));
 
         Assert.Contains("Foundry-reachable", exception.Message, StringComparison.Ordinal);
     }

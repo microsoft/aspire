@@ -26,17 +26,6 @@ internal abstract class FoundryToolboxToolDefinition
     /// </summary>
     public string Name { get; }
 
-    /// <summary>
-    /// Resolves this tool definition into the SDK shape (<see cref="ProjectsAgentTool"/>) used by the
-    /// Foundry data plane when creating a new toolbox version.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    internal async ValueTask<ProjectsAgentTool> ToProjectsAgentToolAsync(CancellationToken cancellationToken)
-    {
-        var resolved = await ResolveAsync(cancellationToken).ConfigureAwait(false);
-        return resolved.Tool;
-    }
-
     internal abstract ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken);
 }
 

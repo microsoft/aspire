@@ -29,7 +29,6 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
     internal const string PreviewFeatureHeaderValue = "Toolboxes=V1Preview";
     internal const string AuthorizationScopeValue = "https://ai.azure.com/.default";
 
-    private const string BeforeStartStepName = "before-start";
     private readonly List<FoundryToolboxToolDefinition> _tools = [];
 
     /// <summary>
@@ -62,7 +61,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
                         ? $"Validates existing Toolbox {Name} after the application starts."
                         : $"Reconciles Toolbox {Name} after the application starts.",
                     Action = DeployBeforeStartAsync,
-                    RequiredBySteps = [BeforeStartStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
                     Resource = this,
                     DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName]
                 });
@@ -435,7 +434,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
             .OfType<FoundryToolboxMcpToolDefinition>()
             .Select(tool => tool.ServerLabel)
             .ToArray();
-        using var client = new HttpClient();
+        var client = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient();
         await new FoundryToolboxReadinessProbe(client).WaitForToolsAsync(
             endpoint,
             accessToken.Token,

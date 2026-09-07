@@ -281,6 +281,9 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             role,
             RoleManagementPrincipalType.ServicePrincipal,
             projectPrincipalId);
+        // Use the same name as ProjectBuilderExtension, which may already have created this
+        // (scope, principal, role) assignment. Azure rejects an equivalent assignment under
+        // a different name with RoleAssignmentExists, so both modules must derive the same GUID.
         roleAssignment.Name = BicepFunction.CreateGuid(
             searchService.Id,
             project.Id,
