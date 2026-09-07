@@ -99,6 +99,15 @@ ignore:
 # Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
+  - paths:
+      - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
+      - src/Aspire.Dashboard/wwwroot/js/app.js
+      - src/Aspire.Dashboard/package.json
+      - src/Aspire.Dashboard/package-lock.json
+      - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
+      - tests/Aspire.Dashboard.Components.Tests/JavaScript/**
+    targets: [test:Infrastructure.Tests]
+    reason: DashboardTerminalScriptTests executes the terminal lifecycle JavaScript and reads the paired package assets outside its MSBuild graph.
 
   # --- catch-all: build infrastructure & broadly shared code -> ALL --------------------------
   - paths:

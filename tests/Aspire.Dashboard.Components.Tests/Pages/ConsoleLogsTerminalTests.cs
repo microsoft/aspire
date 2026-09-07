@@ -583,6 +583,7 @@ public partial class ConsoleLogsTests
     [Fact]
     public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
     {
+        Services.AddLocalization();
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
         var initTerminal = module.Setup<int>("initTerminal", _ => true);
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);

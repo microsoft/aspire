@@ -1,0 +1,202 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Buffers.Binary;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using Aspire.Dashboard.Tests.Shared;
+using Hex1b.Input;
+using Xunit;
+
+namespace Aspire.Dashboard.Tests.Terminal;
+
+public class TerminalWebSocketTests(ITestOutputHelper output)
+{
+    [Fact]
+    public async Task BrowserView_PreservesRemotePrimaryAndResizeAcrossReconnect()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var first = await host.ConnectBrowserAsync(timeout.Token);
+        var initial = await ReadUntilAsync(first, frame => frame.GetProperty("peer").GetProperty("id").ValueKind == JsonValueKind.String, timeout.Token);
+        Assert.Equal(100, initial.GetProperty("columns").GetInt32());
+        Assert.Equal(30, initial.GetProperty("rows").GetInt32());
+
+        // A browser resize cannot seize the remote producer's primary role.
+        await SendAsync(first, """{"type":"resize","columns":80,"rows":24}""", timeout.Token);
+        await SendAsync(first, """{"type":"requestPrimary","columns":80,"rows":24}""", timeout.Token);
+        var primary = await ReadUntilAsync(first, frame => frame.GetProperty("peer").GetProperty("isPrimary").GetBoolean(), timeout.Token);
+        Assert.Equal(80, primary.GetProperty("columns").GetInt32());
+        Assert.Equal(24, primary.GetProperty("rows").GetInt32());
+        Assert.Equal(primary.GetProperty("peer").GetProperty("id").GetString(), host.Presentation.PrimaryPeerId);
+
+        using var second = await host.ConnectBrowserAsync(timeout.Token);
+        var viewer = await ReadUntilAsync(second, frame => frame.GetProperty("peer").GetProperty("id").ValueKind == JsonValueKind.String, timeout.Token);
+        Assert.False(viewer.GetProperty("peer").GetProperty("isPrimary").GetBoolean());
+        Assert.Equal(80, viewer.GetProperty("columns").GetInt32());
+
+        await first.CloseAsync(WebSocketCloseStatus.NormalClosure, "Reconnect", timeout.Token);
+        await ReadUntilAsync(second, frame => frame.GetProperty("peer").GetProperty("primaryId").ValueKind == JsonValueKind.Null, timeout.Token);
+        await SendAsync(second, """{"type":"requestPrimary","columns":132,"rows":30}""", timeout.Token);
+        var takeover = await ReadUntilAsync(second, frame => frame.GetProperty("peer").GetProperty("isPrimary").GetBoolean(), timeout.Token);
+        Assert.Equal(132, takeover.GetProperty("columns").GetInt32());
+        await second.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Fact]
+    public async Task BrowserView_ReassemblesFragmentedUtf8Input()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        var message = Encoding.UTF8.GetBytes("{\"type\":\"input\",\"text\":\"hello \u00e9\"}");
+        var split = Array.IndexOf(message, (byte)0xc3) + 1;
+        await browser.SendAsync(message.AsMemory(0, split), WebSocketMessageType.Text, false, timeout.Token);
+        await browser.SendAsync(message.AsMemory(split), WebSocketMessageType.Text, true, timeout.Token);
+
+        var input = new StringBuilder();
+        while (input.Length < "hello \u00e9".Length)
+        {
+            var inputEvent = await host.Workload.InputEvents.ReadAsync(timeout.Token);
+            if (inputEvent is Hex1bKeyEvent key)
+            {
+                input.Append(key.Text);
+            }
+        }
+        Assert.Equal("hello \u00e9", input.ToString());
+        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserView_RejectsInvalidMessageTypeOrOversizedInput(bool oversized)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        if (oversized)
+        {
+            await browser.SendAsync(new byte[64 * 1024], WebSocketMessageType.Text, false, timeout.Token);
+        }
+        else
+        {
+            await browser.SendAsync(new byte[] { 1 }, WebSocketMessageType.Binary, true, timeout.Token);
+        }
+
+        var buffer = new byte[64 * 1024];
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await browser.ReceiveAsync(buffer, timeout.Token);
+        }
+        while (result.MessageType != WebSocketMessageType.Close);
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, result.CloseStatus);
+    }
+
+    [Theory]
+    [InlineData("\u001bP7;1q\"1;1;2;6#1;2;100;0;0#1BB\u001b\\")]
+    [InlineData("\u001b_Ga=T,f=32,s=1,v=1,i=7,p=11,C=1,q=2;/wAA/w==\u001b\\")]
+    public async Task BrowserView_ProjectsSixelAndKittyGraphics(string sequence)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        await ReadUntilAsync(browser, _ => true, timeout.Token);
+
+        host.Workload.Write(sequence);
+        var graphics = await ReadUntilAsync(browser, frame => frame.GetProperty("placements").GetArrayLength() > 0, timeout.Token);
+        Assert.Single(graphics.GetProperty("placements").EnumerateArray());
+        Assert.Single(graphics.GetProperty("images").EnumerateArray());
+        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+
+        using var reconnected = await host.ConnectBrowserAsync(timeout.Token);
+        var restored = await ReadUntilAsync(reconnected, frame => frame.GetProperty("placements").GetArrayLength() > 0, timeout.Token);
+        Assert.Single(restored.GetProperty("placements").EnumerateArray());
+        Assert.Single(restored.GetProperty("images").EnumerateArray());
+        await reconnected.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+    }
+
+    [Fact]
+    public async Task BrowserView_RequiresAuthenticationBeforeConnectingToProducer()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: true);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+
+        await Assert.ThrowsAsync<WebSocketException>(() => host.ConnectBrowserAsync(timeout.Token));
+
+        Assert.Equal(0, host.ConnectionCount);
+    }
+
+    [Fact]
+    public async Task BrowserView_ProducerDisconnectClosesBrowserWhileWaitingForAcknowledgement()
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        var buffer = new byte[64 * 1024];
+        var initial = await browser.ReceiveAsync(buffer, timeout.Token);
+        Assert.Equal(WebSocketMessageType.Binary, initial.MessageType);
+        Assert.True(initial.EndOfMessage);
+
+        await host.Presentation.DisposeAsync();
+
+        try
+        {
+            var closed = await browser.ReceiveAsync(buffer, timeout.Token);
+            Assert.Equal(WebSocketMessageType.Close, closed.MessageType);
+        }
+        catch (WebSocketException ex)
+        {
+            // Cancelling the server's pending ReceiveAsync can abort the socket.
+            // Either close path must end promptly, without waiting for the HWT ACK timeout.
+            Assert.Equal(WebSocketError.ConnectionClosedPrematurely, ex.WebSocketErrorCode);
+        }
+    }
+
+    private static Task SendAsync(WebSocket socket, string message, CancellationToken cancellationToken)
+    {
+        return socket.SendAsync(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text, true, cancellationToken);
+    }
+
+    private static async Task<JsonElement> ReadUntilAsync(WebSocket socket, Func<JsonElement, bool> predicate, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            using var message = new MemoryStream();
+            WebSocketReceiveResult result;
+            do
+            {
+                result = await socket.ReceiveAsync(buffer, cancellationToken);
+                Assert.Equal(WebSocketMessageType.Binary, result.MessageType);
+                message.Write(buffer, 0, result.Count);
+            }
+            while (!result.EndOfMessage);
+
+            // HWT1: four-byte magic, little-endian JSON byte length, JSON metadata,
+            // then binary cell/image sections. Inspect only metadata in these transport tests.
+            var bytes = message.ToArray();
+            Assert.Equal("HWT1", Encoding.ASCII.GetString(bytes, 0, 4));
+            var length = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(4));
+            using var document = JsonDocument.Parse(bytes.AsMemory(8, length));
+            var frame = document.RootElement;
+            await SendAsync(socket, $$"""{"type":"ack","revision":{{frame.GetProperty("revision").GetUInt32()}}}""", cancellationToken);
+            if (predicate(frame))
+            {
+                return frame.Clone();
+            }
+        }
+    }
+}

@@ -179,9 +179,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // ⋯ menu picker.
     private ConsoleLogsView _activeView = ConsoleLogsView.Console;
     // Tracks the view that was rendered to the DOM on the previous render
-    // pass. When the active view flips back to Terminal we need to nudge
-    // xterm.js to relayout because the wrapper's display:none → visible
-    // transition may not trigger ResizeObserver in every browser.
+    // pass. Revealing Terminal starts a deferred mount or refreshes selection
+    // overlays without disposing the client or changing producer dimensions.
     private ConsoleLogsView? _lastRenderedView;
 
     // UI
@@ -475,11 +474,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             await terminalView.RefreshToolbarStateAsync();
         }
 
-        // Detect a view-flip TO Terminal and prod xterm to relayout. The
-        // wrapper element transitions from display:none to visible on this
-        // render and ResizeObserver is not guaranteed to fire for that
-        // box-tree change. Without this nudge xterm can stay sized to its
-        // pre-hide dimensions until the next external resize.
+        // Notify the terminal after its wrapper becomes visible so a deferred
+        // mount and selection overlays see the new layout.
         if (_selectedResourceHasTerminal &&
             _activeView == ConsoleLogsView.Terminal &&
             _lastRenderedView != ConsoleLogsView.Terminal &&
@@ -1369,15 +1365,15 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // --- Terminal toolbar wiring -----------------------------------------
     //
     // The TerminalView component pushes a TerminalToolbarState snapshot up
-    // here whenever the underlying xterm/HMP1 state changes (role flips,
+    // here whenever the underlying Hex1b state changes (role flips,
     // resize, font change). Those snapshots drive the page-level toolbar
     // that replaces the in-frame chrome the terminal used to render itself.
     // JS remains the source of truth for terminal state; this layer just
     // mirrors the latest snapshot and routes user actions back to JS via
     // the TerminalView public methods.
     private const int TerminalFontStep = 1;
-    private const int TerminalFontMin = 4;
-    private const int TerminalFontMax = 72;
+    private const int TerminalFontMin = 8;
+    private const int TerminalFontMax = 32;
 
     private async Task OnTerminalToolbarStateChangedAsync(Controls.TerminalToolbarState state)
     {
@@ -1507,7 +1503,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         /// <summary>The resource's standard log stream (LogViewer).</summary>
         Console,
-        /// <summary>The interactive xterm.js terminal (TerminalView).</summary>
+        /// <summary>The interactive Hex1b terminal (TerminalView).</summary>
         Terminal,
     }
 }

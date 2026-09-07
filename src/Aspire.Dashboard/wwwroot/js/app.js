@@ -199,7 +199,14 @@ window.copyText = function (text) {
 };
 
 function isActiveElementInput() {
-    const currentElement = document.activeElement;
+    let currentElement = document.activeElement;
+    // Document.activeElement is the shadow host when Hex1b's textarea has
+    // focus. Follow focused shadow roots so printable keys remain terminal
+    // input rather than triggering dashboard navigation shortcuts.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
+    while (currentElement.shadowRoot?.activeElement) {
+        currentElement = currentElement.shadowRoot.activeElement;
+    }
     const tagName = currentElement.tagName.toLowerCase();
 
     // fluent components may have shadow roots that contain inputs

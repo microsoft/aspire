@@ -15,7 +15,7 @@ builder.AddProject<Projects.MyAgent>("agent")
     .WithTerminal();
 ```
 
-The dashboard then renders an xterm.js terminal per replica, and the CLI
+The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal agent --replica 0`.
 
 ## Process topology
@@ -63,10 +63,11 @@ version 1), which already handles:
 - Authenticated stream factory hooks (we only use Unix-socket transport
   today)
 
-The `Hmp1WorkloadAdapter` is what the AppHost-side terminal host uses to
-multiplex DCP's PTY traffic to the consumer-facing listener; the
-`Hmp1PresentationAdapter` is what consumers (Dashboard WebSocket proxy and
-the CLI) use to attach.
+The terminal host uses `DcpUpstreamAdapter` for DCP's minimal single-peer
+protocol and `Hmp1PresentationAdapter` for its consumer-facing listener.
+The dashboard and CLI attach using `Hmp1WorkloadAdapter`. The dashboard
+adds a per-browser `Hex1bTerminal` mirror with `Hwt1PresentationAdapter`;
+the browser receives authoritative terminal state rather than parsing ANSI.
 
 ## Property contract (gRPC `ResourceService` snapshots)
 
@@ -93,34 +94,47 @@ endpoint at `/api/terminal?resource=<displayName>&replica=<index>`.
 
 `TerminalWebSocketProxy` resolves the connection entirely server-side:
 
-1. `ITerminalConnectionResolver.ConnectAsync(resourceName, replicaIndex, ct)`
+1. The same-origin WebSocket gate rejects missing or cross-origin `Origin`
+   headers before resolving a resource, in addition to frontend authorization.
+2. `ITerminalConnectionResolver.ConnectAsync(resourceName, replicaIndex, ct)`
    walks `IDashboardClient.GetResources()`, matches by `DisplayName` +
    `TryGetTerminalReplicaInfo`, and connects via
    `Hmp1Transports.ConnectUnixSocket(consumerUdsPath, ct)`.
-2. The proxy wraps the resulting stream in `Hmp1WorkloadAdapter` and runs
-   two pumps:
-   - **Inbound (browser → producer):** binary frames are forwarded as HMP v1
-     `Input` (keystrokes); text frames are parsed as JSON resize control
-     messages (`{"type":"resize","cols":N,"rows":N}`).
-   - **Outbound (producer → browser):** VT bytes from the producer become
-     binary WebSocket frames; resize hints from the producer become JSON
-     text frames.
-3. Frame type — not content — distinguishes keystroke from control. This
-   keeps the proxy's parser cheap and avoids ambiguity around binary input
-   that happens to look like JSON.
-4. Multi-fragment WS reads are reassembled in `ReassembledFrame` using
-   `ArrayPool<byte>`.
+3. The handler connects a public `Hmp1WorkloadAdapter`, attaches a per-view
+   terminal and `Hwt1PresentationAdapter`, and runs the two transport pumps.
+   Incoming UTF-8 JSON messages are reassembled up to 64 KiB and passed to
+   `HandleMessageAsync`. Each `ReadFrameAsync` result is sent as one complete
+   binary WebSocket message, without dropping or reordering frames.
+4. Hex1b owns input encoding, primary-role negotiation, selection, history,
+   graphics projection, acknowledgements and state resynchronization. The
+   dashboard bounds handshake and send times and cancels both pumps when
+   either transport ends. Disposing a view disconnects only that peer, not
+   the AppHost-owned producer.
 
 The browser never sees `consumerUdsPath` and cannot induce the dashboard
 to connect to an arbitrary local socket — it can only ask for
 `(resource, replica)` pairs that are present in the resource snapshot
 stream.
 
+### Browser requirements and package pairing
+
+The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
+exactly `0.167.0-alpha.1509.1.1f47fd9`. HWT1 is experimental state transfer
+between these paired packages, not a stable wire contract implemented by
+Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
+module workers, relative imports, fonts and licenses.
+
+This release requires a secure context (HTTPS or localhost), WebGPU,
+OffscreenCanvas and module workers. Unsupported browsers display an error;
+there is no xterm.js fallback. Sixel and Kitty Graphics Protocol are rendered
+from server-authoritative state. Historical rendering is text-only. The
+dashboard's independent console-log view remains available.
+
 ### Console / Terminal view toggle
 
 For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
 **both** `LogViewer` (the resource's standard log stream) and
-`TerminalView` (the interactive xterm.js terminal) at the same time and
+`TerminalView` (the interactive Hex1b web terminal) at the same time and
 flips between them via a pair of **Console logs** / **Terminal** items
 rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 
@@ -133,10 +147,10 @@ rendered inside the toolbar's options (⋯) `AspireMenuButton`:
   or a different resource is selected (which resets to Console).
 - Both views stay mounted across flips (visibility is toggled with
   `display:none` on a wrapper `<div>`); the log subscription and the
-  xterm/HMP1 consumer session are kept alive so neither view loses
+  Hex1b/HMP1 consumer session are kept alive so neither view loses
   scrollback or has to re-handshake on toggle. After a `display:none →
   visible` transition the page calls `refreshLayout` on the JS terminal
-  to guarantee xterm rebinds to the new available space.
+  to fit the terminal to the new available space.
 
 The console log stream is now subscribed to for terminal-enabled
 resources too (previously it was suppressed), which is what makes the
@@ -145,7 +159,7 @@ Console view non-empty for a `WithTerminal()` resource.
 ## CLI
 
 `aspire terminal <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalCommand.cs`)
-opens its own `Hmp1PresentationAdapter` against the consumer UDS path
+opens its own `Hmp1WorkloadAdapter` against the consumer UDS path
 returned by `IBackchannel.GetTerminalInfoAsync(resource, replica)` and
 renders frames into the host terminal via Hex1b's `Hex1bTerminal`. When the
 resource has more than one replica and the CLI is interactive, it prompts
@@ -187,6 +201,6 @@ as a Phase 3 follow-up on the parent issue.
 | CLI command                          | `src/Aspire.Cli/Commands/TerminalCommand.cs`                        |
 | Dashboard WebSocket proxy            | `src/Aspire.Dashboard/Terminal/TerminalWebSocketProxy.cs`           |
 | Dashboard resolver                   | `src/Aspire.Dashboard/Terminal/DefaultTerminalConnectionResolver.cs`|
-| `TerminalView` (xterm.js host)       | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
+| `TerminalView` (Hex1b web host)      | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
 | Property keys                        | `src/Shared/Model/KnownProperties.cs` (`Terminal.*`)                |
 | Playground sample                    | `playground/Terminals/Terminals.AppHost/AppHost.cs`                 |

@@ -1,3 +1,15 @@
 @namespace Aspire.Dashboard.Components.Controls
 
-<div class="terminal-container" @ref="_terminalElement" style="width: 100%; height: 100%;"></div>
+<div class="terminal-view">
+    <div class="terminal-container" @ref="_terminalElement"></div>
+    @if (_terminalError is not null)
+    {
+        <div class="terminal-error">
+            <span role="alert">@GetErrorMessage()</span>
+            @if (_terminalError != "unsupported")
+            {
+                <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalRetry)]</FluentButton>
+            }
+        </div>
+    }
+</div>

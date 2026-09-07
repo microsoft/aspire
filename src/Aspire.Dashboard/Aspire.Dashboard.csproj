@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
@@ -329,10 +328,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Update="package.json;package-lock.json" CopyToPublishDirectory="Never" />
     <Content Remove="wwwroot\js\README.md" />
     <None Include="wwwroot\js\README.md" />
-    <Content Remove="wwwroot\fonts\cascadia-mono-nf\README.md" />
-    <None Include="wwwroot\fonts\cascadia-mono-nf\README.md" />
   </ItemGroup>
 
   <Import Project="BlazorAssets.targets" />
