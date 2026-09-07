@@ -315,11 +315,12 @@ internal static class TerminalInteractionCommands
 
                 var playTask = PlayNumberGuessAsync(terminal, limit, gameCts.Token);
 
-                // If the human closes the dialog first the terminal is torn down underneath us, so stop playing.
-                if (await Task.WhenAny(dialogTask, playTask).ConfigureAwait(false) == dialogTask)
+                // The dialog only borrows the terminal. Cancel and join automation before leaving this scope,
+                // where the caller-owned terminal is disposed, and observe failures even after the dialog closes.
+                var dialogClosed = await Task.WhenAny(dialogTask, playTask).ConfigureAwait(false) == dialogTask;
+                if (dialogClosed)
                 {
                     await gameCts.CancelAsync();
-                    return CommandResults.Failure("Canceled");
                 }
 
                 int number;
@@ -328,7 +329,7 @@ internal static class TerminalInteractionCommands
                 {
                     (number, attempts) = await playTask;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (gameCts.IsCancellationRequested)
                 {
                     return CommandResults.Failure("Canceled");
                 }
@@ -343,6 +344,11 @@ internal static class TerminalInteractionCommands
 
                     await gameCts.CancelAsync();
                     return CommandResults.Failure(ex.Message);
+                }
+
+                if (dialogClosed)
+                {
+                    return CommandResults.Failure("Canceled");
                 }
 
                 // Leave the winning line on screen long enough to read before the dialog disappears.
