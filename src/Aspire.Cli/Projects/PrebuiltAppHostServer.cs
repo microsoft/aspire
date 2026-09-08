@@ -881,7 +881,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
 
         var channelSources = GetNuGetSources(restoreSources)?.ToArray() ?? [];
         var rootAdditionalSources = restoreSources.PackageSourceMappings is null
-            ? null
+            ? GetNuGetSources(restoreSources)?.ToArray()
             : configSources
                 .Where(static source => !source.IsAmbient)
                 .Select(static source => source.Source)
