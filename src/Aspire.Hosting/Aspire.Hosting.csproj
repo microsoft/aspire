@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <DefineConstants>$(DefineConstants);ASPIRE_HOSTING_CORE</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);CS8002;IL3000</NoWarn>
     <IsPackable>true</IsPackable>
@@ -61,6 +62,7 @@
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
+    <Compile Include="$(SharedDir)MsBuildResponseFile.cs" Link="Utils\MsBuildResponseFile.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
     <Compile Include="$(SharedDir)AppHostSocketManager.cs" Link="Backchannel\AppHostSocketManager.cs" />
     <Compile Include="$(SharedDir)TerminalHost\*.cs" Link="Backchannel\TerminalHost\%(Filename)%(Extension)" />

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Reflection;
@@ -22,7 +23,7 @@ namespace Aspire.Hosting;
 /// </remarks>
 internal sealed class EFCoreOperationExecutor : IDisposable
 {
-    private readonly ProjectResource _startupProjectResource;
+    private readonly IDotnetProgramResource _startupProjectResource;
     private readonly string? _targetProjectPath;
     private readonly string? _contextTypeName;
     private readonly ILogger _logger;
@@ -35,7 +36,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private string? _configuration;
     private bool _initialized;
     internal const string ToolStartCommandName = "ef-tool-start";
-    internal string? ResolvedFramework { get; private set;}
+    internal string? ResolvedFramework { get; private set; }
 
     // EF Core CLI output prefixes (used with --prefix-output). All are exactly 9 characters.
     private const int PrefixLength = 9;
@@ -60,7 +61,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private static readonly SemaphoreSlim s_globalDotnetEfLock = new(1, 1);
 
     public EFCoreOperationExecutor(
-        ProjectResource startupProjectResource,
+        IDotnetProgramResource startupProjectResource,
         string? targetProjectPath,
         string? contextTypeName,
         ILogger logger,
@@ -185,7 +186,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         }
     }
 
-    private static string? GetProjectPath(ProjectResource projectResource)
+    private static string? GetProjectPath(IDotnetProgramResource projectResource)
     {
         if (projectResource.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
         {
@@ -496,7 +497,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         // The K specifier produces:
         // - 'Z' for UTC (total 28 characters)
         // - '+HH:mm' or '-HH:mm' for non-UTC (total 33 characters)
-        
+
         // First verify common separators for ISO 8601 format
         if (content.Length < 29 ||
             content[4] != '-' ||   // yyyy-
@@ -508,23 +509,23 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         {
             return content;
         }
-        
+
         // Check for UTC format: ends with 'Z' at position 27
         if (content.Length > 28 && content[27] == 'Z' && content[28] == ' ')
         {
             return content[29..];
         }
-        
+
         // Check for non-UTC format: ends with offset like '-07:00' or '+05:30'
         // Position 26 is '+' or '-', position 29 is ':', position 32 is last digit, position 33 is space
-        if (content.Length > 33 && 
-            (content[26] == '+' || content[26] == '-') && 
-            content[29] == ':' && 
+        if (content.Length > 33 &&
+            (content[26] == '+' || content[26] == '-') &&
+            content[29] == ':' &&
             content[33] == ' ')
         {
             return content[34..];
         }
-        
+
         return content;
     }
 

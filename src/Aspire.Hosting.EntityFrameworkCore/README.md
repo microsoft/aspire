@@ -29,6 +29,9 @@ var api = builder.AddProject<Projects.Api>("api");
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
 ```
 
+`AddEFMigrations` also accepts .NET project resources created with `AddDotnetProject`. File-based C# apps are not
+supported because the EF Core CLI requires a project file for its `--project` and `--startup-project` arguments.
+
 **TypeScript**
 
 ```typescript

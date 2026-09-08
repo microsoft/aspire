@@ -163,6 +163,48 @@ public static class DotnetProjectHostingExtensions
     }
 
     /// <summary>
+    /// Configures the number of .NET project replicas for polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
+    internal static IResourceBuilder<DotnetProjectResource> WithReplicasForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        int replicas)
+    {
+        return DotnetProgramResourceBuilderExtensions.WithReplicas(builder, replicas);
+    }
+
+    /// <summary>
+    /// Disables forwarded headers for a .NET project in polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("disableDotnetProjectForwardedHeaders", MethodName = "disableForwardedHeaders")]
+    internal static IResourceBuilder<DotnetProjectResource> DisableForwardedHeadersForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder)
+    {
+        return DotnetProgramResourceBuilderExtensions.DisableForwardedHeaders(builder);
+    }
+
+    /// <summary>
+    /// Configures endpoint environment-variable injection for a .NET project in polyglot AppHosts.
+    /// </summary>
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withDotnetProjectEndpointsInEnvironment", MethodName = "withEndpointsInEnvironment")]
+    internal static IResourceBuilder<DotnetProjectResource> WithEndpointsInEnvironmentForPolyglot(
+        this IResourceBuilder<DotnetProjectResource> builder,
+        string[] endpointNames)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointNames);
+
+        var includedEndpointNames = endpointNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return DotnetProgramResourceBuilderExtensions.WithEndpointsInEnvironment(
+            builder,
+            endpoint => includedEndpointNames.Contains(endpoint.Name));
+    }
+
+    /// <summary>
     /// Adds a C# project or file-based app to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
@@ -270,7 +312,8 @@ public static class DotnetProjectHostingExtensions
         var resource = builder.AddResource(app)
                               .WithAnnotation(projectMetadata)
                               .WithIconName("CodeCsRectangle")
-                              .WithProjectDefaults(options);
+                              .WithProjectDefaults(options)
+                              .WithDotnetProgramPublishing();
         var projectLaunchConfigurationType = resource.Resource.Annotations
             .OfType<SupportsDebuggingAnnotation>()
             .LastOrDefault()

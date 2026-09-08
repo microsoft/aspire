@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -323,7 +324,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder
             .AddProject<TestProject>("project1", launchProfileName: null)
             .WithHttpsEndpoint()
-            .WithHttpProbe(ProbeType.Readiness,"/ready", initialDelaySeconds: 60)
+            .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
 #pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -737,6 +738,27 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public void KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        app.Run();
+
+        var values = File.ReadAllText(Path.Combine(workspace.Path, "values.yaml"));
+        var deployment = File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml"));
+        var service = File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "service.yaml"));
+        Assert.Contains("api_image:", values);
+        Assert.Contains("api_image", deployment);
+        Assert.Contains("containerPort:", deployment);
+        Assert.Contains("targetPort:", service);
     }
 
     [Fact]

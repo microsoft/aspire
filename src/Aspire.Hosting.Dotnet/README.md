@@ -74,7 +74,8 @@ Use `WithBuildEnvironment` when an environment variable must affect MSBuild eval
 resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
 `WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct
 builds instead of a shared traversal build. Build environment variables are not added to the launched process;
-configure the same variable with `WithEnvironment` as well when it is needed at runtime.
+configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
+values are applied when the project is published through the .NET SDK container targets.
 
 Do not use `WithBuildEnvironment` for secrets. Aspire carries these values in IDE launch metadata and
 process environments. Protected temporary MSBuild response files preserve global-property semantics
@@ -98,19 +99,25 @@ await builder
 
 ## Publishing
 
-Automatic project publishing for `DotnetProjectResource` is not currently supported. A plain
-`DotnetProjectResource` causes `aspire publish` and `aspire deploy` to fail with an actionable error
-instead of emitting an `executable.v0` manifest containing machine-local paths.
+Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
+resources created with `AddProject`. Project files, directories containing a single project file, and file-based
+C# apps are emitted as project resources in the Aspire manifest and can be deployed through supported compute
+environments.
 
-Use one of these alternatives:
+File-based apps preserve the .NET SDK's publishing defaults, including Native AOT. Native AOT cannot compile
+across operating systems, so publishing a file-based app from Windows or macOS to a Linux container can fail.
+To publish a framework-dependent container instead, add this directive to the C# file:
 
-- Use `AddProject<TProject>(...)` for a project referenced by a C# AppHost.
-- Use `AddCSharpApp(...)` or `addCSharpApp(...)` for a path-based project or file-based app that
-  should use standard .NET project publishing.
-- Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to configure container publishing
-  explicitly.
-- Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
-  available only during local orchestration.
+```csharp
+#:property PublishAot=false
+```
+
+Alternatively, run publishing on the target operating system to retain Native AOT. Aspire reports focused
+guidance when it detects this cross-operating-system failure.
+
+Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit Dockerfile instead of .NET SDK
+container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
+available only during local orchestration.
 
 ## Additional documentation
 

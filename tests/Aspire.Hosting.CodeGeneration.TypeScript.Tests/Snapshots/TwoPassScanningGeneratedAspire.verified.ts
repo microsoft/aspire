@@ -1,4 +1,4 @@
-﻿// aspire.mts - Capability-based Aspire SDK
+// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
