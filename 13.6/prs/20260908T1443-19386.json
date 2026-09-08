@@ -1,0 +1,9 @@
+{
+  "author": "jfversluis",
+  "comment": "Fixed MAUI OTLP dev tunnel resolution to Aspire Dashboard",
+  "mergedAt": "2026-09-08T14:43:24Z",
+  "number": 19386,
+  "runDate": "2026-09-08T18:08:11Z",
+  "status": "included",
+  "title": "Fix MAUI OTLP dev tunnel resolution"
+}

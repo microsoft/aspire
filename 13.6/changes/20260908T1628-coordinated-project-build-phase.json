@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Project resources now share one coordinated initial build phase instead of building independently, preventing nondeterministic failures when multiple services reference the same .csproj and write to shared bin/obj directories concurrently.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-09-08T16:28:54Z",
+  "lastMergedAt": "2026-09-08T16:28:54Z",
+  "name": "Coordinated project build phase",
+  "owner": "karolz-ms",
+  "prs": [
+    19678
+  ]
+}

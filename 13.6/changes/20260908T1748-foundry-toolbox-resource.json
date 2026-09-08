@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Aspire.Hosting.Foundry now supports Foundry Toolbox data-plane resources, letting AppHosts create toolboxes that bundle web search, MCP, and Azure AI Search tools behind a single MCP endpoint via AddToolbox().",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧰",
+  "firstMergedAt": "2026-09-08T17:48:52Z",
+  "lastMergedAt": "2026-09-08T17:48:52Z",
+  "name": "Foundry Toolbox resource",
+  "owner": "davidfowl",
+  "prs": [
+    17742
+  ]
+}

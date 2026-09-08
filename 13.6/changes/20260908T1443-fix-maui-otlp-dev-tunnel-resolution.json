@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@jfversluis"
+  ],
+  "description": "Fixed WithOtlpDevTunnel() so MAUI apps on Android and iOS reliably reach the Aspire Dashboard's OTLP endpoint, preferring OTLP/HTTP over the resolved local listener port and refreshing mobile launch environment variables on restart.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-09-08T14:43:24Z",
+  "lastMergedAt": "2026-09-08T14:43:24Z",
+  "name": "Fix MAUI OTLP dev tunnel resolution",
+  "owner": "IEvangelist",
+  "prs": [
+    19386
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Coordinated Project v2 build phase to avoid concurrent bin/obj writes",
+  "mergedAt": "2026-09-08T16:28:54Z",
+  "number": 19678,
+  "runDate": "2026-09-08T18:08:11Z",
+  "status": "included",
+  "title": "Project v2 build"
+}

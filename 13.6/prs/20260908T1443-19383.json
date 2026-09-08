@@ -1,0 +1,9 @@
+{
+  "author": "jfversluis",
+  "comment": "Fixed MAUI build queue NETSDK1085 launch handoff regression",
+  "mergedAt": "2026-09-08T14:43:12Z",
+  "number": 19383,
+  "runDate": "2026-09-08T18:08:11Z",
+  "status": "included",
+  "title": "Fix MAUI launch queue handoff"
+}

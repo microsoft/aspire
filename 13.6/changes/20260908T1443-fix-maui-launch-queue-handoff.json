@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@jfversluis"
+  ],
+  "description": "Fixed a NETSDK1085 build failure in the MAUI shared-project launch handoff on .NET SDK 10.0.201 by making the build queue platform-aware, so multiple platform resources for one MAUI project continue to build and launch serially without errors.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚦",
+  "firstMergedAt": "2026-09-08T14:43:12Z",
+  "lastMergedAt": "2026-09-08T14:43:12Z",
+  "name": "Fix MAUI launch queue handoff",
+  "owner": "IEvangelist",
+  "prs": [
+    19383
+  ]
+}
