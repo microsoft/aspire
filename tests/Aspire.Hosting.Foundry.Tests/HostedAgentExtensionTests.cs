@@ -720,7 +720,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()
+    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -736,12 +736,12 @@ public class HostedAgentExtensionTests
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>
-            string.Equals(role.Id, AzureHostedAgentResource.AzureAIUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(role.Id, AzureHostedAgentResource.FoundryUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
 #pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
-    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyAzureAIUserRole()
+    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -757,9 +757,9 @@ public class HostedAgentExtensionTests
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
 
-        // The implied grant is least-privilege: only "Azure AI User" is required to invoke the agent.
+        // The implied grant is least-privilege: only "Foundry User" is required to invoke the agent.
         var role = Assert.Single(annotation.Roles);
-        Assert.Equal(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, role.Id, ignoreCase: true);
+        Assert.Equal(AzureHostedAgentResource.FoundryUserRoleDefinitionId, role.Id, ignoreCase: true);
 
         // The account's default data-plane roles must NOT be folded in here. A consumer that references
         // the account directly still receives them via the preparer's normal walk, and a consumer that

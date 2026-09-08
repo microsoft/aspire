@@ -59,6 +59,74 @@ public static class AzureCognitiveServicesProjectExtensions
     }
 
     /// <summary>
+    /// Assigns roles on the parent Microsoft Foundry account to the Microsoft Foundry project's managed identity.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="roles">The built-in Cognitive Services roles to assign to the project identity.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Role assignments are scoped to the parent Microsoft Foundry account and use the project's own managed identity.
+    /// </remarks>
+    /// <example>
+    /// Grant the project identity the Foundry User role required by Foundry Memory:
+    /// <code lang="csharp">
+    /// var foundryUserRole = (CognitiveServicesBuiltInRole)"53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    ///
+    /// var project = builder.AddFoundry("foundry")
+    ///     .AddProject("my-project")
+    ///     .WithRoleAssignments(foundryUserRole);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the FoundryRole-based overload instead.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithRoleAssignments(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        params CognitiveServicesBuiltInRole[] roles)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (roles is null || roles.Length == 0)
+        {
+            return builder;
+        }
+
+        foreach (var role in roles)
+        {
+            var roleId = role.ToString();
+            var roleName = string.Equals(roleId, AzureHostedAgentResource.FoundryUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase)
+                ? "Foundry User"
+                : CognitiveServicesBuiltInRole.GetBuiltInRoleName(role);
+            builder.Resource.ParentRoleAssignments.Add(new RoleDefinition(roleId, roleName));
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Assigns Microsoft Foundry roles on the parent account to the project's managed identity.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="roles">The Microsoft Foundry roles to assign to the project identity.</param>
+    /// <returns>The resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withFoundryProjectRoleAssignments")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithRoleAssignments(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        params FoundryRole[] roles)
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(Array.Empty<CognitiveServicesBuiltInRole>());
+        }
+
+        var builtInRoles = new CognitiveServicesBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i].ToBuiltInRole();
+        }
+
+        return builder.WithRoleAssignments(builtInRoles);
+    }
+
+    /// <summary>
     /// Adds a reference to a Microsoft Foundry project resource to the destination resource.
     /// </summary>
     /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
@@ -417,6 +485,20 @@ public static class AzureCognitiveServicesProjectExtensions
         {
             Value = projectPrincipalId
         });
+
+        foreach (var role in aspireResource.ParentRoleAssignments)
+        {
+            var roleDefinitionId = BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", role.Id);
+            var roleAssignment = new RoleAssignment(Infrastructure.NormalizeBicepIdentifier($"{prefix}_{role.Name}"))
+            {
+                Name = BicepFunction.CreateGuid(account.Id, project.Id, roleDefinitionId),
+                Scope = new IdentifierExpression(account.BicepIdentifier),
+                PrincipalType = RoleManagementPrincipalType.ServicePrincipal,
+                PrincipalId = projectPrincipalId,
+                RoleDefinitionId = roleDefinitionId
+            };
+            infra.Add(roleAssignment);
+        }
 
         /*
          * Container registry for hosted agents
