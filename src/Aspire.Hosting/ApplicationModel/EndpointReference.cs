@@ -438,8 +438,15 @@ public enum EndpointProperty
     /// </summary>
     Host,
     /// <summary>
-    /// The IPv4 address of the endpoint.
+    /// The address of the endpoint, preferring an IP literal over a host name that may resolve to more than one address.
     /// </summary>
+    /// <remarks>
+    /// An endpoint bound to localhost - the default, a <c>*.localhost</c> TLD, a wildcard address, or a machine name -
+    /// resolves to <c>127.0.0.1</c> rather than <c>localhost</c>, so that consumers which cannot use a host name are not
+    /// handed a name that may resolve to <c>::1</c>. An endpoint whose <see cref="EndpointAnnotation.TargetHost"/> names
+    /// one specific address resolves to the address the orchestrator allocated, which may be IPv6, for example
+    /// <c>[::1]</c>.
+    /// </remarks>
     IPV4Host,
     /// <summary>
     /// The port of the endpoint.
