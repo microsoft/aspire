@@ -195,7 +195,8 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        /// <summary>        ///   Looks up a localized string similar to Installed Playwright CLI..
+        /// <summary>
+        ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
         internal static string InitCommand_InstalledPlaywrightCli {
             get {
