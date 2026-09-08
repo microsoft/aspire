@@ -216,6 +216,10 @@ run `notcurses-demo` to exercise graphics, color and Unicode rendering. Starting
 demo from the attached shell avoids losing its initial capability queries. Press
 `q` to return to the shell; run the command again to repeat the stress workload.
 
+The separate `bb` container follows the same shell-first pattern. Run `bb` from its
+Terminal view to launch the AAlib ASCII-art demo, declining audio when prompted.
+Use `bb -loop` to repeat the demo continuously.
+
 ## Files of interest
 
 | Concern                              | File                                                                |
