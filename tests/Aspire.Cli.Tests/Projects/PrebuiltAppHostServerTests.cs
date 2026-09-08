@@ -2423,6 +2423,69 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithProjectReferencesAndNoRequestedChannel_AddsResolvedSourcesToGeneratedRoot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        XDocument? generatedProject = null;
+
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                generatedProject = XDocument.Load(projectFilePath.FullName);
+                WriteClosureInputs(
+                    projectFilePath.Directory!,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["MyIntegration.dll"] = "integration-v1"
+                    },
+                    ["MyIntegration"]);
+                return 0;
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            logger: NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(generatedProject);
+            var ns = generatedProject.Root!.GetDefaultNamespace();
+            Assert.Equal(
+                channelSource,
+                generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").Single().Value);
+            Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "NuGet.Config")));
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferencesAndExplicitChannel_UsesDiscoveredConfigAndPersistentPolicyOverlay()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
