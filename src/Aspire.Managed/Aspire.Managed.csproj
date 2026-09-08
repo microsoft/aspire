@@ -27,12 +27,13 @@
     <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
   </PropertyGroup>
 
-  <!-- On Windows, ship Hex1b's PTY host alongside aspire-managed. AppHost-owned terminals need it
-       whenever the AppHost, rather than DCP, owns the pseudo-terminal, so the bundle is the one
-       layout that keeps it: src/Directory.Build.targets strips hex1bpty.exe from publish output
-       everywhere else (it is dead weight in the CLI archive and extra winget submission friction).
-       Opting in here publishes it as a loose file next to aspire-managed, which is what lets the
-       build sign it and CreateLayout stage it at managed/hex1bpty.exe. -->
+  <!-- On Windows, ship Hex1b's PTY host alongside aspire-managed. AppHost-owned terminals put Hex1b
+       — running inside the AppHost process, rather than DCP — in charge of the pseudo-terminal, and
+       that is the path where Hex1b launches hex1bpty.exe. src/Directory.Build.targets strips it from
+       publish output for every other project (dead weight in the CLI archive, and extra winget
+       submission friction), so this is the one project that opts back in. Publishing it as a loose
+       file next to aspire-managed is what lets the build sign it and CreateLayout stage it at
+       managed/hex1bpty.exe. -->
   <PropertyGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))">
     <PublishHex1bPtyHost>true</PublishHex1bPtyHost>
   </PropertyGroup>

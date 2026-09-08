@@ -160,7 +160,7 @@ aspire-{version}-{platform}/
 │   ├── aspire-managed[.exe]            # Self-contained single-file executable
 │   │                                   # Subcommands: dashboard | server | nuget
 │   └── hex1bpty.exe                    # Windows only (~5 MB): Hex1b PTY host, launched
-│                                       # when the AppHost owns the pseudo-terminal
+│                                       # when Hex1b, not DCP, owns the pseudo-terminal
 │
 ├── dcp/                                # Developer Control Plane (~127 MB)
 │   ├── dcp[.exe]                       # Native executable

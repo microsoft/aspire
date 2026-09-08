@@ -16,10 +16,11 @@
 
   <!--
     Hex1b's win-x64/win-arm64 native assets carry hex1bpty.exe, a ~5 MB PTY host that Hex1b launches
-    only when *it* owns the pseudo-terminal for a child process. Nothing we ship takes that path: DCP
-    creates and owns every PTY we surface, and Aspire.TerminalHost just proxies the byte stream DCP is
-    already producing (see src/Aspire.TerminalHost/TerminalReplica.cs). So the helper is dead weight in
-    every Windows CLI archive, and it is also a second executable that downstream stores have to
+    only when *it* owns the pseudo-terminal for a child process. Aspire.Managed is the one project that
+    takes that path (see the target below); everywhere else DCP creates and owns every PTY we surface,
+    and Aspire.TerminalHost just proxies the byte stream DCP is already producing (see
+    src/Aspire.TerminalHost/TerminalReplica.cs). So for every other project the helper is dead weight in
+    the Windows CLI archive, and it is also a second executable that downstream stores have to
     account for — winget runs executable and malware checks against every binary in the archive, which
     turned it into submission friction on https://github.com/microsoft/winget-pkgs/pull/421219.
 
@@ -38,9 +39,10 @@
   </Target>
 
   <!--
-    The bundle is the one place that does need the PTY host. AppHost-owned terminals let the AppHost,
-    rather than DCP, own the pseudo-terminal, and on Windows Hex1b launches hex1bpty.exe to do that.
-    Aspire.Managed sets PublishHex1bPtyHost=true for that reason, which turns the removal above off.
+    Aspire.Managed is that exception. AppHost-owned terminals put Hex1b — running inside the AppHost
+    process, rather than DCP — in charge of the pseudo-terminal, and that is exactly the path where
+    Hex1b launches hex1bpty.exe on Windows. Aspire.Managed sets PublishHex1bPtyHost=true for that
+    reason, which turns the removal above off.
 
     Once it is back in the publish output it also has to stay a loose file next to aspire-managed.
     hex1bpty.exe is a native asset, so IncludeNativeLibrariesForSelfExtract would otherwise pack it

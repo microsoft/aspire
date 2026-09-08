@@ -187,8 +187,9 @@ internal sealed class LayoutBuilder : IDisposable
         Log($"  Copied aspire-managed to managed/");
 
         // Hex1b's PTY host is the one other executable that belongs in managed/. AppHost-owned
-        // terminals launch it whenever the AppHost, rather than DCP, owns the pseudo-terminal, so it
-        // is a real runtime dependency and not one of the leaked host stubs skipped above.
+        // terminals put Hex1b — running inside the AppHost process, rather than DCP — in charge of the
+        // pseudo-terminal, and that is the path where it launches this helper. So it is a real runtime
+        // dependency, not one of the leaked host stubs skipped above.
         // Aspire.Managed publishes it as a loose file on Windows (PublishHex1bPtyHost) and the build
         // signs it in place, so by the time we get here it exists next to the managed executable.
         if (isWindows)
