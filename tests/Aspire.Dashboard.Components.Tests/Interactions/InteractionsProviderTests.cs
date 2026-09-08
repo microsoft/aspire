@@ -381,6 +381,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var response = new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
+            Title = "Special characters: < > &",
             Notification = new InteractionNotification()
         };
         await interactionsChannel.Writer.WriteAsync(response);
@@ -402,6 +403,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
             return await instance.GetMessagesProcessedAsync() == 1;
         }, "Wait for message created.");
         var message = instance.OpenMessageBars.Single().Message;
+        Assert.Equal(response.Title, _messageBarProvider!.Find(".dashboard-message-bar-title").TextContent);
 
         // Act 2
         await interactionsChannel.Writer.WriteAsync(response);

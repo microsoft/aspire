@@ -66,6 +66,10 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         var tree = cut.FindComponent<FluentTreeView>();
         Assert.Equal("genai-span", tree.Instance.SelectedId);
+        Assert.Equal(
+            Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>()
+                [nameof(Aspire.Dashboard.Resources.Dialogs.GenAIMessageTreeLabel)].Value,
+            cut.Find(".genai-message-tree").GetAttribute("aria-label"));
         var selectedItem = Assert.Single(cut.FindComponents<FluentTreeItem>(), item => item.Instance.Id == tree.Instance.SelectedId);
         Assert.True(selectedItem.Find("fluent-tree-item").HasAttribute("selected"));
     }

@@ -414,7 +414,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             message = await MessageService.ShowAsync(
                                 new DashboardMessageBarContent
                                 {
-                                    Title = WebUtility.HtmlEncode(item.Title),
+                                    Title = item.Title,
                                     Message = GetMessageHtml(item),
                                     UseMarkupString = true,
                                     AllowDismiss = item.ShowDismiss,
