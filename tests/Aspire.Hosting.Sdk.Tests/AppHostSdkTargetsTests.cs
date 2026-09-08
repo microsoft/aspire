@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Tasks;
 using Aspire.TestUtilities;
+using Microsoft.Build.Framework;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -1041,6 +1042,36 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 _ = await executionTask.WaitAsync(TimeSpan.FromSeconds(5));
             }
         }
+    }
+
+    [Fact]
+    public async Task RunAspireCliCommandIncludesCompletedOutputInTimeoutFailureMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var commandPath = Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "hang-with-output.cmd" : "hang-with-output");
+        await File.WriteAllTextAsync(
+            commandPath,
+            OperatingSystem.IsWindows()
+                ? "@echo off\r\necho actionable-setup-failure\r\nping -n 3601 127.0.0.1 > nul\r\n"
+                : "#!/bin/sh\necho actionable-setup-failure\nsleep 3600\n",
+            TestContext.Current.CancellationToken);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var task = new RunAspireCliCommand
+        {
+            BuildEngine = new NoOpBuildEngine(),
+            FileName = commandPath,
+            TimeoutMilliseconds = 2000
+        };
+
+        Assert.True(task.Execute());
+        Assert.True(task.TimedOut);
+        Assert.NotNull(task.FailureMessage);
+        Assert.Contains("The command timed out after", task.FailureMessage, StringComparison.Ordinal);
+        Assert.Contains("actionable-setup-failure", task.FailureMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2115,6 +2146,37 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
     private sealed record RunHookProject(string ProjectDirectory, string ProjectFile);
 
+    /// <summary>
+    /// Satisfies the task's logging requirements when the task is executed directly instead of through MSBuild.
+    /// </summary>
+    private sealed class NoOpBuildEngine : IBuildEngine
+    {
+        public bool ContinueOnError => false;
+
+        public int LineNumberOfTaskNode => 0;
+
+        public int ColumnNumberOfTaskNode => 0;
+
+        public string ProjectFileOfTaskNode => string.Empty;
+
+        public bool BuildProjectFile(string projectFileName, string[] targetNames, System.Collections.IDictionary globalProperties, System.Collections.IDictionary targetOutputs) => true;
+
+        public void LogCustomEvent(CustomBuildEventArgs e)
+        {
+        }
+
+        public void LogErrorEvent(BuildErrorEventArgs e)
+        {
+        }
+
+        public void LogMessageEvent(BuildMessageEventArgs e)
+        {
+        }
+
+        public void LogWarningEvent(BuildWarningEventArgs e)
+        {
+        }
+    }
     private sealed record DotNetResult(int ExitCode, string StandardOutput, string StandardError)
     {
         public string Output => StandardOutput + StandardError;

@@ -129,9 +129,15 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             // A surviving descendant can retain inherited pipe handles, so timeout cleanup must
             // never wait indefinitely for the redirected readers to reach EOF.
             // See https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks.
-            LogProcessOutputIfCompleted(standardOutputTask);
-            LogProcessOutputIfCompleted(standardErrorTask);
-            FailureMessage ??= $"The command timed out after {TimeoutMilliseconds} milliseconds.";
+            var timedOutStandardOutput = LogProcessOutputIfCompleted(standardOutputTask);
+            var timedOutStandardError = LogProcessOutputIfCompleted(standardErrorTask);
+
+            // A command can write the actionable failure and then hang, so surface whatever the
+            // readers already captured alongside the timeout reason.
+            FailureMessage = BuildFailureMessage(
+                FailureMessage ?? $"The command timed out after {TimeoutMilliseconds} milliseconds.",
+                timedOutStandardOutput,
+                timedOutStandardError);
             return true;
         }
 
@@ -144,14 +150,20 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         if (ExitCode != 0)
         {
             // Defer the error to the targets so a successful fallback can recover the build.
-            // Include both streams because DNX and CLI failures can be written to either one.
-            FailureMessage = string.Join(Environment.NewLine,
-                new[] { $"The command exited with code {ExitCode}.", SummarizeOutput(standardOutput), SummarizeOutput(standardError) }
-                    .Where(static output => output.Length > 0));
+            FailureMessage = BuildFailureMessage($"The command exited with code {ExitCode}.", standardOutput, standardError);
         }
 
         return true;
     }
+
+    /// <summary>
+    /// Combines <paramref name="reason"/> with bounded summaries of both streams, because DNX and CLI
+    /// failures can be written to either one.
+    /// </summary>
+    private static string BuildFailureMessage(string reason, string standardOutput, string standardError)
+        => string.Join(Environment.NewLine,
+            new[] { reason, SummarizeOutput(standardOutput), SummarizeOutput(standardError) }
+                .Where(static output => output.Length > 0));
 
     /// <summary>
     /// Returns the trailing portion of <paramref name="output"/> that is small enough to surface in a build error.
@@ -346,7 +358,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         }
     }
 
-    private void LogProcessOutputIfCompleted(Task<string> outputTask)
+    private string LogProcessOutputIfCompleted(Task<string> outputTask)
     {
         if (outputTask.Status == TaskStatus.RanToCompletion)
         {
@@ -356,7 +368,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
                 LogProcessOutput(output);
             }
 
-            return;
+            return output;
         }
 
         // "Observe" task exceptions (for tasks that exceed the wait timeout and eventually fail) so that
@@ -366,6 +378,8 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+
+        return string.Empty;
     }
 
     private static string GetArgumentValue(ITaskItem argument)
